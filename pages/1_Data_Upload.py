@@ -295,7 +295,7 @@ if uploaded_file is not None:
                     uploaded_file.seek(0)
                     preview_lines = []
                     for i, line in enumerate(uploaded_file):
-                        if i تجاوزت= 5:
+                        if i >= 5:
                             break
                         preview_lines.append(line.decode('utf-8', errors='ignore').strip())
                     st.code('\n'.join(preview_lines))
