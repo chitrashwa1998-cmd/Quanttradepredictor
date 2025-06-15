@@ -139,8 +139,8 @@ class DataProcessor:
                     # Try different date formats
                     df[date_col] = pd.to_datetime(df[date_col], infer_datetime_format=True)
                 except:
-                    # Try specific formats
-                    date_formats = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', 
+                    # Try specific formats, prioritizing DD-MM-YYYY HH:MM:SS
+                    date_formats = ['%d-%m-%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', 
                                   '%Y/%m/%d', '%d-%m-%Y', '%m-%d-%Y']
                     parsed = False
                     for fmt in date_formats:
