@@ -6,6 +6,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, mean_squared_error, mean_absolute_error
 from typing import Dict, Tuple, Any
 import streamlit as st
+from datetime import datetime
 
 class QuantTradingModels:
     """XGBoost models for quantitative trading predictions."""
@@ -55,6 +56,14 @@ class QuantTradingModels:
         volatility_window = 10
         current_vol = df['Close'].rolling(volatility_window).std()
         future_vol = current_vol.shift(-1)
+        
+        # Remove NaN values and ensure we have valid volatility data
+        future_vol = future_vol.fillna(method='ffill').fillna(method='bfill')
+        
+        # Ensure volatility is positive and finite
+        future_vol = future_vol.clip(lower=0.0001)  # Minimum volatility threshold
+        future_vol = future_vol[np.isfinite(future_vol)]
+        
         targets['volatility'] = future_vol
         
         # 5. Trend vs sideways classification
@@ -202,6 +211,14 @@ class QuantTradingModels:
             unique_targets = y_clean.unique()
             if len(unique_targets) < 2:
                 raise ValueError(f"Insufficient target classes for {model_name}. Found classes: {unique_targets}")
+        else:
+            # For regression tasks (like volatility), remove NaN and infinite values
+            valid_targets = np.isfinite(y_clean) & (y_clean > 0)
+            X_clean = X_clean[valid_targets]
+            y_clean = y_clean[valid_targets]
+            
+            if len(y_clean) == 0:
+                raise ValueError(f"No valid target values for {model_name} after cleaning")
         
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training {model_name}. Need at least 100 samples, got {len(X_clean)}")
