@@ -120,68 +120,113 @@ class QuantTradingModels:
         reversal_down = (df['Close'] >= current_high * 0.99) & (low_3 < df['Close'] * 0.98)
         targets['reversal'] = (reversal_up | reversal_down).astype(int)
         
-        # 7. Buy/Sell/Hold signals
-        # Create balanced signals using multiple criteria
+        # 7. Buy/Sell/Hold signals - SCALPING STRATEGY FOR 5-MIN CANDLES
+        # More aggressive signal generation with tighter thresholds
         
-        # Calculate price momentum and trends
-        price_momentum_1 = df['Close'].shift(-1) / df['Close'] - 1
-        price_momentum_3 = df['Close'].shift(-3) / df['Close'] - 1
-        price_momentum_5 = df['Close'].shift(-5) / df['Close'] - 1
+        # Calculate short-term momentum for scalping
+        price_momentum_1 = df['Close'].shift(-1) / df['Close'] - 1  # Next candle
+        price_momentum_2 = df['Close'].shift(-2) / df['Close'] - 1  # 2 candles ahead
+        price_momentum_3 = df['Close'].shift(-3) / df['Close'] - 1  # 3 candles ahead
         
-        # Calculate moving averages for trend detection
-        sma_5 = df['Close'].rolling(5).mean()
-        sma_20 = df['Close'].rolling(20).mean()
+        # Very short moving averages for scalping
+        ema_3 = df['Close'].ewm(span=3).mean()  # 15 min
+        ema_9 = df['Close'].ewm(span=9).mean()  # 45 min
+        sma_5 = df['Close'].rolling(5).mean()   # 25 min
         
-        # Calculate volatility for adaptive thresholds
-        volatility = df['Close'].pct_change().rolling(20).std()
-        avg_volatility = volatility.mean()
+        # Calculate intraday volatility (more responsive)
+        volatility_short = df['Close'].pct_change().rolling(10).std()
+        volatility_long = df['Close'].pct_change().rolling(20).std()
         
-        # Adaptive thresholds based on volatility
-        buy_threshold = max(0.005, avg_volatility * 0.5)  # At least 0.5% or half the average volatility
-        sell_threshold = -buy_threshold
+        # SCALPING THRESHOLDS - Much tighter for 5-min candles
+        base_threshold = 0.0015  # 0.15% base threshold for scalping
+        volatility_multiplier = 0.3  # Lower multiplier for tighter signals
         
-        # Multiple signal criteria
-        # Momentum signals
-        strong_up_momentum = price_momentum_1 > buy_threshold
-        weak_up_momentum = (price_momentum_1 > 0) & (price_momentum_3 > buy_threshold)
-        strong_down_momentum = price_momentum_1 < sell_threshold
-        weak_down_momentum = (price_momentum_1 < 0) & (price_momentum_3 < sell_threshold)
+        # Dynamic thresholds based on recent volatility
+        dynamic_threshold = np.maximum(base_threshold, volatility_short * volatility_multiplier)
+        buy_threshold = dynamic_threshold
+        sell_threshold = -dynamic_threshold
         
-        # Trend signals
-        uptrend = df['Close'] > sma_5
-        strong_uptrend = (df['Close'] > sma_5) & (sma_5 > sma_20)
-        downtrend = df['Close'] < sma_5
-        strong_downtrend = (df['Close'] < sma_5) & (sma_5 < sma_20)
+        # SCALPING SIGNAL CRITERIA
         
-        # Combine signals with different weights
-        buy_score = (strong_up_momentum.astype(int) * 3 + 
-                    weak_up_momentum.astype(int) * 2 +
-                    strong_uptrend.astype(int) * 2 +
-                    uptrend.astype(int) * 1)
+        # 1. Micro momentum signals (very short-term)
+        micro_up = price_momentum_1 > buy_threshold * 0.5  # Even smaller moves
+        micro_down = price_momentum_1 < sell_threshold * 0.5
         
-        sell_score = (strong_down_momentum.astype(int) * 3 + 
-                     weak_down_momentum.astype(int) * 2 +
-                     strong_downtrend.astype(int) * 2 +
-                     downtrend.astype(int) * 1)
+        # 2. EMA crossover signals (fast scalping indicator)
+        ema_bullish = (df['Close'] > ema_3) & (ema_3 > ema_9)
+        ema_bearish = (df['Close'] < ema_3) & (ema_3 < ema_9)
         
-        # Generate signals based on scores
-        # Buy: score >= 4, Sell: score >= 4, Hold: otherwise
-        buy_signals = buy_score >= 4
-        sell_signals = sell_score >= 4
+        # 3. Price action signals
+        breakout_up = df['Close'] > df['High'].rolling(3).max().shift(1)  # Breaking recent high
+        breakout_down = df['Close'] < df['Low'].rolling(3).min().shift(1)  # Breaking recent low
         
-        # Ensure we don't have conflicting signals
-        conflicting = buy_signals & sell_signals
-        buy_signals = buy_signals & ~conflicting
-        sell_signals = sell_signals & ~conflicting
+        # 4. Volume confirmation (if available)
+        if 'Volume' in df.columns:
+            volume_avg = df['Volume'].rolling(10).mean()
+            high_volume = df['Volume'] > volume_avg * 1.2
+        else:
+            high_volume = pd.Series(True, index=df.index)  # Default to True if no volume
         
-        # Create final signals
-        signals = np.where(buy_signals, 2, np.where(sell_signals, 0, 1))  # 2=Buy, 1=Hold, 0=Sell
+        # 5. Volatility expansion (good for scalping entries)
+        vol_expansion = volatility_short > volatility_long * 1.1
+        
+        # 6. Price relative to recent range
+        high_5 = df['High'].rolling(5).max()
+        low_5 = df['Low'].rolling(5).min()
+        range_5 = high_5 - low_5
+        price_position = (df['Close'] - low_5) / range_5
+        
+        upper_range = price_position > 0.7  # In upper 30% of recent range
+        lower_range = price_position < 0.3  # In lower 30% of recent range
+        
+        # SCALPING BUY SIGNALS (More aggressive)
+        scalp_buy_signals = (
+            (micro_up & ema_bullish & high_volume) |  # Strong micro momentum with trend
+            (breakout_up & vol_expansion) |           # Breakout with volume
+            (price_momentum_2 > buy_threshold & ema_bullish) |  # 2-candle momentum
+            (lower_range & micro_up & (df['Close'] > sma_5))    # Bounce from low with trend
+        )
+        
+        # SCALPING SELL SIGNALS (More aggressive)
+        scalp_sell_signals = (
+            (micro_down & ema_bearish & high_volume) |  # Strong micro momentum against trend
+            (breakout_down & vol_expansion) |           # Breakdown with volume
+            (price_momentum_2 < sell_threshold & ema_bearish) | # 2-candle momentum down
+            (upper_range & micro_down & (df['Close'] < sma_5))  # Rejection from high against trend
+        )
+        
+        # Additional scalping filters to reduce whipsaws
+        # Avoid trading in very low volatility (sideways market)
+        sufficient_volatility = volatility_short > volatility_short.rolling(50).quantile(0.3)
+        
+        # Apply volatility filter
+        scalp_buy_signals = scalp_buy_signals & sufficient_volatility
+        scalp_sell_signals = scalp_sell_signals & sufficient_volatility
+        
+        # Ensure no conflicting signals
+        conflicting = scalp_buy_signals & scalp_sell_signals
+        scalp_buy_signals = scalp_buy_signals & ~conflicting
+        scalp_sell_signals = scalp_sell_signals & ~conflicting
+        
+        # Create final scalping signals with reduced hold periods
+        signals = np.where(scalp_buy_signals, 2, 
+                          np.where(scalp_sell_signals, 0, 1))  # 2=Buy, 1=Hold, 0=Sell
+        
         targets['trading_signal'] = pd.Series(signals, index=df.index)
         
-        # Debug information for trading signals
+        # Debug information for scalping trading signals
         signal_counts = pd.Series(signals).value_counts()
-        print(f"Trading Signal Distribution: Buy={signal_counts.get(2, 0)}, Hold={signal_counts.get(1, 0)}, Sell={signal_counts.get(0, 0)}")
-        print(f"Buy threshold: {buy_threshold:.4f}, Sell threshold: {sell_threshold:.4f}")
+        total_signals = len(signals)
+        buy_pct = (signal_counts.get(2, 0) / total_signals) * 100
+        sell_pct = (signal_counts.get(0, 0) / total_signals) * 100
+        hold_pct = (signal_counts.get(1, 0) / total_signals) * 100
+        
+        print(f"SCALPING Trading Signal Distribution:")
+        print(f"  Buy: {signal_counts.get(2, 0)} ({buy_pct:.1f}%)")
+        print(f"  Hold: {signal_counts.get(1, 0)} ({hold_pct:.1f}%)")  
+        print(f"  Sell: {signal_counts.get(0, 0)} ({sell_pct:.1f}%)")
+        print(f"Base threshold: {base_threshold:.4f}, Avg dynamic threshold: {dynamic_threshold.mean():.4f}")
+        print(f"Volatility range: {volatility_short.min():.4f} to {volatility_short.max():.4f}")
         
         # Debug information for profit_prob
         if 'profit_prob' in targets:
