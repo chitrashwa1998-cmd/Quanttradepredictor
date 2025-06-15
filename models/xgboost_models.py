@@ -76,22 +76,67 @@ class QuantTradingModels:
         targets['reversal'] = (reversal_up | reversal_down).astype(int)
         
         # 7. Buy/Sell/Hold signals
-        # Simplified signal generation to avoid issues with missing indicators
-        # Use only price-based signals for reliability
+        # Create balanced signals using multiple criteria
         
-        # Create more robust signals based on price momentum
+        # Calculate price momentum and trends
         price_momentum_1 = df['Close'].shift(-1) / df['Close'] - 1
         price_momentum_3 = df['Close'].shift(-3) / df['Close'] - 1
+        price_momentum_5 = df['Close'].shift(-5) / df['Close'] - 1
         
-        # Simple signal logic: Buy if strong positive momentum, Sell if strong negative, Hold otherwise
-        buy_threshold = 0.015   # 1.5% positive momentum
-        sell_threshold = -0.015 # 1.5% negative momentum
+        # Calculate moving averages for trend detection
+        sma_5 = df['Close'].rolling(5).mean()
+        sma_20 = df['Close'].rolling(20).mean()
         
-        buy_signal = (price_momentum_1 > buy_threshold) | (price_momentum_3 > buy_threshold * 2)
-        sell_signal = (price_momentum_1 < sell_threshold) | (price_momentum_3 < sell_threshold * 2)
+        # Calculate volatility for adaptive thresholds
+        volatility = df['Close'].pct_change().rolling(20).std()
+        avg_volatility = volatility.mean()
         
-        signals = np.where(buy_signal, 2, np.where(sell_signal, 0, 1))  # 2=Buy, 1=Hold, 0=Sell
+        # Adaptive thresholds based on volatility
+        buy_threshold = max(0.005, avg_volatility * 0.5)  # At least 0.5% or half the average volatility
+        sell_threshold = -buy_threshold
+        
+        # Multiple signal criteria
+        # Momentum signals
+        strong_up_momentum = price_momentum_1 > buy_threshold
+        weak_up_momentum = (price_momentum_1 > 0) & (price_momentum_3 > buy_threshold)
+        strong_down_momentum = price_momentum_1 < sell_threshold
+        weak_down_momentum = (price_momentum_1 < 0) & (price_momentum_3 < sell_threshold)
+        
+        # Trend signals
+        uptrend = df['Close'] > sma_5
+        strong_uptrend = (df['Close'] > sma_5) & (sma_5 > sma_20)
+        downtrend = df['Close'] < sma_5
+        strong_downtrend = (df['Close'] < sma_5) & (sma_5 < sma_20)
+        
+        # Combine signals with different weights
+        buy_score = (strong_up_momentum.astype(int) * 3 + 
+                    weak_up_momentum.astype(int) * 2 +
+                    strong_uptrend.astype(int) * 2 +
+                    uptrend.astype(int) * 1)
+        
+        sell_score = (strong_down_momentum.astype(int) * 3 + 
+                     weak_down_momentum.astype(int) * 2 +
+                     strong_downtrend.astype(int) * 2 +
+                     downtrend.astype(int) * 1)
+        
+        # Generate signals based on scores
+        # Buy: score >= 4, Sell: score >= 4, Hold: otherwise
+        buy_signals = buy_score >= 4
+        sell_signals = sell_score >= 4
+        
+        # Ensure we don't have conflicting signals
+        conflicting = buy_signals & sell_signals
+        buy_signals = buy_signals & ~conflicting
+        sell_signals = sell_signals & ~conflicting
+        
+        # Create final signals
+        signals = np.where(buy_signals, 2, np.where(sell_signals, 0, 1))  # 2=Buy, 1=Hold, 0=Sell
         targets['trading_signal'] = pd.Series(signals, index=df.index)
+        
+        # Debug information for trading signals
+        signal_counts = pd.Series(signals).value_counts()
+        print(f"Trading Signal Distribution: Buy={signal_counts.get(2, 0)}, Hold={signal_counts.get(1, 0)}, Sell={signal_counts.get(0, 0)}")
+        print(f"Buy threshold: {buy_threshold:.4f}, Sell threshold: {sell_threshold:.4f}")
         
         # Debug information for profit_prob
         if 'profit_prob' in targets:
