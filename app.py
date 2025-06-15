@@ -22,6 +22,8 @@ if 'predictions' not in st.session_state:
     st.session_state.predictions = None
 if 'features' not in st.session_state:
     st.session_state.features = None
+if 'model_trainer' not in st.session_state:
+    st.session_state.model_trainer = None
 
 # Main page
 st.title("📈 Quantitative Trading Model System")

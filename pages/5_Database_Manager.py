@@ -33,8 +33,11 @@ with col3:
 # Datasets management
 st.header("📈 Saved Datasets")
 
-if db_info.get('total_datasets', 0) > 0:
-    for i, dataset in enumerate(db_info['datasets']):
+datasets = db_info.get('datasets', [])
+
+if len(datasets) > 0:
+    st.success(f"Found {len(datasets)} dataset(s) in database")
+    for i, dataset in enumerate(datasets):
         with st.expander(f"📊 {dataset['name']} ({dataset['rows']} rows)"):
             col1, col2, col3 = st.columns(3)
             

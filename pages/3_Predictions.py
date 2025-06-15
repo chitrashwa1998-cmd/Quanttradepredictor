@@ -20,6 +20,11 @@ if not st.session_state.models:
     st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
     st.stop()
 
+# Initialize model trainer if not available
+if 'model_trainer' not in st.session_state or st.session_state.model_trainer is None:
+    st.warning("⚠️ Model trainer not initialized. Please go to the **Model Training** page first.")
+    st.stop()
+
 df = st.session_state.data
 models = st.session_state.models
 model_trainer = st.session_state.model_trainer
@@ -29,16 +34,29 @@ available_models = [name for name, info in models.items() if info is not None]
 
 if not available_models:
     st.error("❌ No successfully trained models found.")
+    st.info("Please go to the **Model Training** page to train models first.")
+    
+    # Show what's in session state for debugging
+    with st.expander("🔍 Debug Information"):
+        st.write("Models in session state:", list(models.keys()) if models else "None")
+        st.write("Model values:", {k: "Loaded" if v is not None else "None" for k, v in models.items()} if models else "Empty")
     st.stop()
 
 st.header("Prediction Dashboard")
 
-# Model selection
-selected_model = st.selectbox(
-    "Select Model for Analysis",
-    available_models,
-    format_func=lambda x: x.replace('_', ' ').title()
-)
+# Model selection with better error handling
+try:
+    selected_model = st.selectbox(
+        "Select Model for Analysis",
+        available_models,
+        format_func=lambda x: x.replace('_', ' ').title(),
+        help="Select a trained model to generate predictions"
+    )
+except Exception as e:
+    st.error(f"Error loading model options: {str(e)}")
+    st.info("Try refreshing the page or retraining your models.")
+    available_models = []
+    selected_model = None
 
 # Time range selection for predictions
 st.subheader("Time Range Selection")
