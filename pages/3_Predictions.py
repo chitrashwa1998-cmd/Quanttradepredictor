@@ -673,6 +673,255 @@ if st.session_state.features is not None:
             st.dataframe(recent_periods[['Start_Date', 'End_Date', 'Market_State', 'Duration_Days']], 
                         use_container_width=True)
         
+        elif selected_model == 'reversal':
+            st.subheader("Reversal Point Predictions")
+            
+            # Reversal predictions (0=No Reversal, 1=Reversal Expected)
+            pred_df = pd.DataFrame({
+                'Date': features_filtered.index,
+                'Price': df_filtered['Close'],
+                'Reversal_Prediction': predictions,
+                'Reversal_Signal': ['Reversal Expected' if p == 1 else 'No Reversal' for p in predictions]
+            })
+            
+            if probabilities is not None:
+                pred_df['Confidence'] = np.max(probabilities, axis=1)
+            
+            # ENHANCED REVERSAL ANALYSIS
+            # Calculate additional technical indicators for reversal confirmation
+            pred_df['Price_Change'] = pred_df['Price'].pct_change()
+            pred_df['Price_Change_3'] = pred_df['Price'].pct_change(3)
+            pred_df['Price_Change_5'] = pred_df['Price'].pct_change(5)
+            
+            # Moving averages for trend context
+            pred_df['SMA_10'] = pred_df['Price'].rolling(10).mean()
+            pred_df['SMA_20'] = pred_df['Price'].rolling(20).mean()
+            
+            # RSI-like momentum indicator
+            price_diff = pred_df['Price'].diff()
+            gains = price_diff.where(price_diff > 0, 0).rolling(14).mean()
+            losses = (-price_diff.where(price_diff < 0, 0)).rolling(14).mean()
+            pred_df['Momentum'] = 100 - (100 / (1 + gains / losses))
+            
+            # Bollinger Band-like volatility
+            rolling_std = pred_df['Price'].rolling(20).std()
+            pred_df['Upper_Band'] = pred_df['SMA_20'] + (rolling_std * 2)
+            pred_df['Lower_Band'] = pred_df['SMA_20'] - (rolling_std * 2)
+            
+            # Identify different types of reversals
+            reversal_points = pred_df[pred_df['Reversal_Prediction'] == 1].copy()
+            
+            if len(reversal_points) > 0:
+                # Classify reversal types based on price action and context
+                reversal_points['Reversal_Type'] = 'Unknown'
+                reversal_points['Reversal_Strength'] = 'Medium'
+                
+                for idx in reversal_points.index:
+                    current_price = pred_df.loc[idx, 'Price']
+                    sma_10 = pred_df.loc[idx, 'SMA_10']
+                    sma_20 = pred_df.loc[idx, 'SMA_20']
+                    momentum = pred_df.loc[idx, 'Momentum']
+                    upper_band = pred_df.loc[idx, 'Upper_Band']
+                    lower_band = pred_df.loc[idx, 'Lower_Band']
+                    price_change_3 = pred_df.loc[idx, 'Price_Change_3']
+                    
+                    # Determine reversal type
+                    if current_price <= lower_band and momentum < 30:
+                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bullish Oversold'
+                        reversal_points.loc[idx, 'Reversal_Strength'] = 'Strong'
+                    elif current_price >= upper_band and momentum > 70:
+                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bearish Overbought'
+                        reversal_points.loc[idx, 'Reversal_Strength'] = 'Strong'
+                    elif current_price < sma_10 and price_change_3 < -0.02:
+                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bullish Support'
+                        reversal_points.loc[idx, 'Reversal_Strength'] = 'Medium'
+                    elif current_price > sma_10 and price_change_3 > 0.02:
+                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bearish Resistance'
+                        reversal_points.loc[idx, 'Reversal_Strength'] = 'Medium'
+                    elif momentum < 35:
+                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bullish Momentum'
+                    elif momentum > 65:
+                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bearish Momentum'
+                    else:
+                        reversal_points.loc[idx, 'Reversal_Type'] = 'Neutral Reversal'
+                        reversal_points.loc[idx, 'Reversal_Strength'] = 'Weak'
+            
+            # Create comprehensive visualization
+            fig = make_subplots(rows=3, cols=1,
+                              subplot_titles=('Price Chart with Reversal Points', 'Momentum Indicator', 'Reversal Confidence'),
+                              vertical_spacing=0.08,
+                              row_heights=[0.6, 0.2, 0.2])
+            
+            # Main price chart with Bollinger Bands
+            fig.add_trace(
+                go.Scatter(x=pred_df['Date'], y=pred_df['Price'], 
+                          name='Price', line=dict(color='blue', width=2)),
+                row=1, col=1
+            )
+            
+            fig.add_trace(
+                go.Scatter(x=pred_df['Date'], y=pred_df['SMA_20'], 
+                          name='SMA 20', line=dict(color='gray', width=1, dash='dash')),
+                row=1, col=1
+            )
+            
+            fig.add_trace(
+                go.Scatter(x=pred_df['Date'], y=pred_df['Upper_Band'], 
+                          name='Upper Band', line=dict(color='lightgray', width=1, dash='dot'),
+                          fill=None),
+                row=1, col=1
+            )
+            
+            fig.add_trace(
+                go.Scatter(x=pred_df['Date'], y=pred_df['Lower_Band'], 
+                          name='Lower Band', line=dict(color='lightgray', width=1, dash='dot'),
+                          fill='tonexty', fillcolor='rgba(128,128,128,0.1)'),
+                row=1, col=1
+            )
+            
+            # Add reversal points with different colors and symbols based on type
+            if len(reversal_points) > 0:
+                # Group by reversal type for better visualization
+                reversal_types = reversal_points['Reversal_Type'].unique()
+                colors = {
+                    'Bullish Oversold': 'darkgreen',
+                    'Bearish Overbought': 'darkred', 
+                    'Bullish Support': 'green',
+                    'Bearish Resistance': 'red',
+                    'Bullish Momentum': 'lightgreen',
+                    'Bearish Momentum': 'lightcoral',
+                    'Neutral Reversal': 'orange',
+                    'Unknown': 'gray'
+                }
+                
+                symbols = {
+                    'Strong': 'star',
+                    'Medium': 'diamond',
+                    'Weak': 'circle'
+                }
+                
+                for rev_type in reversal_types:
+                    type_data = reversal_points[reversal_points['Reversal_Type'] == rev_type]
+                    
+                    for strength in ['Strong', 'Medium', 'Weak']:
+                        strength_data = type_data[type_data['Reversal_Strength'] == strength]
+                        if len(strength_data) > 0:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=strength_data['Date'], 
+                                    y=strength_data['Price'],
+                                    mode='markers',
+                                    marker=dict(
+                                        symbol=symbols[strength],
+                                        color=colors.get(rev_type, 'gray'),
+                                        size=12 if strength == 'Strong' else 10 if strength == 'Medium' else 8,
+                                        line=dict(width=2, color='black')
+                                    ),
+                                    name=f'{rev_type} ({strength})',
+                                    hovertemplate=f'<b>{rev_type}</b><br>Strength: {strength}<br>Date: %{{x}}<br>Price: %{{y:.2f}}<extra></extra>'
+                                ),
+                                row=1, col=1
+                            )
+            
+            # Momentum chart
+            fig.add_trace(
+                go.Scatter(x=pred_df['Date'], y=pred_df['Momentum'],
+                          name='Momentum', line=dict(color='purple')),
+                row=2, col=1
+            )
+            
+            # Add momentum reference lines
+            fig.add_hline(y=70, line_dash="dash", line_color="red", opacity=0.7, row=2, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="green", opacity=0.7, row=2, col=1)
+            fig.add_hline(y=50, line_dash="solid", line_color="gray", opacity=0.5, row=2, col=1)
+            
+            # Confidence chart (if available)
+            if 'Confidence' in pred_df.columns:
+                fig.add_trace(
+                    go.Scatter(x=pred_df['Date'], y=pred_df['Confidence'],
+                              name='Prediction Confidence', line=dict(color='orange')),
+                    row=3, col=1
+                )
+            
+            fig.update_layout(height=800, title="Reversal Point Detection and Analysis")
+            fig.update_xaxes(title_text="Date", row=3, col=1)
+            fig.update_yaxes(title_text="Price", row=1, col=1)
+            fig.update_yaxes(title_text="Momentum (0-100)", row=2, col=1)
+            fig.update_yaxes(title_text="Confidence", row=3, col=1)
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Statistics and analysis
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                reversal_pct = (predictions == 1).mean() * 100
+                st.metric("Reversal Signals", f"{reversal_pct:.1f}%")
+            
+            with col2:
+                if len(reversal_points) > 0:
+                    strong_reversals = len(reversal_points[reversal_points['Reversal_Strength'] == 'Strong'])
+                    st.metric("Strong Reversals", strong_reversals)
+                else:
+                    st.metric("Strong Reversals", 0)
+            
+            with col3:
+                if 'Confidence' in pred_df.columns:
+                    avg_confidence = pred_df[pred_df['Reversal_Prediction'] == 1]['Confidence'].mean()
+                    st.metric("Avg Confidence", f"{avg_confidence:.3f}")
+                else:
+                    st.metric("Avg Confidence", "N/A")
+            
+            with col4:
+                recent_reversals = len(reversal_points.tail(10))
+                st.metric("Recent Reversals", recent_reversals)
+            
+            # Detailed reversal analysis table
+            if len(reversal_points) > 0:
+                st.subheader("🔄 Detailed Reversal Analysis")
+                
+                # Show recent reversal points with full analysis
+                recent_reversals_detailed = reversal_points.tail(10).copy()
+                recent_reversals_detailed['Date_Formatted'] = recent_reversals_detailed['Date'].dt.strftime('%Y-%m-%d %H:%M')
+                recent_reversals_detailed['Price_Formatted'] = recent_reversals_detailed['Price'].apply(lambda x: f"${x:.2f}")
+                recent_reversals_detailed['Price_Change_3_Formatted'] = recent_reversals_detailed['Price_Change_3'].apply(lambda x: f"{x*100:.2f}%")
+                
+                display_columns = ['Date_Formatted', 'Price_Formatted', 'Reversal_Type', 'Reversal_Strength', 'Price_Change_3_Formatted']
+                display_names = ['Date', 'Price', 'Reversal Type', 'Strength', '3-Day Change']
+                
+                if 'Confidence' in recent_reversals_detailed.columns:
+                    recent_reversals_detailed['Confidence_Formatted'] = recent_reversals_detailed['Confidence'].apply(lambda x: f"{x:.3f}")
+                    display_columns.append('Confidence_Formatted')
+                    display_names.append('Confidence')
+                
+                display_df = recent_reversals_detailed[display_columns].copy()
+                display_df.columns = display_names
+                display_df = display_df.sort_values('Date', ascending=False)
+                
+                st.dataframe(display_df, use_container_width=True)
+                
+                # Reversal type distribution
+                st.subheader("📊 Reversal Type Distribution")
+                type_counts = reversal_points['Reversal_Type'].value_counts()
+                
+                fig_pie = go.Figure(data=[go.Pie(
+                    labels=type_counts.index,
+                    values=type_counts.values,
+                    hole=0.3
+                )])
+                fig_pie.update_layout(title="Distribution of Reversal Types", height=400)
+                st.plotly_chart(fig_pie, use_container_width=True)
+                
+                st.info("""
+                **Reversal Signal Interpretation:**
+                - 🟢 **Bullish Oversold**: Price at lower band with low momentum - strong buy signal
+                - 🔴 **Bearish Overbought**: Price at upper band with high momentum - strong sell signal  
+                - 🟢 **Bullish Support**: Price finding support with recent decline - potential buy
+                - 🔴 **Bearish Resistance**: Price hitting resistance after recent rise - potential sell
+                - **Momentum Reversals**: Based on momentum indicators crossing key levels
+                - **Strength**: Strong signals have higher probability of success
+                """)
+        
         elif selected_model == 'volatility':
             st.subheader("Volatility Forecasting")
             
