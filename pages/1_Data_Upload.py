@@ -27,6 +27,9 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
+    # Display file info
+    st.info(f"**File Info**: {uploaded_file.name} ({uploaded_file.size:,} bytes)")
+    
     with st.spinner("Loading and processing data..."):
         df, message = DataProcessor.load_and_process_data(uploaded_file)
     
@@ -254,14 +257,51 @@ if uploaded_file is not None:
         st.info("📋 **Next Steps:** Once your data is loaded and processed, go to the **Model Training** page to train the XGBoost models.")
         
     else:
-        st.error(f"Error loading data: {message}")
-        st.markdown("""
-        **Common issues:**
-        - Make sure your CSV file has the required columns (Date, Open, High, Low, Close)
-        - Check that dates are in a recognizable format
-        - Ensure all price columns contain numeric values
-        - Verify that the file is not corrupted
-        """)
+        st.error(f"❌ Error loading data: {message}")
+        
+        # Show troubleshooting section
+        with st.expander("🔧 Troubleshooting Guide", expanded=True):
+            st.markdown("""
+            **Common issues and solutions:**
+            
+            1. **Column Names**: Ensure your CSV has columns named Date/Datetime, Open, High, Low, Close
+               - Variations like 'O', 'H', 'L', 'C' are automatically detected
+               - Column names are case-insensitive
+            
+            2. **File Format**: 
+               - Use standard CSV format with comma separators
+               - Try different separators (semicolon `;` or tab) if needed
+               - Ensure file encoding is UTF-8
+            
+            3. **Date Format**: Supported formats include:
+               - YYYY-MM-DD HH:MM:SS (e.g., 2023-01-01 09:30:00)
+               - YYYY-MM-DD (e.g., 2023-01-01)
+               - MM/DD/YYYY, DD/MM/YYYY
+            
+            4. **Data Quality**:
+               - All price values must be positive numbers
+               - High ≥ Low, High ≥ Open, High ≥ Close
+               - Low ≤ Open, Low ≤ Close
+               - Need at least 100 data rows
+            
+            5. **File Size**: Large files (>500MB) may take longer to process
+            """)
+            
+            # Show first few lines of uploaded file for debugging
+            if uploaded_file is not None:
+                st.markdown("**File Preview (first 5 lines):**")
+                try:
+                    uploaded_file.seek(0)
+                    preview_lines = []
+                    for i, line in enumerate(uploaded_file):
+                        if i >= 5:
+                            break
+                        preview_lines.append(line.decode('utf-8', errors='ignore').strip())
+                    st.code('\n'.join(preview_lines))
+                except Exception as e:
+                    st.warning(f"Could not preview file: {e}")
+                finally:
+                    uploaded_file.seek(0)
 
 else:
     st.info("👆 Please upload a CSV file with OHLC data to get started.")
