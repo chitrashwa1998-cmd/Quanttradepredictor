@@ -57,12 +57,48 @@ class QuantTradingModels:
         future_vol = current_vol.shift(-1)
         targets['volatility'] = future_vol
         
-        # 5. Trend vs sideways
+        # 5. Trend vs sideways classification
+        # Use multiple timeframes to determine trend strength
+        price_change_3 = df['Close'].shift(-3) / df['Close'] - 1
         price_change_5 = df['Close'].shift(-5) / df['Close'] - 1
-        trend_threshold = 0.02  # 2% threshold
-        # Handle NaN values and create valid binary targets
-        trend_sideways = np.where(np.abs(price_change_5) > trend_threshold, 1, 0)
-        targets['trend_sideways'] = pd.Series(trend_sideways, index=df.index)
+        price_change_10 = df['Close'].shift(-10) / df['Close'] - 1
+        
+        # Calculate moving averages for trend detection
+        sma_short = df['Close'].rolling(5).mean()
+        sma_long = df['Close'].rolling(20).mean()
+        
+        # Calculate volatility for adaptive threshold
+        volatility = df['Close'].pct_change().rolling(20).std()
+        adaptive_threshold = volatility * 2  # Dynamic threshold based on volatility
+        base_threshold = 0.015  # 1.5% base threshold
+        
+        # Combine thresholds
+        trend_threshold = np.maximum(adaptive_threshold, base_threshold)
+        
+        # Multiple trend criteria
+        # 1. Price momentum over different periods
+        strong_trend_3 = np.abs(price_change_3) > trend_threshold
+        strong_trend_5 = np.abs(price_change_5) > trend_threshold
+        strong_trend_10 = np.abs(price_change_10) > trend_threshold * 1.5
+        
+        # 2. Moving average trend
+        ma_trend = np.abs(sma_short / sma_long - 1) > 0.01  # 1% difference in MAs
+        
+        # 3. Price relative to moving averages
+        price_above_ma = df['Close'] > sma_short
+        consistent_trend = (price_above_ma == price_above_ma.shift(3)) & (price_above_ma == price_above_ma.shift(5))
+        
+        # Combine all criteria - trending if any strong trend indicator is true
+        is_trending = (strong_trend_3 | strong_trend_5 | strong_trend_10 | ma_trend | consistent_trend)
+        
+        # Convert to binary: 1 = trending, 0 = sideways
+        targets['trend_sideways'] = is_trending.astype(int)
+        
+        # Debug information for trend_sideways
+        trend_counts = targets['trend_sideways'].value_counts()
+        print(f"Trend/Sideways Distribution: Trending={trend_counts.get(1, 0)}, Sideways={trend_counts.get(0, 0)}")
+        if len(trend_counts) > 0:
+            print(f"Trending percentage: {trend_counts.get(1, 0) / len(targets['trend_sideways']) * 100:.1f}%")
         
         # 6. Reversal points
         # Look for price reversals in next 3 periods
