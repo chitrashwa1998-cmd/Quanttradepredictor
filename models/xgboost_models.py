@@ -179,29 +179,52 @@ class QuantTradingModels:
         upper_range = price_position > 0.7  # In upper 30% of recent range
         lower_range = price_position < 0.3  # In lower 30% of recent range
         
+        # Convert all conditions to boolean Series explicitly
+        micro_up = micro_up.fillna(False).astype(bool)
+        micro_down = micro_down.fillna(False).astype(bool)
+        ema_bullish = ema_bullish.fillna(False).astype(bool)
+        ema_bearish = ema_bearish.fillna(False).astype(bool)
+        high_volume = high_volume.fillna(False).astype(bool)
+        breakout_up = breakout_up.fillna(False).astype(bool)
+        breakout_down = breakout_down.fillna(False).astype(bool)
+        vol_expansion = vol_expansion.fillna(False).astype(bool)
+        lower_range = lower_range.fillna(False).astype(bool)
+        upper_range = upper_range.fillna(False).astype(bool)
+        
+        # Create boolean masks for momentum conditions
+        momentum_2_bullish = (price_momentum_2 > buy_threshold).fillna(False).astype(bool)
+        momentum_2_bearish = (price_momentum_2 < sell_threshold).fillna(False).astype(bool)
+        price_above_sma = (df['Close'] > sma_5).fillna(False).astype(bool)
+        price_below_sma = (df['Close'] < sma_5).fillna(False).astype(bool)
+        
         # SCALPING BUY SIGNALS (More aggressive)
         scalp_buy_signals = (
             (micro_up & ema_bullish & high_volume) |  # Strong micro momentum with trend
             (breakout_up & vol_expansion) |           # Breakout with volume
-            (price_momentum_2 > buy_threshold & ema_bullish) |  # 2-candle momentum
-            (lower_range & micro_up & (df['Close'] > sma_5))    # Bounce from low with trend
+            (momentum_2_bullish & ema_bullish) |      # 2-candle momentum
+            (lower_range & micro_up & price_above_sma)    # Bounce from low with trend
         )
         
         # SCALPING SELL SIGNALS (More aggressive)
         scalp_sell_signals = (
             (micro_down & ema_bearish & high_volume) |  # Strong micro momentum against trend
             (breakout_down & vol_expansion) |           # Breakdown with volume
-            (price_momentum_2 < sell_threshold & ema_bearish) | # 2-candle momentum down
-            (upper_range & micro_down & (df['Close'] < sma_5))  # Rejection from high against trend
+            (momentum_2_bearish & ema_bearish) |        # 2-candle momentum down
+            (upper_range & micro_down & price_below_sma)  # Rejection from high against trend
         )
         
         # Additional scalping filters to reduce whipsaws
         # Avoid trading in very low volatility (sideways market)
-        sufficient_volatility = volatility_short > volatility_short.rolling(50).quantile(0.3)
+        volatility_quantile = volatility_short.rolling(50).quantile(0.3)
+        sufficient_volatility = (volatility_short > volatility_quantile).fillna(False).astype(bool)
         
         # Apply volatility filter
         scalp_buy_signals = scalp_buy_signals & sufficient_volatility
         scalp_sell_signals = scalp_sell_signals & sufficient_volatility
+        
+        # Ensure all signals are boolean and handle NaN values
+        scalp_buy_signals = scalp_buy_signals.fillna(False).astype(bool)
+        scalp_sell_signals = scalp_sell_signals.fillna(False).astype(bool)
         
         # Ensure no conflicting signals
         conflicting = scalp_buy_signals & scalp_sell_signals
