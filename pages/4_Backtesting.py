@@ -52,6 +52,12 @@ with col3:
 # Strategy selection
 st.subheader("Strategy Configuration")
 
+# Initialize variables with default values
+confidence_threshold = 0.7
+prob_threshold = 0.7
+stop_loss_pct = 5
+take_profit_pct = 10
+
 if selected_model == 'trading_signal':
     st.info("Using direct trading signals from the model (Buy/Sell/Hold)")
     strategy_type = 'direct_signals'
@@ -68,8 +74,6 @@ elif selected_model == 'direction':
     elif strategy_type == "Direction with Stop Loss":
         stop_loss_pct = st.slider("Stop Loss %", 1, 10, 5, 1)
         take_profit_pct = st.slider("Take Profit %", 1, 20, 10, 1)
-    else:
-        confidence_threshold = 0.7  # Default value
 
 else:  # profit_prob
     st.info("Using profit probability predictions for trade entry")
@@ -215,7 +219,8 @@ if 'backtest_results' in st.session_state:
     
     if 'backtest_signals' in st.session_state:
         signals = st.session_state.backtest_signals
-        fig = backtester.create_performance_chart(df_backtest, signals)
+        temp_backtester = Backtester(initial_capital=initial_capital, commission=commission)
+        fig = temp_backtester.create_performance_chart(df_backtest, signals)
         st.plotly_chart(fig, use_container_width=True)
     
     # Trade history
