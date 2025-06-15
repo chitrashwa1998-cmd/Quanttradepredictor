@@ -42,7 +42,18 @@ if not available_models:
         st.write("Model values:", {k: "Loaded" if v is not None else "None" for k, v in models.items()} if models else "Empty")
     st.stop()
 
-st.header("Prediction Dashboard")
+# Load custom CSS
+with open('style.css') as f:
+    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+
+st.markdown("""
+<div class="trading-header">
+    <h1 style="margin:0;">🎯 PREDICTION ENGINE</h1>
+    <p style="font-size: 1.2rem; margin: 1rem 0 0 0; color: rgba(255,255,255,0.8);">
+        Real-time Market Analysis & Forecasting
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # Model selection with better error handling
 try:

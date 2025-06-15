@@ -11,8 +11,18 @@ trading_db = TradingDatabase()
 
 st.set_page_config(page_title="Data Upload", page_icon="📊", layout="wide")
 
-st.title("📊 Data Upload and Preprocessing")
-st.markdown("---")
+# Load custom CSS
+with open('style.css') as f:
+    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+
+st.markdown("""
+<div class="trading-header">
+    <h1 style="margin:0;">📊 DATA UPLOAD CENTER</h1>
+    <p style="font-size: 1.2rem; margin: 1rem 0 0 0; color: rgba(255,255,255,0.8);">
+        Load and Process Market Data
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # File upload section
 st.header("Upload OHLC Data")

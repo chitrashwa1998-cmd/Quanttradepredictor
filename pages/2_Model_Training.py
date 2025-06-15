@@ -7,8 +7,18 @@ from features.technical_indicators import TechnicalIndicators
 
 st.set_page_config(page_title="Model Training", page_icon="🔬", layout="wide")
 
-st.title("🔬 Model Training")
-st.markdown("---")
+# Load custom CSS
+with open('style.css') as f:
+    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+
+st.markdown("""
+<div class="trading-header">
+    <h1 style="margin:0;">🔬 ML TRAINING LAB</h1>
+    <p style="font-size: 1.2rem; margin: 1rem 0 0 0; color: rgba(255,255,255,0.8);">
+        Advanced Machine Learning Model Training
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # Check if data is loaded
 if st.session_state.data is None:
