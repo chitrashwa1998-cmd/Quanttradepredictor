@@ -1,218 +1,453 @@
 
-/* THE QUANT TRADING ENGINE - Professional Styling */
+/* MODERN QUANT TRADING ENGINE - Premium Design */
 
-/* Import modern fonts */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+/* Import premium fonts */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Fira+Code:wght@300;400;500;600&display=swap');
 
-/* Global Variables */
+/* Modern Color Palette */
 :root {
-    --primary-bg: #0a0e1a;
-    --secondary-bg: #1a1f2e;
-    --accent-bg: #242940;
-    --primary-text: #e6e8eb;
-    --secondary-text: #9ca3af;
-    --accent-color: #00d4ff;
-    --success-color: #00ff88;
-    --warning-color: #ffaa00;
-    --danger-color: #ff4757;
-    --border-color: #2a3441;
-    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --gradient-accent: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
-    --shadow-glow: 0 0 20px rgba(0, 212, 255, 0.3);
-    --font-mono: 'JetBrains Mono', monospace;
-    --font-sans: 'Inter', sans-serif;
+    --primary-bg: #0f0f23;
+    --secondary-bg: #1a1a2e;
+    --accent-bg: #16213e;
+    --card-bg: #1e1e3f;
+    --primary-text: #ffffff;
+    --secondary-text: #b8b9cf;
+    --accent-text: #00ffa3;
+    --accent-blue: #00d4ff;
+    --accent-purple: #9146ff;
+    --accent-orange: #ff6b35;
+    --accent-pink: #ff3cac;
+    --success: #00ffa3;
+    --warning: #ffb800;
+    --error: #ff4757;
+    --border: rgba(255, 255, 255, 0.1);
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --glow: 0 0 30px rgba(0, 255, 163, 0.3);
+    --font-primary: 'Poppins', sans-serif;
+    --font-mono: 'Fira Code', monospace;
 }
 
-/* Main App Background */
-.main .block-container {
+/* Global Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    font-family: var(--font-primary);
     background: var(--primary-bg);
     color: var(--primary-text);
-    font-family: var(--font-sans);
-    padding: 2rem;
-    max-width: 1400px;
+    line-height: 1.6;
 }
 
-/* Streamlit App Background */
+/* Streamlit App */
 .stApp {
-    background: var(--primary-bg);
-    color: var(--primary-text);
+    background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+    min-height: 100vh;
 }
 
-/* Header Styling */
+.main .block-container {
+    padding: 2rem 3rem;
+    max-width: 1400px;
+    background: transparent;
+}
+
+/* Typography */
 h1, h2, h3, h4, h5, h6 {
-    color: var(--primary-text) !important;
-    font-family: var(--font-sans) !important;
+    font-family: var(--font-primary) !important;
     font-weight: 600 !important;
-    text-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+    color: var(--primary-text) !important;
+    margin-bottom: 1rem !important;
 }
 
 h1 {
-    font-size: 3rem !important;
-    background: var(--gradient-accent);
+    font-size: 3.5rem !important;
+    font-weight: 800 !important;
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     text-align: center;
-    margin-bottom: 2rem !important;
+    margin-bottom: 0.5rem !important;
 }
 
-/* Sidebar Styling */
+h2 {
+    font-size: 2rem !important;
+    color: var(--accent-text) !important;
+}
+
+h3 {
+    font-size: 1.5rem !important;
+    color: var(--accent-blue) !important;
+}
+
+p, span, div {
+    color: var(--secondary-text);
+    font-weight: 400;
+}
+
+/* Sidebar */
 .css-1d391kg {
     background: var(--secondary-bg) !important;
-    border-right: 2px solid var(--border-color);
+    border-right: 2px solid var(--border);
+    backdrop-filter: blur(10px);
 }
 
 .css-1d391kg .css-1v0mbdj {
     color: var(--primary-text) !important;
+    font-family: var(--font-primary) !important;
 }
 
-/* Metric Cards */
+/* Cards & Containers */
 .metric-container {
-    background: var(--secondary-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 1.5rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
     margin: 1rem 0;
-    box-shadow: var(--shadow-glow);
-    transition: transform 0.3s ease;
+    box-shadow: var(--shadow);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+}
+
+.metric-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple), var(--accent-pink));
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
 
 .metric-container:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 0 30px rgba(0, 212, 255, 0.4);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    border-color: var(--accent-text);
+}
+
+.metric-container:hover::before {
+    opacity: 1;
+}
+
+/* Trading Header */
+.trading-header {
+    background: linear-gradient(135deg, var(--accent-bg), var(--card-bg));
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3rem 2rem;
+    margin-bottom: 3rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.trading-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(0, 255, 163, 0.1), transparent);
+    transform: rotate(45deg);
+    animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+    100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
 }
 
 /* Buttons */
 .stButton > button {
-    background: var(--gradient-accent) !important;
-    color: white !important;
+    background: linear-gradient(135deg, var(--accent-text), var(--accent-blue)) !important;
+    color: var(--primary-bg) !important;
     border: none !important;
-    border-radius: 8px !important;
+    border-radius: 12px !important;
     padding: 0.75rem 2rem !important;
     font-weight: 600 !important;
-    font-family: var(--font-sans) !important;
-    transition: all 0.3s ease !important;
-    box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3) !important;
+    font-family: var(--font-primary) !important;
+    font-size: 1rem !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 4px 20px rgba(0, 255, 163, 0.3) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
 }
 
 .stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 6px 20px rgba(0, 212, 255, 0.5) !important;
+    transform: translateY(-2px) scale(1.02) !important;
+    box-shadow: 0 8px 30px rgba(0, 255, 163, 0.5) !important;
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple)) !important;
 }
 
-/* Data Tables */
-.dataframe {
-    background: var(--secondary-bg) !important;
-    border: 1px solid var(--border-color) !important;
-    border-radius: 8px !important;
-    font-family: var(--font-mono) !important;
-}
-
-.dataframe th {
-    background: var(--accent-bg) !important;
-    color: var(--accent-color) !important;
-    font-weight: 600 !important;
-}
-
-.dataframe td {
-    color: var(--primary-text) !important;
-    border-bottom: 1px solid var(--border-color) !important;
+.stButton > button:active {
+    transform: translateY(0) scale(0.98) !important;
 }
 
 /* Input Fields */
 .stTextInput > div > div > input,
 .stSelectbox > div > div > select,
-.stNumberInput > div > div > input {
-    background: var(--secondary-bg) !important;
+.stNumberInput > div > div > input,
+.stTextArea > div > div > textarea {
+    background: var(--card-bg) !important;
     color: var(--primary-text) !important;
-    border: 1px solid var(--border-color) !important;
-    border-radius: 6px !important;
-    font-family: var(--font-mono) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px !important;
+    padding: 0.75rem 1rem !important;
+    font-family: var(--font-primary) !important;
+    font-size: 1rem !important;
+    transition: all 0.3s ease !important;
 }
 
-/* Cards and Containers */
-.element-container {
-    background: var(--secondary-bg);
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
-    padding: 1rem;
-    margin: 0.5rem 0;
+.stTextInput > div > div > input:focus,
+.stSelectbox > div > div > select:focus,
+.stNumberInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+    border-color: var(--accent-text) !important;
+    box-shadow: 0 0 0 2px rgba(0, 255, 163, 0.2) !important;
+    outline: none !important;
+}
+
+/* Data Tables */
+.dataframe {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    font-family: var(--font-mono) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.dataframe th {
+    background: var(--accent-bg) !important;
+    color: var(--accent-text) !important;
+    font-weight: 600 !important;
+    padding: 1rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+
+.dataframe td {
+    color: var(--primary-text) !important;
+    padding: 0.75rem 1rem !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+
+.dataframe tr:hover {
+    background: rgba(0, 255, 163, 0.05) !important;
+}
+
+/* Metrics */
+.css-1r6slb0 {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    padding: 1.5rem !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.css-1r6slb0 > div > div {
+    color: var(--primary-text) !important;
+    font-family: var(--font-primary) !important;
 }
 
 /* Progress Bars */
 .stProgress > div > div > div {
-    background: var(--gradient-accent) !important;
+    background: linear-gradient(90deg, var(--accent-text), var(--accent-blue)) !important;
+    border-radius: 10px !important;
 }
 
-/* Alerts */
+/* Alerts & Messages */
 .stSuccess {
-    background: rgba(0, 255, 136, 0.1) !important;
-    border: 1px solid var(--success-color) !important;
-    color: var(--success-color) !important;
+    background: linear-gradient(135deg, rgba(0, 255, 163, 0.1), rgba(0, 255, 163, 0.05)) !important;
+    border: 1px solid var(--success) !important;
+    border-radius: 12px !important;
+    color: var(--success) !important;
+    font-weight: 500 !important;
 }
 
 .stWarning {
-    background: rgba(255, 170, 0, 0.1) !important;
-    border: 1px solid var(--warning-color) !important;
-    color: var(--warning-color) !important;
+    background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05)) !important;
+    border: 1px solid var(--warning) !important;
+    border-radius: 12px !important;
+    color: var(--warning) !important;
+    font-weight: 500 !important;
 }
 
 .stError {
-    background: rgba(255, 71, 87, 0.1) !important;
-    border: 1px solid var(--danger-color) !important;
-    color: var(--danger-color) !important;
+    background: linear-gradient(135deg, rgba(255, 71, 87, 0.1), rgba(255, 71, 87, 0.05)) !important;
+    border: 1px solid var(--error) !important;
+    border-radius: 12px !important;
+    color: var(--error) !important;
+    font-weight: 500 !important;
 }
 
-/* Custom Classes */
-.trading-header {
-    text-align: center;
-    padding: 2rem 0;
-    background: var(--gradient-primary);
-    border-radius: 15px;
+.stInfo {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05)) !important;
+    border: 1px solid var(--accent-blue) !important;
+    border-radius: 12px !important;
+    color: var(--accent-blue) !important;
+    font-weight: 500 !important;
+}
+
+/* Chart Containers */
+.chart-container {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin: 1rem 0;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+}
+
+/* Plotly Charts */
+.js-plotly-plot {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 0.5rem;
     margin-bottom: 2rem;
 }
 
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-    margin: 2rem 0;
+.stTabs [data-baseweb="tab"] {
+    background: transparent;
+    color: var(--secondary-text);
+    border-radius: 8px;
+    font-weight: 500;
+    font-family: var(--font-primary);
+    transition: all 0.3s ease;
 }
 
-.chart-container {
-    background: var(--secondary-bg);
-    border-radius: 12px;
-    padding: 1rem;
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow-glow);
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    background: linear-gradient(135deg, var(--accent-text), var(--accent-blue));
+    color: var(--primary-bg);
 }
 
-/* Animation */
-@keyframes glow {
-    0% { box-shadow: 0 0 5px rgba(0, 212, 255, 0.3); }
-    50% { box-shadow: 0 0 20px rgba(0, 212, 255, 0.6); }
-    100% { box-shadow: 0 0 5px rgba(0, 212, 255, 0.3); }
+/* Expanders */
+.streamlit-expanderHeader {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    color: var(--primary-text) !important;
+    font-weight: 600 !important;
 }
 
+.streamlit-expanderContent {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border) !important;
+    border-top: none !important;
+    border-radius: 0 0 12px 12px !important;
+}
+
+/* File Uploader */
+.stFileUploader > div > div {
+    background: var(--card-bg) !important;
+    border: 2px dashed var(--border) !important;
+    border-radius: 12px !important;
+    padding: 2rem !important;
+    transition: all 0.3s ease !important;
+}
+
+.stFileUploader > div > div:hover {
+    border-color: var(--accent-text) !important;
+    background: rgba(0, 255, 163, 0.05) !important;
+}
+
+/* Sliders */
+.stSlider > div > div > div {
+    background: var(--accent-text) !important;
+}
+
+/* Columns */
+.element-container {
+    background: transparent !important;
+}
+
+/* Custom Animations */
 .glow-animation {
-    animation: glow 2s infinite;
+    animation: glow-pulse 2s infinite alternate;
+}
+
+@keyframes glow-pulse {
+    0% { box-shadow: var(--shadow); }
+    100% { box-shadow: var(--glow); }
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
     background: var(--primary-bg);
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--accent-color);
     border-radius: 4px;
 }
 
-/* Hide Streamlit branding */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, var(--accent-text), var(--accent-blue));
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+}
+
+/* Remove Streamlit branding */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header { visibility: hidden; }
+.stDeployButton { display: none; }
+
+/* Loading Spinner */
+.stSpinner > div {
+    border-top-color: var(--accent-text) !important;
+}
+
+/* Code blocks */
+code {
+    background: var(--card-bg) !important;
+    color: var(--accent-text) !important;
+    padding: 0.2rem 0.4rem !important;
+    border-radius: 4px !important;
+    font-family: var(--font-mono) !important;
+}
+
+pre {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .main .block-container {
+        padding: 1rem;
+    }
+    
+    h1 {
+        font-size: 2.5rem !important;
+    }
+    
+    .trading-header {
+        padding: 2rem 1rem;
+    }
+    
+    .metric-container {
+        padding: 1.5rem;
+    }
+}

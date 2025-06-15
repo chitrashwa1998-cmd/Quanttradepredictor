@@ -33,8 +33,8 @@ if 'model_trainer' not in st.session_state:
 # Header with professional styling
 st.markdown("""
 <div class="trading-header">
-    <h1 style="margin:0; font-size: 4rem; font-weight: 700;">⚡ THE QUANT TRADING ENGINE</h1>
-    <p style="font-size: 1.5rem; margin: 1rem 0 0 0; color: rgba(255,255,255,0.8);">
+    <h1>QUANT TRADING ENGINE</h1>
+    <p style="font-size: 1.3rem; margin: 1rem 0 0 0; opacity: 0.9; font-weight: 300;">
         Advanced Machine Learning for Quantitative Trading
     </p>
 </div>
@@ -82,9 +82,9 @@ with col3:
 with col4:
     st.markdown(f"""
     <div class="metric-container glow-animation">
-        <h3 style="color: #ff4757; margin: 0;">SYSTEM</h3>
-        <h2 style="margin: 0.5rem 0;">🚀 ONLINE</h2>
-        <p style="color: #9ca3af; margin: 0;">
+        <h3 style="color: #00ffa3; margin: 0;">SYSTEM</h3>
+        <h2 style="margin: 0.5rem 0;">ONLINE</h2>
+        <p style="color: #b8b9cf; margin: 0;">
             All Systems Go
         </p>
     </div>
@@ -94,9 +94,8 @@ st.markdown("---")
 
 # Main Content Area
 st.markdown("""
-<div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); 
-     padding: 2rem; border-radius: 15px; margin: 2rem 0;">
-    <h2 style="color: #00d4ff; margin-bottom: 1rem;">🎯 ADVANCED PREDICTION CAPABILITIES</h2>
+<div class="chart-container" style="margin: 2rem 0;">
+    <h2 style="color: #00ffa3; margin-bottom: 1rem;">ADVANCED PREDICTION CAPABILITIES</h2>
 </div>
 """, unsafe_allow_html=True)
 
