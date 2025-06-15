@@ -13,23 +13,68 @@ class TradingDatabase:
         self.db = db
         
     def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset") -> bool:
-        """Save OHLC dataframe to database."""
+        """Save OHLC dataframe to database with chunking for large datasets."""
         try:
-            # Convert DataFrame to dictionary format for storage
-            data_dict = {
-                'data': data.to_dict('records'),
-                'index': data.index.strftime('%Y-%m-%d %H:%M:%S').tolist(),
-                'columns': data.columns.tolist(),
-                'metadata': {
-                    'rows': len(data),
-                    'start_date': data.index.min().strftime('%Y-%m-%d %H:%M:%S'),
-                    'end_date': data.index.max().strftime('%Y-%m-%d %H:%M:%S'),
-                    'saved_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # Limit data size - if too large, sample it
+            max_rows = 10000  # Limit to prevent database errors
+            if len(data) > max_rows:
+                # Sample data evenly across the time range
+                step = len(data) // max_rows
+                data_sampled = data.iloc[::step].copy()
+                print(f"Data too large ({len(data)} rows), sampled to {len(data_sampled)} rows")
+                data = data_sampled
+            
+            # Convert to simpler format to reduce size
+            data_records = []
+            for idx, row in data.iterrows():
+                record = {
+                    'date': idx.strftime('%Y-%m-%d %H:%M:%S'),
+                    'open': float(row['Open']),
+                    'high': float(row['High']),
+                    'low': float(row['Low']),
+                    'close': float(row['Close'])
                 }
+                if 'Volume' in row and pd.notna(row['Volume']):
+                    record['volume'] = float(row['Volume'])
+                data_records.append(record)
+            
+            # Create metadata
+            metadata = {
+                'rows': len(data),
+                'original_rows': len(data),
+                'start_date': data.index.min().strftime('%Y-%m-%d %H:%M:%S'),
+                'end_date': data.index.max().strftime('%Y-%m-%d %H:%M:%S'),
+                'saved_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'columns': data.columns.tolist()
             }
             
-            # Store in database
-            self.db[f"ohlc_data_{dataset_name}"] = data_dict
+            # Try to save in chunks if still too large
+            chunk_size = 1000
+            if len(data_records) > chunk_size:
+                # Save metadata first
+                self.db[f"ohlc_metadata_{dataset_name}"] = metadata
+                
+                # Save data in chunks
+                for i in range(0, len(data_records), chunk_size):
+                    chunk = data_records[i:i+chunk_size]
+                    chunk_key = f"ohlc_chunk_{dataset_name}_{i//chunk_size}"
+                    self.db[chunk_key] = chunk
+                
+                # Save chunk info
+                chunk_info = {
+                    'total_chunks': (len(data_records) + chunk_size - 1) // chunk_size,
+                    'chunk_size': chunk_size,
+                    'total_records': len(data_records)
+                }
+                self.db[f"ohlc_info_{dataset_name}"] = chunk_info
+                
+            else:
+                # Save as single object if small enough
+                data_dict = {
+                    'data': data_records,
+                    'metadata': metadata
+                }
+                self.db[f"ohlc_data_{dataset_name}"] = data_dict
             
             # Update dataset list
             existing_datasets = self.get_dataset_list()
@@ -41,27 +86,121 @@ class TradingDatabase:
             
         except Exception as e:
             print(f"Error saving data: {str(e)}")
-            return False
+            # Try fallback method with even smaller data
+            try:
+                # Save only essential data as fallback
+                essential_data = data[['Open', 'High', 'Low', 'Close']].tail(1000)
+                fallback_records = []
+                for idx, row in essential_data.iterrows():
+                    fallback_records.append({
+                        'date': idx.strftime('%Y-%m-%d %H:%M:%S'),
+                        'close': float(row['Close'])
+                    })
+                
+                fallback_dict = {
+                    'data': fallback_records,
+                    'metadata': {
+                        'rows': len(fallback_records),
+                        'saved_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'is_fallback': True
+                    }
+                }
+                
+                self.db[f"ohlc_fallback_{dataset_name}"] = fallback_dict
+                return True
+                
+            except Exception as e2:
+                print(f"Fallback save also failed: {str(e2)}")
+                return False
     
     def load_ohlc_data(self, dataset_name: str = "main_dataset") -> Optional[pd.DataFrame]:
-        """Load OHLC dataframe from database."""
+        """Load OHLC dataframe from database, handling both chunked and regular data."""
         try:
+            # Try loading regular format first
             key = f"ohlc_data_{dataset_name}"
-            if key not in self.db:
-                return None
+            if key in self.db:
+                data_dict = self.db[key]
+                
+                # New format with simplified records
+                if 'data' in data_dict and isinstance(data_dict['data'], list):
+                    records = data_dict['data']
+                    df_data = []
+                    for record in records:
+                        row_data = {
+                            'Open': record['open'],
+                            'High': record['high'],
+                            'Low': record['low'],
+                            'Close': record['close']
+                        }
+                        if 'volume' in record:
+                            row_data['Volume'] = record['volume']
+                        df_data.append(row_data)
+                    
+                    df = pd.DataFrame(df_data)
+                    dates = [record['date'] for record in records]
+                    df.index = pd.to_datetime(dates)
+                    df.index.name = 'Date'
+                    return df
+                
+                # Old format compatibility
+                elif 'data' in data_dict and 'index' in data_dict:
+                    df = pd.DataFrame(data_dict['data'])
+                    df.index = pd.to_datetime(data_dict['index'])
+                    df.index.name = 'Date'
+                    
+                    if 'columns' in data_dict:
+                        df = df[data_dict['columns']]
+                    return df
             
-            data_dict = self.db[key]
+            # Try loading chunked format
+            info_key = f"ohlc_info_{dataset_name}"
+            if info_key in self.db:
+                chunk_info = self.db[info_key]
+                metadata = self.db.get(f"ohlc_metadata_{dataset_name}", {})
+                
+                all_records = []
+                for chunk_idx in range(chunk_info['total_chunks']):
+                    chunk_key = f"ohlc_chunk_{dataset_name}_{chunk_idx}"
+                    if chunk_key in self.db:
+                        chunk_data = self.db[chunk_key]
+                        all_records.extend(chunk_data)
+                
+                if all_records:
+                    df_data = []
+                    for record in all_records:
+                        row_data = {
+                            'Open': record['open'],
+                            'High': record['high'],
+                            'Low': record['low'],
+                            'Close': record['close']
+                        }
+                        if 'volume' in record:
+                            row_data['Volume'] = record['volume']
+                        df_data.append(row_data)
+                    
+                    df = pd.DataFrame(df_data)
+                    dates = [record['date'] for record in all_records]
+                    df.index = pd.to_datetime(dates)
+                    df.index.name = 'Date'
+                    return df
             
-            # Reconstruct DataFrame
-            df = pd.DataFrame(data_dict['data'])
-            df.index = pd.to_datetime(data_dict['index'])
-            df.index.name = 'Date'
+            # Try loading fallback format
+            fallback_key = f"ohlc_fallback_{dataset_name}"
+            if fallback_key in self.db:
+                fallback_dict = self.db[fallback_key]
+                records = fallback_dict['data']
+                
+                df_data = []
+                for record in records:
+                    df_data.append({'Close': record['close']})
+                
+                df = pd.DataFrame(df_data)
+                dates = [record['date'] for record in records]
+                df.index = pd.to_datetime(dates)
+                df.index.name = 'Date'
+                return df
             
-            # Ensure proper column order
-            if 'columns' in data_dict:
-                df = df[data_dict['columns']]
-            
-            return df
+            return None
             
         except Exception as e:
             print(f"Error loading data: {str(e)}")

@@ -43,14 +43,20 @@ if uploaded_file is not None:
         # Store data in session state
         st.session_state.data = df
         
-        # Auto-save to database
-        with st.spinner("Saving to database..."):
+        # Manual save to database
+        st.subheader("💾 Save to Database")
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
             dataset_name = st.text_input("Dataset name", value="main_dataset", key="dataset_name")
-            if st.button("💾 Save to Database") or True:  # Auto-save enabled
-                if trading_db.save_ohlc_data(df, dataset_name):
-                    st.success(f"✅ Data saved to database as '{dataset_name}'")
-                else:
-                    st.error("❌ Failed to save data to database")
+        
+        with col2:
+            if st.button("💾 Save to Database", type="primary"):
+                with st.spinner("Saving to database..."):
+                    if trading_db.save_ohlc_data(df, dataset_name):
+                        st.success(f"✅ Data saved to database as '{dataset_name}'")
+                    else:
+                        st.error("❌ Failed to save data to database. Try with a smaller dataset or different name.")
 
         # Display data summary
         col1, col2 = st.columns(2)
