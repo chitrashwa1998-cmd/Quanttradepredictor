@@ -139,9 +139,24 @@ class DataProcessor:
                     # Try different date formats
                     df[date_col] = pd.to_datetime(df[date_col], infer_datetime_format=True)
                 except Exception as e1:
-                    # Try specific formats, prioritizing DD-MM-YYYY HH:MM:SS
-                    date_formats = ['%d-%m-%Y %H:%M:%S', '%d/%m/%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', 
-                                  '%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%Y/%m/%d', '%d-%m-%Y', '%m-%d-%Y']
+                    # Try specific formats, prioritizing DD-MM-YYYY HH:MM:SS variations
+                    date_formats = [
+                        '%d-%m-%Y %H:%M:%S',    # 01-12-2023 09:30:00
+                        '%d/%m/%Y %H:%M:%S',    # 01/12/2023 09:30:00
+                        '%d.%m.%Y %H:%M:%S',    # 01.12.2023 09:30:00
+                        '%d-%m-%Y %H:%M',       # 01-12-2023 09:30
+                        '%d/%m/%Y %H:%M',       # 01/12/2023 09:30
+                        '%d.%m.%Y %H:%M',       # 01.12.2023 09:30
+                        '%d-%m-%Y',             # 01-12-2023
+                        '%d/%m/%Y',             # 01/12/2023
+                        '%d.%m.%Y',             # 01.12.2023
+                        '%Y-%m-%d %H:%M:%S',    # 2023-12-01 09:30:00
+                        '%Y-%m-%d',             # 2023-12-01
+                        '%m/%d/%Y %H:%M:%S',    # 12/01/2023 09:30:00
+                        '%m/%d/%Y',             # 12/01/2023
+                        '%Y/%m/%d',             # 2023/12/01
+                        '%m-%d-%Y'              # 12-01-2023
+                    ]
                     parsed = False
                     last_error = None
                     
@@ -158,7 +173,8 @@ class DataProcessor:
                             continue
                     
                     if not parsed:
-                        return None, f"Could not parse date column '{date_col}'. Sample dates: {sample_dates}. Last error: {last_error}. Please ensure dates are in DD-MM-YYYY HH:MM:SS format."
+                        attempted_formats = ', '.join(date_formats[:5])  # Show first 5 attempted formats
+                        return None, f"Could not parse date column '{date_col}'. Sample dates: {sample_dates}. Attempted formats: {attempted_formats}. Last error: {last_error}. Please ensure your dates match one of the supported formats (preferably DD-MM-YYYY HH:MM:SS)."
                 
                 df.set_index(date_col, inplace=True)
             else:
