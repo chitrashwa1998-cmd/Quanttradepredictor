@@ -43,7 +43,13 @@ class QuantTradingModels:
         for i in range(5):
             future_returns_5.append(df['Close'].shift(-i-1) / df['Close'] - 1)
         max_future_return = pd.concat(future_returns_5, axis=1).max(axis=1)
-        targets['profit_prob'] = (max_future_return > 0.01).astype(int)  # 1% profit threshold
+        
+        # Use a more adaptive threshold based on data volatility
+        returns = df['Close'].pct_change().dropna()
+        volatility = returns.std()
+        profit_threshold = min(0.005, volatility)  # Use 0.5% or data volatility, whichever is smaller
+        
+        targets['profit_prob'] = (max_future_return > profit_threshold).astype(int)
         
         # 4. Volatility forecasting (next period volatility)
         volatility_window = 10
@@ -86,6 +92,13 @@ class QuantTradingModels:
         
         signals = np.where(buy_signal, 2, np.where(sell_signal, 0, 1))  # 2=Buy, 1=Hold, 0=Sell
         targets['trading_signal'] = pd.Series(signals, index=df.index)
+        
+        # Debug information for profit_prob
+        if 'profit_prob' in targets:
+            profit_prob_stats = targets['profit_prob'].value_counts()
+            print(f"Profit Probability Target Distribution: {profit_prob_stats.to_dict()}")
+            print(f"Profit threshold used: {profit_threshold:.4f}")
+            print(f"Max future return range: {max_future_return.min():.4f} to {max_future_return.max():.4f}")
         
         return targets
     
