@@ -8,7 +8,7 @@ warnings.filterwarnings('ignore')
 
 # Page configuration
 st.set_page_config(
-    page_title="THE QUANT TRADING ENGINE",
+    page_title="TribexAlpha",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -46,7 +46,7 @@ nav_pages = {
 st.sidebar.markdown("""
 <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #00ffff 0%, #8b5cf6 100%); 
      border-radius: 16px; margin-bottom: 2rem;">
-    <h2 style="color: white; margin: 0; font-family: 'Orbitron', monospace;">⚡ CONTROL PANEL</h2>
+    <h2 style="color: white; margin: 0; font-family: 'Orbitron', monospace;">⚡ TribexAlpha</h2>
 </div>
 """, unsafe_allow_html=True)
 
@@ -74,7 +74,7 @@ if st.session_state.current_page == "home":
     # Header with enhanced styling
     st.markdown("""
     <div class="trading-header">
-        <h1>THE QUANT TRADING ENGINE</h1>
+        <h1>TribexAlpha</h1>
         <p style="font-size: 1.5rem; margin: 1rem 0 0 0; opacity: 0.9; font-weight: 300; color: #00ffff;">
             🚀 Advanced Machine Learning for Quantitative Trading Excellence
         </p>
@@ -276,7 +276,7 @@ elif st.session_state.current_page == "about":
     st.markdown("""
     <div class="corporate-page">
         <div class="trading-header">
-            <h1>ABOUT THE QUANT TRADING ENGINE</h1>
+            <h1>ABOUT TribexAlpha</h1>
             <p style="font-size: 1.3rem; color: #00ffff; margin-top: 1rem;">
                 Revolutionizing quantitative trading through artificial intelligence
             </p>
@@ -511,7 +511,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("""
 <div style="text-align: center; color: #9ca3af; font-family: 'JetBrains Mono', monospace; 
      background: rgba(0, 255, 255, 0.05); padding: 1.5rem; border-radius: 12px; margin: 1rem 0;">
-    <p style="margin: 0; color: #00ffff; font-weight: 600;">THE QUANT TRADING ENGINE</p>
+    <p style="margin: 0; color: #00ffff; font-weight: 600;">TribexAlpha</p>
     <p style="margin: 0.5rem 0 0 0; color: #8b5cf6;">v3.0 | Enterprise Edition</p>
     <p style="margin: 0.5rem 0 0 0; color: #ffd700;">⚡ Powered by AI</p>
 </div>
