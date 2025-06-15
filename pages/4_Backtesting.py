@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from datetime import timedelta
 from utils.backtesting import Backtester
 
 st.set_page_config(page_title="Backtesting", page_icon="📈", layout="wide")
@@ -67,6 +68,8 @@ elif selected_model == 'direction':
     elif strategy_type == "Direction with Stop Loss":
         stop_loss_pct = st.slider("Stop Loss %", 1, 10, 5, 1)
         take_profit_pct = st.slider("Take Profit %", 1, 20, 10, 1)
+    else:
+        confidence_threshold = 0.7  # Default value
 
 else:  # profit_prob
     st.info("Using profit probability predictions for trade entry")
@@ -85,7 +88,6 @@ with col1:
     )
 
 # Date range filtering
-from datetime import timedelta
 
 if backtest_period == "Last 6 months":
     start_date = df.index.max() - timedelta(days=180)
