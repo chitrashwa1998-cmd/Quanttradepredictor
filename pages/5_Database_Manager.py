@@ -60,6 +60,18 @@ if db_info.get('total_datasets', 0) > 0:
                         st.dataframe(preview_data.head(10), use_container_width=True)
                     else:
                         st.error("Failed to load preview")
+                
+                # Export button for each dataset
+                export_data = trading_db.load_ohlc_data(dataset['name'])
+                if export_data is not None:
+                    csv_data = export_data.to_csv()
+                    st.download_button(
+                        label="📥 Export CSV",
+                        data=csv_data,
+                        file_name=f"{dataset['name']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        key=f"export_{i}"
+                    )
             
             with col3:
                 if st.button(f"Delete Dataset", key=f"delete_{i}", type="secondary"):
@@ -144,6 +156,8 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("Export Data")
+    
+    # Export current session data
     if st.session_state.data is not None:
         csv_data = st.session_state.data.to_csv()
         st.download_button(
@@ -152,6 +166,29 @@ with col1:
             file_name=f"trading_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv"
         )
+    
+    # Export all datasets from database
+    if db_info.get('total_datasets', 0) > 0:
+        st.write("**Export from Database:**")
+        selected_datasets = st.multiselect(
+            "Select datasets to export",
+            [dataset['name'] for dataset in db_info['datasets']],
+            key="bulk_export_selection"
+        )
+        
+        if selected_datasets:
+            if st.button("📥 Export Selected Datasets", key="bulk_export"):
+                for dataset_name in selected_datasets:
+                    export_data = trading_db.load_ohlc_data(dataset_name)
+                    if export_data is not None:
+                        csv_data = export_data.to_csv()
+                        st.download_button(
+                            label=f"📥 Download {dataset_name}",
+                            data=csv_data,
+                            file_name=f"{dataset_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            key=f"bulk_download_{dataset_name}"
+                        )
 
 with col2:
     st.subheader("⚠️ Danger Zone")
