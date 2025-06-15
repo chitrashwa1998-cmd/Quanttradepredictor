@@ -26,7 +26,7 @@ if st.session_state.data is None:
     st.stop()
 
 # Initialize model trainer
-if 'model_trainer' not in st.session_state:
+if 'model_trainer' not in st.session_state or st.session_state.model_trainer is None:
     st.session_state.model_trainer = QuantTradingModels()
 
 df = st.session_state.data
@@ -125,15 +125,24 @@ if st.session_state.features is not None:
         if not selected_models:
             st.error("Please select at least one model to train.")
         else:
+            # Ensure model trainer is initialized
+            if st.session_state.model_trainer is None:
+                st.session_state.model_trainer = QuantTradingModels()
+            
             st.info(f"Training {len(selected_models)} models...")
             
-            # Train models
-            results = st.session_state.model_trainer.train_all_models(st.session_state.features)
-            
-            # Store results
-            st.session_state.models = results
-            
-            st.success("🎉 Model training completed!")
+            try:
+                # Train models
+                results = st.session_state.model_trainer.train_all_models(st.session_state.features)
+                
+                # Store results
+                st.session_state.models = results
+                
+                st.success("🎉 Model training completed!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error during model training: {str(e)}")
+                st.info("Please try refreshing the page and training again.")
 
 # Display training results
 if st.session_state.models:
