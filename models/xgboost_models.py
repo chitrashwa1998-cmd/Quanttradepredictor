@@ -54,9 +54,9 @@ class QuantTradingModels:
         # 5. Trend vs sideways
         price_change_5 = df['Close'].shift(-5) / df['Close'] - 1
         trend_threshold = 0.02  # 2% threshold
-        targets['trend_sideways'] = np.where(
-            np.abs(price_change_5) > trend_threshold, 1, 0  # 1 for trending, 0 for sideways
-        )
+        # Handle NaN values and create valid binary targets
+        trend_sideways = np.where(np.abs(price_change_5) > trend_threshold, 1, 0)
+        targets['trend_sideways'] = pd.Series(trend_sideways, index=df.index)
         
         # 6. Reversal points
         # Look for price reversals in next 3 periods
@@ -70,25 +70,44 @@ class QuantTradingModels:
         targets['reversal'] = (reversal_up | reversal_down).astype(int)
         
         # 7. Buy/Sell/Hold signals
-        # Combine multiple factors for signal generation
-        rsi = df.get('rsi', 50)  # Default RSI if not available
-        macd_hist = df.get('macd_histogram', 0)  # Default MACD if not available
+        # Simplified signal generation to avoid issues with missing indicators
+        # Use only price-based signals for reliability
         
-        buy_signal = (future_return > 0.01) & (rsi < 30) & (macd_hist > 0)
-        sell_signal = (future_return < -0.01) & (rsi > 70) & (macd_hist < 0)
+        # Create more robust signals based on price momentum
+        price_momentum_1 = df['Close'].shift(-1) / df['Close'] - 1
+        price_momentum_3 = df['Close'].shift(-3) / df['Close'] - 1
+        
+        # Simple signal logic: Buy if strong positive momentum, Sell if strong negative, Hold otherwise
+        buy_threshold = 0.015   # 1.5% positive momentum
+        sell_threshold = -0.015 # 1.5% negative momentum
+        
+        buy_signal = (price_momentum_1 > buy_threshold) | (price_momentum_3 > buy_threshold * 2)
+        sell_signal = (price_momentum_1 < sell_threshold) | (price_momentum_3 < sell_threshold * 2)
         
         signals = np.where(buy_signal, 2, np.where(sell_signal, 0, 1))  # 2=Buy, 1=Hold, 0=Sell
-        targets['trading_signal'] = signals
+        targets['trading_signal'] = pd.Series(signals, index=df.index)
         
         return targets
     
     def train_model(self, model_name: str, X: pd.DataFrame, y: pd.Series, task_type: str = 'classification') -> Dict[str, Any]:
         """Train XGBoost model for specific task."""
         
-        # Remove NaN values
+        # Remove NaN values and ensure we have valid targets
         mask = ~(X.isna().any(axis=1) | y.isna())
         X_clean = X[mask]
         y_clean = y[mask]
+        
+        # Additional validation for target values
+        if task_type == 'classification':
+            # Remove any invalid target values
+            valid_targets = ~np.isinf(y_clean) & (y_clean >= 0)
+            X_clean = X_clean[valid_targets]
+            y_clean = y_clean[valid_targets]
+            
+            # Ensure we have at least 2 classes
+            unique_targets = y_clean.unique()
+            if len(unique_targets) < 2:
+                raise ValueError(f"Insufficient target classes for {model_name}. Found classes: {unique_targets}")
         
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training {model_name}. Need at least 100 samples, got {len(X_clean)}")
