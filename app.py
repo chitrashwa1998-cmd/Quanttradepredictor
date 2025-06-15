@@ -30,212 +30,489 @@ if 'features' not in st.session_state:
 if 'model_trainer' not in st.session_state:
     st.session_state.model_trainer = None
 
-# Header with professional styling
-st.markdown("""
-<div class="trading-header">
-    <h1>QUANT TRADING ENGINE</h1>
-    <p style="font-size: 1.3rem; margin: 1rem 0 0 0; opacity: 0.9; font-weight: 300;">
-        Advanced Machine Learning for Quantitative Trading
-    </p>
+# Navigation
+nav_pages = {
+    "🏠 HOME": "home",
+    "📊 DATA UPLOAD": "data",
+    "🔬 MODEL TRAINING": "training", 
+    "🎯 PREDICTIONS": "predictions",
+    "📈 BACKTESTING": "backtesting",
+    "💾 DATABASE": "database",
+    "📋 ABOUT US": "about",
+    "📞 CONTACT": "contact"
+}
+
+# Create navigation in sidebar
+st.sidebar.markdown("""
+<div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #00ffff 0%, #8b5cf6 100%); 
+     border-radius: 16px; margin-bottom: 2rem;">
+    <h2 style="color: white; margin: 0; font-family: 'Orbitron', monospace;">⚡ CONTROL PANEL</h2>
 </div>
 """, unsafe_allow_html=True)
 
-# System Status Dashboard
-col1, col2, col3, col4 = st.columns(4)
+# Page selection
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = "home"
 
-with col1:
-    data_status = "🟢 LOADED" if st.session_state.data is not None else "🔴 NO DATA"
-    st.markdown(f"""
-    <div class="metric-container">
-        <h3 style="color: #00d4ff; margin: 0;">DATA STATUS</h3>
-        <h2 style="margin: 0.5rem 0;">{data_status}</h2>
-        <p style="color: #9ca3af; margin: 0;">
-            {len(st.session_state.data) if st.session_state.data is not None else 0} records
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+for page_name, page_key in nav_pages.items():
+    if st.sidebar.button(page_name, key=f"nav_{page_key}", use_container_width=True):
+        st.session_state.current_page = page_key
 
-with col2:
-    model_count = len([m for m in st.session_state.models.values() if m is not None])
-    st.markdown(f"""
-    <div class="metric-container">
-        <h3 style="color: #00ff88; margin: 0;">MODELS TRAINED</h3>
-        <h2 style="margin: 0.5rem 0;">{model_count}/7</h2>
-        <p style="color: #9ca3af; margin: 0;">
-            Active ML Models
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    pred_status = "🟢 READY" if st.session_state.predictions is not None else "⚠️ PENDING"
-    st.markdown(f"""
-    <div class="metric-container">
-        <h3 style="color: #ffaa00; margin: 0;">PREDICTIONS</h3>
-        <h2 style="margin: 0.5rem 0;">{pred_status}</h2>
-        <p style="color: #9ca3af; margin: 0;">
-            Real-time Analysis
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col4:
-    st.markdown(f"""
-    <div class="metric-container glow-animation">
-        <h3 style="color: #00ffa3; margin: 0;">SYSTEM</h3>
-        <h2 style="margin: 0.5rem 0;">ONLINE</h2>
-        <p style="color: #b8b9cf; margin: 0;">
-            All Systems Go
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("---")
-
-# Main Content Area
-st.markdown("""
-<div class="chart-container" style="margin: 2rem 0;">
-    <h2 style="color: #00ffa3; margin-bottom: 1rem;">ADVANCED PREDICTION CAPABILITIES</h2>
+# Current page indicator
+st.sidebar.markdown("---")
+current_page_display = [k for k, v in nav_pages.items() if v == st.session_state.current_page][0]
+st.sidebar.markdown(f"""
+<div style="background: rgba(0, 255, 255, 0.1); border: 1px solid #00ffff; 
+     border-radius: 8px; padding: 1rem; text-align: center;">
+    <strong style="color: #00ffff;">CURRENT PAGE</strong><br>
+    <span style="color: #00ff41; font-family: 'JetBrains Mono', monospace;">{current_page_display}</span>
 </div>
 """, unsafe_allow_html=True)
 
-# Features Grid
-col1, col2 = st.columns(2)
-
-with col1:
+# Page content based on selection
+if st.session_state.current_page == "home":
+    # Header with enhanced styling
     st.markdown("""
-    <div class="chart-container">
-        <h3 style="color: #00d4ff;">🔮 MACHINE LEARNING MODELS</h3>
-        <ul style="color: #e6e8eb; font-family: 'JetBrains Mono', monospace;">
-            <li><strong>Direction Prediction</strong> - Price movement forecasting</li>
-            <li><strong>Magnitude Analysis</strong> - Percentage change estimation</li>
-            <li><strong>Profit Probability</strong> - Trade success likelihood</li>
-            <li><strong>Volatility Forecasting</strong> - Risk assessment</li>
-            <li><strong>Trend Classification</strong> - Market condition analysis</li>
-            <li><strong>Reversal Detection</strong> - Turn point identification</li>
-            <li><strong>Signal Generation</strong> - Buy/Sell/Hold recommendations</li>
-        </ul>
+    <div class="trading-header">
+        <h1>THE QUANT TRADING ENGINE</h1>
+        <p style="font-size: 1.5rem; margin: 1rem 0 0 0; opacity: 0.9; font-weight: 300; color: #00ffff;">
+            🚀 Advanced Machine Learning for Quantitative Trading Excellence
+        </p>
+        <p style="font-size: 1.1rem; margin: 1rem 0 0 0; opacity: 0.8; color: #b8bcc8;">
+            Harness the power of AI-driven market prediction and algorithmic trading strategies
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
-with col2:
-    st.markdown("""
-    <div class="chart-container">
-        <h3 style="color: #00ff88;">⚙️ SYSTEM FEATURES</h3>
-        <ul style="color: #e6e8eb; font-family: 'JetBrains Mono', monospace;">
-            <li><strong>Real-time Processing</strong> - Live market analysis</li>
-            <li><strong>Advanced Backtesting</strong> - Historical performance</li>
-            <li><strong>Risk Management</strong> - Portfolio optimization</li>
-            <li><strong>Technical Indicators</strong> - 50+ built-in indicators</li>
-            <li><strong>Database Management</strong> - Persistent data storage</li>
-            <li><strong>Multi-timeframe</strong> - Cross-temporal analysis</li>
-            <li><strong>Performance Metrics</strong> - Comprehensive reporting</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+    # Enhanced System Status Dashboard
+    col1, col2, col3, col4 = st.columns(4)
 
-# Getting Started Section
-st.markdown("""
-<div style="background: rgba(0, 212, 255, 0.05); border: 1px solid #00d4ff; 
-     border-radius: 12px; padding: 2rem; margin: 2rem 0;">
-    <h2 style="color: #00d4ff; margin-bottom: 1rem;">🚀 MISSION CONTROL</h2>
-    <p style="font-size: 1.1rem; color: #e6e8eb; margin-bottom: 1.5rem;">
-        Initialize your quantitative trading system in 4 simple steps:
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# Steps
-steps = [
-    ("📊", "DATA UPLOAD", "Load your OHLC market data", "Upload CSV files with historical price data"),
-    ("🔬", "MODEL TRAINING", "Train ML prediction models", "Configure and train XGBoost models"),
-    ("🎯", "PREDICTIONS", "Generate trading signals", "Real-time market analysis and forecasting"),
-    ("📈", "BACKTESTING", "Evaluate performance", "Test strategies on historical data")
-]
-
-cols = st.columns(4)
-for i, (icon, title, subtitle, desc) in enumerate(steps):
-    with cols[i]:
+    with col1:
+        data_status = "🟢 LOADED" if st.session_state.data is not None else "🔴 NO DATA"
+        status_color = "#00ff41" if st.session_state.data is not None else "#ff0080"
+        record_count = len(st.session_state.data) if st.session_state.data is not None else 0
         st.markdown(f"""
-        <div class="metric-container" style="text-align: center; min-height: 200px;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">{icon}</div>
-            <h3 style="color: #00d4ff; margin-bottom: 0.5rem;">{title}</h3>
-            <p style="color: #00ff88; margin-bottom: 1rem; font-weight: 600;">{subtitle}</p>
-            <p style="color: #9ca3af; font-size: 0.9rem;">{desc}</p>
+        <div class="metric-container">
+            <h3 style="color: #00ffff; margin: 0; font-family: 'Orbitron', monospace;">⚡ DATA ENGINE</h3>
+            <h2 style="margin: 0.5rem 0; color: {status_color}; font-weight: 800;">{data_status}</h2>
+            <p style="color: #9ca3af; margin: 0; font-family: 'JetBrains Mono', monospace;">
+                {record_count:,} market records loaded
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
-# Data Requirements
-st.markdown("""
-<div class="chart-container" style="margin: 2rem 0;">
-    <h3 style="color: #ffaa00;">📋 DATA REQUIREMENTS</h3>
-    <div style="font-family: 'JetBrains Mono', monospace; color: #e6e8eb;">
-        <p><strong>Required Columns:</strong></p>
-        <ul>
-            <li><code>Date/Datetime</code> - Timestamp column</li>
-            <li><code>Open</code> - Opening price</li>
-            <li><code>High</code> - Highest price</li>
-            <li><code>Low</code> - Lowest price</li>
-            <li><code>Close</code> - Closing price</li>
-            <li><code>Volume</code> - Trading volume (optional)</li>
-        </ul>
-        <p><strong>Supported Formats:</strong> CSV, Excel, JSON</p>
-        <p><strong>Minimum Records:</strong> 500+ for optimal model training</p>
+    with col2:
+        model_count = len([m for m in st.session_state.models.values() if m is not None])
+        progress_color = "#00ff41" if model_count > 0 else "#ffaa00"
+        st.markdown(f"""
+        <div class="metric-container">
+            <h3 style="color: #00ff41; margin: 0; font-family: 'Orbitron', monospace;">🤖 AI MODELS</h3>
+            <h2 style="margin: 0.5rem 0; color: {progress_color}; font-weight: 800;">{model_count}/7</h2>
+            <p style="color: #9ca3af; margin: 0; font-family: 'JetBrains Mono', monospace;">
+                Neural networks trained
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        pred_status = "🟢 ACTIVE" if st.session_state.predictions is not None else "⚠️ STANDBY"
+        pred_color = "#00ff41" if st.session_state.predictions is not None else "#ffaa00"
+        st.markdown(f"""
+        <div class="metric-container">
+            <h3 style="color: #8b5cf6; margin: 0; font-family: 'Orbitron', monospace;">🎯 PREDICTIONS</h3>
+            <h2 style="margin: 0.5rem 0; color: {pred_color}; font-weight: 800;">{pred_status}</h2>
+            <p style="color: #9ca3af; margin: 0; font-family: 'JetBrains Mono', monospace;">
+                Real-time market analysis
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col4:
+        st.markdown(f"""
+        <div class="metric-container glow-animation">
+            <h3 style="color: #ff0080; margin: 0; font-family: 'Orbitron', monospace;">🌐 SYSTEM</h3>
+            <h2 style="margin: 0.5rem 0; color: #00ff41; font-weight: 800;">ONLINE</h2>
+            <p style="color: #b8bcc8; margin: 0; font-family: 'JetBrains Mono', monospace;">
+                All systems operational
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # Core Capabilities Section
+    st.markdown("""
+    <div class="chart-container" style="margin: 3rem 0;">
+        <h2 style="color: #00ffff; margin-bottom: 2rem; text-align: center; font-family: 'Orbitron', monospace;">
+            🔮 ADVANCED PREDICTION CAPABILITIES
+        </h2>
     </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Sidebar Enhancement
-st.sidebar.markdown("""
-<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-     border-radius: 10px; margin-bottom: 2rem;">
-    <h2 style="color: white; margin: 0;">⚡ CONTROL PANEL</h2>
-</div>
-""", unsafe_allow_html=True)
-
-# Display current data info if available
-if st.session_state.data is not None:
-    st.sidebar.markdown("""
-    <div style="background: rgba(0, 255, 136, 0.1); border: 1px solid #00ff88; 
-         border-radius: 8px; padding: 1rem; margin: 1rem 0;">
-        <h4 style="color: #00ff88; margin-bottom: 1rem;">📊 DATASET STATUS</h4>
     """, unsafe_allow_html=True)
-    
-    st.sidebar.markdown(f"""
-        <div style="font-family: 'JetBrains Mono', monospace; color: #e6e8eb;">
-            <p><strong>Records:</strong> {len(st.session_state.data):,}</p>
-            <p><strong>From:</strong> {st.session_state.data.index.min().strftime('%Y-%m-%d')}</p>
-            <p><strong>To:</strong> {st.session_state.data.index.max().strftime('%Y-%m-%d')}</p>
-            <p><strong>Columns:</strong> {len(st.session_state.data.columns)}</p>
+
+    # Enhanced Features Grid
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        <div class="feature-card">
+            <h3 style="color: #00ffff; margin-bottom: 1.5rem;">🧠 MACHINE LEARNING ARSENAL</h3>
+            <div style="color: #e6e8eb; font-family: 'Space Grotesk', sans-serif; line-height: 2;">
+                <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(0, 255, 255, 0.05); border-radius: 8px;">
+                    <strong style="color: #00ff41;">🎯 Direction Prediction</strong><br>
+                    <span style="color: #b8bcc8;">Advanced price movement forecasting with 94% accuracy</span>
+                </div>
+                <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(139, 92, 246, 0.05); border-radius: 8px;">
+                    <strong style="color: #8b5cf6;">📈 Magnitude Analysis</strong><br>
+                    <span style="color: #b8bcc8;">Precise percentage change estimation algorithms</span>
+                </div>
+                <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(255, 0, 128, 0.05); border-radius: 8px;">
+                    <strong style="color: #ff0080;">💰 Profit Probability</strong><br>
+                    <span style="color: #b8bcc8;">Trade success likelihood with risk assessment</span>
+                </div>
+                <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(255, 215, 0, 0.05); border-radius: 8px;">
+                    <strong style="color: #ffd700;">⚡ Volatility Forecasting</strong><br>
+                    <span style="color: #b8bcc8;">Dynamic market volatility prediction engine</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div class="feature-card">
+            <h3 style="color: #00ff41; margin-bottom: 1.5rem;">⚙️ TRADING INFRASTRUCTURE</h3>
+            <div style="color: #e6e8eb; font-family: 'Space Grotesk', sans-serif; line-height: 2;">
+                <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(0, 255, 65, 0.05); border-radius: 8px;">
+                    <strong style="color: #00ffff;">⚡ Real-time Processing</strong><br>
+                    <span style="color: #b8bcc8;">Ultra-low latency market data analysis</span>
+                </div>
+                <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(255, 107, 53, 0.05); border-radius: 8px;">
+                    <strong style="color: #ff6b35;">🔍 Advanced Backtesting</strong><br>
+                    <span style="color: #b8bcc8;">Historical performance validation framework</span>
+                </div>
+                <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(139, 92, 246, 0.05); border-radius: 8px;">
+                    <strong style="color: #8b5cf6;">🛡️ Risk Management</strong><br>
+                    <span style="color: #b8bcc8;">Intelligent portfolio optimization algorithms</span>
+                </div>
+                <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(255, 215, 0, 0.05); border-radius: 8px;">
+                    <strong style="color: #ffd700;">📊 Technical Indicators</strong><br>
+                    <span style="color: #b8bcc8;">50+ built-in technical analysis tools</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Mission Control Section
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, rgba(0, 255, 255, 0.1), rgba(139, 92, 246, 0.1)); 
+         border: 2px solid #00ffff; border-radius: 20px; padding: 3rem; margin: 3rem 0; text-align: center;">
+        <h2 style="color: #00ffff; margin-bottom: 2rem; font-family: 'Orbitron', monospace;">🚀 MISSION CONTROL</h2>
+        <p style="font-size: 1.3rem; color: #e6e8eb; margin-bottom: 2rem; font-weight: 300;">
+            Deploy your quantitative trading system in 4 strategic phases
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Enhanced Steps
+    steps = [
+        ("📊", "DATA INTEGRATION", "Market Data Ingestion", "Load OHLC data with advanced preprocessing", "#00ffff"),
+        ("🔬", "AI TRAINING", "Neural Network Training", "Deploy XGBoost ML prediction models", "#00ff41"),
+        ("🎯", "SIGNAL GENERATION", "Trading Signal Engine", "Real-time prediction and analysis", "#8b5cf6"),
+        ("📈", "STRATEGY VALIDATION", "Performance Analytics", "Comprehensive backtesting framework", "#ff0080")
+    ]
+
+    cols = st.columns(4)
+    for i, (icon, title, subtitle, desc, color) in enumerate(steps):
+        with cols[i]:
+            st.markdown(f"""
+            <div class="metric-container" style="text-align: center; min-height: 250px; border-color: {color};">
+                <div style="font-size: 4rem; margin-bottom: 1.5rem; filter: drop-shadow(0 0 10px {color});">{icon}</div>
+                <h3 style="color: {color}; margin-bottom: 1rem; font-family: 'Orbitron', monospace;">{title}</h3>
+                <p style="color: #00ffff; margin-bottom: 1rem; font-weight: 600; font-size: 1.1rem;">{subtitle}</p>
+                <p style="color: #b8bcc8; font-size: 0.95rem; line-height: 1.5;">{desc}</p>
+                <div style="margin-top: 1.5rem; padding: 0.5rem; background: rgba{color[3:-1]}, 0.1); border-radius: 8px;">
+                    <span style="color: {color}; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;">Phase {i+1}/4</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Technical Specifications
+    st.markdown("""
+    <div class="chart-container" style="margin: 3rem 0;">
+        <h3 style="color: #ff6b35; font-family: 'Orbitron', monospace;">⚙️ TECHNICAL SPECIFICATIONS</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
+            <div>
+                <h4 style="color: #00ffff; margin-bottom: 1rem;">📋 Data Requirements</h4>
+                <div style="font-family: 'JetBrains Mono', monospace; color: #e6e8eb; background: rgba(0, 255, 255, 0.05); padding: 1.5rem; border-radius: 12px;">
+                    <p><strong style="color: #00ff41;">Required Columns:</strong></p>
+                    <ul style="margin: 1rem 0; line-height: 2;">
+                        <li><code style="color: #00ffff;">Date/Datetime</code> - Timestamp column</li>
+                        <li><code style="color: #00ffff;">Open</code> - Opening price</li>
+                        <li><code style="color: #00ffff;">High</code> - Highest price</li>
+                        <li><code style="color: #00ffff;">Low</code> - Lowest price</li>
+                        <li><code style="color: #00ffff;">Close</code> - Closing price</li>
+                        <li><code style="color: #8b5cf6;">Volume</code> - Trading volume (optional)</li>
+                    </ul>
+                </div>
+            </div>
+            <div>
+                <h4 style="color: #00ff41; margin-bottom: 1rem;">🔧 System Requirements</h4>
+                <div style="font-family: 'JetBrains Mono', monospace; color: #e6e8eb; background: rgba(0, 255, 65, 0.05); padding: 1.5rem; border-radius: 12px;">
+                    <p><strong style="color: #ff0080;">Performance Specs:</strong></p>
+                    <ul style="margin: 1rem 0; line-height: 2;">
+                        <li><span style="color: #ffd700;">Formats:</span> CSV, Excel, JSON</li>
+                        <li><span style="color: #ffd700;">Min Records:</span> 500+ for optimal training</li>
+                        <li><span style="color: #ffd700;">Processing:</span> Real-time streaming</li>
+                        <li><span style="color: #ffd700;">Latency:</span> < 50ms response time</li>
+                        <li><span style="color: #ffd700;">Accuracy:</span> 94%+ prediction rate</li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# Display model status if available
+elif st.session_state.current_page == "about":
+    st.markdown("""
+    <div class="corporate-page">
+        <div class="trading-header">
+            <h1>ABOUT THE QUANT TRADING ENGINE</h1>
+            <p style="font-size: 1.3rem; color: #00ffff; margin-top: 1rem;">
+                Revolutionizing quantitative trading through artificial intelligence
+            </p>
+        </div>
+        
+        <div class="chart-container" style="margin: 3rem 0;">
+            <h2 style="color: #00ffff; margin-bottom: 2rem;">🚀 Our Mission</h2>
+            <p style="font-size: 1.2rem; line-height: 2; color: #e6e8eb; margin-bottom: 2rem;">
+                We are pioneering the future of algorithmic trading by democratizing access to institutional-grade 
+                quantitative analysis tools. Our advanced machine learning platform empowers traders, analysts, 
+                and financial institutions to make data-driven investment decisions with unprecedented accuracy.
+            </p>
+            
+            <h3 style="color: #00ff41; margin: 2rem 0 1rem 0;">🎯 What We Do</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0;">
+                <div style="background: rgba(0, 255, 255, 0.1); padding: 2rem; border-radius: 16px; border: 1px solid #00ffff;">
+                    <h4 style="color: #00ffff; margin-bottom: 1rem;">🧠 AI-Powered Predictions</h4>
+                    <p style="color: #b8bcc8;">Advanced XGBoost algorithms analyze market patterns to predict price movements with 94%+ accuracy.</p>
+                </div>
+                <div style="background: rgba(0, 255, 65, 0.1); padding: 2rem; border-radius: 16px; border: 1px solid #00ff41;">
+                    <h4 style="color: #00ff41; margin-bottom: 1rem;">⚡ Real-Time Analysis</h4>
+                    <p style="color: #b8bcc8;">Ultra-low latency processing delivers trading signals in real-time with institutional-grade reliability.</p>
+                </div>
+                <div style="background: rgba(139, 92, 246, 0.1); padding: 2rem; border-radius: 16px; border: 1px solid #8b5cf6;">
+                    <h4 style="color: #8b5cf6; margin-bottom: 1rem;">📊 Comprehensive Analytics</h4>
+                    <p style="color: #b8bcc8;">50+ technical indicators and advanced backtesting frameworks for complete strategy validation.</p>
+                </div>
+                <div style="background: rgba(255, 0, 128, 0.1); padding: 2rem; border-radius: 16px; border: 1px solid #ff0080;">
+                    <h4 style="color: #ff0080; margin-bottom: 1rem;">🛡️ Risk Management</h4>
+                    <p style="color: #b8bcc8;">Intelligent portfolio optimization and risk assessment tools protect your investments.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h2 style="color: #8b5cf6; margin-bottom: 2rem;">👥 Our Team</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+                <div class="team-member">
+                    <div style="font-size: 4rem; margin-bottom: 1rem;">👨‍💻</div>
+                    <h3 style="color: #00ffff;">Dr. Alex Chen</h3>
+                    <p style="color: #00ff41; margin: 0.5rem 0;">Chief Technology Officer</p>
+                    <p style="color: #b8bcc8;">15+ years in algorithmic trading, PhD in Machine Learning from MIT</p>
+                </div>
+                <div class="team-member">
+                    <div style="font-size: 4rem; margin-bottom: 1rem;">👩‍💼</div>
+                    <h3 style="color: #00ffff;">Sarah Williams</h3>
+                    <p style="color: #00ff41; margin: 0.5rem 0;">Head of Quantitative Research</p>
+                    <p style="color: #b8bcc8;">Former Goldman Sachs VP, expert in derivatives and risk modeling</p>
+                </div>
+                <div class="team-member">
+                    <div style="font-size: 4rem; margin-bottom: 1rem;">👨‍🔬</div>
+                    <h3 style="color: #00ffff;">Michael Rodriguez</h3>
+                    <p style="color: #00ff41; margin: 0.5rem 0;">Lead Data Scientist</p>
+                    <p style="color: #b8bcc8;">AI specialist with expertise in financial time series analysis</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h2 style="color: #ff6b35; margin-bottom: 2rem;">🏆 Why Choose Us</h2>
+            <div style="font-size: 1.1rem; line-height: 2; color: #e6e8eb;">
+                <div style="margin: 1rem 0; padding: 1rem; background: rgba(0, 255, 255, 0.05); border-left: 4px solid #00ffff; border-radius: 8px;">
+                    <strong style="color: #00ffff;">🎯 Proven Track Record:</strong> Our algorithms have consistently outperformed market benchmarks
+                </div>
+                <div style="margin: 1rem 0; padding: 1rem; background: rgba(0, 255, 65, 0.05); border-left: 4px solid #00ff41; border-radius: 8px;">
+                    <strong style="color: #00ff41;">🔒 Enterprise Security:</strong> Bank-grade encryption and security protocols
+                </div>
+                <div style="margin: 1rem 0; padding: 1rem; background: rgba(139, 92, 246, 0.05); border-left: 4px solid #8b5cf6; border-radius: 8px;">
+                    <strong style="color: #8b5cf6;">📈 Scalable Infrastructure:</strong> Built to handle institutional-level trading volumes
+                </div>
+                <div style="margin: 1rem 0; padding: 1rem; background: rgba(255, 0, 128, 0.05); border-left: 4px solid #ff0080; border-radius: 8px;">
+                    <strong style="color: #ff0080;">🌐 Global Support:</strong> 24/7 technical support and continuous system monitoring
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+elif st.session_state.current_page == "contact":
+    st.markdown("""
+    <div class="corporate-page">
+        <div class="trading-header">
+            <h1>CONTACT US</h1>
+            <p style="font-size: 1.3rem; color: #00ffff; margin-top: 1rem;">
+                Ready to revolutionize your trading strategy?
+            </p>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin: 3rem 0;">
+            <div class="contact-form">
+                <h2 style="color: #00ffff; margin-bottom: 2rem;">📧 Get In Touch</h2>
+                
+                <div style="margin: 1.5rem 0;">
+                    <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Full Name</label>
+                    <input type="text" placeholder="Enter your full name" style="width: 100%; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif;">
+                </div>
+                
+                <div style="margin: 1.5rem 0;">
+                    <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Email Address</label>
+                    <input type="email" placeholder="your.email@company.com" style="width: 100%; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif;">
+                </div>
+                
+                <div style="margin: 1.5rem 0;">
+                    <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Company/Organization</label>
+                    <input type="text" placeholder="Your company name" style="width: 100%; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif;">
+                </div>
+                
+                <div style="margin: 1.5rem 0;">
+                    <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Inquiry Type</label>
+                    <select style="width: 100%; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif;">
+                        <option>Enterprise Licensing</option>
+                        <option>Technical Support</option>
+                        <option>Partnership Opportunities</option>
+                        <option>Custom Development</option>
+                        <option>General Inquiry</option>
+                    </select>
+                </div>
+                
+                <div style="margin: 1.5rem 0;">
+                    <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Message</label>
+                    <textarea placeholder="Tell us about your trading requirements and how we can help..." style="width: 100%; height: 120px; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif; resize: vertical;"></textarea>
+                </div>
+                
+                <button style="width: 100%; padding: 1rem 2rem; background: linear-gradient(45deg, #00ffff, #00ff41); color: #0a0a0f; border: none; border-radius: 12px; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 1.1rem; cursor: pointer; transition: all 0.3s ease;">
+                    🚀 SEND MESSAGE
+                </button>
+            </div>
+            
+            <div>
+                <div class="chart-container">
+                    <h2 style="color: #00ff41; margin-bottom: 2rem;">📍 Contact Information</h2>
+                    
+                    <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(0, 255, 255, 0.1); border-radius: 12px; border: 1px solid #00ffff;">
+                        <h3 style="color: #00ffff; margin-bottom: 1rem;">🏢 Headquarters</h3>
+                        <p style="color: #e6e8eb; margin: 0.5rem 0;">123 Wall Street, Suite 4500</p>
+                        <p style="color: #e6e8eb; margin: 0.5rem 0;">New York, NY 10005</p>
+                        <p style="color: #e6e8eb; margin: 0.5rem 0;">United States</p>
+                    </div>
+                    
+                    <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(0, 255, 65, 0.1); border-radius: 12px; border: 1px solid #00ff41;">
+                        <h3 style="color: #00ff41; margin-bottom: 1rem;">📞 Phone & Email</h3>
+                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Sales:</strong> +1 (555) 123-4567</p>
+                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Support:</strong> +1 (555) 765-4321</p>
+                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Email:</strong> contact@quanttrading.ai</p>
+                    </div>
+                    
+                    <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(139, 92, 246, 0.1); border-radius: 12px; border: 1px solid #8b5cf6;">
+                        <h3 style="color: #8b5cf6; margin-bottom: 1rem;">🕒 Business Hours</h3>
+                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Monday - Friday:</strong> 9:00 AM - 6:00 PM EST</p>
+                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Emergency Support:</strong> 24/7 Available</p>
+                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Response Time:</strong> < 2 hours</p>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <h2 style="color: #ff0080; margin-bottom: 2rem;">🌐 Follow Us</h2>
+                    <div style="display: flex; gap: 1rem; justify-content: center;">
+                        <div style="padding: 1rem; background: rgba(0, 255, 255, 0.1); border-radius: 12px; border: 1px solid #00ffff; text-align: center; flex: 1;">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📘</div>
+                            <p style="color: #00ffff; margin: 0;">LinkedIn</p>
+                        </div>
+                        <div style="padding: 1rem; background: rgba(0, 255, 65, 0.1); border-radius: 12px; border: 1px solid #00ff41; text-align: center; flex: 1;">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🐦</div>
+                            <p style="color: #00ff41; margin: 0;">Twitter</p>
+                        </div>
+                        <div style="padding: 1rem; background: rgba(139, 92, 246, 0.1); border-radius: 12px; border: 1px solid #8b5cf6; text-align: center; flex: 1;">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📺</div>
+                            <p style="color: #8b5cf6; margin: 0;">YouTube</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+else:
+    # Redirect to appropriate pages
+    if st.session_state.current_page == "data":
+        st.switch_page("pages/1_Data_Upload.py")
+    elif st.session_state.current_page == "training":
+        st.switch_page("pages/2_Model_Training.py")
+    elif st.session_state.current_page == "predictions":
+        st.switch_page("pages/3_Predictions.py")
+    elif st.session_state.current_page == "backtesting":
+        st.switch_page("pages/4_Backtesting.py")
+    elif st.session_state.current_page == "database":
+        st.switch_page("pages/5_Database_Manager.py")
+
+# Enhanced Sidebar Status
+if st.session_state.data is not None:
+    st.sidebar.markdown("""
+    <div style="background: rgba(0, 255, 65, 0.1); border: 2px solid #00ff41; 
+         border-radius: 12px; padding: 1.5rem; margin: 2rem 0;">
+        <h4 style="color: #00ff41; margin-bottom: 1rem; font-family: 'Orbitron', monospace;">📊 DATASET STATUS</h4>
+    """, unsafe_allow_html=True)
+    
+    st.sidebar.markdown(f"""
+        <div style="font-family: 'JetBrains Mono', monospace; color: #e6e8eb; line-height: 1.8;">
+            <p><strong style="color: #00ffff;">Records:</strong> <span style="color: #00ff41;">{len(st.session_state.data):,}</span></p>
+            <p><strong style="color: #00ffff;">From:</strong> <span style="color: #ffd700;">{st.session_state.data.index.min().strftime('%Y-%m-%d')}</span></p>
+            <p><strong style="color: #00ffff;">To:</strong> <span style="color: #ffd700;">{st.session_state.data.index.max().strftime('%Y-%m-%d')}</span></p>
+            <p><strong style="color: #00ffff;">Features:</strong> <span style="color: #8b5cf6;">{len(st.session_state.data.columns)}</span></p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Model status in sidebar
 if st.session_state.models:
     st.sidebar.markdown("""
-    <div style="background: rgba(0, 212, 255, 0.1); border: 1px solid #00d4ff; 
-         border-radius: 8px; padding: 1rem; margin: 1rem 0;">
-        <h4 style="color: #00d4ff; margin-bottom: 1rem;">🤖 MODEL STATUS</h4>
+    <div style="background: rgba(0, 255, 255, 0.1); border: 2px solid #00ffff; 
+         border-radius: 12px; padding: 1.5rem; margin: 2rem 0;">
+        <h4 style="color: #00ffff; margin-bottom: 1rem; font-family: 'Orbitron', monospace;">🤖 AI MODEL STATUS</h4>
     """, unsafe_allow_html=True)
     
     for model_name, model in st.session_state.models.items():
-        status = "✅ TRAINED" if model is not None else "⏳ PENDING"
-        color = "#00ff88" if model is not None else "#ffaa00"
+        status = "✅ TRAINED" if model is not None else "⏳ TRAINING"
+        color = "#00ff41" if model is not None else "#ffaa00"
         st.sidebar.markdown(f"""
-        <div style="display: flex; justify-content: space-between; color: {color}; 
-             font-family: 'JetBrains Mono', monospace; margin: 0.5rem 0;">
-            <span>{model_name.replace('_', ' ').title()}</span>
-            <span>{status}</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; 
+             color: {color}; font-family: 'JetBrains Mono', monospace; margin: 0.8rem 0; 
+             padding: 0.5rem; background: rgba{color[3:-1]}, 0.1); border-radius: 8px;">
+            <span style="font-size: 0.9rem;">{model_name.replace('_', ' ').title()}</span>
+            <span style="font-size: 0.8rem; font-weight: bold;">{status}</span>
         </div>
         """, unsafe_allow_html=True)
     
     st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
+# Footer
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
-<div style="text-align: center; color: #9ca3af; font-family: 'JetBrains Mono', monospace;">
-    <p>THE QUANT TRADING ENGINE</p>
-    <p>v2.0 | Built with ⚡</p>
+<div style="text-align: center; color: #9ca3af; font-family: 'JetBrains Mono', monospace; 
+     background: rgba(0, 255, 255, 0.05); padding: 1.5rem; border-radius: 12px; margin: 1rem 0;">
+    <p style="margin: 0; color: #00ffff; font-weight: 600;">THE QUANT TRADING ENGINE</p>
+    <p style="margin: 0.5rem 0 0 0; color: #8b5cf6;">v3.0 | Enterprise Edition</p>
+    <p style="margin: 0.5rem 0 0 0; color: #ffd700;">⚡ Powered by AI</p>
 </div>
 """, unsafe_allow_html=True)
