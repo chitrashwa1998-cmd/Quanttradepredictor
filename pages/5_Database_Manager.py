@@ -166,17 +166,51 @@ with col2:
             else:
                 st.error("Failed to clear database")
 
+# Data Recovery Section
+st.header("🔄 Data Recovery")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Check Session Data")
+    if 'data' in st.session_state and st.session_state.data is not None:
+        st.success(f"✅ Session data exists: {len(st.session_state.data)} rows")
+        if st.button("💾 Save Session Data to Database"):
+            if trading_db.save_ohlc_data(st.session_state.data, "recovered_data"):
+                st.success("✅ Session data saved to database as 'recovered_data'")
+                st.rerun()
+            else:
+                st.error("Failed to save session data")
+    else:
+        st.warning("⚠️ No data in current session")
+
+with col2:
+    st.subheader("Auto-save Settings")
+    auto_save = st.checkbox("Auto-save uploaded data", value=True)
+    if auto_save:
+        st.info("New uploads will be automatically saved to database")
+
 # Raw database view (for debugging)
 with st.expander("🔍 Raw Database View (Debug)"):
     st.write("**All Keys:**")
     all_keys = list(trading_db.db.keys())
     st.write(all_keys)
     
+    # Show database size
+    st.write(f"**Total Keys:** {len(all_keys)}")
+    
     if all_keys:
         selected_key = st.selectbox("Select key to inspect:", all_keys)
         if st.button("View Key Content"):
             try:
                 content = trading_db.db[selected_key]
-                st.json(content)
+                if isinstance(content, dict) and 'data' in content:
+                    st.write(f"Data type: {type(content)}")
+                    st.write(f"Keys: {list(content.keys())}")
+                    if 'metadata' in content:
+                        st.write("Metadata:")
+                        st.json(content['metadata'])
+                else:
+                    st.json(content)
             except Exception as e:
                 st.error(f"Error viewing key: {str(e)}")

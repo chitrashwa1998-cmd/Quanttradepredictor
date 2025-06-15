@@ -198,6 +198,40 @@ class TradingDatabase:
             print(f"Error getting database info: {str(e)}")
             return {'error': str(e)}
     
+    def recover_data(self) -> Optional[pd.DataFrame]:
+        """Try to recover any available OHLC data from database."""
+        try:
+            # Look for any OHLC data keys
+            ohlc_keys = [key for key in self.db.keys() if key.startswith('ohlc_data_')]
+            
+            if not ohlc_keys:
+                return None
+            
+            # Try to load the most recent dataset
+            latest_key = None
+            latest_time = None
+            
+            for key in ohlc_keys:
+                try:
+                    data_dict = self.db[key]
+                    if 'metadata' in data_dict and 'saved_at' in data_dict['metadata']:
+                        saved_time = datetime.strptime(data_dict['metadata']['saved_at'], '%Y-%m-%d %H:%M:%S')
+                        if latest_time is None or saved_time > latest_time:
+                            latest_time = saved_time
+                            latest_key = key
+                except:
+                    continue
+            
+            if latest_key:
+                dataset_name = latest_key.replace('ohlc_data_', '')
+                return self.load_ohlc_data(dataset_name)
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error recovering data: {str(e)}")
+            return None
+
     def clear_all_data(self) -> bool:
         """Clear all data from database."""
         try:
