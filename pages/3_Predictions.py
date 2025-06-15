@@ -324,6 +324,119 @@ if st.session_state.features is not None:
                 sell_pct = (signal_counts.get(0, 0) / len(predictions)) * 100
                 st.metric("Sell Signals", f"{sell_pct:.1f}%")
         
+        elif selected_model == 'trend_sideways':
+            st.subheader("Trend vs Sideways Classification")
+            
+            # Trend mapping: 0=Sideways, 1=Trending
+            trend_map = {0: 'Sideways', 1: 'Trending'}
+            trend_colors = {0: 'orange', 1: 'blue'}
+            
+            pred_df = pd.DataFrame({
+                'Date': features_filtered.index,
+                'Price': df_filtered['Close'],
+                'Prediction': predictions,
+                'Market_State': [trend_map[p] for p in predictions]
+            })
+            
+            # Add confidence if available
+            if probabilities is not None:
+                pred_df['Confidence'] = np.max(probabilities, axis=1)
+            
+            # Create visualization
+            fig = make_subplots(rows=2, cols=1,
+                              subplot_titles=('Price with Market State', 'Market State Timeline'),
+                              vertical_spacing=0.1,
+                              row_heights=[0.7, 0.3])
+            
+            # Price chart with color-coded background for market state
+            fig.add_trace(
+                go.Scatter(x=pred_df['Date'], y=pred_df['Price'], 
+                          name='Price', line=dict(color='black', width=2)),
+                row=1, col=1
+            )
+            
+            # Add market state periods as background colors
+            sideways_periods = pred_df[pred_df['Prediction'] == 0]
+            trending_periods = pred_df[pred_df['Prediction'] == 1]
+            
+            # Add scatter points for market states
+            if len(sideways_periods) > 0:
+                fig.add_trace(
+                    go.Scatter(x=sideways_periods['Date'], y=sideways_periods['Price'],
+                              mode='markers', marker=dict(color='orange', size=6, symbol='square'),
+                              name='Sideways Market'),
+                    row=1, col=1
+                )
+            
+            if len(trending_periods) > 0:
+                fig.add_trace(
+                    go.Scatter(x=trending_periods['Date'], y=trending_periods['Price'],
+                              mode='markers', marker=dict(color='blue', size=6, symbol='diamond'),
+                              name='Trending Market'),
+                    row=1, col=1
+                )
+            
+            # Market state timeline
+            fig.add_trace(
+                go.Scatter(x=pred_df['Date'], y=pred_df['Prediction'],
+                          mode='lines+markers', 
+                          line=dict(color='purple', width=3),
+                          marker=dict(size=4),
+                          name='Market State',
+                          hovertemplate='<b>Date:</b> %{x}<br><b>State:</b> %{customdata}<extra></extra>',
+                          customdata=pred_df['Market_State']),
+                row=2, col=1
+            )
+            
+            fig.update_layout(height=700, title="Trend vs Sideways Market Analysis")
+            fig.update_xaxes(title_text="Date", row=2, col=1)
+            fig.update_yaxes(title_text="Price", row=1, col=1)
+            fig.update_yaxes(title_text="Market State (0=Sideways, 1=Trending)", row=2, col=1)
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Market state statistics
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                sideways_pct = (predictions == 0).mean() * 100
+                st.metric("Sideways Market %", f"{sideways_pct:.1f}%")
+            
+            with col2:
+                trending_pct = (predictions == 1).mean() * 100
+                st.metric("Trending Market %", f"{trending_pct:.1f}%")
+            
+            with col3:
+                if 'Confidence' in pred_df.columns:
+                    avg_confidence = pred_df['Confidence'].mean()
+                    st.metric("Avg Confidence", f"{avg_confidence:.3f}")
+            
+            # Show periods analysis
+            st.subheader("Market State Periods Analysis")
+            
+            # Calculate consecutive periods
+            pred_df['State_Change'] = pred_df['Prediction'].diff().fillna(0) != 0
+            pred_df['Period_ID'] = pred_df['State_Change'].cumsum()
+            
+            # Group by periods
+            periods_summary = pred_df.groupby('Period_ID').agg({
+                'Date': ['first', 'last'],
+                'Prediction': 'first',
+                'Market_State': 'first'
+            }).round(2)
+            
+            periods_summary.columns = ['Start_Date', 'End_Date', 'State_Code', 'Market_State']
+            periods_summary['Duration_Days'] = (periods_summary['End_Date'] - periods_summary['Start_Date']).dt.days + 1
+            
+            # Show recent periods
+            st.write("**Recent Market State Periods:**")
+            recent_periods = periods_summary.tail(10).copy()
+            recent_periods['Start_Date'] = recent_periods['Start_Date'].dt.strftime('%Y-%m-%d')
+            recent_periods['End_Date'] = recent_periods['End_Date'].dt.strftime('%Y-%m-%d')
+            
+            st.dataframe(recent_periods[['Start_Date', 'End_Date', 'Market_State', 'Duration_Days']], 
+                        use_container_width=True)
+        
         elif selected_model == 'volatility':
             st.subheader("Volatility Forecasting")
             
