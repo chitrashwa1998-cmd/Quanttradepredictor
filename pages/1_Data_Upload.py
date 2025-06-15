@@ -368,4 +368,3 @@ else:
     - **Close**: Closing price (numeric)
     - **Volume**: Trading volume (optional, numeric)
     """)
-```
