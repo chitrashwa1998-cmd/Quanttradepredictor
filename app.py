@@ -30,6 +30,18 @@ if 'features' not in st.session_state:
 if 'model_trainer' not in st.session_state:
     st.session_state.model_trainer = None
 
+# Auto-load data from database on app start
+if st.session_state.data is None:
+    try:
+        from utils.database import TradingDatabase
+        trading_db = TradingDatabase()
+        recovered_data = trading_db.load_ohlc_data("main_dataset")
+        if recovered_data is not None:
+            st.session_state.data = recovered_data
+            st.toast("📊 Data automatically loaded from database!")
+    except Exception as e:
+        pass  # Silently fail if database not available
+
 # Navigation
 nav_pages = {
     "🏠 HOME": "home",

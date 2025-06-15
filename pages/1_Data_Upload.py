@@ -48,18 +48,28 @@ if uploaded_file is not None:
         df, message = DataProcessor.load_and_process_data(uploaded_file)
 
     if df is not None:
-        st.success(message)
-
-        # Store data in session state
         st.session_state.data = df
-        
+        st.session_state.features = None  # Reset features when new data is loaded
+        st.session_state.models = {}  # Reset models when new data is loaded
+        st.session_state.predictions = None  # Reset predictions
+
+        # Automatically save to database
+        from utils.database import TradingDatabase
+        trading_db = TradingDatabase()
+        if trading_db.save_ohlc_data(df, "main_dataset"):
+            st.success(f"✅ {message} & Auto-saved to database!")
+        else:
+            st.success(f"✅ {message}")
+            st.warning("⚠️ Data loaded but failed to save to database")
+        st.rerun()
+
         # Manual save to database
         st.subheader("💾 Save to Database")
         col1, col2 = st.columns([2, 1])
-        
+
         with col1:
             dataset_name = st.text_input("Dataset name", value="main_dataset", key="dataset_name")
-        
+
         with col2:
             if st.button("💾 Save to Database", type="primary"):
                 with st.spinner("Saving to database..."):
@@ -358,3 +368,4 @@ else:
     - **Close**: Closing price (numeric)
     - **Volume**: Trading volume (optional, numeric)
     """)
+```

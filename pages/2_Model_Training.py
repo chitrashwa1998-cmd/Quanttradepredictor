@@ -138,7 +138,24 @@ if st.session_state.features is not None:
                 # Store results
                 st.session_state.models = results
                 
-                st.success("🎉 Model training completed!")
+                # Auto-save model results to database
+                try:
+                    from utils.database import TradingDatabase
+                    trading_db = TradingDatabase()
+                    for model_name, model_result in results.items():
+                        if model_result is not None:
+                            # Save model metrics and info (not the actual model object)
+                            model_data = {
+                                'metrics': model_result['metrics'],
+                                'task_type': model_result['task_type'],
+                                'trained_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            }
+                            trading_db.save_model_results(model_name, model_data)
+                    st.success("🎉 Model training completed & saved to database!")
+                except Exception as e:
+                    st.success("🎉 Model training completed!")
+                    st.warning("⚠️ Models trained but failed to save to database")
+                
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ Error during model training: {str(e)}")
