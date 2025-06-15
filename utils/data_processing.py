@@ -96,7 +96,7 @@ class DataProcessor:
                     break
             
             if df is None:
-                return None, "Could not read CSV file. Please check file format, encoding, and separator."
+                return None, "Could not read CSV file. Please check file format, encoding, and separator. Try saving your CSV file with UTF-8 encoding and comma separators."
             
             # Clean column names (remove spaces, make case-insensitive)
             df.columns = df.columns.str.strip().str.lower()
@@ -138,21 +138,27 @@ class DataProcessor:
                 try:
                     # Try different date formats
                     df[date_col] = pd.to_datetime(df[date_col], infer_datetime_format=True)
-                except:
+                except Exception as e1:
                     # Try specific formats, prioritizing DD-MM-YYYY HH:MM:SS
-                    date_formats = ['%d-%m-%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', 
-                                  '%Y/%m/%d', '%d-%m-%Y', '%m-%d-%Y']
+                    date_formats = ['%d-%m-%Y %H:%M:%S', '%d/%m/%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', 
+                                  '%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%Y/%m/%d', '%d-%m-%Y', '%m-%d-%Y']
                     parsed = False
+                    last_error = None
+                    
+                    # Show sample date values for debugging
+                    sample_dates = df[date_col].head(3).tolist()
+                    
                     for fmt in date_formats:
                         try:
                             df[date_col] = pd.to_datetime(df[date_col], format=fmt)
                             parsed = True
                             break
-                        except:
+                        except Exception as e:
+                            last_error = str(e)
                             continue
                     
                     if not parsed:
-                        return None, f"Could not parse date column '{date_col}'. Please ensure dates are in a standard format."
+                        return None, f"Could not parse date column '{date_col}'. Sample dates: {sample_dates}. Last error: {last_error}. Please ensure dates are in DD-MM-YYYY HH:MM:SS format."
                 
                 df.set_index(date_col, inplace=True)
             else:
