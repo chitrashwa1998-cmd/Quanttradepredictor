@@ -4,7 +4,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from utils.data_processing import DataProcessor
 from features.technical_indicators import TechnicalIndicators
-from utils import trading_db
+from utils.database import TradingDatabase
+
+# Initialize database
+trading_db = TradingDatabase()
 
 st.set_page_config(page_title="Data Upload", page_icon="📊", layout="wide")
 
