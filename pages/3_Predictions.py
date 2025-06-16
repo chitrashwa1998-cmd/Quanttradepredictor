@@ -516,8 +516,400 @@ try:
 
             st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
 
+    elif selected_model == 'volatility':
+        tab1, tab2, tab3 = st.tabs(["📊 Volatility Forecast", "📈 Volatility Trends", "📋 Data Table"])
+
+        # Add volatility-specific fields
+        pred_df['Volatility_Forecast'] = predictions
+        pred_df['Volatility_Category'] = pd.cut(pred_df['Volatility_Forecast'], 
+                                               bins=[0, 0.01, 0.02, 0.05, float('inf')],
+                                               labels=['Low Vol', 'Medium Vol', 'High Vol', 'Extreme Vol'])
+
+        with tab1:
+            st.subheader("📊 Volatility Forecasting Analysis")
+
+            # Volatility forecast over time
+            fig = make_subplots(rows=2, cols=1, 
+                              subplot_titles=('Predicted Volatility Over Time', 'Volatility Distribution'),
+                              vertical_spacing=0.1)
+
+            # Volatility timeline
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Volatility_Forecast'],
+                mode='lines+markers',
+                name='Volatility Forecast',
+                line=dict(color='orange', width=2),
+                marker=dict(size=4)
+            ), row=1, col=1)
+
+            # Volatility histogram
+            fig.add_trace(go.Histogram(
+                x=pred_df['Volatility_Forecast'],
+                nbinsx=30,
+                name='Distribution',
+                marker_color='lightcoral'
+            ), row=2, col=1)
+
+            fig.update_layout(height=600, showlegend=False)
+            fig.update_xaxes(title_text="Date", row=1, col=1)
+            fig.update_yaxes(title_text="Volatility", row=1, col=1)
+            fig.update_xaxes(title_text="Volatility Value", row=2, col=1)
+            fig.update_yaxes(title_text="Frequency", row=2, col=1)
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Statistics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Avg Volatility", f"{pred_df['Volatility_Forecast'].mean():.4f}")
+            with col2:
+                st.metric("Max Volatility", f"{pred_df['Volatility_Forecast'].max():.4f}")
+            with col3:
+                high_vol = (pred_df['Volatility_Category'].isin(['High Vol', 'Extreme Vol'])).mean() * 100
+                st.metric("High Volatility %", f"{high_vol:.1f}%")
+            with col4:
+                st.metric("Latest Volatility", f"{pred_df['Volatility_Forecast'].iloc[-1]:.4f}")
+
+        with tab2:
+            st.subheader("📈 Price with Volatility Indicators")
+
+            fig = go.Figure()
+
+            # Price line
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Price'],
+                mode='lines',
+                name='Price',
+                line=dict(color='blue', width=2)
+            ))
+
+            # Volatility-based markers
+            vol_colors = {'Low Vol': 'green', 'Medium Vol': 'yellow', 'High Vol': 'orange', 'Extreme Vol': 'red'}
+            for vol_level in vol_colors:
+                vol_data = pred_df[pred_df['Volatility_Category'] == vol_level]
+                if len(vol_data) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=vol_data.index,
+                        y=vol_data['Price'],
+                        mode='markers',
+                        marker=dict(color=vol_colors[vol_level], size=8),
+                        name=vol_level,
+                        hovertemplate=f'<b>Volatility:</b> {vol_level}<br><b>Price:</b> $%{{y:.2f}}<extra></extra>'
+                    ))
+
+            fig.update_layout(
+                height=500,
+                title="Price Movement with Volatility Level Indicators",
+                xaxis_title="Date",
+                yaxis_title="Price ($)"
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        with tab3:
+            st.subheader("📋 Volatility Predictions Data")
+
+            display_df = create_display_dataframe(pred_df)
+            if 'Volatility_Forecast' in display_df.columns:
+                display_df['Volatility_Forecast'] = display_df['Volatility_Forecast'].apply(lambda x: f"{float(x):.4f}" if isinstance(x, (int, float, str)) else x)
+
+            st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+
+    elif selected_model == 'trend_sideways':
+        tab1, tab2, tab3 = st.tabs(["📈 Trend Analysis", "📊 Market State", "📋 Data Table"])
+
+        # Add trend analysis fields
+        pred_df['Market_State'] = np.where(predictions == 1, 'Trending', 'Sideways')
+        pred_df['Trend_Signal'] = predictions
+
+        with tab1:
+            st.subheader("📈 Trend vs Sideways Market Analysis")
+
+            # Trend analysis chart
+            fig = go.Figure()
+
+            # Price line
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Price'],
+                mode='lines',
+                name='Price',
+                line=dict(color='blue', width=2)
+            ))
+
+            # Trend/Sideways markers
+            trending_data = pred_df[pred_df['Market_State'] == 'Trending']
+            sideways_data = pred_df[pred_df['Market_State'] == 'Sideways']
+
+            if len(trending_data) > 0:
+                fig.add_trace(go.Scatter(
+                    x=trending_data.index,
+                    y=trending_data['Price'],
+                    mode='markers',
+                    marker=dict(color='green', size=8, symbol='triangle-up'),
+                    name='Trending Market',
+                    hovertemplate='<b>State:</b> Trending<br><b>Price:</b> $%{y:.2f}<extra></extra>'
+                ))
+
+            if len(sideways_data) > 0:
+                fig.add_trace(go.Scatter(
+                    x=sideways_data.index,
+                    y=sideways_data['Price'],
+                    mode='markers',
+                    marker=dict(color='orange', size=8, symbol='circle'),
+                    name='Sideways Market',
+                    hovertemplate='<b>State:</b> Sideways<br><b>Price:</b> $%{y:.2f}<extra></extra>'
+                ))
+
+            fig.update_layout(
+                height=500,
+                title="Market State Classification",
+                xaxis_title="Date",
+                yaxis_title="Price ($)"
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        with tab2:
+            st.subheader("📊 Market State Distribution")
+
+            # Market state pie chart
+            state_counts = pred_df['Market_State'].value_counts()
+
+            fig = go.Figure(data=[go.Pie(
+                labels=state_counts.index,
+                values=state_counts.values,
+                hole=0.3,
+                marker_colors=['green', 'orange']
+            )])
+
+            fig.update_layout(
+                title="Trending vs Sideways Market Distribution",
+                height=400
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Statistics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                trending_pct = (predictions == 1).mean() * 100
+                st.metric("Trending %", f"{trending_pct:.1f}%")
+            with col2:
+                sideways_pct = (predictions == 0).mean() * 100
+                st.metric("Sideways %", f"{sideways_pct:.1f}%")
+            with col3:
+                if 'Confidence' in pred_df.columns:
+                    avg_conf = pred_df['Confidence'].mean()
+                    st.metric("Avg Confidence", f"{avg_conf:.3f}")
+                else:
+                    st.metric("Data Points", len(pred_df))
+            with col4:
+                current_state = "Trending" if predictions[-1] == 1 else "Sideways"
+                st.metric("Current State", current_state)
+
+        with tab3:
+            st.subheader("📋 Trend Classification Data")
+
+            display_df = create_display_dataframe(pred_df)
+            st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+
+    elif selected_model == 'reversal':
+        tab1, tab2, tab3 = st.tabs(["🔄 Reversal Signals", "📊 Reversal Analysis", "📋 Data Table"])
+
+        # Add reversal fields
+        pred_df['Reversal_Signal'] = np.where(predictions == 1, 'Reversal Expected', 'No Reversal')
+        pred_df['Signal_Type'] = predictions
+
+        with tab1:
+            st.subheader("🔄 Price Reversal Detection")
+
+            fig = go.Figure()
+
+            # Price line
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Price'],
+                mode='lines',
+                name='Price',
+                line=dict(color='blue', width=2)
+            ))
+
+            # Reversal markers
+            reversal_data = pred_df[pred_df['Reversal_Signal'] == 'Reversal Expected']
+
+            if len(reversal_data) > 0:
+                fig.add_trace(go.Scatter(
+                    x=reversal_data.index,
+                    y=reversal_data['Price'],
+                    mode='markers',
+                    marker=dict(color='red', size=12, symbol='diamond'),
+                    name='Reversal Signal',
+                    hovertemplate='<b>Signal:</b> Reversal Expected<br><b>Price:</b> $%{y:.2f}<extra></extra>'
+                ))
+
+            fig.update_layout(
+                height=500,
+                title="Price Reversal Detection Points",
+                xaxis_title="Date",
+                yaxis_title="Price ($)"
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        with tab2:
+            st.subheader("📊 Reversal Signal Analysis")
+
+            # Reversal statistics
+            reversal_counts = pred_df['Reversal_Signal'].value_counts()
+
+            fig = go.Figure(data=[go.Pie(
+                labels=reversal_counts.index,
+                values=reversal_counts.values,
+                hole=0.3,
+                marker_colors=['lightblue', 'red']
+            )])
+
+            fig.update_layout(
+                title="Reversal Signal Distribution",
+                height=400
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Statistics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                reversal_pct = (predictions == 1).mean() * 100
+                st.metric("Reversal Signals %", f"{reversal_pct:.1f}%")
+            with col2:
+                no_reversal_pct = (predictions == 0).mean() * 100
+                st.metric("No Reversal %", f"{no_reversal_pct:.1f}%")
+            with col3:
+                if 'Confidence' in pred_df.columns:
+                    avg_conf = pred_df['Confidence'].mean()
+                    st.metric("Avg Confidence", f"{avg_conf:.3f}")
+                else:
+                    st.metric("Total Signals", len(reversal_data))
+            with col4:
+                current_signal = "Reversal Expected" if predictions[-1] == 1 else "No Reversal"
+                st.metric("Latest Signal", current_signal)
+
+        with tab3:
+            st.subheader("📋 Reversal Detection Data")
+
+            display_df = create_display_dataframe(pred_df)
+            st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+
+    elif selected_model == 'trading_signal':
+        tab1, tab2, tab3 = st.tabs(["📊 Trading Signals", "📈 Signal Analysis", "📋 Signal History"])
+
+        signal_map = {0: 'Sell', 1: 'Hold', 2: 'Buy'}
+        signal_colors = {0: '#E74C3C', 1: '#F39C12', 2: '#27AE60'}
+
+        pred_df['Signal'] = predictions
+        pred_df['Signal_Name'] = [signal_map[p] for p in predictions]
+
+        with tab1:
+            st.subheader("📊 Trading Signal Overview")
+
+            fig = go.Figure()
+
+            # Price line
+            fig.add_trace(go.Scatter(
+                x=pred_df.index, 
+                y=pred_df['Price'],
+                name='Price',
+                line=dict(color='#2E86C1', width=2)
+            ))
+
+            # Signal markers
+            for signal_value, signal_name in signal_map.items():
+                signal_data = pred_df[pred_df['Signal'] == signal_value]
+                if len(signal_data) > 0:
+                    marker_symbol = 'triangle-up' if signal_value == 2 else ('triangle-down' if signal_value == 0 else 'circle')
+
+                    fig.add_trace(go.Scatter(
+                        x=signal_data.index,
+                        y=signal_data['Price'],
+                        mode='markers',
+                        marker=dict(
+                            symbol=marker_symbol,
+                            color=signal_colors[signal_value],
+                            size=10
+                        ),
+                        name=f'{signal_name} Signal',
+                        hovertemplate=f'<b>{signal_name} Signal</b><br>Price: $%{{y:.2f}}<br>Date: %{{x}}<extra></extra>'
+                    ))
+
+            fig.update_layout(
+                height=500,
+                title="Trading Signals on Price Chart",
+                xaxis_title="Date",
+                yaxis_title="Price ($)"
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Current signal
+            current_signal = signal_map[predictions[-1]]
+            signal_color = signal_colors[predictions[-1]]
+
+            st.markdown(f"""
+            <div style="background: rgba{signal_color[3:-1]}, 0.1); border: 2px solid {signal_color}; 
+                 border-radius: 12px; padding: 1.5rem; margin: 1rem 0; text-align: center;">
+                <h3 style="color: {signal_color}; margin: 0;">Current Signal: {current_signal}</h3>
+                <p style="margin: 0.5rem 0 0 0;">Latest trading recommendation</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with tab2:
+            st.subheader("📈 Signal Distribution Analysis")
+
+            signal_counts = pd.Series(predictions).value_counts()
+
+            # Pie chart
+            fig = go.Figure(data=[go.Pie(
+                labels=['Sell', 'Hold', 'Buy'],
+                values=[signal_counts.get(0, 0), signal_counts.get(1, 0), signal_counts.get(2, 0)],
+                hole=0.3,
+                marker_colors=['#E74C3C', '#F39C12', '#27AE60']
+            )])
+
+            fig.update_layout(
+                title="Trading Signal Distribution",
+                height=400
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Signal metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                buy_pct = (signal_counts.get(2, 0) / len(predictions)) * 100
+                st.metric("Buy Signals", f"{buy_pct:.1f}%")
+            with col2:
+                hold_pct = (signal_counts.get(1, 0) / len(predictions)) * 100
+                st.metric("Hold Signals", f"{hold_pct:.1f}%")
+            with col3:
+                sell_pct = (signal_counts.get(0, 0) / len(predictions)) * 100
+                st.metric("Sell Signals", f"{sell_pct:.1f}%")
+
+        with tab3:
+            st.subheader("📋 Signal History")
+
+            display_df = create_display_dataframe(pred_df)
+            
+            st.dataframe(
+                display_df.tail(50),
+                use_container_width=True,
+                hide_index=True
+            )
+
     else:
-        # Handle other model types (trading_signal, etc.)
+        # Handle any other model types
         st.subheader(f"📊 {selected_model.replace('_', ' ').title()} Predictions")
 
         # Create display dataframe
@@ -541,17 +933,9 @@ try:
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # Show data table with enhanced formatting
+        # Show data table
         st.subheader("Recent Predictions")
-
-        # Add signal interpretation for better readability
-        recent_df = display_df.tail(20).copy()
-        if 'Prediction' in recent_df.columns:
-            recent_df['Signal'] = recent_df['Prediction'].apply(
-                lambda x: "🟢 BUY" if x == 1 else "🔴 SELL" if x == 0 else "⚪ HOLD"
-            )
-
-        st.dataframe(recent_df, use_container_width=True, hide_index=True)
+        st.dataframe(display_df.tail(20), use_container_width=True, hide_index=True)
 
 except Exception as e:
     st.error(f"Error generating predictions: {str(e)}")
