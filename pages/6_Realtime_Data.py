@@ -249,12 +249,35 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
             # ML Predictions Section
             st.header("ML Predictions")
             
-            # Check if models are available
-            if 'model_trainer' in st.session_state and st.session_state.model_trainer.models:
+            # Check if models are available in session state or try to load from database
+            models_available = False
+            model_trainer = None
+            
+            if 'model_trainer' in st.session_state and st.session_state.model_trainer and hasattr(st.session_state.model_trainer, 'models') and st.session_state.model_trainer.models:
+                models_available = True
+                model_trainer = st.session_state.model_trainer
+            else:
+                # Try to load models from database
+                try:
+                    from models.xgboost_models import QuantTradingModels
+                    from utils.database_adapter import get_trading_database
+                    
+                    db = get_trading_database()
+                    trained_models = db.load_trained_models()
+                    
+                    if trained_models:
+                        model_trainer = QuantTradingModels()
+                        model_trainer.models = trained_models
+                        st.session_state.model_trainer = model_trainer
+                        models_available = True
+                        st.success("✅ Loaded models from database")
+                    
+                except Exception as e:
+                    st.warning(f"⚠️ Could not load models from database: {str(e)}")
+            
+            if models_available and model_trainer:
                 
                 try:
-                    model_trainer = st.session_state.model_trainer
-                    
                     # Prepare features for prediction
                     features_df = model_trainer.prepare_features(df_with_indicators)
                     
@@ -262,6 +285,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     clean_features = features_df.dropna()
                     
                     if not clean_features.empty and len(clean_features) >= 1:
+                        st.success(f"✅ {len(clean_features)} data points ready for prediction")
                         # Get latest data point for prediction
                         latest_features = clean_features.tail(1)
                         
@@ -269,50 +293,87 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                         
                         pred_cols = st.columns(3)
                         
-                        # Direction prediction
-                        if 'direction' in model_trainer.models:
-                            with pred_cols[0]:
-                                direction_pred, direction_prob = model_trainer.predict('direction', latest_features)
-                                direction_text = "📈 BUY" if direction_pred[0] == 1 else "📉 SELL"
-                                confidence = direction_prob[0].max() * 100 if direction_prob[0] is not None else 50
-                                
-                                st.metric(
-                                    "Direction",
-                                    direction_text,
-                                    delta=f"{confidence:.1f}% confidence"
-                                )
+                        available_models = [name for name in ['direction', 'profit_prob', 'trading_signal'] if name in model_trainer.models and model_trainer.models[name] is not None]
                         
-                        # Profit probability
-                        if 'profit_prob' in model_trainer.models:
-                            with pred_cols[1]:
-                                profit_pred, profit_prob = model_trainer.predict('profit_prob', latest_features)
-                                profit_text = "✅ PROFIT" if profit_pred[0] == 1 else "❌ LOSS"
-                                profit_confidence = profit_prob[0].max() * 100 if profit_prob[0] is not None else 50
-                                
-                                st.metric(
-                                    "Profit Probability",
-                                    profit_text,
-                                    delta=f"{profit_confidence:.1f}% confidence"
-                                )
-                        
-                        # Trading signal
-                        if 'trading_signal' in model_trainer.models:
-                            with pred_cols[2]:
-                                signal_pred, signal_prob = model_trainer.predict('trading_signal', latest_features)
-                                signal_text = "🚀 STRONG BUY" if signal_pred[0] == 1 else "⏸️ HOLD/SELL"
-                                signal_confidence = signal_prob[0].max() * 100 if signal_prob[0] is not None else 50
-                                
-                                st.metric(
-                                    "Trading Signal",
-                                    signal_text,
-                                    delta=f"{signal_confidence:.1f}% confidence"
-                                )
+                        if not available_models:
+                            st.warning("⚠️ No prediction models available")
+                        else:
+                            # Direction prediction
+                            if 'direction' in available_models:
+                                with pred_cols[0]:
+                                    try:
+                                        direction_pred, direction_prob = model_trainer.predict('direction', latest_features)
+                                        direction_text = "📈 BUY" if direction_pred[0] == 1 else "📉 SELL"
+                                        confidence = direction_prob[0].max() * 100 if direction_prob is not None and len(direction_prob[0]) > 0 else 50
+                                        
+                                        st.metric(
+                                            "Direction",
+                                            direction_text,
+                                            delta=f"{confidence:.1f}% confidence"
+                                        )
+                                    except Exception as e:
+                                        st.error(f"Direction prediction error: {str(e)}")
+                            
+                            # Profit probability
+                            if 'profit_prob' in available_models:
+                                with pred_cols[1]:
+                                    try:
+                                        profit_pred, profit_prob = model_trainer.predict('profit_prob', latest_features)
+                                        
+                                        # Handle different prediction formats
+                                        if hasattr(profit_pred[0], '__iter__'):
+                                            profit_value = profit_pred[0][0] if len(profit_pred[0]) > 0 else profit_pred[0]
+                                        else:
+                                            profit_value = profit_pred[0]
+                                            
+                                        if isinstance(profit_value, (int, float)):
+                                            if profit_value > 0.5:
+                                                profit_text = "✅ PROFIT"
+                                            else:
+                                                profit_text = "❌ LOSS"
+                                            profit_confidence = profit_value * 100
+                                        else:
+                                            profit_text = "✅ PROFIT" if profit_value == 1 else "❌ LOSS"
+                                            profit_confidence = profit_prob[0].max() * 100 if profit_prob is not None and len(profit_prob[0]) > 0 else 50
+                                        
+                                        st.metric(
+                                            "Profit Probability",
+                                            profit_text,
+                                            delta=f"{profit_confidence:.1f}% confidence"
+                                        )
+                                    except Exception as e:
+                                        st.error(f"Profit prediction error: {str(e)}")
+                            
+                            # Trading signal
+                            if 'trading_signal' in available_models:
+                                with pred_cols[2]:
+                                    try:
+                                        signal_pred, signal_prob = model_trainer.predict('trading_signal', latest_features)
+                                        
+                                        # Handle multi-class trading signals (0=sell, 1=hold, 2=buy)
+                                        if signal_pred[0] == 2:
+                                            signal_text = "🚀 STRONG BUY"
+                                        elif signal_pred[0] == 1:
+                                            signal_text = "⏸️ HOLD"
+                                        else:
+                                            signal_text = "📉 SELL"
+                                            
+                                        signal_confidence = signal_prob[0].max() * 100 if signal_prob is not None and len(signal_prob[0]) > 0 else 50
+                                        
+                                        st.metric(
+                                            "Trading Signal",
+                                            signal_text,
+                                            delta=f"{signal_confidence:.1f}% confidence"
+                                        )
+                                    except Exception as e:
+                                        st.error(f"Trading signal error: {str(e)}")
                         
                         # Prediction history table
                         st.subheader("Recent Predictions")
                         
-                        if len(clean_features) >= 10:
-                            recent_features = clean_features.tail(10)
+                        if len(clean_features) >= 5:
+                            recent_count = min(10, len(clean_features))
+                            recent_features = clean_features.tail(recent_count)
                             
                             prediction_data = []
                             
@@ -322,20 +383,41 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                 # Get predictions for each available model
                                 single_row = row.to_frame().T
                                 
-                                if 'direction' in model_trainer.models:
-                                    dir_pred, dir_prob = model_trainer.predict('direction', single_row)
-                                    row_data['Direction'] = "BUY" if dir_pred[0] == 1 else "SELL"
-                                    row_data['Dir_Conf'] = f"{dir_prob[0].max() * 100:.1f}%" if dir_prob[0] is not None else "N/A"
+                                try:
+                                    if 'direction' in available_models:
+                                        dir_pred, dir_prob = model_trainer.predict('direction', single_row)
+                                        row_data['Direction'] = "BUY" if dir_pred[0] == 1 else "SELL"
+                                        row_data['Dir_Conf'] = f"{dir_prob[0].max() * 100:.1f}%" if dir_prob is not None and len(dir_prob[0]) > 0 else "N/A"
                                 
-                                if 'profit_prob' in model_trainer.models:
-                                    profit_pred, profit_prob = model_trainer.predict('profit_prob', single_row)
-                                    row_data['Profit'] = "YES" if profit_pred[0] == 1 else "NO"
-                                    row_data['Profit_Conf'] = f"{profit_prob[0].max() * 100:.1f}%" if profit_prob[0] is not None else "N/A"
+                                    if 'profit_prob' in available_models:
+                                        profit_pred, profit_prob = model_trainer.predict('profit_prob', single_row)
+                                        if isinstance(profit_pred[0], (int, float)):
+                                            row_data['Profit'] = "YES" if profit_pred[0] > 0.5 else "NO"
+                                            row_data['Profit_Conf'] = f"{profit_pred[0] * 100:.1f}%"
+                                        else:
+                                            row_data['Profit'] = "YES" if profit_pred[0] == 1 else "NO"
+                                            row_data['Profit_Conf'] = f"{profit_prob[0].max() * 100:.1f}%" if profit_prob is not None and len(profit_prob[0]) > 0 else "N/A"
+                                    
+                                    if 'trading_signal' in available_models:
+                                        signal_pred, signal_prob = model_trainer.predict('trading_signal', single_row)
+                                        if signal_pred[0] == 2:
+                                            row_data['Signal'] = "STRONG BUY"
+                                        elif signal_pred[0] == 1:
+                                            row_data['Signal'] = "HOLD"
+                                        else:
+                                            row_data['Signal'] = "SELL"
+                                        row_data['Signal_Conf'] = f"{signal_prob[0].max() * 100:.1f}%" if signal_prob is not None and len(signal_prob[0]) > 0 else "N/A"
+                                
+                                except Exception as e:
+                                    row_data['Error'] = f"Prediction failed: {str(e)[:30]}"
                                 
                                 prediction_data.append(row_data)
                             
-                            pred_df = pd.DataFrame(prediction_data)
-                            st.dataframe(pred_df, use_container_width=True)
+                            if prediction_data:
+                                pred_df = pd.DataFrame(prediction_data)
+                                st.dataframe(pred_df, use_container_width=True)
+                        else:
+                            st.info("Need at least 5 data points for prediction history")
                     
                     else:
                         st.warning("⚠️ Cannot generate predictions - insufficient technical indicator data")
@@ -345,7 +427,59 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     st.info("💡 Make sure you have trained models available")
             
             else:
-                st.warning("⚠️ No trained models available. Please train models first in the Model Training page.")
+                st.warning("⚠️ No trained models available for predictions.")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🚀 Quick Train Models", type="primary"):
+                        if st.session_state.get('data') is not None:
+                            with st.spinner("Training essential models for real-time predictions..."):
+                                try:
+                                    from models.xgboost_models import QuantTradingModels
+                                    from features.technical_indicators import TechnicalIndicators
+                                    
+                                    # Use existing data
+                                    data = st.session_state.data
+                                    
+                                    # Calculate features
+                                    features_data = TechnicalIndicators.calculate_all_indicators(data)
+                                    features_data = features_data.dropna()
+                                    
+                                    if len(features_data) >= 100:
+                                        # Initialize trainer
+                                        model_trainer = QuantTradingModels()
+                                        
+                                        # Prepare data
+                                        X = model_trainer.prepare_features(features_data)
+                                        targets = model_trainer.create_targets(features_data)
+                                        
+                                        # Train essential models for real-time predictions
+                                        essential_models = ['direction', 'trading_signal', 'profit_prob']
+                                        trained_count = 0
+                                        
+                                        for model_name in essential_models:
+                                            if model_name in targets:
+                                                y = targets[model_name]
+                                                task_type = 'classification' if model_name in ['direction', 'trading_signal'] else 'regression'
+                                                
+                                                result = model_trainer.train_model(model_name, X, y, task_type)
+                                                if result:
+                                                    trained_count += 1
+                                        
+                                        if trained_count > 0:
+                                            st.session_state.model_trainer = model_trainer
+                                            st.success(f"✅ Trained {trained_count} models successfully!")
+                                            st.rerun()
+                                    else:
+                                        st.error("❌ Need at least 100 clean data points for training")
+                                
+                                except Exception as e:
+                                    st.error(f"❌ Training failed: {str(e)}")
+                        else:
+                            st.error("❌ No data available. Please upload data first.")
+                
+                with col2:
+                    st.info("💡 Go to **Model Training** page for comprehensive model training with full configuration options.")
             
             # Real-time Trading Insights
             st.header("Real-time Trading Insights")
