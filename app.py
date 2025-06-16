@@ -41,11 +41,11 @@ def initialize_session_state():
     # Auto-recovery system
     if not st.session_state.auto_recovery_done:
         try:
-            from utils.database import TradingDatabase
+            from utils.database_adapter import get_trading_database
             from models.xgboost_models import QuantTradingModels
             from features.technical_indicators import TechnicalIndicators
             
-            trading_db = TradingDatabase()
+            trading_db = get_trading_database()
             
             # Recover OHLC data
             if st.session_state.data is None:
@@ -136,8 +136,39 @@ for page_name, page_key in nav_pages.items():
     if st.sidebar.button(page_name, key=f"nav_{page_key}", use_container_width=True):
         st.session_state.current_page = page_key
 
-# Current page indicator
+# Database status indicator
 st.sidebar.markdown("---")
+try:
+    from utils.database_adapter import get_trading_database
+    db = get_trading_database()
+    db_status = db.get_connection_status()
+    
+    if db_status['type'] == 'postgresql':
+        db_icon = "🐘"
+        db_name = "PostgreSQL"
+        db_color = "#336791"
+    else:
+        db_icon = "🔑"
+        db_name = "Key-Value Store"
+        db_color = "#00ff41"
+    
+    st.sidebar.markdown(f"""
+    <div style="background: rgba(0, 255, 255, 0.05); border: 1px solid {db_color}; 
+         border-radius: 8px; padding: 0.8rem; text-align: center; margin-bottom: 1rem;">
+        <div style="color: {db_color}; font-size: 1.2rem;">{db_icon}</div>
+        <div style="color: {db_color}; font-size: 0.8rem; font-weight: bold;">{db_name}</div>
+        <div style="color: #8b949e; font-size: 0.7rem;">{"Connected" if db_status['connected'] else "Disconnected"}</div>
+    </div>
+    """, unsafe_allow_html=True)
+except Exception:
+    st.sidebar.markdown("""
+    <div style="background: rgba(255, 0, 0, 0.1); border: 1px solid #ff6b6b; 
+         border-radius: 8px; padding: 0.8rem; text-align: center; margin-bottom: 1rem;">
+        <div style="color: #ff6b6b; font-size: 0.8rem;">⚠️ DB Error</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Current page indicator
 current_page_display = [k for k, v in nav_pages.items() if v == st.session_state.current_page][0]
 st.sidebar.markdown(f"""
 <div style="background: rgba(0, 255, 255, 0.1); border: 1px solid #00ffff; 

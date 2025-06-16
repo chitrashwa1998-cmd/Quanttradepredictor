@@ -37,7 +37,7 @@ if not st.session_state.models:
         try:
             from models.xgboost_models import QuantTradingModels
             from features.technical_indicators import TechnicalIndicators
-            from utils.database import TradingDatabase
+            from utils.database_adapter import get_trading_database
             from datetime import datetime
             
             with st.spinner("Training models on full dataset... This may take 5-10 minutes for maximum accuracy."):
@@ -79,7 +79,7 @@ if not st.session_state.models:
                 
                 # Save to database
                 try:
-                    db = TradingDatabase()
+                    db = get_trading_database()
                     for model_name, model_result in results.items():
                         if model_result:
                             model_data = {
