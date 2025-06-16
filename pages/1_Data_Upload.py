@@ -42,7 +42,7 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     # Display file info
-    st.info(f"**File Info**: {uploaded_file.name} ({uploaded_file.size:,} bytes)")
+    st.info(f"**File Info**: {uploaded_file.name} ({uploaded_file.size:,} bytes)")tes)")
 
     with st.spinner("Loading and processing data..."):
         df, message = DataProcessor.load_and_process_data(uploaded_file)
