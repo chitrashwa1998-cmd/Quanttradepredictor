@@ -184,43 +184,47 @@ class TradingDatabase:
             print(f"Error clearing chunks: {str(e)}")
     
     def _load_chunked_dataset(self, dataset_name: str, metadata: dict) -> Optional[pd.DataFrame]:
-        """Load a chunked dataset and reconstruct the complete DataFrame."""
+        """Load a chunked dataset and reconstruct the complete DataFrame efficiently."""
         try:
             total_chunks = metadata['total_chunks']
             print(f"Loading chunked dataset: {total_chunks} chunks, {metadata['total_rows']} total rows")
             
-            all_records = []
+            # Pre-allocate lists for better performance
+            opens, highs, lows, closes, volumes, dates = [], [], [], [], [], []
             
-            # Load all chunks in order
+            # Load chunks in batches for better memory efficiency
             for chunk_num in range(total_chunks):
                 chunk_key = f"ohlc_chunk_{dataset_name}_{chunk_num}"
                 if chunk_key in self.db:
                     chunk_data = self.db[chunk_key]
                     chunk_records = chunk_data['chunk_data']
-                    all_records.extend(chunk_records)
+                    
+                    # Extract data directly into lists
+                    for record in chunk_records:
+                        opens.append(record['open'])
+                        highs.append(record['high'])
+                        lows.append(record['low'])
+                        closes.append(record['close'])
+                        volumes.append(record.get('volume', 0))
+                        dates.append(record['date'])
+                    
                     print(f"Loaded chunk {chunk_num + 1}/{total_chunks}")
                 else:
                     print(f"Warning: Missing chunk {chunk_num}")
             
-            if not all_records:
+            if not dates:
                 print("No chunk data found")
                 return None
             
-            # Convert to DataFrame
-            df_data = []
-            for record in all_records:
-                row_data = {
-                    'Open': record['open'],
-                    'High': record['high'],
-                    'Low': record['low'],
-                    'Close': record['close']
-                }
-                if 'volume' in record:
-                    row_data['Volume'] = record['volume']
-                df_data.append(row_data)
+            # Create DataFrame directly from lists (much faster)
+            df = pd.DataFrame({
+                'Open': opens,
+                'High': highs,
+                'Low': lows,
+                'Close': closes,
+                'Volume': volumes
+            })
             
-            df = pd.DataFrame(df_data)
-            dates = [record['date'] for record in all_records]
             df.index = pd.to_datetime(dates)
             df.index.name = 'Date'
             

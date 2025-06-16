@@ -159,11 +159,9 @@ if st.session_state.features is not None:
             st.info(f"Training {len(selected_models)} models...")
             
             try:
-                # Use recent data for faster training if dataset is large
+                # Use full dataset for maximum accuracy
                 features_data = st.session_state.features
-                if len(features_data) > 10000:
-                    st.info("Large dataset detected. Using most recent 10,000 rows for faster training...")
-                    features_data = features_data.tail(10000).copy()
+                st.info(f"Training on complete dataset: {len(features_data)} rows for maximum accuracy...")
                 
                 # Train models
                 results = st.session_state.model_trainer.train_all_models(features_data)

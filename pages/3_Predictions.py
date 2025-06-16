@@ -40,17 +40,13 @@ if not st.session_state.models:
             from utils.database import TradingDatabase
             from datetime import datetime
             
-            with st.spinner("Training models... This may take a few minutes."):
-                # Use recent data subset for faster training
+            with st.spinner("Training models on full dataset... This may take 5-10 minutes for maximum accuracy."):
+                # Use full dataset for maximum accuracy
                 data = st.session_state.data
-                if len(data) > 8000:
-                    recent_data = data.tail(8000).copy()
-                    st.info(f"Using most recent {len(recent_data)} rows for faster training")
-                else:
-                    recent_data = data.copy()
+                st.info(f"Training on complete dataset: {len(data)} rows for maximum accuracy")
                 
                 # Calculate features
-                features_data = TechnicalIndicators.calculate_all_indicators(recent_data)
+                features_data = TechnicalIndicators.calculate_all_indicators(data)
                 features_data = features_data.dropna()
                 
                 if len(features_data) < 100:
