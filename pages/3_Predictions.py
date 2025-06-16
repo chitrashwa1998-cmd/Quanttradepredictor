@@ -556,4 +556,3 @@ if len(available_models) > 1:
 # Next steps
 st.markdown("---")
 st.info("📋 **Next Steps:** Analyze your predictions and proceed to the **Backtesting** page to evaluate strategy performance.")
-```
