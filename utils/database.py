@@ -583,10 +583,31 @@ class TradingDatabase:
     def clear_all_data(self) -> bool:
         """Clear all data from database."""
         try:
-            # Get all keys and delete them
-            keys_to_delete = list(self.db.keys())
-            for key in keys_to_delete:
-                del self.db[key]
+            # Get all keys and delete them in batches
+            max_retries = 3
+            for attempt in range(max_retries):
+                keys_to_delete = list(self.db.keys())
+                if not keys_to_delete:
+                    break
+                    
+                print(f"Attempt {attempt + 1}: Found {len(keys_to_delete)} keys to delete")
+                
+                for key in keys_to_delete:
+                    try:
+                        del self.db[key]
+                        print(f"Deleted key: {key}")
+                    except Exception as e:
+                        print(f"Error deleting key {key}: {str(e)}")
+                        continue
+                
+                # Check if any keys remain
+                remaining_keys = list(self.db.keys())
+                if not remaining_keys:
+                    print("✓ All keys successfully deleted")
+                    break
+                else:
+                    print(f"Warning: {len(remaining_keys)} keys still remain")
+            
             return True
         except Exception as e:
             print(f"Error clearing database: {str(e)}")
