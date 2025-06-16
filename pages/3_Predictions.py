@@ -611,11 +611,73 @@ try:
         with tab3:
             st.subheader("📋 Volatility Predictions Data")
 
+            # Create enhanced display dataframe for volatility
             display_df = create_display_dataframe(pred_df)
+            
+            # Format volatility values
             if 'Volatility_Forecast' in display_df.columns:
-                display_df['Volatility_Forecast'] = display_df['Volatility_Forecast'].apply(lambda x: f"{float(x):.4f}" if isinstance(x, (int, float, str)) else x)
-
-            st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+                display_df['Volatility_Forecast'] = display_df['Volatility_Forecast'].apply(
+                    lambda x: f"{float(x):.4f}" if isinstance(x, (int, float, str)) else x
+                )
+            
+            # Add volatility interpretation
+            if 'Volatility_Category' in display_df.columns:
+                display_df['Vol_Level'] = display_df['Volatility_Category'].apply(
+                    lambda x: f"📊 {x}" if pd.notna(x) else "N/A"
+                )
+            
+            # Show validation stats
+            st.subheader("📊 Volatility Analysis Summary")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                low_vol_count = (pred_df['Volatility_Category'] == 'Low Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
+                st.metric("Low Volatility", low_vol_count)
+            
+            with col2:
+                medium_vol_count = (pred_df['Volatility_Category'] == 'Medium Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
+                st.metric("Medium Volatility", medium_vol_count)
+            
+            with col3:
+                high_vol_count = (pred_df['Volatility_Category'] == 'High Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
+                st.metric("High Volatility", high_vol_count)
+            
+            with col4:
+                extreme_vol_count = (pred_df['Volatility_Category'] == 'Extreme Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
+                st.metric("Extreme Volatility", extreme_vol_count)
+            
+            # Detailed data table
+            columns_to_show = ['Date', 'Price', 'Volatility_Forecast']
+            if 'Vol_Level' in display_df.columns:
+                columns_to_show.append('Vol_Level')
+            if 'Volatility_Category' in display_df.columns:
+                columns_to_show.append('Volatility_Category')
+            
+            # Filter columns that exist
+            available_columns = [col for col in columns_to_show if col in display_df.columns]
+            
+            # Add volatility statistics for recent data
+            st.subheader("📈 Recent Volatility Data")
+            recent_vol_data = pred_df.tail(20)
+            
+            # Show volatility statistics for recent data
+            if len(recent_vol_data) > 0:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    recent_avg = recent_vol_data['Volatility_Forecast'].mean()
+                    st.metric("Recent Avg Vol", f"{recent_avg:.4f}")
+                with col2:
+                    recent_max = recent_vol_data['Volatility_Forecast'].max()
+                    st.metric("Recent Max Vol", f"{recent_max:.4f}")
+                with col3:
+                    latest_vol = recent_vol_data['Volatility_Forecast'].iloc[-1]
+                    st.metric("Latest Vol", f"{latest_vol:.4f}")
+            
+            st.dataframe(
+                display_df[available_columns].tail(50), 
+                use_container_width=True, 
+                hide_index=True
+            )
 
     elif selected_model == 'trend_sideways':
         tab1, tab2, tab3 = st.tabs(["📈 Trend Analysis", "📊 Market State", "📋 Data Table"])
