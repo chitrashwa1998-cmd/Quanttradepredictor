@@ -49,7 +49,16 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python3 -m streamlit run app.py --server.port 5000 --server.address 0.0.0.0"
+args = "/nix/store/rbg00q7j8bflgr0vqq1557m45lzljfav-python3-wrapper/bin/python3 -m streamlit run app.py --server.port 5000 --server.address 0.0.0.0"
+
+[[workflows.workflow]]
+name = "Streamlit Direct"
+author = 40743738
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run app.py --server.port 5000 --server.address 0.0.0.0"
 
 [[ports]]
 localPort = 5000
