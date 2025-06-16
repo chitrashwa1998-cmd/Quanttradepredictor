@@ -21,6 +21,16 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Initialize session state variables if they don't exist
+if 'data' not in st.session_state:
+    st.session_state.data = None
+if 'model_trainer' not in st.session_state:
+    st.session_state.model_trainer = None
+if 'models' not in st.session_state:
+    st.session_state.models = {}
+if 'features' not in st.session_state:
+    st.session_state.features = None
+
 # Check if data is loaded
 if st.session_state.data is None:
     st.warning("⚠️ No data loaded. Please go to the **Data Upload** page first.")
