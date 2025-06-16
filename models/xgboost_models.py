@@ -149,9 +149,15 @@ class QuantTradingModels:
         volatility_10 = returns.rolling(10).std()
         volatility_20 = returns.rolling(20).std()
         
-        # Adaptive trend threshold based on volatility
-        base_threshold = 0.008  # 0.8% base threshold (more conservative)
-        volatility_multiplier = 1.5
+        # Data-adaptive trend threshold based on actual volatility distribution
+        # Calculate percentiles of actual data volatility
+        vol_25th = volatility_20.quantile(0.25)
+        vol_50th = volatility_20.quantile(0.50)
+        vol_75th = volatility_20.quantile(0.75)
+        
+        # Use adaptive base threshold based on data characteristics
+        base_threshold = np.maximum(0.001, vol_50th * 0.8)  # 80% of median volatility
+        volatility_multiplier = 1.0
         trend_threshold = np.maximum(base_threshold, volatility_20 * volatility_multiplier)
         
         # 1. MOVING AVERAGE TREND STRENGTH
@@ -194,25 +200,40 @@ class QuantTradingModels:
             ema_trend_strength.shift(2)
         )
         
-        # FINAL TREND CLASSIFICATION (requires multiple confirmations)
-        # Use AND logic for more conservative trend detection
-        strong_trend = (
+        # MULTI-REGIME TREND CLASSIFICATION
+        # Create three trend strength levels for better market regime detection
+        
+        # 1. STRONG TRENDS (high conviction)
+        strong_trend_strict = (
             momentum_consistent & 
             (momentum_10_strong | momentum_20_strong) &
             ema_trend_strength &
             strong_price_position
-        ) | (
-            # Alternative: very strong single-timeframe momentum with MA support
-            momentum_5_strong & 
-            strong_sma_trend & 
-            ema_trend_strength &
-            volatility_expansion
-        ) | (
-            # Alternative: persistent trend with moderate momentum
-            trend_persistence_3 &
-            (momentum_10_strong | momentum_20_strong) &
-            strong_price_position
         )
+        
+        # 2. MODERATE TRENDS (medium conviction)
+        moderate_trend = (
+            ((momentum_10_strong | momentum_20_strong) & ema_trend_strength) |
+            (momentum_consistent & strong_sma_trend) |
+            (volatility_expansion & strong_price_position & ema_trend_strength)
+        ) & ~strong_trend_strict
+        
+        # 3. WEAK TRENDS (low conviction but still directional)
+        weak_trend = (
+            (momentum_5_strong & ema_trend_strength) |
+            (trend_persistence_3 & (strong_price_position | strong_sma_trend)) |
+            (volatility_expansion & (momentum_5_strong | strong_sma_trend))
+        ) & ~strong_trend_strict & ~moderate_trend
+        
+        # FINAL BINARY CLASSIFICATION with adaptive thresholds
+        # Use percentile-based approach to maintain reasonable balance
+        all_trend_strength = strong_trend_strict.astype(int) * 3 + moderate_trend.astype(int) * 2 + weak_trend.astype(int) * 1
+        
+        # Adaptive threshold: aim for 10-20% trending periods (realistic for 5-min data)
+        trend_threshold_percentile = 85  # Top 15% as trending
+        trend_cutoff = np.percentile(all_trend_strength, trend_threshold_percentile)
+        
+        strong_trend = all_trend_strength >= trend_cutoff
         
         # Convert to binary: 1 = trending, 0 = sideways
         targets['trend_sideways'] = strong_trend.astype(int)
