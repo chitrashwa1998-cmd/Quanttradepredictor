@@ -369,11 +369,23 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         st.error(f"Trading signal error: {str(e)}")
                         
                         # Prediction history table
-                        st.subheader("Recent Predictions")
+                        st.subheader("Today's Predictions")
                         
                         if len(clean_features) >= 5:
-                            recent_count = min(10, len(clean_features))
-                            recent_features = clean_features.tail(recent_count)
+                            # Get current date in IST
+                            current_date = datetime.now(ist_tz).date()
+                            
+                            # Filter data for current day
+                            today_features = clean_features[clean_features.index.date == current_date]
+                            
+                            # If no data for today, fall back to recent data
+                            if len(today_features) == 0:
+                                st.info("No data available for today. Showing recent predictions instead.")
+                                recent_count = min(20, len(clean_features))
+                                recent_features = clean_features.tail(recent_count)
+                            else:
+                                recent_features = today_features
+                                st.info(f"Showing {len(recent_features)} predictions for {current_date}")
                             
                             prediction_data = []
                             
@@ -418,6 +430,104 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                 st.dataframe(pred_df, use_container_width=True)
                         else:
                             st.info("Need at least 5 data points for prediction history")
+                        
+                        # Additional option to view all predictions
+                        with st.expander("📊 View All Historical Predictions", expanded=False):
+                            if len(clean_features) >= 10:
+                                # Date range selector for historical predictions
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    days_back = st.selectbox(
+                                        "Select time range:",
+                                        options=[1, 3, 7, 14, 30],
+                                        format_func=lambda x: f"Last {x} day{'s' if x > 1 else ''}",
+                                        index=2  # Default to 7 days
+                                    )
+                                
+                                with col2:
+                                    end_date = datetime.now(ist_tz).date()
+                                    start_date = end_date - timedelta(days=days_back)
+                                    st.info(f"From {start_date} to {end_date}")
+                                
+                                # Filter historical data
+                                historical_features = clean_features[
+                                    (clean_features.index.date >= start_date) & 
+                                    (clean_features.index.date <= end_date)
+                                ]
+                                
+                                if len(historical_features) > 0:
+                                    historical_prediction_data = []
+                                    
+                                    for idx, (timestamp, row) in enumerate(historical_features.iterrows()):
+                                        row_data = {
+                                            'Date': timestamp.strftime('%Y-%m-%d'),
+                                            'Time': timestamp.strftime('%H:%M'),
+                                            'Timestamp': timestamp.strftime('%Y-%m-%d %H:%M')
+                                        }
+                                        
+                                        single_row = row.to_frame().T
+                                        
+                                        try:
+                                            if 'direction' in available_models:
+                                                dir_pred, dir_prob = model_trainer.predict('direction', single_row)
+                                                row_data['Direction'] = "BUY" if dir_pred[0] == 1 else "SELL"
+                                                row_data['Dir_Conf'] = f"{dir_prob[0].max() * 100:.1f}%" if dir_prob is not None and len(dir_prob[0]) > 0 else "N/A"
+                                        
+                                            if 'profit_prob' in available_models:
+                                                profit_pred, profit_prob = model_trainer.predict('profit_prob', single_row)
+                                                if isinstance(profit_pred[0], (int, float)):
+                                                    row_data['Profit'] = "YES" if profit_pred[0] > 0.5 else "NO"
+                                                    row_data['Profit_Conf'] = f"{profit_pred[0] * 100:.1f}%"
+                                                else:
+                                                    row_data['Profit'] = "YES" if profit_pred[0] == 1 else "NO"
+                                                    row_data['Profit_Conf'] = f"{profit_prob[0].max() * 100:.1f}%" if profit_prob is not None and len(profit_prob[0]) > 0 else "N/A"
+                                            
+                                            if 'trading_signal' in available_models:
+                                                signal_pred, signal_prob = model_trainer.predict('trading_signal', single_row)
+                                                if signal_pred[0] == 2:
+                                                    row_data['Signal'] = "STRONG BUY"
+                                                elif signal_pred[0] == 1:
+                                                    row_data['Signal'] = "HOLD"
+                                                else:
+                                                    row_data['Signal'] = "SELL"
+                                                row_data['Signal_Conf'] = f"{signal_prob[0].max() * 100:.1f}%" if signal_prob is not None and len(signal_prob[0]) > 0 else "N/A"
+                                        
+                                        except Exception as e:
+                                            row_data['Error'] = f"Prediction failed: {str(e)[:30]}"
+                                        
+                                        historical_prediction_data.append(row_data)
+                                    
+                                    if historical_prediction_data:
+                                        historical_pred_df = pd.DataFrame(historical_prediction_data)
+                                        
+                                        # Group by date for better organization
+                                        if 'Date' in historical_pred_df.columns:
+                                            dates = historical_pred_df['Date'].unique()
+                                            
+                                            # Show predictions grouped by date
+                                            for date in sorted(dates, reverse=True):
+                                                date_data = historical_pred_df[historical_pred_df['Date'] == date]
+                                                
+                                                with st.expander(f"📅 {date} ({len(date_data)} predictions)", expanded=False):
+                                                    # Remove Date column for display since it's in the expander title
+                                                    display_cols = [col for col in date_data.columns if col != 'Date']
+                                                    st.dataframe(date_data[display_cols], use_container_width=True, hide_index=True)
+                                        else:
+                                            st.dataframe(historical_pred_df, use_container_width=True, hide_index=True)
+                                        
+                                        # Download option
+                                        csv_data = pd.DataFrame(historical_prediction_data).to_csv(index=False)
+                                        st.download_button(
+                                            "📥 Download Historical Predictions CSV",
+                                            csv_data,
+                                            file_name=f"nifty_predictions_{start_date}_to_{end_date}.csv",
+                                            mime="text/csv"
+                                        )
+                                else:
+                                    st.warning(f"No prediction data available for the selected {days_back} day period.")
+                            else:
+                                st.info("Need at least 10 data points for historical analysis")
                     
                     else:
                         st.warning("⚠️ Cannot generate predictions - insufficient technical indicator data")
