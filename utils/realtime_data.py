@@ -66,9 +66,9 @@ class IndianMarketData:
             period: Data period ('1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max')
             interval: Data interval ('1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo')
         """
-        if yf is None:
-            print("Creating demo Nifty 50 data for visualization...")
-            return self._generate_demo_nifty_data(period=period)
+        if not YF_AVAILABLE:
+            print("yfinance not available - attempting to use requests for data fetching...")
+            return self._fetch_with_requests(symbol, period, interval)
             
         try:
             # Create ticker object
@@ -194,11 +194,87 @@ class IndianMarketData:
         
         return df
     
+    def _fetch_with_requests(self, symbol: str, period: str = "5d", interval: str = "5m") -> Optional[pd.DataFrame]:
+        """Fetch data using direct HTTP requests to Yahoo Finance API"""
+        try:
+            import json
+            from urllib.parse import urlencode
+            import urllib.request
+            
+            # Convert period to timestamps
+            end_time = int(datetime.now().timestamp())
+            period_days = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365}
+            start_time = end_time - (period_days.get(period, 5) * 24 * 60 * 60)
+            
+            # Convert interval to seconds
+            interval_map = {"1m": 60, "2m": 120, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600}
+            interval_seconds = interval_map.get(interval, 300)
+            
+            # Yahoo Finance API URL
+            params = {
+                'period1': start_time,
+                'period2': end_time,
+                'interval': interval,
+                'includePrePost': 'true',
+                'events': 'div%2Csplit'
+            }
+            
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?" + urlencode(params)
+            
+            # Make request
+            req = urllib.request.Request(url)
+            req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode())
+            
+            # Parse response
+            if 'chart' not in data or not data['chart']['result']:
+                print(f"No data found for {symbol}")
+                return self._generate_demo_nifty_data(period=period)
+            
+            result = data['chart']['result'][0]
+            timestamps = result['timestamp']
+            quotes = result['indicators']['quote'][0]
+            
+            # Create DataFrame
+            df_data = []
+            for i, ts in enumerate(timestamps):
+                if all(quotes[key][i] is not None for key in ['open', 'high', 'low', 'close', 'volume']):
+                    df_data.append({
+                        'Open': quotes['open'][i],
+                        'High': quotes['high'][i],
+                        'Low': quotes['low'][i],
+                        'Close': quotes['close'][i],
+                        'Volume': quotes['volume'][i]
+                    })
+            
+            if not df_data:
+                print(f"No valid data found for {symbol}")
+                return self._generate_demo_nifty_data(period=period)
+            
+            # Create index from timestamps
+            dates = [datetime.fromtimestamp(ts) for ts in timestamps[:len(df_data)]]
+            df = pd.DataFrame(df_data, index=dates)
+            df.index.name = 'Datetime'
+            
+            # Add metadata
+            df.attrs = {
+                'symbol': symbol,
+                'last_updated': datetime.now(),
+                'source': 'yahoo_finance_api'
+            }
+            
+            return df
+            
+        except Exception as e:
+            print(f"Error fetching data via HTTP for {symbol}: {str(e)}")
+            return self._generate_demo_nifty_data(period=period)
+    
     def get_current_price(self, symbol: str) -> Optional[Dict]:
         """Get current market price and basic info"""
-        if yf is None:
-            print("yfinance library not available. Please install it to use real-time data features.")
-            return None
+        if not YF_AVAILABLE:
+            return self._get_current_price_http(symbol)
             
         try:
             ticker = yf.Ticker(symbol, session=self.session)
@@ -223,6 +299,66 @@ class IndianMarketData:
             
         except Exception as e:
             print(f"Error getting current price for {symbol}: {str(e)}")
+            return self._get_current_price_http(symbol)
+    
+    def _get_current_price_http(self, symbol: str) -> Optional[Dict]:
+        """Get current price using HTTP requests"""
+        try:
+            import json
+            import urllib.request
+            from urllib.parse import urlencode
+            
+            # Get recent data to extract current price
+            end_time = int(datetime.now().timestamp())
+            start_time = end_time - (24 * 60 * 60)  # Last 24 hours
+            
+            params = {
+                'period1': start_time,
+                'period2': end_time,
+                'interval': '1d',
+                'includePrePost': 'true'
+            }
+            
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?" + urlencode(params)
+            
+            req = urllib.request.Request(url)
+            req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode())
+            
+            if 'chart' not in data or not data['chart']['result']:
+                print(f"No current price data found for {symbol}")
+                return None
+            
+            result = data['chart']['result'][0]
+            quotes = result['indicators']['quote'][0]
+            meta = result['meta']
+            
+            # Get the most recent price data
+            current_price = meta.get('regularMarketPrice', 0)
+            previous_close = meta.get('previousClose', 0)
+            
+            if current_price == 0 and quotes['close']:
+                # Fallback to last close price
+                current_price = quotes['close'][-1] if quotes['close'][-1] is not None else 0
+            
+            change = current_price - previous_close if previous_close > 0 else 0
+            change_percent = (change / previous_close * 100) if previous_close > 0 else 0
+            
+            return {
+                'symbol': symbol,
+                'current_price': current_price,
+                'previous_close': previous_close,
+                'change': change,
+                'change_percent': change_percent,
+                'volume': meta.get('regularMarketVolume', 0),
+                'market_cap': meta.get('marketCap', 0),
+                'company_name': meta.get('longName', symbol)
+            }
+            
+        except Exception as e:
+            print(f"Error getting current price via HTTP for {symbol}: {str(e)}")
             return None
     
     def update_dataset_with_realtime(self, existing_df: pd.DataFrame, symbol: str, 
