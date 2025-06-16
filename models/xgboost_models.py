@@ -10,16 +10,8 @@ from typing import Dict, Tuple, Any
 import streamlit as st
 from datetime import datetime
 
-# Try to import LightGBM, fallback if not available
-try:
-    import lightgbm as lgb
-    LIGHTGBM_AVAILABLE = True
-except ImportError:
-    LIGHTGBM_AVAILABLE = False
-    print("Warning: LightGBM not available due to missing dependencies. Using XGBoost + CatBoost + RandomForest ensemble.")
-
 class QuantTradingModels:
-    """Ensemble models using XGBoost, CatBoost, LightGBM (when available), and Random Forest for quantitative trading predictions."""
+    """Ensemble models using XGBoost, CatBoost, and Random Forest for quantitative trading predictions."""
 
     def __init__(self):
         self.models = {}
@@ -463,7 +455,7 @@ class QuantTradingModels:
             )
             
         else:
-            # Regression ensemble: XGBoost + CatBoost + LightGBM + Random Forest
+            # Regression ensemble: XGBoost + CatBoost + Random Forest
             
             # XGBoost Regressor
             xgb_model = xgb.XGBRegressor(
@@ -494,27 +486,14 @@ class QuantTradingModels:
                 n_jobs=-1
             )
             
-            # Create ensemble estimators list
-            estimators = [
-                ('xgboost', xgb_model),
-                ('catboost', catboost_model),
-                ('random_forest', rf_model)
-            ]
-            
-            # Add LightGBM if available
-            if LIGHTGBM_AVAILABLE:
-                lgb_model = lgb.LGBMRegressor(
-                    n_estimators=100,
-                    max_depth=6,
-                    learning_rate=0.1,
-                    random_state=random_state,
-                    n_jobs=-1,
-                    verbose=-1
-                )
-                estimators.append(('lightgbm', lgb_model))
-            
             # Create voting regressor
-            ensemble_model = VotingRegressor(estimators=estimators)
+            ensemble_model = VotingRegressor(
+                estimators=[
+                    ('xgboost', xgb_model),
+                    ('catboost', catboost_model),
+                    ('random_forest', rf_model)
+                ]
+            )
 
         # Train ensemble model
         ensemble_model.fit(X_train_scaled, y_train)
