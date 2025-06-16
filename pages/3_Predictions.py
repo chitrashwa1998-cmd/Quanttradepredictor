@@ -82,6 +82,14 @@ with col2:
 with col3:
     st.metric("Model Type", models[selected_model]['task_type'].title())
 
+# Ensure Date is not both index and column
+if 'Date' in df.columns and df.index.name in ['Date', 'date', None]:
+    # Remove Date column if it exists as both index and column
+    df = df.drop(columns=['Date'], errors='ignore')
+
+if 'Date' in st.session_state.features.columns and st.session_state.features.index.name in ['Date', 'date', None]:
+    st.session_state.features = st.session_state.features.drop(columns=['Date'], errors='ignore')
+
 # Filter data based on selection
 if date_range == "Last 30 days":
     start_date = df.index.max() - timedelta(days=30)
@@ -94,8 +102,8 @@ elif date_range == "Last year":
 else:
     start_date = df.index.min()
 
-df_filtered = df[df.index >= start_date]
-features_filtered = st.session_state.features[st.session_state.features.index >= start_date]
+df_filtered = df[df.index >= start_date].copy()
+features_filtered = st.session_state.features[st.session_state.features.index >= start_date].copy()
 
 # Generate predictions
 try:
@@ -354,11 +362,17 @@ try:
 
             # Format the dataframe for display
             display_df = pred_df.copy()
-            display_df['Date'] = display_df.index.strftime('%Y-%m-%d %H:%M')
+            display_df = display_df.reset_index()
+            display_df['Date'] = pd.to_datetime(display_df.iloc[:, 0]).dt.strftime('%Y-%m-%d %H:%M')
             display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
 
             if 'Confidence' in display_df.columns:
                 display_df['Confidence'] = display_df['Confidence'].apply(lambda x: f"{x:.3f}")
+
+            # Remove the original index column and reorder
+            display_df = display_df.drop(columns=display_df.columns[0])
+            cols = ['Date'] + [col for col in display_df.columns if col != 'Date']
+            display_df = display_df[cols]
 
             # Show recent predictions (last 50)
             st.dataframe(
@@ -478,9 +492,13 @@ try:
 
             # Recent signals
             display_df = pred_df.copy()
-            display_df['Date'] = display_df.index.strftime('%Y-%m-%d %H:%M')
+            display_df = display_df.reset_index()
+            display_df['Date'] = pd.to_datetime(display_df.iloc[:, 0]).dt.strftime('%Y-%m-%d %H:%M')
             display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
 
+            # Remove the original index column and select required columns
+            display_df = display_df.drop(columns=display_df.columns[0])
+            
             st.dataframe(
                 display_df[['Date', 'Price', 'Signal_Name']].tail(50).sort_values('Date', ascending=False),
                 use_container_width=True,
@@ -509,8 +527,14 @@ try:
 
         # Show data table
         display_df = pred_df.copy()
-        display_df['Date'] = display_df.index.strftime('%Y-%m-%d %H:%M')
+        display_df = display_df.reset_index()
+        display_df['Date'] = pd.to_datetime(display_df.iloc[:, 0]).dt.strftime('%Y-%m-%d %H:%M')
         display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
+        
+        # Remove the original index column and reorder
+        display_df = display_df.drop(columns=display_df.columns[0])
+        cols = ['Date'] + [col for col in display_df.columns if col != 'Date']
+        display_df = display_df[cols]
 
         st.subheader("Recent Predictions")
         st.dataframe(display_df.tail(20), use_container_width=True, hide_index=True)
