@@ -6,13 +6,20 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, mean_squared_error, mean_absolute_error
 from sklearn.ensemble import VotingClassifier, VotingRegressor, RandomForestClassifier, RandomForestRegressor
 from catboost import CatBoostClassifier, CatBoostRegressor
-import lightgbm as lgb
 from typing import Dict, Tuple, Any
 import streamlit as st
 from datetime import datetime
 
+# Try to import LightGBM, fallback if not available
+try:
+    import lightgbm as lgb
+    LIGHTGBM_AVAILABLE = True
+except ImportError:
+    LIGHTGBM_AVAILABLE = False
+    print("Warning: LightGBM not available due to missing dependencies. Using XGBoost + CatBoost + RandomForest ensemble.")
+
 class QuantTradingModels:
-    """Ensemble models using XGBoost, CatBoost, LightGBM, and Random Forest for quantitative trading predictions."""
+    """Ensemble models using XGBoost, CatBoost, LightGBM (when available), and Random Forest for quantitative trading predictions."""
 
     def __init__(self):
         self.models = {}
@@ -479,16 +486,6 @@ class QuantTradingModels:
                 allow_writing_files=False
             )
             
-            # LightGBM Regressor
-            lgb_model = lgb.LGBMRegressor(
-                n_estimators=100,
-                max_depth=6,
-                learning_rate=0.1,
-                random_state=random_state,
-                n_jobs=-1,
-                verbose=-1
-            )
-            
             # Random Forest Regressor
             rf_model = RandomForestRegressor(
                 n_estimators=100,
@@ -497,15 +494,27 @@ class QuantTradingModels:
                 n_jobs=-1
             )
             
+            # Create ensemble estimators list
+            estimators = [
+                ('xgboost', xgb_model),
+                ('catboost', catboost_model),
+                ('random_forest', rf_model)
+            ]
+            
+            # Add LightGBM if available
+            if LIGHTGBM_AVAILABLE:
+                lgb_model = lgb.LGBMRegressor(
+                    n_estimators=100,
+                    max_depth=6,
+                    learning_rate=0.1,
+                    random_state=random_state,
+                    n_jobs=-1,
+                    verbose=-1
+                )
+                estimators.append(('lightgbm', lgb_model))
+            
             # Create voting regressor
-            ensemble_model = VotingRegressor(
-                estimators=[
-                    ('xgboost', xgb_model),
-                    ('catboost', catboost_model),
-                    ('lightgbm', lgb_model),
-                    ('random_forest', rf_model)
-                ]
-            )
+            ensemble_model = VotingRegressor(estimators=estimators)
 
         # Train ensemble model
         ensemble_model.fit(X_train_scaled, y_train)
