@@ -8,8 +8,9 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Predictions", page_icon="🎯", layout="wide")
 
-st.title("🎯 Model Predictions and Analysis")
-st.markdown("---")
+# Load custom CSS
+with open('style.css') as f:
+    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 # Check if data and models are available
 if st.session_state.data is None:
@@ -20,7 +21,6 @@ if not st.session_state.models:
     st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
     st.stop()
 
-# Initialize model trainer if not available
 if 'model_trainer' not in st.session_state or st.session_state.model_trainer is None:
     st.warning("⚠️ Model trainer not initialized. Please go to the **Model Training** page first.")
     st.stop()
@@ -35,17 +35,9 @@ available_models = [name for name, info in models.items() if info is not None]
 if not available_models:
     st.error("❌ No successfully trained models found.")
     st.info("Please go to the **Model Training** page to train models first.")
-    
-    # Show what's in session state for debugging
-    with st.expander("🔍 Debug Information"):
-        st.write("Models in session state:", list(models.keys()) if models else "None")
-        st.write("Model values:", {k: "Loaded" if v is not None else "None" for k, v in models.items()} if models else "Empty")
     st.stop()
 
-# Load custom CSS
-with open('style.css') as f:
-    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
-
+# Header
 st.markdown("""
 <div class="trading-header">
     <h1 style="margin:0;">🎯 PREDICTION ENGINE</h1>
@@ -55,30 +47,28 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Model selection with better error handling
-try:
-    selected_model = st.selectbox(
-        "Select Model for Analysis",
-        available_models,
-        format_func=lambda x: x.replace('_', ' ').title(),
-        help="Select a trained model to generate predictions"
-    )
-except Exception as e:
-    st.error(f"Error loading model options: {str(e)}")
-    st.info("Try refreshing the page or retraining your models.")
-    available_models = []
-    selected_model = None
+st.markdown("---")
 
-# Time range selection for predictions
-st.subheader("Time Range Selection")
-
-col1, col2 = st.columns(2)
+# Model and time range selection in columns for better layout
+col1, col2, col3 = st.columns([2, 2, 1])
 
 with col1:
-    date_range = st.selectbox(
-        "Select Date Range",
-        ["Last 30 days", "Last 90 days", "Last 6 months", "Last year", "All data"]
+    selected_model = st.selectbox(
+        "🤖 Select AI Model",
+        available_models,
+        format_func=lambda x: x.replace('_', ' ').title(),
+        help="Choose a trained model for predictions"
     )
+
+with col2:
+    date_range = st.selectbox(
+        "📅 Time Period",
+        ["Last 30 days", "Last 90 days", "Last 6 months", "Last year", "All data"],
+        index=1
+    )
+
+with col3:
+    st.metric("Model Type", models[selected_model]['task_type'].title())
 
 # Filter data based on selection
 if date_range == "Last 30 days":
@@ -93,313 +83,320 @@ else:
     start_date = df.index.min()
 
 df_filtered = df[df.index >= start_date]
+features_filtered = st.session_state.features[st.session_state.features.index >= start_date]
 
-# Get predictions for selected model
-model_info = models[selected_model]
+# Generate predictions
+try:
+    predictions, probabilities = model_trainer.predict(selected_model, features_filtered)
 
-# Display model information
-col1, col2, col3 = st.columns(3)
+    # Create tabs for different views
+    if selected_model == 'direction':
+        tab1, tab2, tab3, tab4 = st.tabs(["📈 Price Chart", "🔄 Reversals", "📊 Statistics", "📋 Data Table"])
 
-with col1:
-    st.metric("Model Type", model_info['task_type'].title())
+        # Create prediction dataframe
+        pred_df = pd.DataFrame({
+            'Date': features_filtered.index,
+            'Price': df_filtered['Close'],
+            'Prediction': predictions,
+            'Direction': ['Up' if p == 1 else 'Down' for p in predictions]
+        })
 
-with col2:
-    if model_info['task_type'] == 'classification':
-        st.metric("Accuracy", f"{model_info['metrics']['accuracy']:.3f}")
-    else:
-        st.metric("RMSE", f"{model_info['metrics']['rmse']:.4f}")
+        if probabilities is not None:
+            pred_df['Confidence'] = np.max(probabilities, axis=1)
 
-with col3:
-    st.metric("Data Points", len(df_filtered))
+        # Calculate technical indicators for reversal detection
+        pred_df['Direction_Change'] = pred_df['Prediction'].diff().fillna(0) != 0
+        pred_df['SMA_10'] = pred_df['Price'].rolling(10).mean()
+        pred_df['SMA_20'] = pred_df['Price'].rolling(20).mean()
 
-# Generate predictions for the filtered data
-if st.session_state.features is not None:
-    
-    st.header("Prediction Results")
-    
-    # Make predictions on the filtered data
-    features_filtered = st.session_state.features[st.session_state.features.index >= start_date]
-    
-    try:
-        predictions, probabilities = model_trainer.predict(selected_model, features_filtered)
-        
-        # Create prediction visualization based on model type
-        if selected_model == 'direction':
-            st.subheader("Direction Predictions with Reversal Analysis")
-            
-            # Direction predictions (0=Down, 1=Up)
-            pred_df = pd.DataFrame({
-                'Date': features_filtered.index,
-                'Actual_Price': df_filtered['Close'],
-                'Prediction': predictions,
-                'Direction': ['Up' if p == 1 else 'Down' for p in predictions]
-            })
-            
-            if probabilities is not None:
-                pred_df['Confidence'] = np.max(probabilities, axis=1)
-            
-            # REVERSAL DETECTION FOR DIRECTION PREDICTIONS
-            # Detect when predictions change direction - potential reversal signals
-            
-            pred_df['Direction_Change'] = pred_df['Prediction'].diff().fillna(0) != 0
-            pred_df['Price_Change'] = pred_df['Actual_Price'].pct_change()
-            
-            # Calculate moving averages for confirmation
-            pred_df['SMA_10'] = pred_df['Actual_Price'].rolling(10).mean()
-            pred_df['SMA_20'] = pred_df['Actual_Price'].rolling(20).mean()
-            
-            # Identify reversal points
-            # Bullish reversal: prediction changes from Down to Up
-            bullish_reversal = (pred_df['Prediction'].shift(1) == 0) & (pred_df['Prediction'] == 1)
-            
-            # Bearish reversal: prediction changes from Up to Down  
-            bearish_reversal = (pred_df['Prediction'].shift(1) == 1) & (pred_df['Prediction'] == 0)
-            
-            # Add confirmation with price action
-            price_support = pred_df['Actual_Price'] > pred_df['SMA_10']  # Price above short MA
-            price_resistance = pred_df['Actual_Price'] < pred_df['SMA_10']  # Price below short MA
-            
-            # Confirmed reversals
-            pred_df['Confirmed_Bull_Reversal'] = bullish_reversal & price_support
-            pred_df['Confirmed_Bear_Reversal'] = bearish_reversal & price_resistance
-            
-            # Plot price with direction predictions and reversals
-            fig = make_subplots(rows=2, cols=1, 
-                              subplot_titles=('Price Chart with Direction Predictions & Reversals', 'Prediction Confidence'),
-                              vertical_spacing=0.1,
-                              row_heights=[0.7, 0.3])
-            
-            # Price chart
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Actual_Price'], 
-                          name='Price', line=dict(color='blue', width=2)),
-                row=1, col=1
-            )
-            
-            # Add moving average
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['SMA_10'], 
-                          name='SMA 10', line=dict(color='gray', width=1, dash='dash')),
-                row=1, col=1
-            )
-            
-            # Add prediction markers
-            up_predictions = pred_df[pred_df['Prediction'] == 1]
-            down_predictions = pred_df[pred_df['Prediction'] == 0]
-            
-            fig.add_trace(
-                go.Scatter(x=up_predictions['Date'], y=up_predictions['Actual_Price'],
-                          mode='markers', marker=dict(symbol='triangle-up', color='lightgreen', size=6),
-                          name='Predicted Up'),
-                row=1, col=1
-            )
-            
-            fig.add_trace(
-                go.Scatter(x=down_predictions['Date'], y=down_predictions['Actual_Price'],
-                          mode='markers', marker=dict(symbol='triangle-down', color='lightcoral', size=6),
-                          name='Predicted Down'),
-                row=1, col=1
-            )
-            
-            # Add confirmed reversal points
-            bull_reversals = pred_df[pred_df['Confirmed_Bull_Reversal']]
-            bear_reversals = pred_df[pred_df['Confirmed_Bear_Reversal']]
-            
-            if len(bull_reversals) > 0:
-                fig.add_trace(
-                    go.Scatter(x=bull_reversals['Date'], y=bull_reversals['Actual_Price'],
-                              mode='markers', 
-                              marker=dict(symbol='star', color='green', size=15, line=dict(width=2, color='darkgreen')),
-                              name='Bullish Reversal',
-                              hovertemplate='<b>Bullish Reversal</b><br>Date: %{x}<br>Price: %{y:.2f}<extra></extra>'),
-                    row=1, col=1
-                )
-            
-            if len(bear_reversals) > 0:
-                fig.add_trace(
-                    go.Scatter(x=bear_reversals['Date'], y=bear_reversals['Actual_Price'],
-                              mode='markers', 
-                              marker=dict(symbol='star', color='red', size=15, line=dict(width=2, color='darkred')),
-                              name='Bearish Reversal',
-                              hovertemplate='<b>Bearish Reversal</b><br>Date: %{x}<br>Price: %{y:.2f}<extra></extra>'),
-                    row=1, col=1
-                )
-            
-            # Confidence chart
-            if 'Confidence' in pred_df.columns:
-                fig.add_trace(
-                    go.Scatter(x=pred_df['Date'], y=pred_df['Confidence'],
-                              name='Confidence', line=dict(color='orange')),
-                    row=2, col=1
-                )
-            
-            fig.update_layout(height=600, title="Direction Prediction Analysis with Reversal Detection")
-            fig.update_xaxes(title_text="Date", row=2, col=1)
-            fig.update_yaxes(title_text="Price", row=1, col=1)
-            fig.update_yaxes(title_text="Confidence", row=2, col=1)
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Prediction statistics with reversal info
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                up_pct = (predictions == 1).mean() * 100
-                st.metric("Predicted Up %", f"{up_pct:.1f}%")
-            
-            with col2:
-                down_pct = (predictions == 0).mean() * 100
-                st.metric("Predicted Down %", f"{down_pct:.1f}%")
-            
-            with col3:
-                bull_reversals_count = pred_df['Confirmed_Bull_Reversal'].sum()
-                st.metric("Bullish Reversals", bull_reversals_count)
-            
-            with col4:
-                bear_reversals_count = pred_df['Confirmed_Bear_Reversal'].sum()
-                st.metric("Bearish Reversals", bear_reversals_count)
-            
-            # Show recent reversals
-            if bull_reversals_count > 0 or bear_reversals_count > 0:
-                st.subheader("🔄 Recent Direction Reversals")
-                
-                recent_reversals = []
-                
-                # Get recent bullish reversals
-                if len(bull_reversals) > 0:
-                    for _, row in bull_reversals.tail(3).iterrows():
-                        recent_reversals.append({
-                            'Date': row['Date'].strftime('%Y-%m-%d %H:%M'),
-                            'Type': 'Bullish Reversal 🟢',
-                            'Price': f"${row['Actual_Price']:.2f}",
-                            'Direction': row['Direction'],
-                            'Confidence': f"{row.get('Confidence', 0):.3f}" if 'Confidence' in pred_df.columns else 'N/A'
-                        })
-                
-                # Get recent bearish reversals
-                if len(bear_reversals) > 0:
-                    for _, row in bear_reversals.tail(3).iterrows():
-                        recent_reversals.append({
-                            'Date': row['Date'].strftime('%Y-%m-%d %H:%M'),
-                            'Type': 'Bearish Reversal 🔴',
-                            'Price': f"${row['Actual_Price']:.2f}",
-                            'Direction': row['Direction'],
-                            'Confidence': f"{row.get('Confidence', 0):.3f}" if 'Confidence' in pred_df.columns else 'N/A'
-                        })
-                
-                if recent_reversals:
-                    reversal_df = pd.DataFrame(recent_reversals)
-                    reversal_df = reversal_df.sort_values('Date', ascending=False)
-                    st.dataframe(reversal_df, use_container_width=True)
-                    
-                    st.info("""
-                    **How to Use Reversal Signals:**
-                    - 🟢 **Bullish Reversal**: Model predicts direction change from Down to Up - potential buying opportunity
-                    - 🔴 **Bearish Reversal**: Model predicts direction change from Up to Down - potential selling opportunity
-                    - **Confirmation**: Reversals are confirmed when price aligns with the predicted direction relative to moving average
-                    - **Trading Strategy**: Wait for reversal confirmation before entering trades
-                    """)
-            
-            # Additional confidence analysis
-            if 'Confidence' in pred_df.columns:
-                st.subheader("Confidence Analysis for Trading Decisions")
-                avg_confidence = pred_df['Confidence'].mean()
-                st.metric("Average Confidence", f"{avg_confidence:.3f}")
-                
-                high_conf_threshold = 0.7
-                high_conf_predictions = pred_df[pred_df['Confidence'] >= high_conf_threshold]
-                
-                if len(high_conf_predictions) > 0:
-                    high_conf_pct = len(high_conf_predictions) / len(pred_df) * 100
-                    st.info(f"**High Confidence Predictions (≥{high_conf_threshold}):** {high_conf_pct:.1f}% of all predictions")
-                    st.write("Consider focusing on high-confidence predictions for trading decisions.")
-        
-        elif selected_model == 'magnitude':
-            st.subheader("Magnitude Predictions")
-            
-            pred_df = pd.DataFrame({
-                'Date': features_filtered.index,
-                'Actual_Price': df_filtered['Close'],
-                'Predicted_Magnitude': predictions
-            })
-            
-            # Calculate actual magnitude for comparison
-            actual_returns = df_filtered['Close'].pct_change().shift(-1)
-            actual_magnitude = np.abs(actual_returns) * 100
-            pred_df['Actual_Magnitude'] = actual_magnitude
-            
-            # Plot predicted vs actual magnitude
+        # Reversal detection
+        bullish_reversal = (pred_df['Prediction'].shift(1) == 0) & (pred_df['Prediction'] == 1)
+        bearish_reversal = (pred_df['Prediction'].shift(1) == 1) & (pred_df['Prediction'] == 0)
+        price_support = pred_df['Price'] > pred_df['SMA_10']
+        price_resistance = pred_df['Price'] < pred_df['SMA_10']
+
+        pred_df['Confirmed_Bull_Reversal'] = bullish_reversal & price_support
+        pred_df['Confirmed_Bear_Reversal'] = bearish_reversal & price_resistance
+
+        with tab1:
+            st.subheader("📈 Price Movement with Direction Predictions")
+
             fig = go.Figure()
-            
-            fig.add_trace(go.Scatter(
-                x=pred_df['Date'], 
-                y=pred_df['Predicted_Magnitude'],
-                name='Predicted Magnitude',
-                line=dict(color='red')
-            ))
-            
-            fig.add_trace(go.Scatter(
-                x=pred_df['Date'], 
-                y=pred_df['Actual_Magnitude'],
-                name='Actual Magnitude',
-                line=dict(color='blue')
-            ))
-            
-            fig.update_layout(
-                title="Predicted vs Actual Magnitude of Price Moves",
-                xaxis_title="Date",
-                yaxis_title="Magnitude (%)",
-                height=500
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Statistics
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                avg_pred = predictions.mean()
-                st.metric("Avg Predicted Magnitude", f"{avg_pred:.2f}%")
-            
-            with col2:
-                avg_actual = actual_magnitude.mean()
-                st.metric("Avg Actual Magnitude", f"{avg_actual:.2f}%")
-            
-            with col3:
-                correlation = np.corrcoef(predictions[~np.isnan(actual_magnitude)], 
-                                       actual_magnitude.dropna())[0,1]
-                st.metric("Correlation", f"{correlation:.3f}")
-        
-        elif selected_model == 'trading_signal':
-            st.subheader("Trading Signals")
-            
-            # Signal mapping: 0=Sell, 1=Hold, 2=Buy
-            signal_map = {0: 'Sell', 1: 'Hold', 2: 'Buy'}
-            signal_colors = {0: 'red', 1: 'gray', 2: 'green'}
-            
-            pred_df = pd.DataFrame({
-                'Date': features_filtered.index,
-                'Price': df_filtered['Close'],
-                'Signal': predictions,
-                'Signal_Name': [signal_map[s] for s in predictions]
-            })
-            
-            # Plot price with trading signals
-            fig = go.Figure()
-            
+
+            # Price line
             fig.add_trace(go.Scatter(
                 x=pred_df['Date'], 
                 y=pred_df['Price'],
                 name='Price',
-                line=dict(color='blue')
+                line=dict(color='#2E86C1', width=2),
+                hovertemplate='<b>Price:</b> $%{y:.2f}<br><b>Date:</b> %{x}<extra></extra>'
             ))
-            
-            # Add signal markers
+
+            # Moving average
+            fig.add_trace(go.Scatter(
+                x=pred_df['Date'], 
+                y=pred_df['SMA_10'],
+                name='SMA 10',
+                line=dict(color='gray', width=1, dash='dash'),
+                opacity=0.7
+            ))
+
+            # Prediction markers
+            up_predictions = pred_df[pred_df['Prediction'] == 1]
+            down_predictions = pred_df[pred_df['Prediction'] == 0]
+
+            if len(up_predictions) > 0:
+                fig.add_trace(go.Scatter(
+                    x=up_predictions['Date'], 
+                    y=up_predictions['Price'],
+                    mode='markers',
+                    marker=dict(symbol='triangle-up', color='#27AE60', size=8),
+                    name='Predicted Up',
+                    hovertemplate='<b>Prediction:</b> Up<br><b>Price:</b> $%{y:.2f}<extra></extra>'
+                ))
+
+            if len(down_predictions) > 0:
+                fig.add_trace(go.Scatter(
+                    x=down_predictions['Date'], 
+                    y=down_predictions['Price'],
+                    mode='markers',
+                    marker=dict(symbol='triangle-down', color='#E74C3C', size=8),
+                    name='Predicted Down',
+                    hovertemplate='<b>Prediction:</b> Down<br><b>Price:</b> $%{y:.2f}<extra></extra>'
+                ))
+
+            fig.update_layout(
+                height=500,
+                title="Direction Predictions Overview",
+                xaxis_title="Date",
+                yaxis_title="Price ($)",
+                hovermode='x unified',
+                showlegend=True
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Quick stats
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                up_pct = (predictions == 1).mean() * 100
+                st.metric("Predicted Up", f"{up_pct:.1f}%", delta=None)
+            with col2:
+                down_pct = (predictions == 0).mean() * 100
+                st.metric("Predicted Down", f"{down_pct:.1f}%", delta=None)
+            with col3:
+                if 'Confidence' in pred_df.columns:
+                    avg_conf = pred_df['Confidence'].mean()
+                    st.metric("Avg Confidence", f"{avg_conf:.3f}")
+                else:
+                    st.metric("Data Points", len(pred_df))
+            with col4:
+                current_pred = "Up" if predictions[-1] == 1 else "Down"
+                st.metric("Latest Signal", current_pred)
+
+        with tab2:
+            st.subheader("🔄 Reversal Detection Analysis")
+
+            bull_reversals = pred_df[pred_df['Confirmed_Bull_Reversal']]
+            bear_reversals = pred_df[pred_df['Confirmed_Bear_Reversal']]
+
+            if len(bull_reversals) > 0 or len(bear_reversals) > 0:
+                fig = go.Figure()
+
+                # Price line
+                fig.add_trace(go.Scatter(
+                    x=pred_df['Date'], 
+                    y=pred_df['Price'],
+                    name='Price',
+                    line=dict(color='#2E86C1', width=2)
+                ))
+
+                # Reversal points
+                if len(bull_reversals) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=bull_reversals['Date'], 
+                        y=bull_reversals['Price'],
+                        mode='markers',
+                        marker=dict(symbol='star', color='#27AE60', size=15, line=dict(width=2, color='darkgreen')),
+                        name='Bullish Reversal',
+                        hovertemplate='<b>Bullish Reversal</b><br>Date: %{x}<br>Price: $%{y:.2f}<extra></extra>'
+                    ))
+
+                if len(bear_reversals) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=bear_reversals['Date'], 
+                        y=bear_reversals['Price'],
+                        mode='markers',
+                        marker=dict(symbol='star', color='#E74C3C', size=15, line=dict(width=2, color='darkred')),
+                        name='Bearish Reversal',
+                        hovertemplate='<b>Bearish Reversal</b><br>Date: %{x}<br>Price: $%{y:.2f}<extra></extra>'
+                    ))
+
+                fig.update_layout(
+                    height=500,
+                    title="Confirmed Reversal Points",
+                    xaxis_title="Date",
+                    yaxis_title="Price ($)"
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Reversal summary
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Bullish Reversals", len(bull_reversals))
+                with col2:
+                    st.metric("Bearish Reversals", len(bear_reversals))
+
+                # Recent reversals table
+                if len(bull_reversals) > 0 or len(bear_reversals) > 0:
+                    st.subheader("Recent Reversal Signals")
+
+                    recent_reversals = []
+
+                    for _, row in bull_reversals.tail(5).iterrows():
+                        recent_reversals.append({
+                            'Date': row['Date'].strftime('%Y-%m-%d %H:%M'),
+                            'Type': 'Bullish 🟢',
+                            'Price': f"${row['Price']:.2f}",
+                            'Confidence': f"{row.get('Confidence', 0):.3f}" if 'Confidence' in pred_df.columns else 'N/A'
+                        })
+
+                    for _, row in bear_reversals.tail(5).iterrows():
+                        recent_reversals.append({
+                            'Date': row['Date'].strftime('%Y-%m-%d %H:%M'),
+                            'Type': 'Bearish 🔴',
+                            'Price': f"${row['Price']:.2f}",
+                            'Confidence': f"{row.get('Confidence', 0):.3f}" if 'Confidence' in pred_df.columns else 'N/A'
+                        })
+
+                    if recent_reversals:
+                        reversal_df = pd.DataFrame(recent_reversals)
+                        reversal_df = reversal_df.sort_values('Date', ascending=False)
+                        st.dataframe(reversal_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No confirmed reversal points detected in this time period.")
+
+        with tab3:
+            st.subheader("📊 Prediction Statistics")
+
+            # Model performance metrics
+            model_info = models[selected_model]
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if 'accuracy' in model_info['metrics']:
+                    st.metric("Model Accuracy", f"{model_info['metrics']['accuracy']:.3f}")
+                if 'precision' in model_info['metrics']:
+                    st.metric("Precision", f"{model_info['metrics']['precision']:.3f}")
+
+            with col2:
+                if 'recall' in model_info['metrics']:
+                    st.metric("Recall", f"{model_info['metrics']['recall']:.3f}")
+                if 'f1' in model_info['metrics']:
+                    st.metric("F1 Score", f"{model_info['metrics']['f1']:.3f}")
+
+            with col3:
+                st.metric("Total Predictions", len(predictions))
+                st.metric("Time Period", f"{(df_filtered.index.max() - df_filtered.index.min()).days} days")
+
+            # Prediction distribution chart
+            signal_counts = pd.Series(predictions).value_counts()
+
+            fig = go.Figure(data=[go.Pie(
+                labels=['Down', 'Up'],
+                values=[signal_counts.get(0, 0), signal_counts.get(1, 0)],
+                hole=0.3,
+                marker_colors=['#E74C3C', '#27AE60']
+            )])
+
+            fig.update_layout(
+                title="Direction Prediction Distribution",
+                height=400
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Confidence analysis if available
+            if 'Confidence' in pred_df.columns:
+                st.subheader("Confidence Analysis")
+
+                fig = go.Figure()
+                fig.add_trace(go.Histogram(
+                    x=pred_df['Confidence'],
+                    nbinsx=20,
+                    name='Confidence Distribution',
+                    marker_color='#3498DB'
+                ))
+
+                fig.update_layout(
+                    title="Prediction Confidence Distribution",
+                    xaxis_title="Confidence Score",
+                    yaxis_title="Frequency",
+                    height=300
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+        with tab4:
+            st.subheader("📋 Detailed Predictions Data")
+
+            # Format the dataframe for display
+            display_df = pred_df.copy()
+            display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d %H:%M')
+            display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
+
+            if 'Confidence' in display_df.columns:
+                display_df['Confidence'] = display_df['Confidence'].apply(lambda x: f"{x:.3f}")
+
+            # Show recent predictions (last 50)
+            st.dataframe(
+                display_df.tail(50).sort_values('Date', ascending=False),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            # Download button
+            csv = pred_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Full Predictions CSV",
+                data=csv,
+                file_name=f"direction_predictions_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv"
+            )
+
+    elif selected_model == 'trading_signal':
+        tab1, tab2, tab3 = st.tabs(["📊 Trading Signals", "📈 Signal Analysis", "📋 Signal History"])
+
+        signal_map = {0: 'Sell', 1: 'Hold', 2: 'Buy'}
+        signal_colors = {0: '#E74C3C', 1: '#F39C12', 2: '#27AE60'}
+
+        pred_df = pd.DataFrame({
+            'Date': features_filtered.index,
+            'Price': df_filtered['Close'],
+            'Signal': predictions,
+            'Signal_Name': [signal_map[s] for s in predictions]
+        })
+
+        with tab1:
+            st.subheader("📊 Trading Signal Overview")
+
+            fig = go.Figure()
+
+            # Price line
+            fig.add_trace(go.Scatter(
+                x=pred_df['Date'], 
+                y=pred_df['Price'],
+                name='Price',
+                line=dict(color='#2E86C1', width=2)
+            ))
+
+            # Signal markers
             for signal_value, signal_name in signal_map.items():
                 signal_data = pred_df[pred_df['Signal'] == signal_value]
                 if len(signal_data) > 0:
                     marker_symbol = 'triangle-up' if signal_value == 2 else ('triangle-down' if signal_value == 0 else 'circle')
-                    
+
                     fig.add_trace(go.Scatter(
                         x=signal_data['Date'],
                         y=signal_data['Price'],
@@ -409,653 +406,154 @@ if st.session_state.features is not None:
                             color=signal_colors[signal_value],
                             size=10
                         ),
-                        name=f'{signal_name} Signal'
+                        name=f'{signal_name} Signal',
+                        hovertemplate=f'<b>{signal_name} Signal</b><br>Price: $%{{y:.2f}}<br>Date: %{{x}}<extra></extra>'
                     ))
-            
+
             fig.update_layout(
-                title="Trading Signals",
+                height=500,
+                title="Trading Signals on Price Chart",
                 xaxis_title="Date",
-                yaxis_title="Price",
-                height=500
+                yaxis_title="Price ($)"
             )
-            
+
             st.plotly_chart(fig, use_container_width=True)
-            
-            # Signal distribution
+
+            # Current signal
+            current_signal = signal_map[predictions[-1]]
+            signal_color = signal_colors[predictions[-1]]
+
+            st.markdown(f"""
+            <div style="background: rgba{signal_color[3:-1]}, 0.1); border: 2px solid {signal_color}; 
+                 border-radius: 12px; padding: 1.5rem; margin: 1rem 0; text-align: center;">
+                <h3 style="color: {signal_color}; margin: 0;">Current Signal: {current_signal}</h3>
+                <p style="margin: 0.5rem 0 0 0;">Latest trading recommendation</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with tab2:
+            st.subheader("📈 Signal Distribution Analysis")
+
             signal_counts = pd.Series(predictions).value_counts()
-            
+
+            # Pie chart
+            fig = go.Figure(data=[go.Pie(
+                labels=['Sell', 'Hold', 'Buy'],
+                values=[signal_counts.get(0, 0), signal_counts.get(1, 0), signal_counts.get(2, 0)],
+                hole=0.3,
+                marker_colors=['#E74C3C', '#F39C12', '#27AE60']
+            )])
+
+            fig.update_layout(
+                title="Trading Signal Distribution",
+                height=400
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Signal metrics
             col1, col2, col3 = st.columns(3)
-            
             with col1:
                 buy_pct = (signal_counts.get(2, 0) / len(predictions)) * 100
                 st.metric("Buy Signals", f"{buy_pct:.1f}%")
-            
             with col2:
                 hold_pct = (signal_counts.get(1, 0) / len(predictions)) * 100
                 st.metric("Hold Signals", f"{hold_pct:.1f}%")
-            
             with col3:
                 sell_pct = (signal_counts.get(0, 0) / len(predictions)) * 100
                 st.metric("Sell Signals", f"{sell_pct:.1f}%")
-        
-        elif selected_model == 'trend_sideways':
-            st.subheader("Trend vs Sideways Classification")
-            
-            # Trend mapping: 0=Sideways, 1=Trending
-            trend_map = {0: 'Sideways', 1: 'Trending'}
-            trend_colors = {0: 'orange', 1: 'blue'}
-            
-            pred_df = pd.DataFrame({
-                'Date': features_filtered.index,
-                'Price': df_filtered['Close'],
-                'Prediction': predictions,
-                'Market_State': [trend_map[p] for p in predictions]
-            })
-            
-            # Add confidence if available
-            if probabilities is not None:
-                pred_df['Confidence'] = np.max(probabilities, axis=1)
-            
-            # REVERSAL DETECTION LOGIC
-            # Detect potential reversal points based on market state changes and price action
-            
-            # 1. State change reversals (trending to sideways or vice versa)
-            pred_df['State_Change'] = pred_df['Prediction'].diff().fillna(0) != 0
-            
-            # 2. Price momentum reversals
-            pred_df['Price_Change'] = pred_df['Price'].pct_change()
-            pred_df['Price_Change_3'] = pred_df['Price'].pct_change(3)
-            
-            # 3. Moving averages for trend confirmation
-            pred_df['SMA_5'] = pred_df['Price'].rolling(5).mean()
-            pred_df['SMA_20'] = pred_df['Price'].rolling(20).mean()
-            
-            # 4. Identify potential reversal points
-            reversal_conditions = []
-            
-            # Condition 1: State changes from trending to sideways (potential end of trend)
-            trending_to_sideways = (pred_df['Prediction'].shift(1) == 1) & (pred_df['Prediction'] == 0)
-            
-            # Condition 2: State changes from sideways to trending (potential start of new trend)
-            sideways_to_trending = (pred_df['Prediction'].shift(1) == 0) & (pred_df['Prediction'] == 1)
-            
-            # Condition 3: Price crossing moving averages during state changes
-            price_below_sma = pred_df['Price'] < pred_df['SMA_5']
-            price_above_sma = pred_df['Price'] > pred_df['SMA_5']
-            sma_cross_up = (pred_df['Price'].shift(1) < pred_df['SMA_5'].shift(1)) & (pred_df['Price'] > pred_df['SMA_5'])
-            sma_cross_down = (pred_df['Price'].shift(1) > pred_df['SMA_5'].shift(1)) & (pred_df['Price'] < pred_df['SMA_5'])
-            
-            # Condition 4: Significant price momentum changes
-            momentum_reversal = (
-                (pred_df['Price_Change'].shift(1) > 0.01) & (pred_df['Price_Change'] < -0.01) |  # Up to Down
-                (pred_df['Price_Change'].shift(1) < -0.01) & (pred_df['Price_Change'] > 0.01)    # Down to Up
+
+        with tab3:
+            st.subheader("📋 Signal History")
+
+            # Recent signals
+            display_df = pred_df.copy()
+            display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d %H:%M')
+            display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
+
+            st.dataframe(
+                display_df[['Date', 'Price', 'Signal_Name']].tail(50).sort_values('Date', ascending=False),
+                use_container_width=True,
+                hide_index=True
             )
-            
-            # Combine reversal conditions
-            pred_df['Potential_Reversal_Up'] = (
-                (sideways_to_trending & price_above_sma) |  # Breaking out upward
-                (sma_cross_up & (pred_df['Prediction'] == 1)) |  # Price crossing SMA up in trending market
-                (momentum_reversal & (pred_df['Price_Change'] > 0.01))  # Strong upward momentum change
-            )
-            
-            pred_df['Potential_Reversal_Down'] = (
-                (trending_to_sideways & price_below_sma) |  # Breaking down to sideways
-                (sma_cross_down & (pred_df['Prediction'] == 1)) |  # Price crossing SMA down in trending market
-                (momentum_reversal & (pred_df['Price_Change'] < -0.01))  # Strong downward momentum change
-            )
-            
-            # Create visualization
-            fig = make_subplots(rows=2, cols=1,
-                              subplot_titles=('Price with Market State & Reversal Points', 'Market State Timeline'),
-                              vertical_spacing=0.1,
-                              row_heights=[0.7, 0.3])
-            
-            # Price chart with color-coded background for market state
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Price'], 
-                          name='Price', line=dict(color='black', width=2)),
-                row=1, col=1
-            )
-            
-            # Add moving averages
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['SMA_5'], 
-                          name='SMA 5', line=dict(color='gray', width=1, dash='dash')),
-                row=1, col=1
-            )
-            
-            # Add market state periods as background colors
-            sideways_periods = pred_df[pred_df['Prediction'] == 0]
-            trending_periods = pred_df[pred_df['Prediction'] == 1]
-            
-            # Add scatter points for market states
-            if len(sideways_periods) > 0:
-                fig.add_trace(
-                    go.Scatter(x=sideways_periods['Date'], y=sideways_periods['Price'],
-                              mode='markers', marker=dict(color='orange', size=4, symbol='square'),
-                              name='Sideways Market'),
-                    row=1, col=1
-                )
-            
-            if len(trending_periods) > 0:
-                fig.add_trace(
-                    go.Scatter(x=trending_periods['Date'], y=trending_periods['Price'],
-                              mode='markers', marker=dict(color='blue', size=4, symbol='diamond'),
-                              name='Trending Market'),
-                    row=1, col=1
-                )
-            
-            # ADD REVERSAL POINTS
-            reversal_up_points = pred_df[pred_df['Potential_Reversal_Up']]
-            reversal_down_points = pred_df[pred_df['Potential_Reversal_Down']]
-            
-            if len(reversal_up_points) > 0:
-                fig.add_trace(
-                    go.Scatter(x=reversal_up_points['Date'], y=reversal_up_points['Price'],
-                              mode='markers', 
-                              marker=dict(color='green', size=12, symbol='triangle-up', line=dict(width=2, color='darkgreen')),
-                              name='Potential Reversal Up',
-                              hovertemplate='<b>Reversal Up</b><br>Date: %{x}<br>Price: %{y:.2f}<extra></extra>'),
-                    row=1, col=1
-                )
-            
-            if len(reversal_down_points) > 0:
-                fig.add_trace(
-                    go.Scatter(x=reversal_down_points['Date'], y=reversal_down_points['Price'],
-                              mode='markers', 
-                              marker=dict(color='red', size=12, symbol='triangle-down', line=dict(width=2, color='darkred')),
-                              name='Potential Reversal Down',
-                              hovertemplate='<b>Reversal Down</b><br>Date: %{x}<br>Price: %{y:.2f}<extra></extra>'),
-                    row=1, col=1
-                )
-            
-            # Market state timeline
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Prediction'],
-                          mode='lines+markers', 
-                          line=dict(color='purple', width=3),
-                          marker=dict(size=4),
-                          name='Market State',
-                          hovertemplate='<b>Date:</b> %{x}<br><b>State:</b> %{customdata}<extra></extra>',
-                          customdata=pred_df['Market_State']),
-                row=2, col=1
-            )
-            
-            fig.update_layout(height=700, title="Trend vs Sideways Market Analysis with Reversal Detection")
-            fig.update_xaxes(title_text="Date", row=2, col=1)
-            fig.update_yaxes(title_text="Price", row=1, col=1)
-            fig.update_yaxes(title_text="Market State (0=Sideways, 1=Trending)", row=2, col=1)
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Market state and reversal statistics
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                sideways_pct = (predictions == 0).mean() * 100
-                st.metric("Sideways Market %", f"{sideways_pct:.1f}%")
-            
-            with col2:
-                trending_pct = (predictions == 1).mean() * 100
-                st.metric("Trending Market %", f"{trending_pct:.1f}%")
-            
-            with col3:
-                reversal_up_count = pred_df['Potential_Reversal_Up'].sum()
-                st.metric("Potential Reversals Up", reversal_up_count)
-            
-            with col4:
-                reversal_down_count = pred_df['Potential_Reversal_Down'].sum()
-                st.metric("Potential Reversals Down", reversal_down_count)
-            
-            # Show recent reversal points
-            if reversal_up_count > 0 or reversal_down_count > 0:
-                st.subheader("🔄 Recent Reversal Points")
-                
-                recent_reversals = []
-                
-                # Get recent reversal up points
-                if len(reversal_up_points) > 0:
-                    for _, row in reversal_up_points.tail(5).iterrows():
-                        recent_reversals.append({
-                            'Date': row['Date'].strftime('%Y-%m-%d %H:%M'),
-                            'Type': 'Reversal Up ⬆️',
-                            'Price': f"${row['Price']:.2f}",
-                            'Market_State': row['Market_State'],
-                            'Price_Change': f"{row['Price_Change']*100:.2f}%"
-                        })
-                
-                # Get recent reversal down points
-                if len(reversal_down_points) > 0:
-                    for _, row in reversal_down_points.tail(5).iterrows():
-                        recent_reversals.append({
-                            'Date': row['Date'].strftime('%Y-%m-%d %H:%M'),
-                            'Type': 'Reversal Down ⬇️',
-                            'Price': f"${row['Price']:.2f}",
-                            'Market_State': row['Market_State'],
-                            'Price_Change': f"{row['Price_Change']*100:.2f}%"
-                        })
-                
-                if recent_reversals:
-                    reversal_df = pd.DataFrame(recent_reversals)
-                    reversal_df = reversal_df.sort_values('Date', ascending=False)
-                    st.dataframe(reversal_df, use_container_width=True)
-                    
-                    st.info("""
-                    **Reversal Interpretation:**
-                    - 🟢 **Reversal Up**: Potential bullish reversal - market may be starting an upward trend
-                    - 🔴 **Reversal Down**: Potential bearish reversal - market may be starting a downward trend
-                    - **Market State**: Current classification (Trending/Sideways)
-                    - **Price Change**: Short-term momentum at reversal point
-                    """)
-            
-            # Show periods analysis
-            st.subheader("Market State Periods Analysis")
-            
-            # Calculate consecutive periods
-            pred_df['Period_ID'] = pred_df['State_Change'].cumsum()
-            
-            # Group by periods
-            periods_summary = pred_df.groupby('Period_ID').agg({
-                'Date': ['first', 'last'],
-                'Prediction': 'first',
-                'Market_State': 'first'
-            }).round(2)
-            
-            periods_summary.columns = ['Start_Date', 'End_Date', 'State_Code', 'Market_State']
-            periods_summary['Duration_Days'] = (periods_summary['End_Date'] - periods_summary['Start_Date']).dt.days + 1
-            
-            # Show recent periods
-            st.write("**Recent Market State Periods:**")
-            recent_periods = periods_summary.tail(10).copy()
-            recent_periods['Start_Date'] = recent_periods['Start_Date'].dt.strftime('%Y-%m-%d')
-            recent_periods['End_Date'] = recent_periods['End_Date'].dt.strftime('%Y-%m-%d')
-            
-            st.dataframe(recent_periods[['Start_Date', 'End_Date', 'Market_State', 'Duration_Days']], 
-                        use_container_width=True)
-        
-        elif selected_model == 'reversal':
-            st.subheader("Reversal Point Predictions")
-            
-            # Reversal predictions (0=No Reversal, 1=Reversal Expected)
-            pred_df = pd.DataFrame({
-                'Date': features_filtered.index,
-                'Price': df_filtered['Close'],
-                'Reversal_Prediction': predictions,
-                'Reversal_Signal': ['Reversal Expected' if p == 1 else 'No Reversal' for p in predictions]
-            })
-            
-            if probabilities is not None:
-                pred_df['Confidence'] = np.max(probabilities, axis=1)
-            
-            # ENHANCED REVERSAL ANALYSIS
-            # Calculate additional technical indicators for reversal confirmation
-            pred_df['Price_Change'] = pred_df['Price'].pct_change()
-            pred_df['Price_Change_3'] = pred_df['Price'].pct_change(3)
-            pred_df['Price_Change_5'] = pred_df['Price'].pct_change(5)
-            
-            # Moving averages for trend context
-            pred_df['SMA_10'] = pred_df['Price'].rolling(10).mean()
-            pred_df['SMA_20'] = pred_df['Price'].rolling(20).mean()
-            
-            # RSI-like momentum indicator
-            price_diff = pred_df['Price'].diff()
-            gains = price_diff.where(price_diff > 0, 0).rolling(14).mean()
-            losses = (-price_diff.where(price_diff < 0, 0)).rolling(14).mean()
-            pred_df['Momentum'] = 100 - (100 / (1 + gains / losses))
-            
-            # Bollinger Band-like volatility
-            rolling_std = pred_df['Price'].rolling(20).std()
-            pred_df['Upper_Band'] = pred_df['SMA_20'] + (rolling_std * 2)
-            pred_df['Lower_Band'] = pred_df['SMA_20'] - (rolling_std * 2)
-            
-            # Identify different types of reversals
-            reversal_points = pred_df[pred_df['Reversal_Prediction'] == 1].copy()
-            
-            if len(reversal_points) > 0:
-                # Classify reversal types based on price action and context
-                reversal_points['Reversal_Type'] = 'Unknown'
-                reversal_points['Reversal_Strength'] = 'Medium'
-                
-                for idx in reversal_points.index:
-                    current_price = pred_df.loc[idx, 'Price']
-                    sma_10 = pred_df.loc[idx, 'SMA_10']
-                    sma_20 = pred_df.loc[idx, 'SMA_20']
-                    momentum = pred_df.loc[idx, 'Momentum']
-                    upper_band = pred_df.loc[idx, 'Upper_Band']
-                    lower_band = pred_df.loc[idx, 'Lower_Band']
-                    price_change_3 = pred_df.loc[idx, 'Price_Change_3']
-                    
-                    # Determine reversal type
-                    if current_price <= lower_band and momentum < 30:
-                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bullish Oversold'
-                        reversal_points.loc[idx, 'Reversal_Strength'] = 'Strong'
-                    elif current_price >= upper_band and momentum > 70:
-                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bearish Overbought'
-                        reversal_points.loc[idx, 'Reversal_Strength'] = 'Strong'
-                    elif current_price < sma_10 and price_change_3 < -0.02:
-                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bullish Support'
-                        reversal_points.loc[idx, 'Reversal_Strength'] = 'Medium'
-                    elif current_price > sma_10 and price_change_3 > 0.02:
-                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bearish Resistance'
-                        reversal_points.loc[idx, 'Reversal_Strength'] = 'Medium'
-                    elif momentum < 35:
-                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bullish Momentum'
-                    elif momentum > 65:
-                        reversal_points.loc[idx, 'Reversal_Type'] = 'Bearish Momentum'
-                    else:
-                        reversal_points.loc[idx, 'Reversal_Type'] = 'Neutral Reversal'
-                        reversal_points.loc[idx, 'Reversal_Strength'] = 'Weak'
-            
-            # Create comprehensive visualization
-            fig = make_subplots(rows=3, cols=1,
-                              subplot_titles=('Price Chart with Reversal Points', 'Momentum Indicator', 'Reversal Confidence'),
-                              vertical_spacing=0.08,
-                              row_heights=[0.6, 0.2, 0.2])
-            
-            # Main price chart with Bollinger Bands
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Price'], 
-                          name='Price', line=dict(color='blue', width=2)),
-                row=1, col=1
-            )
-            
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['SMA_20'], 
-                          name='SMA 20', line=dict(color='gray', width=1, dash='dash')),
-                row=1, col=1
-            )
-            
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Upper_Band'], 
-                          name='Upper Band', line=dict(color='lightgray', width=1, dash='dot'),
-                          fill=None),
-                row=1, col=1
-            )
-            
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Lower_Band'], 
-                          name='Lower Band', line=dict(color='lightgray', width=1, dash='dot'),
-                          fill='tonexty', fillcolor='rgba(128,128,128,0.1)'),
-                row=1, col=1
-            )
-            
-            # Add reversal points with different colors and symbols based on type
-            if len(reversal_points) > 0:
-                # Group by reversal type for better visualization
-                reversal_types = reversal_points['Reversal_Type'].unique()
-                colors = {
-                    'Bullish Oversold': 'darkgreen',
-                    'Bearish Overbought': 'darkred', 
-                    'Bullish Support': 'green',
-                    'Bearish Resistance': 'red',
-                    'Bullish Momentum': 'lightgreen',
-                    'Bearish Momentum': 'lightcoral',
-                    'Neutral Reversal': 'orange',
-                    'Unknown': 'gray'
-                }
-                
-                symbols = {
-                    'Strong': 'star',
-                    'Medium': 'diamond',
-                    'Weak': 'circle'
-                }
-                
-                for rev_type in reversal_types:
-                    type_data = reversal_points[reversal_points['Reversal_Type'] == rev_type]
-                    
-                    for strength in ['Strong', 'Medium', 'Weak']:
-                        strength_data = type_data[type_data['Reversal_Strength'] == strength]
-                        if len(strength_data) > 0:
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=strength_data['Date'], 
-                                    y=strength_data['Price'],
-                                    mode='markers',
-                                    marker=dict(
-                                        symbol=symbols[strength],
-                                        color=colors.get(rev_type, 'gray'),
-                                        size=12 if strength == 'Strong' else 10 if strength == 'Medium' else 8,
-                                        line=dict(width=2, color='black')
-                                    ),
-                                    name=f'{rev_type} ({strength})',
-                                    hovertemplate=f'<b>{rev_type}</b><br>Strength: {strength}<br>Date: %{{x}}<br>Price: %{{y:.2f}}<extra></extra>'
-                                ),
-                                row=1, col=1
-                            )
-            
-            # Momentum chart
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Momentum'],
-                          name='Momentum', line=dict(color='purple')),
-                row=2, col=1
-            )
-            
-            # Add momentum reference lines
-            fig.add_hline(y=70, line_dash="dash", line_color="red", opacity=0.7, row=2, col=1)
-            fig.add_hline(y=30, line_dash="dash", line_color="green", opacity=0.7, row=2, col=1)
-            fig.add_hline(y=50, line_dash="solid", line_color="gray", opacity=0.5, row=2, col=1)
-            
-            # Confidence chart (if available)
-            if 'Confidence' in pred_df.columns:
-                fig.add_trace(
-                    go.Scatter(x=pred_df['Date'], y=pred_df['Confidence'],
-                              name='Prediction Confidence', line=dict(color='orange')),
-                    row=3, col=1
-                )
-            
-            fig.update_layout(height=800, title="Reversal Point Detection and Analysis")
-            fig.update_xaxes(title_text="Date", row=3, col=1)
-            fig.update_yaxes(title_text="Price", row=1, col=1)
-            fig.update_yaxes(title_text="Momentum (0-100)", row=2, col=1)
-            fig.update_yaxes(title_text="Confidence", row=3, col=1)
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Statistics and analysis
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                reversal_pct = (predictions == 1).mean() * 100
-                st.metric("Reversal Signals", f"{reversal_pct:.1f}%")
-            
-            with col2:
-                if len(reversal_points) > 0:
-                    strong_reversals = len(reversal_points[reversal_points['Reversal_Strength'] == 'Strong'])
-                    st.metric("Strong Reversals", strong_reversals)
-                else:
-                    st.metric("Strong Reversals", 0)
-            
-            with col3:
-                if 'Confidence' in pred_df.columns:
-                    avg_confidence = pred_df[pred_df['Reversal_Prediction'] == 1]['Confidence'].mean()
-                    st.metric("Avg Confidence", f"{avg_confidence:.3f}")
-                else:
-                    st.metric("Avg Confidence", "N/A")
-            
-            with col4:
-                recent_reversals = len(reversal_points.tail(10))
-                st.metric("Recent Reversals", recent_reversals)
-            
-            # Detailed reversal analysis table
-            if len(reversal_points) > 0:
-                st.subheader("🔄 Detailed Reversal Analysis")
-                
-                # Show recent reversal points with full analysis
-                recent_reversals_detailed = reversal_points.tail(10).copy()
-                recent_reversals_detailed['Date_Formatted'] = recent_reversals_detailed['Date'].dt.strftime('%Y-%m-%d %H:%M')
-                recent_reversals_detailed['Price_Formatted'] = recent_reversals_detailed['Price'].apply(lambda x: f"${x:.2f}")
-                recent_reversals_detailed['Price_Change_3_Formatted'] = recent_reversals_detailed['Price_Change_3'].apply(lambda x: f"{x*100:.2f}%")
-                
-                display_columns = ['Date_Formatted', 'Price_Formatted', 'Reversal_Type', 'Reversal_Strength', 'Price_Change_3_Formatted']
-                display_names = ['Date', 'Price', 'Reversal Type', 'Strength', '3-Day Change']
-                
-                if 'Confidence' in recent_reversals_detailed.columns:
-                    recent_reversals_detailed['Confidence_Formatted'] = recent_reversals_detailed['Confidence'].apply(lambda x: f"{x:.3f}")
-                    display_columns.append('Confidence_Formatted')
-                    display_names.append('Confidence')
-                
-                display_df = recent_reversals_detailed[display_columns].copy()
-                display_df.columns = display_names
-                display_df = display_df.sort_values('Date', ascending=False)
-                
-                st.dataframe(display_df, use_container_width=True)
-                
-                # Reversal type distribution
-                st.subheader("📊 Reversal Type Distribution")
-                type_counts = reversal_points['Reversal_Type'].value_counts()
-                
-                fig_pie = go.Figure(data=[go.Pie(
-                    labels=type_counts.index,
-                    values=type_counts.values,
-                    hole=0.3
-                )])
-                fig_pie.update_layout(title="Distribution of Reversal Types", height=400)
-                st.plotly_chart(fig_pie, use_container_width=True)
-                
-                st.info("""
-                **Reversal Signal Interpretation:**
-                - 🟢 **Bullish Oversold**: Price at lower band with low momentum - strong buy signal
-                - 🔴 **Bearish Overbought**: Price at upper band with high momentum - strong sell signal  
-                - 🟢 **Bullish Support**: Price finding support with recent decline - potential buy
-                - 🔴 **Bearish Resistance**: Price hitting resistance after recent rise - potential sell
-                - **Momentum Reversals**: Based on momentum indicators crossing key levels
-                - **Strength**: Strong signals have higher probability of success
-                """)
-        
-        elif selected_model == 'volatility':
-            st.subheader("Volatility Forecasting")
-            
-            pred_df = pd.DataFrame({
-                'Date': features_filtered.index,
-                'Price': df_filtered['Close'],
-                'Predicted_Volatility': predictions
-            })
-            
-            # Calculate actual volatility for comparison
-            actual_vol = df_filtered['Close'].rolling(10).std()
-            pred_df['Actual_Volatility'] = actual_vol
-            
-            # Plot volatility predictions
-            fig = make_subplots(rows=2, cols=1,
-                              subplot_titles=('Price', 'Volatility Forecast'),
-                              vertical_spacing=0.1)
-            
-            # Price chart
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Price'], name='Price'),
-                row=1, col=1
-            )
-            
-            # Volatility chart
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Predicted_Volatility'], 
-                          name='Predicted Volatility', line=dict(color='red')),
-                row=2, col=1
-            )
-            
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Actual_Volatility'], 
-                          name='Actual Volatility', line=dict(color='blue')),
-                row=2, col=1
-            )
-            
-            fig.update_layout(height=600, title="Volatility Forecasting")
-            fig.update_xaxes(title_text="Date", row=2, col=1)
-            fig.update_yaxes(title_text="Price", row=1, col=1)
-            fig.update_yaxes(title_text="Volatility", row=2, col=1)
-            
-            st.plotly_chart(fig, use_container_width=True)
-        
-        else:
-            # Generic visualization for other models
-            st.subheader(f"{selected_model.replace('_', ' ').title()} Predictions")
-            
-            pred_df = pd.DataFrame({
-                'Date': features_filtered.index,
-                'Price': df_filtered['Close'],
-                'Prediction': predictions
-            })
-            
-            fig = make_subplots(rows=2, cols=1,
-                              subplot_titles=('Price', 'Predictions'),
-                              vertical_spacing=0.1)
-            
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Price'], name='Price'),
-                row=1, col=1
-            )
-            
-            fig.add_trace(
-                go.Scatter(x=pred_df['Date'], y=pred_df['Prediction'], name='Prediction'),
-                row=2, col=1
-            )
-            
-            fig.update_layout(height=600)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # Prediction data table
+
+    else:
+        # Generic handler for other models
+        st.subheader(f"{selected_model.replace('_', ' ').title()} Predictions")
+
+        pred_df = pd.DataFrame({
+            'Date': features_filtered.index,
+            'Price': df_filtered['Close'],
+            'Prediction': predictions
+        })
+
+        # Simple chart
+        fig = make_subplots(rows=2, cols=1,
+                          subplot_titles=('Price', 'Predictions'),
+                          vertical_spacing=0.1)
+
+        fig.add_trace(go.Scatter(x=pred_df['Date'], y=pred_df['Price'], name='Price'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=pred_df['Date'], y=pred_df['Prediction'], name='Prediction'), row=2, col=1)
+
+        fig.update_layout(height=600)
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Show data table
+        display_df = pred_df.copy()
+        display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d %H:%M')
+        display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
+
         st.subheader("Recent Predictions")
-        
-        # Show last 20 predictions
-        if 'pred_df' in locals():
-            recent_predictions = pred_df.tail(20).copy()
-            recent_predictions['Date'] = recent_predictions['Date'].dt.strftime('%Y-%m-%d')
-            st.dataframe(recent_predictions, use_container_width=True)
-        
-    except Exception as e:
-        st.error(f"Error generating predictions: {str(e)}")
+        st.dataframe(display_df.tail(20), use_container_width=True, hide_index=True)
+
+except Exception as e:
+    st.error(f"Error generating predictions: {str(e)}")
+    st.info("Please try refreshing the page or check your model training.")
 
 # Model comparison section
-st.header("Model Comparison")
+st.markdown("---")
+st.header("🔍 Model Comparison")
 
 if len(available_models) > 1:
     compare_models = st.multiselect(
-        "Select models to compare",
+        "Select models to compare performance",
         available_models,
-        default=available_models[:2] if len(available_models) >= 2 else available_models,
+        default=available_models[:3] if len(available_models) >= 3 else available_models,
         format_func=lambda x: x.replace('_', ' ').title()
     )
-    
+
     if len(compare_models) >= 2:
         comparison_data = []
-        
+
         for model_name in compare_models:
             model_info = models[model_name]
             metrics = model_info['metrics']
-            
+
+            row_data = {
+                'Model': model_name.replace('_', ' ').title(),
+                'Type': model_info['task_type'].title()
+            }
+
             if model_info['task_type'] == 'classification':
-                comparison_data.append({
-                    'Model': model_name.replace('_', ' ').title(),
-                    'Type': 'Classification',
-                    'Accuracy': f"{metrics['accuracy']:.3f}",
-                    'Primary Metric': f"{metrics['accuracy']:.3f}"
+                row_data.update({
+                    'Accuracy': f"{metrics.get('accuracy', 0):.3f}",
+                    'Precision': f"{metrics.get('precision', 0):.3f}",
+                    'Recall': f"{metrics.get('recall', 0):.3f}",
+                    'F1 Score': f"{metrics.get('f1', 0):.3f}"
                 })
             else:
-                comparison_data.append({
-                    'Model': model_name.replace('_', ' ').title(),
-                    'Type': 'Regression',
-                    'RMSE': f"{metrics['rmse']:.4f}",
-                    'Primary Metric': f"{metrics['rmse']:.4f}"
+                row_data.update({
+                    'RMSE': f"{metrics.get('rmse', 0):.4f}",
+                    'MAE': f"{metrics.get('mae', 0):.4f}",
+                    'R²': f"{metrics.get('r2', 0):.3f}"
                 })
-        
+
+            comparison_data.append(row_data)
+
         comparison_df = pd.DataFrame(comparison_data)
-        st.dataframe(comparison_df, use_container_width=True)
-
-# Export predictions
-st.header("Export Predictions")
-
-if st.button("Download Predictions as CSV"):
-    if 'pred_df' in locals():
-        csv = pred_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download CSV",
-            data=csv,
-            file_name=f"{selected_model}_predictions_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv"
-        )
-    else:
-        st.warning("No prediction data available to download")
+        st.dataframe(comparison_df, use_container_width=True, hide_index=True)
 
 # Next steps
 st.markdown("---")
 st.info("📋 **Next Steps:** Analyze your predictions and proceed to the **Backtesting** page to evaluate strategy performance.")
+```
