@@ -17,9 +17,9 @@ with open('style.css') as f:
 
 st.markdown("""
 <div class="trading-header">
-    <h1 style="margin:0;">📈 REAL-TIME INDIAN MARKET</h1>
+    <h1 style="margin:0;">📈 NIFTY 50 REAL-TIME</h1>
     <p style="font-size: 1.2rem; margin: 1rem 0 0 0; color: rgba(255,255,255,0.8);">
-        Live NSE/BSE Data Integration with ML Predictions
+        Live Nifty 50 Index Data - 5 Minute Timeframe
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -50,37 +50,18 @@ with col3:
     current_time = datetime.now().strftime("%H:%M:%S IST")
     st.info(f"🕐 {current_time}")
 
-# Stock selection
-st.header("Stock Selection")
+# Nifty 50 Configuration
+st.header("Nifty 50 Index Configuration")
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    # Get available symbols
-    indian_stocks = market_data.get_indian_stock_symbols()
-    nifty_indices = market_data.get_nifty_symbols()
-    
-    all_symbols = {**indian_stocks, **nifty_indices}
-    
-    selected_name = st.selectbox(
-        "Select Stock/Index:",
-        options=list(all_symbols.keys()),
-        help="Choose from popular Indian stocks and indices"
-    )
-    
-    selected_symbol = all_symbols[selected_name]
+    st.info("📊 Configured for Nifty 50 Index (^NSEI) - 5 Minute Timeframe")
+    selected_symbol = "^NSEI"
+    selected_name = "NIFTY 50"
 
 with col2:
-    # Custom symbol input
-    custom_symbol = st.text_input(
-        "Or enter custom symbol:",
-        placeholder="e.g., TATASTEEL.NS",
-        help="Use .NS for NSE, .BO for BSE"
-    )
-    
-    if custom_symbol:
-        selected_symbol = custom_symbol
-        selected_name = custom_symbol
+    st.metric("Index", "Nifty 50", "NSE")
 
 # Data fetching controls
 st.header("Data Configuration")
@@ -88,12 +69,8 @@ st.header("Data Configuration")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    interval = st.selectbox(
-        "Interval:",
-        options=["1m", "5m", "15m", "30m", "1h"],
-        index=1,
-        help="Data frequency"
-    )
+    interval = "5m"  # Fixed to 5 minutes as requested
+    st.info("Interval: 5 minutes (Fixed)")
 
 with col2:
     period = st.selectbox(
@@ -106,12 +83,12 @@ with col2:
 with col3:
     auto_refresh = st.checkbox(
         "Auto Refresh",
-        value=False,
-        help="Automatically update data every minute"
+        value=True,
+        help="Automatically update Nifty 50 data every 5 minutes"
     )
 
 with col4:
-    if st.button("Fetch Data", type="primary"):
+    if st.button("Fetch Nifty 50 Data", type="primary"):
         st.session_state.fetch_triggered = True
 
 # Current price display
@@ -357,43 +334,40 @@ if st.session_state.get('fetch_triggered', False) or auto_refresh:
 
 # Auto-refresh functionality
 if auto_refresh:
-    time.sleep(60)  # Refresh every minute
+    time.sleep(300)  # Refresh every 5 minutes for Nifty 50
     st.rerun()
 
 # Instructions
-with st.expander("📋 How to Use Real-time Data", expanded=False):
+with st.expander("📋 Nifty 50 Real-Time Guide", expanded=False):
     st.markdown("""
-    ### Indian Market Integration Guide
+    ### Nifty 50 Index Trading System
     
-    **1. Stock Selection:**
-    - Choose from pre-loaded popular Indian stocks (Reliance, TCS, Infosys, etc.)
-    - Or enter custom symbols (use .NS for NSE, .BO for BSE)
-    - Indices available: Nifty 50, Bank Nifty, etc.
+    **Configuration:**
+    - **Index**: Nifty 50 (^NSEI) - Top 50 stocks by market cap
+    - **Timeframe**: 5-minute candles (Fixed)
+    - **Market Hours**: 9:15 AM to 3:30 PM IST, Monday to Friday
+    - **Auto Refresh**: Updates every 5 minutes during market hours
     
-    **2. Data Configuration:**
-    - **Interval**: How frequently data points are captured (1m, 5m, 15m, etc.)
-    - **Period**: How far back to fetch historical data
-    - **Auto Refresh**: Automatically updates data every minute during market hours
+    **Features:**
+    - Live Nifty 50 price, volume, and market data
+    - Technical indicators calculated automatically on 5-min data
+    - ML predictions for index movement direction
+    - Profit probability analysis for scalping/intraday
+    - Trading signal generation with confidence levels
     
-    **3. ML Predictions:**
-    - Requires trained models from the Model Training page
-    - Shows real-time predictions for direction, profit probability, and trading signals
-    - Confidence levels indicate model certainty
+    **ML Predictions Available:**
+    - **Direction**: BUY/SELL signal for next 5-minute candle
+    - **Profit Probability**: Likelihood of profitable trade
+    - **Trading Signal**: Strong BUY/HOLD recommendation
     
-    **4. Market Hours:**
-    - NSE/BSE: 9:15 AM to 3:30 PM IST, Monday to Friday
-    - Real-time data available during market hours
-    - Historical data available anytime
+    **Data Export:**
+    - Save Nifty 50 data to database for model training
+    - Update existing datasets with latest 5-min data
+    - Download CSV for external analysis
     
-    **5. Data Integration:**
-    - Save real-time data to database for persistence
-    - Update existing datasets with new data
-    - Export to CSV for external analysis
-    
-    **Popular Indian Stock Symbols:**
-    - Reliance: RELIANCE.NS
-    - TCS: TCS.NS
-    - Infosys: INFY.NS
-    - HDFC Bank: HDFCBANK.NS
-    - ICICI Bank: ICICIBANK.NS
+    **Trading Strategy:**
+    - Use ML predictions as guidance for manual trades
+    - High confidence signals (>70%) are more reliable
+    - Combine with technical indicators for confirmation
+    - Always use proper risk management
     """)

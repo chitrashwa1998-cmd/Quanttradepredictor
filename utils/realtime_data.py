@@ -1,7 +1,10 @@
 try:
     import yfinance as yf
+    import requests
 except ImportError:
     yf = None
+    requests = None
+    print("Warning: yfinance not available. Installing required dependencies...")
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
