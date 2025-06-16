@@ -8,9 +8,12 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Predictions", page_icon="🎯", layout="wide")
 
-# Load custom CSS
-with open('style.css') as f:
-    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+# Load custom CSS if it exists
+try:
+    with open('style.css') as f:
+        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+except FileNotFoundError:
+    pass  # Continue without custom CSS
 
 # Initialize session state variables if they don't exist
 if 'data' not in st.session_state:
@@ -83,12 +86,13 @@ with col3:
     st.metric("Model Type", models[selected_model]['task_type'].title())
 
 # Ensure Date is not both index and column
-if 'Date' in df.columns and df.index.name in ['Date', 'date', None]:
+if 'Date' in df.columns:
     # Remove Date column if it exists as both index and column
     df = df.drop(columns=['Date'], errors='ignore')
 
-if 'Date' in st.session_state.features.columns and st.session_state.features.index.name in ['Date', 'date', None]:
-    st.session_state.features = st.session_state.features.drop(columns=['Date'], errors='ignore')
+if st.session_state.features is not None:
+    if hasattr(st.session_state.features, 'columns') and 'Date' in st.session_state.features.columns:
+        st.session_state.features = st.session_state.features.drop(columns=['Date'], errors='ignore')
 
 # Filter data based on selection
 if date_range == "Last 30 days":
@@ -103,7 +107,14 @@ else:
     start_date = df.index.min()
 
 df_filtered = df[df.index >= start_date].copy()
-features_filtered = st.session_state.features[st.session_state.features.index >= start_date].copy()
+
+# Check if features exist, if not prepare them
+if st.session_state.features is None:
+    st.warning("Features not found. Preparing features from current data...")
+    features_filtered = model_trainer.prepare_features(df_filtered)
+    st.session_state.features = model_trainer.prepare_features(df)
+else:
+    features_filtered = st.session_state.features[st.session_state.features.index >= start_date].copy()
 
 # Generate predictions
 try:
