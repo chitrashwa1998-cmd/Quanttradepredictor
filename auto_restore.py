@@ -14,7 +14,7 @@ def auto_restore_system():
         return
     
     try:
-        from utils.database import TradingDatabase
+        from utils.database_adapter import DatabaseAdapter
         from models.xgboost_models import QuantTradingModels
         from features.technical_indicators import TechnicalIndicators
         

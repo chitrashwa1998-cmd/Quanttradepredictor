@@ -13,7 +13,7 @@ def retrain_all_models():
     print("Starting model retraining process...")
     
     # Load data from database
-    db = TradingDatabase()
+    db = DatabaseAdapter()
     data = db.load_ohlc_data("main_dataset")
     
     if data is None:

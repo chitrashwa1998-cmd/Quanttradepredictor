@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from utils.database import TradingDatabase
+from utils.database_adapter import DatabaseAdapter
 from datetime import datetime
 
 st.set_page_config(page_title="Database Manager", page_icon="💾", layout="wide")
@@ -21,7 +21,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Initialize database
-trading_db = TradingDatabase()
+trading_db = DatabaseAdapter()
 
 # Database overview
 st.header("📊 Database Overview")

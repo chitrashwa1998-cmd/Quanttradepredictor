@@ -4,10 +4,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from utils.data_processing import DataProcessor
 from features.technical_indicators import TechnicalIndicators
-from utils.database import TradingDatabase
+from utils.database_adapter import DatabaseAdapter
 
 # Initialize database
-trading_db = TradingDatabase()
+trading_db = DatabaseAdapter()
 
 st.set_page_config(page_title="Data Upload", page_icon="📊", layout="wide")
 
@@ -71,8 +71,8 @@ if uploaded_file is not None:
         st.session_state.predictions = None  # Reset predictions
 
         # Automatically save to database
-        from utils.database import TradingDatabase
-        trading_db = TradingDatabase()
+        from utils.database_adapter import DatabaseAdapter
+        trading_db = DatabaseAdapter()
         if trading_db.save_ohlc_data(df, "main_dataset", preserve_full_data):
             if preserve_full_data:
                 st.success(f"✅ {message} & Full dataset saved to database!")

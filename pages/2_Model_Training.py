@@ -171,8 +171,8 @@ if st.session_state.features is not None:
                 
                 # Auto-save model results to database
                 try:
-                    from utils.database import TradingDatabase
-                    trading_db = TradingDatabase()
+                    from utils.database_adapter import DatabaseAdapter
+                    trading_db = DatabaseAdapter()
                     
                     # Save model results
                     for model_name, model_result in results.items():
