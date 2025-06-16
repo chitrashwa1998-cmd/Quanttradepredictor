@@ -250,23 +250,41 @@ try:
             down_predictions = pred_df[pred_df['Prediction'] == 0]
 
             if len(up_predictions) > 0:
+                # Build hover template with confidence if available
+                if 'Confidence' in up_predictions.columns:
+                    hover_template_up = '<b>Prediction:</b> Up<br><b>Price:</b> $%{y:.2f}<br><b>Confidence:</b> %{customdata:.3f}<extra></extra>'
+                    customdata_up = up_predictions['Confidence']
+                else:
+                    hover_template_up = '<b>Prediction:</b> Up<br><b>Price:</b> $%{y:.2f}<extra></extra>'
+                    customdata_up = None
+                
                 fig.add_trace(go.Scatter(
                     x=up_predictions.index,
                     y=up_predictions['Price'],
                     mode='markers',
                     marker=dict(symbol='triangle-up', color='green', size=8),
                     name='Predicted Up',
-                    hovertemplate='<b>Prediction:</b> Up<br><b>Price:</b> $%{y:.2f}<extra></extra>'
+                    hovertemplate=hover_template_up,
+                    customdata=customdata_up
                 ))
 
             if len(down_predictions) > 0:
+                # Build hover template with confidence if available
+                if 'Confidence' in down_predictions.columns:
+                    hover_template_down = '<b>Prediction:</b> Down<br><b>Price:</b> $%{y:.2f}<br><b>Confidence:</b> %{customdata:.3f}<extra></extra>'
+                    customdata_down = down_predictions['Confidence']
+                else:
+                    hover_template_down = '<b>Prediction:</b> Down<br><b>Price:</b> $%{y:.2f}<extra></extra>'
+                    customdata_down = None
+                
                 fig.add_trace(go.Scatter(
                     x=down_predictions.index,
                     y=down_predictions['Price'],
                     mode='markers',
                     marker=dict(symbol='triangle-down', color='red', size=8),
                     name='Predicted Down',
-                    hovertemplate='<b>Prediction:</b> Down<br><b>Price:</b> $%{y:.2f}<extra></extra>'
+                    hovertemplate=hover_template_down,
+                    customdata=customdata_down
                 ))
 
             fig.update_layout(
