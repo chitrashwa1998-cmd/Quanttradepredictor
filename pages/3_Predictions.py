@@ -12,6 +12,18 @@ st.set_page_config(page_title="Predictions", page_icon="🎯", layout="wide")
 with open('style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
+# Initialize session state variables if they don't exist
+if 'data' not in st.session_state:
+    st.session_state.data = None
+if 'models' not in st.session_state:
+    st.session_state.models = {}
+if 'predictions' not in st.session_state:
+    st.session_state.predictions = None
+if 'features' not in st.session_state:
+    st.session_state.features = None
+if 'model_trainer' not in st.session_state:
+    st.session_state.model_trainer = None
+
 # Check if data and models are available
 if st.session_state.data is None:
     st.warning("⚠️ No data loaded. Please go to the **Data Upload** page first.")
@@ -21,7 +33,7 @@ if not st.session_state.models:
     st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
     st.stop()
 
-if 'model_trainer' not in st.session_state or st.session_state.model_trainer is None:
+if st.session_state.model_trainer is None:
     st.warning("⚠️ Model trainer not initialized. Please go to the **Model Training** page first.")
     st.stop()
 
