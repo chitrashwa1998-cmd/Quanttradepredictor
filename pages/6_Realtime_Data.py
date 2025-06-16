@@ -212,11 +212,23 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
             ))
             
             fig.update_layout(
-                title=f"{selected_name} - {interval} Candlestick Chart",
+                title=f"{selected_name} - {interval} Candlestick Chart (Last Updated: {current_time_ist})",
                 xaxis_title="Time",
                 yaxis_title="Price (₹)",
                 height=500,
-                showlegend=False
+                showlegend=False,
+                annotations=[
+                    dict(
+                        x=0.02, y=0.98,
+                        xref='paper', yref='paper',
+                        text=f"🔴 LIVE" if is_open else "🔴 CLOSED",
+                        showarrow=False,
+                        font=dict(size=12, color="red" if is_open else "gray"),
+                        bgcolor="rgba(255,255,255,0.8)",
+                        bordercolor="red" if is_open else "gray",
+                        borderwidth=1
+                    )
+                ]
             )
             
             st.plotly_chart(fig, use_container_width=True)
@@ -334,6 +346,82 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
             
             else:
                 st.warning("⚠️ No trained models available. Please train models first in the Model Training page.")
+            
+            # Real-time Trading Insights
+            st.header("Real-time Trading Insights")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                # Price momentum
+                if len(df) >= 5:
+                    recent_prices = df['Close'].tail(5)
+                    momentum = ((recent_prices.iloc[-1] - recent_prices.iloc[0]) / recent_prices.iloc[0]) * 100
+                    momentum_color = "normal" if abs(momentum) < 0.5 else ("inverse" if momentum > 0 else "off")
+                    st.metric(
+                        "5-Period Momentum", 
+                        f"{momentum:.2f}%",
+                        delta=f"{momentum:.2f}%",
+                        delta_color=momentum_color
+                    )
+            
+            with col2:
+                # Volume analysis
+                if len(df) >= 10:
+                    avg_volume = df['Volume'].tail(10).mean()
+                    current_volume = df['Volume'].iloc[-1]
+                    volume_ratio = (current_volume / avg_volume) * 100
+                    st.metric(
+                        "Volume vs Avg", 
+                        f"{volume_ratio:.0f}%",
+                        delta=f"{volume_ratio - 100:.0f}%",
+                        delta_color="normal" if volume_ratio > 120 else "off"
+                    )
+            
+            with col3:
+                # Volatility indicator
+                if len(df) >= 20:
+                    returns = df['Close'].pct_change().tail(20)
+                    volatility = returns.std() * 100
+                    vol_level = "High" if volatility > 2 else "Medium" if volatility > 1 else "Low"
+                    st.metric("20-Period Volatility", f"{volatility:.2f}%", delta=vol_level)
+            
+            # Real-time alerts
+            if len(df) >= 2:
+                st.subheader("Real-time Alerts")
+                alerts = []
+                
+                # Price breakout alert
+                current_price = df['Close'].iloc[-1]
+                prev_price = df['Close'].iloc[-2]
+                price_change = ((current_price - prev_price) / prev_price) * 100
+                
+                if abs(price_change) > 0.5:
+                    direction = "🔴 Sharp Move Up" if price_change > 0 else "🔴 Sharp Move Down"
+                    alerts.append(f"{direction}: {price_change:.2f}% in latest candle")
+                
+                # Volume spike alert
+                if len(df) >= 5:
+                    avg_vol = df['Volume'].tail(5).mean()
+                    current_vol = df['Volume'].iloc[-1]
+                    if current_vol > avg_vol * 1.5:
+                        alerts.append(f"🔊 Volume Spike: {((current_vol/avg_vol-1)*100):.0f}% above average")
+                
+                # Technical level alerts
+                if len(df) >= 20:
+                    high_20 = df['High'].tail(20).max()
+                    low_20 = df['Low'].tail(20).min()
+                    
+                    if current_price >= high_20 * 0.999:
+                        alerts.append(f"📈 Near 20-period High: ₹{high_20:.2f}")
+                    elif current_price <= low_20 * 1.001:
+                        alerts.append(f"📉 Near 20-period Low: ₹{low_20:.2f}")
+                
+                if alerts:
+                    for alert in alerts:
+                        st.warning(alert)
+                else:
+                    st.info("✅ No significant alerts at current levels")
             
             # Data export options
             st.header("Data Export")
