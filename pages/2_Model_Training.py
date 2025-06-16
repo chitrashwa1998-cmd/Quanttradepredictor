@@ -29,6 +29,32 @@ if st.session_state.data is None:
 if 'model_trainer' not in st.session_state or st.session_state.model_trainer is None:
     st.session_state.model_trainer = QuantTradingModels()
 
+# Check for existing trained models
+model_trainer = st.session_state.model_trainer
+existing_models = model_trainer.models
+
+if existing_models:
+    st.success(f"🎯 Found {len(existing_models)} pre-trained models in database!")
+    
+    # Show existing models status
+    with st.expander("View Existing Models", expanded=True):
+        for model_name, model_data in existing_models.items():
+            trained_date = model_data.get('trained_at', 'Unknown date')
+            task_type = model_data.get('task_type', 'Unknown type')
+            st.info(f"**{model_name}** ({task_type}) - Trained: {trained_date}")
+    
+    # Option to retrain or use existing
+    retrain_choice = st.radio(
+        "Model Training Options:",
+        ["Use existing trained models", "Retrain all models (this will overwrite existing models)"],
+        help="Existing models can be used immediately for predictions without retraining"
+    )
+    
+    if retrain_choice == "Use existing trained models":
+        st.session_state.training_results = {name: {'status': 'loaded'} for name in existing_models.keys()}
+        st.success("✅ Using existing trained models - ready for predictions!")
+        st.stop()
+
 df = st.session_state.data
 
 st.header("Training Configuration")
