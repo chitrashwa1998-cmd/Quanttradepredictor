@@ -466,10 +466,15 @@ class QuantTradingModels:
     def train_model(self, model_name: str, X: pd.DataFrame, y: pd.Series, task_type: str = 'classification', train_split: float = 0.8) -> Dict[str, Any]:
         """Train ensemble model using multiple algorithms with voting."""
 
+        # Ensure X and y have the same index for proper alignment
+        common_index = X.index.intersection(y.index)
+        X_aligned = X.loc[common_index]
+        y_aligned = y.loc[common_index]
+
         # Remove NaN values and ensure we have valid targets
-        mask = ~(X.isna().any(axis=1) | y.isna())
-        X_clean = X[mask]
-        y_clean = y[mask]
+        mask = ~(X_aligned.isna().any(axis=1) | y_aligned.isna())
+        X_clean = X_aligned[mask]
+        y_clean = y_aligned[mask]
 
         # Additional validation for target values
         if task_type == 'classification':
@@ -695,7 +700,19 @@ class QuantTradingModels:
 
             try:
                 if model_name in targets:
-                    result = self.train_model(model_name, X, targets[model_name], task_type, train_split)
+                    # Ensure X and target are properly aligned by using common index
+                    target_series = targets[model_name]
+                    common_index = X.index.intersection(target_series.index)
+                    
+                    if len(common_index) == 0:
+                        st.warning(f"⚠️ No common indices between features and {model_name} target")
+                        results[model_name] = None
+                        continue
+                    
+                    X_aligned = X.loc[common_index]
+                    y_aligned = target_series.loc[common_index]
+                    
+                    result = self.train_model(model_name, X_aligned, y_aligned, task_type, train_split)
                     results[model_name] = result
                     st.success(f"✅ {model_name} model trained successfully")
                 else:
