@@ -17,6 +17,55 @@ class QuantTradingModels:
         self.models = {}
         self.scalers = {}
         self.feature_names = []
+        self._load_existing_models()
+
+    def _load_existing_models(self):
+        """Load previously trained models from database if available."""
+        try:
+            from utils.database import TradingDatabase
+            db = TradingDatabase()
+            loaded_models = db.load_trained_models()
+            
+            if loaded_models:
+                self.models = loaded_models
+                print(f"Loaded {len(loaded_models)} existing trained models from database")
+                
+                # Extract feature names from first available model
+                for model_name, model_data in loaded_models.items():
+                    if 'feature_names' in model_data and model_data['feature_names']:
+                        self.feature_names = model_data['feature_names']
+                        break
+            else:
+                print("No existing models found in database")
+                
+        except Exception as e:
+            print(f"Could not load existing models: {str(e)}")
+
+    def _save_models_to_database(self):
+        """Save trained models to database for persistence."""
+        try:
+            from utils.database import TradingDatabase
+            db = TradingDatabase()
+            
+            # Prepare models for saving
+            models_to_save = {}
+            for model_name, model_data in self.models.items():
+                if 'ensemble' in model_data:
+                    models_to_save[model_name] = {
+                        'ensemble': model_data['ensemble'],
+                        'feature_names': self.feature_names,
+                        'task_type': model_data.get('task_type', 'classification')
+                    }
+            
+            if models_to_save:
+                success = db.save_trained_models(models_to_save)
+                if success:
+                    print(f"Saved {len(models_to_save)} trained models to database")
+                else:
+                    print("Failed to save models to database")
+            
+        except Exception as e:
+            print(f"Error saving models to database: {str(e)}")
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Prepare features for model training."""
@@ -549,7 +598,7 @@ class QuantTradingModels:
 
         # Store model
         self.models[model_name] = {
-            'model': ensemble_model,
+            'ensemble': ensemble_model,  # Changed 'model' to 'ensemble' for database compatibility
             'metrics': metrics,
             'feature_importance': feature_importance,
             'task_type': task_type,
@@ -604,7 +653,11 @@ class QuantTradingModels:
 
             progress_bar.progress((i + 1) / total_models)
 
-        status_text.text("All models trained!")
+        status_text.text("Saving trained models to database...")
+        # Automatically save all trained models for persistence
+        self._save_models_to_database()
+        
+        status_text.text("All models trained and saved!")
         return results
 
     def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
@@ -613,7 +666,8 @@ class QuantTradingModels:
             raise ValueError(f"Model {model_name} not found. Available models: {list(self.models.keys())}")
 
         model_info = self.models[model_name]
-        model = model_info['model']
+        # Handle both new 'ensemble' and legacy 'model' keys
+        model = model_info.get('ensemble') or model_info.get('model')
 
         # Prepare features
         X_features = X[self.feature_names]

@@ -230,28 +230,6 @@ class TradingDatabase:
         except Exception as e:
             print(f"Error loading chunked dataset: {str(e)}")
             return None
-                fallback_records = []
-                for idx, row in essential_data.iterrows():
-                    fallback_records.append({
-                        'date': idx.strftime('%Y-%m-%d %H:%M:%S'),
-                        'close': float(row['Close'])
-                    })
-                
-                fallback_dict = {
-                    'data': fallback_records,
-                    'metadata': {
-                        'rows': len(fallback_records),
-                        'saved_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'is_fallback': True
-                    }
-                }
-                
-                self.db[f"ohlc_fallback_{dataset_name}"] = fallback_dict
-                return True
-                
-            except Exception as e2:
-                print(f"Fallback save also failed: {str(e2)}")
-                return False
     
     def load_ohlc_data(self, dataset_name: str = "main_dataset") -> Optional[pd.DataFrame]:
         """Load OHLC dataframe from database, handling both chunked and regular data."""
@@ -405,6 +383,86 @@ class TradingDatabase:
         except Exception as e:
             print(f"Error saving model results: {str(e)}")
             return False
+    
+    def save_trained_models(self, models_dict: Dict[str, Any]) -> bool:
+        """Save trained model objects for persistence."""
+        try:
+            import pickle
+            import base64
+            
+            serialized_models = {}
+            for model_name, model_data in models_dict.items():
+                try:
+                    # Serialize the model ensemble
+                    model_bytes = pickle.dumps(model_data['ensemble'])
+                    model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+                    
+                    serialized_models[model_name] = {
+                        'ensemble': model_b64,
+                        'feature_names': model_data.get('feature_names', []),
+                        'task_type': model_data.get('task_type', 'classification'),
+                        'trained_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'model_type': str(type(model_data['ensemble']).__name__)
+                    }
+                    print(f"Serialized model: {model_name}")
+                except Exception as e:
+                    print(f"Error serializing model {model_name}: {str(e)}")
+                    continue
+            
+            if serialized_models:
+                self.db['trained_models'] = serialized_models
+                print(f"Saved {len(serialized_models)} trained models to database")
+                return True
+            else:
+                print("No models were successfully serialized")
+                return False
+                
+        except Exception as e:
+            print(f"Error saving trained models: {str(e)}")
+            return False
+    
+    def load_trained_models(self) -> Optional[Dict[str, Any]]:
+        """Load trained model objects from database."""
+        try:
+            import pickle
+            import base64
+            
+            if 'trained_models' not in self.db:
+                return None
+            
+            serialized_models = self.db['trained_models']
+            loaded_models = {}
+            
+            for model_name, model_data in serialized_models.items():
+                try:
+                    # Deserialize the model ensemble
+                    model_b64 = model_data['ensemble']
+                    model_bytes = base64.b64decode(model_b64.encode('utf-8'))
+                    ensemble = pickle.loads(model_bytes)
+                    
+                    loaded_models[model_name] = {
+                        'ensemble': ensemble,
+                        'feature_names': model_data.get('feature_names', []),
+                        'task_type': model_data.get('task_type', 'classification'),
+                        'trained_at': model_data.get('trained_at', ''),
+                        'model_type': model_data.get('model_type', 'Unknown')
+                    }
+                    print(f"Loaded model: {model_name}")
+                    
+                except Exception as e:
+                    print(f"Error loading model {model_name}: {str(e)}")
+                    continue
+            
+            if loaded_models:
+                print(f"Successfully loaded {len(loaded_models)} trained models")
+                return loaded_models
+            else:
+                print("No models could be loaded")
+                return None
+                
+        except Exception as e:
+            print(f"Error loading trained models: {str(e)}")
+            return None
     
     def load_model_results(self, model_name: str) -> Optional[Dict[str, Any]]:
         """Load model training results."""
