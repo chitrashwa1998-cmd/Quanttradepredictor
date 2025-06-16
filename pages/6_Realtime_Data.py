@@ -82,9 +82,9 @@ with col2:
 
 with col3:
     auto_refresh = st.checkbox(
-        "Auto Refresh",
+        "Live Updates",
         value=True,
-        help="Automatically update Nifty 50 data every 5 minutes"
+        help="Automatically update every 30 seconds during market hours"
     )
 
 with col4:
@@ -116,8 +116,35 @@ if selected_symbol:
                 market_cap_cr = current_data['market_cap'] / 10000000  # Convert to crores
                 st.metric("Market Cap", f"₹{market_cap_cr:.0f} Cr")
 
+# Auto-refresh logic for live updates
+refresh_triggered = False
+
+if auto_refresh and is_open:
+    # Initialize or check last refresh time
+    if 'last_refresh_time' not in st.session_state:
+        st.session_state.last_refresh_time = datetime.now()
+        refresh_triggered = True
+    else:
+        # Check if 30 seconds have passed since last refresh
+        time_since_refresh = datetime.now() - st.session_state.last_refresh_time
+        if time_since_refresh.total_seconds() >= 30:
+            st.session_state.last_refresh_time = datetime.now()
+            refresh_triggered = True
+            
+    # Show next refresh countdown and trigger page refresh
+    if not refresh_triggered:
+        next_refresh_in = 30 - int(time_since_refresh.total_seconds())
+        st.info(f"🔄 Next auto-refresh in {next_refresh_in} seconds")
+        
+        # Auto-refresh the page when countdown reaches 0
+        if next_refresh_in <= 0:
+            st.rerun()
+
+elif auto_refresh and not is_open:
+    st.info("🕐 Auto-refresh paused - Market is closed")
+
 # Data fetching and display
-if st.session_state.get('fetch_triggered', False) or auto_refresh:
+if st.session_state.get('fetch_triggered', False) or refresh_triggered:
     
     with st.spinner(f"Fetching real-time data for {selected_name}..."):
         
