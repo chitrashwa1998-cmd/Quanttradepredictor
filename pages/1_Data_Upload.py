@@ -42,7 +42,7 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     # Display file info
-    st.info(f"**File Info**: {uploaded_file.name} ({uploaded_file.size:,} bytes)")tes)")
+    st.info(f"**File Info**: {uploaded_file.name} ({uploaded_file.size:,} bytes)")
 
     with st.spinner("Loading and processing data..."):
         df, message = DataProcessor.load_and_process_data(uploaded_file)
@@ -300,7 +300,7 @@ if uploaded_file is not None:
 
         # Show troubleshooting section
         with st.expander("🔧 Troubleshooting Guide", expanded=True):
-            st.markdown("""n("""
+            st.markdown("""
             **Common issues and solutions:**
 
             1. **Column Names**: Ensure your CSV has columns named Date/Datetime, Open, High, Low, Close
