@@ -115,54 +115,54 @@ def create_display_dataframe(pred_df):
     """Create a safely formatted display dataframe"""
     display_df = pred_df.copy()
     display_df = display_df.reset_index()
-    
+
     # Safely handle date column
     if len(display_df.columns) > 0:
         index_col = display_df.columns[0]
         display_df['Date'] = display_df[index_col].apply(safe_format_date)
-        
+
         # Remove original index column if different from Date
         if index_col != 'Date':
             display_df = display_df.drop(columns=[index_col], errors='ignore')
-    
+
     # Format numeric columns
     if 'Price' in display_df.columns:
         display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
-    
+
     if 'Confidence' in display_df.columns:
         display_df['Confidence'] = display_df['Confidence'].apply(lambda x: f"{x:.3f}")
-    
+
     # Reorder columns
     date_cols = [col for col in display_df.columns if 'Date' in col]
     other_cols = [col for col in display_df.columns if 'Date' not in col]
     ordered_cols = date_cols + other_cols
-    
+
     return display_df[ordered_cols]
 
 # Generate predictions
 try:
     predictions, probabilities = model_trainer.predict(selected_model, features_filtered)
-    
+
     # Create prediction dataframe
     pred_df = pd.DataFrame({
         'Price': df_filtered['Close'],
         'Prediction': predictions,
         'Direction': ['Up' if p == 1 else 'Down' for p in predictions]
     }, index=features_filtered.index)
-    
+
     if probabilities is not None:
         pred_df['Confidence'] = np.max(probabilities, axis=1)
-    
+
     # Create tabs for different views
     if selected_model == 'direction':
         tab1, tab2, tab3, tab4 = st.tabs(["📈 Price Chart", "📊 Statistics", "📋 Data Table", "🔍 Analysis"])
-        
+
         with tab1:
             st.subheader("📈 Direction Predictions")
-            
+
             # Create price chart with predictions
             fig = go.Figure()
-            
+
             # Price line
             fig.add_trace(go.Scatter(
                 x=pred_df.index,
@@ -172,11 +172,11 @@ try:
                 line=dict(color='blue', width=2),
                 opacity=0.7
             ))
-            
+
             # Prediction markers
             up_predictions = pred_df[pred_df['Prediction'] == 1]
             down_predictions = pred_df[pred_df['Prediction'] == 0]
-            
+
             if len(up_predictions) > 0:
                 fig.add_trace(go.Scatter(
                     x=up_predictions.index,
@@ -186,7 +186,7 @@ try:
                     name='Predicted Up',
                     hovertemplate='<b>Prediction:</b> Up<br><b>Price:</b> $%{y:.2f}<extra></extra>'
                 ))
-            
+
             if len(down_predictions) > 0:
                 fig.add_trace(go.Scatter(
                     x=down_predictions.index,
@@ -196,7 +196,7 @@ try:
                     name='Predicted Down',
                     hovertemplate='<b>Prediction:</b> Down<br><b>Price:</b> $%{y:.2f}<extra></extra>'
                 ))
-            
+
             fig.update_layout(
                 height=500,
                 title="Direction Predictions Overview",
@@ -205,12 +205,12 @@ try:
                 hovermode='x unified',
                 showlegend=True
             )
-            
+
             st.plotly_chart(fig, use_container_width=True)
-        
+
         with tab2:
             st.subheader("📊 Prediction Statistics")
-            
+
             # Quick stats
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -228,35 +228,35 @@ try:
             with col4:
                 current_pred = "Up" if predictions[-1] == 1 else "Down"
                 st.metric("Latest Signal", current_pred)
-        
+
         with tab3:
             st.subheader("📋 Detailed Predictions Data")
-            
+
             # Create display dataframe
             display_df = create_display_dataframe(pred_df)
-            
+
             # Show recent predictions
             st.dataframe(
                 display_df.tail(50),
                 use_container_width=True,
                 hide_index=True
             )
-        
+
         with tab4:
             st.subheader("🔍 Recent Predictions")
-            
+
             # Create display dataframe for recent predictions
             display_df = create_display_dataframe(pred_df)
-            
+
             # Show the most recent 20 predictions with better formatting
             recent_df = display_df.tail(20).copy()
-            
+
             # Add signal interpretation
             if 'Direction' in recent_df.columns:
                 recent_df['Signal'] = recent_df['Direction'].apply(
                     lambda x: "🟢 BUY" if x == "Up" else "🔴 SELL"
                 )
-            
+
             st.dataframe(
                 recent_df[['Date', 'Price', 'Direction', 'Signal'] + 
                          ([col for col in recent_df.columns if 'Confidence' in col] if 'Confidence' in recent_df.columns else [])
@@ -264,24 +264,24 @@ try:
                 use_container_width=True,
                 hide_index=True
             )
-    
+
     elif selected_model == 'magnitude':
         tab1, tab2, tab3 = st.tabs(["📊 Magnitude Analysis", "📈 Price Movement", "📋 Data Table"])
-        
+
         # Add magnitude-specific fields
         pred_df['Magnitude'] = np.abs(predictions)
         pred_df['Magnitude_Category'] = pd.cut(pred_df['Magnitude'], 
                                              bins=[0, 0.01, 0.02, 0.05, float('inf')],
                                              labels=['Low', 'Medium', 'High', 'Extreme'])
-        
+
         with tab1:
             st.subheader("📊 Price Movement Magnitude Analysis")
-            
+
             # Magnitude distribution
             fig = make_subplots(rows=2, cols=1, 
                               subplot_titles=('Magnitude Over Time', 'Magnitude Distribution'),
                               vertical_spacing=0.1)
-            
+
             # Magnitude timeline
             fig.add_trace(go.Scatter(
                 x=pred_df.index,
@@ -291,7 +291,7 @@ try:
                 line=dict(color='purple', width=2),
                 marker=dict(size=4)
             ), row=1, col=1)
-            
+
             # Magnitude histogram
             fig.add_trace(go.Histogram(
                 x=pred_df['Magnitude'],
@@ -299,15 +299,15 @@ try:
                 name='Distribution',
                 marker_color='lightblue'
             ), row=2, col=1)
-            
+
             fig.update_layout(height=600, showlegend=False)
             fig.update_xaxes(title_text="Date", row=1, col=1)
             fig.update_yaxes(title_text="Magnitude", row=1, col=1)
             fig.update_xaxes(title_text="Magnitude Value", row=2, col=1)
             fig.update_yaxes(title_text="Frequency", row=2, col=1)
-            
+
             st.plotly_chart(fig, use_container_width=True)
-            
+
             # Statistics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -319,12 +319,12 @@ try:
                 st.metric("High Magnitude %", f"{high_magnitude:.1f}%")
             with col4:
                 st.metric("Latest Magnitude", f"{pred_df['Magnitude'].iloc[-1]:.4f}")
-        
+
         with tab2:
             st.subheader("📈 Price Chart with Magnitude Indicators")
-            
+
             fig = go.Figure()
-            
+
             # Price line
             fig.add_trace(go.Scatter(
                 x=pred_df.index,
@@ -333,7 +333,7 @@ try:
                 name='Price',
                 line=dict(color='blue', width=2)
             ))
-            
+
             # Color-coded magnitude markers
             colors = {'Low': 'green', 'Medium': 'yellow', 'High': 'orange', 'Extreme': 'red'}
             for category in colors:
@@ -347,40 +347,65 @@ try:
                         name=f'{category} Magnitude',
                         hovertemplate=f'<b>Magnitude:</b> {category}<br><b>Price:</b> $%{{y:.2f}}<extra></extra>'
                     ))
-            
+
             fig.update_layout(
                 height=500,
                 title="Price Movement with Magnitude Categories",
                 xaxis_title="Date",
                 yaxis_title="Price ($)"
             )
-            
+
             st.plotly_chart(fig, use_container_width=True)
-        
+
         with tab3:
             st.subheader("📋 Magnitude Predictions Data")
-            
+
             display_df = create_display_dataframe(pred_df)
             if 'Magnitude' in display_df.columns:
                 display_df['Magnitude'] = display_df['Magnitude'].apply(lambda x: f"{float(x):.4f}" if isinstance(x, (int, float, str)) else x)
-            
+
             st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
-    
-    elif selected_model == 'profit_probability':
+
+    elif selected_model in ['profit_probability', 'profit_prob', 'profit_prob_regression']:
         tab1, tab2, tab3 = st.tabs(["🎯 Profit Probability", "📊 Risk Analysis", "📋 Data Table"])
-        
+
         # Add profit probability specific fields
-        pred_df['Profit_Prob'] = predictions
+        if selected_model == 'profit_prob_regression':
+            # For regression model, predictions are actual probabilities (0-1)
+            pred_df['Profit_Prob'] = np.clip(predictions, 0, 1)
+            pred_df['Prediction_Type'] = 'Regression (Probability)'
+        else:
+            # For classification model
+            if probabilities is not None and probabilities.shape[1] > 1:
+                # Use the probability of the positive class (class 1)
+                pred_df['Profit_Prob'] = probabilities[:, 1]
+                pred_df['Prediction_Type'] = 'Classification (Confidence)'
+            elif probabilities is not None:
+                # Single probability array
+                pred_df['Profit_Prob'] = probabilities[:, 0]
+                pred_df['Prediction_Type'] = 'Classification (Confidence)'
+            else:
+                # Binary predictions only - convert to meaningful probabilities
+                # High confidence for 1, low confidence for 0
+                pred_df['Profit_Prob'] = np.where(predictions == 1, 0.75, 0.25)
+                pred_df['Prediction_Type'] = 'Classification (Binary)'
+
+        # Create risk levels based on probability thresholds
         pred_df['Risk_Level'] = pd.cut(pred_df['Profit_Prob'], 
-                                     bins=[0, 0.3, 0.6, 0.8, 1.0],
-                                     labels=['High Risk', 'Medium Risk', 'Low Risk', 'Very Low Risk'])
-        
+                                     bins=[0, 0.25, 0.5, 0.75, 1.0],
+                                     labels=['High Risk', 'Medium Risk', 'Low Risk', 'Very Low Risk'],
+                                     include_lowest=True)
+
+        # Add signal interpretation
+        pred_df['Signal'] = np.where(pred_df['Profit_Prob'] >= 0.6, '🟢 HIGH PROFIT', 
+                                   np.where(pred_df['Profit_Prob'] >= 0.4, '🟡 MEDIUM PROFIT', '🔴 LOW PROFIT'))
+
         with tab1:
             st.subheader("🎯 Profit Probability Analysis")
-            
+
             # Probability over time with risk zones
             fig = go.Figure()
-            
+
             fig.add_trace(go.Scatter(
                 x=pred_df.index,
                 y=pred_df['Profit_Prob'],
@@ -389,15 +414,15 @@ try:
                 line=dict(color='green', width=2),
                 fill='tonexty'
             ))
-            
+
             # Add risk zone backgrounds
-            fig.add_hline(y=0.8, line_dash="dash", line_color="green", 
+            fig.add_hline(y=0.75, line_dash="dash", line_color="green", 
                          annotation_text="Low Risk Zone")
-            fig.add_hline(y=0.6, line_dash="dash", line_color="orange", 
+            fig.add_hline(y=0.5, line_dash="dash", line_color="orange", 
                          annotation_text="Medium Risk Zone")
-            fig.add_hline(y=0.3, line_dash="dash", line_color="red", 
+            fig.add_hline(y=0.25, line_dash="dash", line_color="red", 
                          annotation_text="High Risk Zone")
-            
+
             fig.update_layout(
                 height=500,
                 title="Profit Probability Over Time",
@@ -405,9 +430,9 @@ try:
                 yaxis_title="Profit Probability",
                 yaxis=dict(range=[0, 1])
             )
-            
+
             st.plotly_chart(fig, use_container_width=True)
-            
+
             # Statistics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -420,32 +445,32 @@ try:
                 st.metric("Low Risk %", f"{low_risk:.1f}%")
             with col4:
                 st.metric("Latest Probability", f"{pred_df['Profit_Prob'].iloc[-1]:.3f}")
-        
+
         with tab2:
             st.subheader("📊 Risk Distribution Analysis")
-            
+
             # Risk level pie chart
             risk_counts = pred_df['Risk_Level'].value_counts()
-            
+
             fig = go.Figure(data=[go.Pie(
                 labels=risk_counts.index,
                 values=risk_counts.values,
                 hole=0.3,
                 marker_colors=['red', 'orange', 'lightgreen', 'darkgreen']
             )])
-            
+
             fig.update_layout(
                 title="Risk Level Distribution",
                 height=400
             )
-            
+
             st.plotly_chart(fig, use_container_width=True)
-            
+
             # Price chart with risk indicators
             st.subheader("Price Movement with Risk Levels")
-            
+
             fig = go.Figure()
-            
+
             # Price line
             fig.add_trace(go.Scatter(
                 x=pred_df.index,
@@ -454,11 +479,11 @@ try:
                 name='Price',
                 line=dict(color='blue', width=2)
             ))
-            
+
             # Risk level markers
             risk_colors = {'High Risk': 'red', 'Medium Risk': 'orange', 
                           'Low Risk': 'lightgreen', 'Very Low Risk': 'darkgreen'}
-            
+
             for risk_level in risk_colors:
                 risk_data = pred_df[pred_df['Risk_Level'] == risk_level]
                 if len(risk_data) > 0:
@@ -470,32 +495,34 @@ try:
                         name=risk_level,
                         hovertemplate=f'<b>Risk:</b> {risk_level}<br><b>Price:</b> $%{{y:.2f}}<extra></extra>'
                     ))
-            
+
             fig.update_layout(
                 height=500,
                 title="Price Movement with Risk Level Indicators",
                 xaxis_title="Date",
                 yaxis_title="Price ($)"
             )
-            
+
             st.plotly_chart(fig, use_container_width=True)
-        
+
         with tab3:
             st.subheader("📋 Profit Probability Data")
-            
+
             display_df = create_display_dataframe(pred_df)
             if 'Profit_Prob' in display_df.columns:
                 display_df['Profit_Prob'] = display_df['Profit_Prob'].apply(lambda x: f"{float(x):.3f}" if isinstance(x, (int, float, str)) else x)
-            
+            if 'Signal' in display_df.columns:
+                display_df['Signal'] = display_df['Signal'].astype(str)
+
             st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
-    
+
     else:
         # Handle other model types (trading_signal, etc.)
         st.subheader(f"📊 {selected_model.replace('_', ' ').title()} Predictions")
-        
+
         # Create display dataframe
         display_df = create_display_dataframe(pred_df)
-        
+
         # Show chart
         fig = go.Figure()
         fig.add_trace(go.Scatter(
@@ -504,32 +531,32 @@ try:
             mode='lines+markers',
             name='Price with Predictions'
         ))
-        
+
         fig.update_layout(
             height=400,
             title=f"{selected_model.replace('_', ' ').title()} Predictions",
             xaxis_title="Date",
             yaxis_title="Price ($)"
         )
-        
+
         st.plotly_chart(fig, use_container_width=True)
-        
+
         # Show data table with enhanced formatting
         st.subheader("Recent Predictions")
-        
+
         # Add signal interpretation for better readability
         recent_df = display_df.tail(20).copy()
         if 'Prediction' in recent_df.columns:
             recent_df['Signal'] = recent_df['Prediction'].apply(
                 lambda x: "🟢 BUY" if x == 1 else "🔴 SELL" if x == 0 else "⚪ HOLD"
             )
-        
+
         st.dataframe(recent_df, use_container_width=True, hide_index=True)
 
 except Exception as e:
     st.error(f"Error generating predictions: {str(e)}")
     st.info("Please try refreshing the page or check your model training.")
-    
+
     # Show debug information
     st.subheader("Debug Information")
     st.write("Available models:", available_models)
@@ -548,7 +575,7 @@ if len(available_models) > 1:
         default=available_models[:3] if len(available_models) >= 3 else available_models,
         format_func=lambda x: x.replace('_', ' ').title()
     )
-    
+
     if compare_models:
         st.info(f"Comparing {len(compare_models)} models. Feature comparison would be displayed here.")
 else:
