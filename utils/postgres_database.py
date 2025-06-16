@@ -19,19 +19,40 @@ class PostgresTradingDatabase:
     """PostgreSQL database for storing trading data, models, and predictions."""
     
     def __init__(self):
-        """Initialize PostgreSQL connection."""
-        self.connection_params = {
-            'host': os.getenv('PGHOST'),
-            'port': os.getenv('PGPORT'),
-            'database': os.getenv('PGDATABASE'),
-            'user': os.getenv('PGUSER'),
-            'password': os.getenv('PGPASSWORD')
-        }
+        """Initialize PostgreSQL connection using psql."""
+        self.database_url = os.getenv('DATABASE_URL')
+        if not self.database_url:
+            raise ValueError("DATABASE_URL environment variable not set")
         self._create_tables()
     
-    def _get_connection(self):
-        """Get database connection."""
-        return psycopg2.connect(**self.connection_params)
+    def _execute_sql(self, sql: str, return_output: bool = False):
+        """Execute SQL using psql command line tool."""
+        try:
+            env = os.environ.copy()
+            env['PGPASSWORD'] = os.getenv('PGPASSWORD', '')
+            
+            cmd = ['psql', self.database_url, '-c', sql]
+            if return_output:
+                cmd.extend(['-t', '-A'])  # tuples only, no alignment
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                env=env,
+                check=True
+            )
+            
+            if return_output:
+                return result.stdout.strip()
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            print(f"SQL execution error: {e.stderr}")
+            return False if not return_output else None
+        except Exception as e:
+            print(f"SQL execution error: {str(e)}")
+            return False if not return_output else None
     
     def _create_tables(self):
         """Create necessary tables if they don't exist."""

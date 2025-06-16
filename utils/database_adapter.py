@@ -4,25 +4,44 @@ Provides a unified interface for the trading application
 """
 import os
 from typing import Dict, List, Optional, Any
-from utils.postgres_database import PostgresTradingDatabase
 
 class DatabaseAdapter:
-    """Unified database interface that automatically selects PostgreSQL or fallback."""
+    """Unified database interface that automatically selects the best available database."""
     
     def __init__(self):
-        """Initialize database adapter with PostgreSQL."""
-        self.db_type = "postgresql"
-        self.db = PostgresTradingDatabase()
+        """Initialize database adapter with the best available option."""
+        self.db_type = "replit_kv"
         
-        # Test PostgreSQL connection
-        if not self._test_connection():
-            print("PostgreSQL connection failed, check database configuration")
+        # Try PostgreSQL first if available
+        try:
+            if os.getenv('DATABASE_URL'):
+                from utils.postgres_database import PostgresTradingDatabase
+                self.db = PostgresTradingDatabase()
+                if self._test_connection():
+                    self.db_type = "postgresql"
+                    print("Using PostgreSQL database")
+                    return
+        except Exception as e:
+            print(f"PostgreSQL unavailable: {str(e)}")
+        
+        # Fallback to enhanced key-value store
+        try:
+            from utils.database import TradingDatabase
+            self.db = TradingDatabase()
+            print("Using Replit Key-Value Store")
+        except Exception as e:
+            print(f"Database initialization failed: {str(e)}")
             self.db_type = "error"
     
     def _test_connection(self) -> bool:
         """Test database connection."""
         try:
-            return self.db.test_connection()
+            if hasattr(self.db, 'test_connection'):
+                return self.db.test_connection()
+            else:
+                # For key-value store, test by trying to access keys
+                list(self.db.db.keys())
+                return True
         except Exception as e:
             print(f"Database connection test failed: {str(e)}")
             return False

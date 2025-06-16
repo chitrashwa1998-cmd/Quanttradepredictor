@@ -125,11 +125,21 @@ if model_keys:
                 
                 if st.button(f"Delete {model_name} Results", key=f"delete_model_{model_name}"):
                     try:
-                        del trading_db.db[key]
-                        st.success(f"✅ Deleted {model_name} model results")
-                        st.rerun()
-                    except:
-                        st.error("Failed to delete model results")
+                        # For PostgreSQL, we need to implement delete methods
+                        if hasattr(trading_db.db, 'delete_model_results'):
+                            success = trading_db.db.delete_model_results(model_name)
+                        else:
+                            # Fallback for key-value store
+                            del trading_db.db.db[key]
+                            success = True
+                        
+                        if success:
+                            st.success(f"✅ Deleted {model_name} model results")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete model results")
+                    except Exception as e:
+                        st.error(f"Failed to delete model results: {str(e)}")
 else:
     st.info("No model results found. Train models first!")
 
