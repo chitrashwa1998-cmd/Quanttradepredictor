@@ -121,8 +121,9 @@ if st.session_state.get('fetch_triggered', False) or auto_refresh:
     
     with st.spinner(f"Fetching real-time data for {selected_name}..."):
         
-        # Fetch data
-        df = market_data.fetch_realtime_data(selected_symbol, period=period, interval=interval)
+        # Fetch data with extended period for technical indicators
+        extended_period = "1mo" if period == "5d" else period  # Use longer period for indicator calculation
+        df = market_data.fetch_realtime_data(selected_symbol, period=extended_period, interval=interval)
         
         if df is not None and not df.empty:
             st.success(f"✅ Fetched {len(df)} data points for {selected_name}")
@@ -131,9 +132,20 @@ if st.session_state.get('fetch_triggered', False) or auto_refresh:
             st.session_state.realtime_data = df
             st.session_state.realtime_symbol = selected_symbol
             
-            # Calculate technical indicators
+            # Calculate technical indicators with minimum data check
+            if len(df) < 50:
+                st.warning(f"⚠️ Only {len(df)} data points available. Need at least 50 for reliable technical indicators.")
+                st.info("💡 Try selecting '1mo' or '3mo' period for better indicator calculation.")
+            
             tech_indicators = TechnicalIndicators()
             df_with_indicators = tech_indicators.calculate_all_indicators(df)
+            
+            # Remove NaN rows that result from indicator calculation
+            clean_data_count = len(df_with_indicators.dropna())
+            if clean_data_count < 10:
+                st.warning(f"⚠️ Only {clean_data_count} clean data points after indicator calculation. Need more historical data.")
+            else:
+                st.info(f"✅ {clean_data_count} clean data points available for predictions")
             
             # Display data summary
             col1, col2, col3, col4 = st.columns(4)
@@ -203,9 +215,12 @@ if st.session_state.get('fetch_triggered', False) or auto_refresh:
                     # Prepare features for prediction
                     features_df = model_trainer.prepare_features(df_with_indicators)
                     
-                    if not features_df.empty:
+                    # Remove rows with NaN values
+                    clean_features = features_df.dropna()
+                    
+                    if not clean_features.empty and len(clean_features) >= 1:
                         # Get latest data point for prediction
-                        latest_features = features_df.tail(1)
+                        latest_features = clean_features.tail(1)
                         
                         st.subheader("Latest Predictions")
                         
@@ -253,8 +268,8 @@ if st.session_state.get('fetch_triggered', False) or auto_refresh:
                         # Prediction history table
                         st.subheader("Recent Predictions")
                         
-                        if len(features_df) >= 10:
-                            recent_features = features_df.tail(10)
+                        if len(clean_features) >= 10:
+                            recent_features = clean_features.tail(10)
                             
                             prediction_data = []
                             
