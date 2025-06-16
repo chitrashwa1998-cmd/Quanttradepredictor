@@ -243,8 +243,27 @@ try:
             )
         
         with tab4:
-            st.subheader("🔍 Analysis")
-            st.info("Model analysis and insights would be displayed here.")
+            st.subheader("🔍 Recent Predictions")
+            
+            # Create display dataframe for recent predictions
+            display_df = create_display_dataframe(pred_df)
+            
+            # Show the most recent 20 predictions with better formatting
+            recent_df = display_df.tail(20).copy()
+            
+            # Add signal interpretation
+            if 'Direction' in recent_df.columns:
+                recent_df['Signal'] = recent_df['Direction'].apply(
+                    lambda x: "🟢 BUY" if x == "Up" else "🔴 SELL"
+                )
+            
+            st.dataframe(
+                recent_df[['Date', 'Price', 'Direction', 'Signal'] + 
+                         ([col for col in recent_df.columns if 'Confidence' in col] if 'Confidence' in recent_df.columns else [])
+                        ],
+                use_container_width=True,
+                hide_index=True
+            )
     
     else:
         # Handle other model types (trading_signal, profit_prob, etc.)
@@ -271,9 +290,17 @@ try:
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # Show data table
+        # Show data table with enhanced formatting
         st.subheader("Recent Predictions")
-        st.dataframe(display_df.tail(20), use_container_width=True, hide_index=True)
+        
+        # Add signal interpretation for better readability
+        recent_df = display_df.tail(20).copy()
+        if 'Prediction' in recent_df.columns:
+            recent_df['Signal'] = recent_df['Prediction'].apply(
+                lambda x: "🟢 BUY" if x == 1 else "🔴 SELL" if x == 0 else "⚪ HOLD"
+            )
+        
+        st.dataframe(recent_df, use_container_width=True, hide_index=True)
 
 except Exception as e:
     st.error(f"Error generating predictions: {str(e)}")
