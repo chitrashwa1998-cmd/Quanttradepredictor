@@ -18,6 +18,10 @@ st.set_page_config(
 with open('style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
+# Auto-restore system
+from auto_restore import auto_restore_system
+auto_restore_system()
+
 # Initialize session state with automatic data recovery
 def initialize_session_state():
     """Initialize session state with automatic data and model recovery."""
