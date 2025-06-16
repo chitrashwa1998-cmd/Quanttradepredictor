@@ -129,42 +129,93 @@ class QuantTradingModels:
 
         targets['volatility'] = future_vol
 
-        # 5. Trend vs sideways classification
-        # Use multiple timeframes to determine trend strength
-        price_change_3 = df['Close'].shift(-3) / df['Close'] - 1
-        price_change_5 = df['Close'].shift(-5) / df['Close'] - 1
-        price_change_10 = df['Close'].shift(-10) / df['Close'] - 1
-
+        # 5. Trend vs sideways classification - IMPROVED ALGORITHM
+        # Use historical data only (no look-ahead bias)
+        
         # Calculate moving averages for trend detection
-        sma_short = df['Close'].rolling(5).mean()
-        sma_long = df['Close'].rolling(20).mean()
-
-        # Calculate volatility for adaptive threshold
-        volatility = df['Close'].pct_change().rolling(20).std()
-        adaptive_threshold = volatility * 2  # Dynamic threshold based on volatility
-        base_threshold = 0.015  # 1.5% base threshold
-
-        # Combine thresholds
-        trend_threshold = np.maximum(adaptive_threshold, base_threshold)
-
-        # Multiple trend criteria
-        # 1. Price momentum over different periods
-        strong_trend_3 = np.abs(price_change_3) > trend_threshold
-        strong_trend_5 = np.abs(price_change_5) > trend_threshold
-        strong_trend_10 = np.abs(price_change_10) > trend_threshold * 1.5
-
-        # 2. Moving average trend
-        ma_trend = np.abs(sma_short / sma_long - 1) > 0.01  # 1% difference in MAs
-
-        # 3. Price relative to moving averages
-        price_above_ma = df['Close'] > sma_short
-        consistent_trend = (price_above_ma == price_above_ma.shift(3)) & (price_above_ma == price_above_ma.shift(5))
-
-        # Combine all criteria - trending if any strong trend indicator is true
-        is_trending = (strong_trend_3 | strong_trend_5 | strong_trend_10 | ma_trend | consistent_trend)
-
+        sma_5 = df['Close'].rolling(5).mean()
+        sma_10 = df['Close'].rolling(10).mean()
+        sma_20 = df['Close'].rolling(20).mean()
+        ema_8 = df['Close'].ewm(span=8).mean()
+        ema_21 = df['Close'].ewm(span=21).mean()
+        
+        # Calculate price momentum (historical only)
+        price_change_5 = df['Close'] / df['Close'].shift(5) - 1  # 5-period momentum
+        price_change_10 = df['Close'] / df['Close'].shift(10) - 1  # 10-period momentum
+        price_change_20 = df['Close'] / df['Close'].shift(20) - 1  # 20-period momentum
+        
+        # Calculate volatility for adaptive thresholds
+        returns = df['Close'].pct_change()
+        volatility_10 = returns.rolling(10).std()
+        volatility_20 = returns.rolling(20).std()
+        
+        # Adaptive trend threshold based on volatility
+        base_threshold = 0.008  # 0.8% base threshold (more conservative)
+        volatility_multiplier = 1.5
+        trend_threshold = np.maximum(base_threshold, volatility_20 * volatility_multiplier)
+        
+        # 1. MOVING AVERAGE TREND STRENGTH
+        # EMA alignment (strong trend indicator)
+        ema_bullish_trend = (ema_8 > ema_21) & (df['Close'] > ema_8)
+        ema_bearish_trend = (ema_8 < ema_21) & (df['Close'] < ema_8)
+        ema_trend_strength = ema_bullish_trend | ema_bearish_trend
+        
+        # SMA slope analysis
+        sma_20_slope = (sma_20 - sma_20.shift(5)) / sma_20.shift(5)
+        strong_sma_trend = np.abs(sma_20_slope) > (trend_threshold * 0.5)
+        
+        # 2. MOMENTUM ANALYSIS
+        # Consistent momentum across multiple timeframes
+        momentum_5_strong = np.abs(price_change_5) > trend_threshold
+        momentum_10_strong = np.abs(price_change_10) > (trend_threshold * 1.2)
+        momentum_20_strong = np.abs(price_change_20) > (trend_threshold * 1.5)
+        
+        # Momentum consistency (same direction across timeframes)
+        momentum_consistent = (
+            (price_change_5 > 0) & (price_change_10 > 0) & (price_change_20 > 0)
+        ) | (
+            (price_change_5 < 0) & (price_change_10 < 0) & (price_change_20 < 0)
+        )
+        
+        # 3. VOLATILITY REGIME
+        # Higher volatility often indicates trending market
+        volatility_expansion = volatility_10 > (volatility_20 * 1.2)
+        
+        # 4. PRICE POSITION RELATIVE TO MOVING AVERAGES
+        # Price consistently above/below key moving averages
+        price_vs_sma20 = df['Close'] / sma_20 - 1
+        strong_price_position = np.abs(price_vs_sma20) > (trend_threshold * 0.5)
+        
+        # 5. TREND PERSISTENCE
+        # Check if trend conditions have persisted
+        trend_persistence_3 = (
+            ema_trend_strength & 
+            ema_trend_strength.shift(1) & 
+            ema_trend_strength.shift(2)
+        )
+        
+        # FINAL TREND CLASSIFICATION (requires multiple confirmations)
+        # Use AND logic for more conservative trend detection
+        strong_trend = (
+            momentum_consistent & 
+            (momentum_10_strong | momentum_20_strong) &
+            ema_trend_strength &
+            strong_price_position
+        ) | (
+            # Alternative: very strong single-timeframe momentum with MA support
+            momentum_5_strong & 
+            strong_sma_trend & 
+            ema_trend_strength &
+            volatility_expansion
+        ) | (
+            # Alternative: persistent trend with moderate momentum
+            trend_persistence_3 &
+            (momentum_10_strong | momentum_20_strong) &
+            strong_price_position
+        )
+        
         # Convert to binary: 1 = trending, 0 = sideways
-        targets['trend_sideways'] = is_trending.astype(int)
+        targets['trend_sideways'] = strong_trend.astype(int)
 
         # Debug information for trend_sideways
         trend_counts = targets['trend_sideways'].value_counts()
