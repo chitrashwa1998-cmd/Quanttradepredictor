@@ -40,6 +40,23 @@ uploaded_file = st.file_uploader(
     help="Upload a CSV file with OHLC data"
 )
 
+# Data preservation options
+st.subheader("📊 Data Storage Options")
+col1, col2 = st.columns(2)
+
+with col1:
+    preserve_full_data = st.checkbox(
+        "Preserve Full Dataset", 
+        value=False,
+        help="Keep all data points without sampling. Use for datasets under 100k rows."
+    )
+
+with col2:
+    if preserve_full_data:
+        st.info("Full dataset will be preserved")
+    else:
+        st.info("Large datasets will be intelligently sampled (50k rows max)")
+
 if uploaded_file is not None:
     # Display file info
     st.info(f"**File Info**: {uploaded_file.name} ({uploaded_file.size:,} bytes)")
@@ -56,8 +73,11 @@ if uploaded_file is not None:
         # Automatically save to database
         from utils.database import TradingDatabase
         trading_db = TradingDatabase()
-        if trading_db.save_ohlc_data(df, "main_dataset"):
-            st.success(f"✅ {message} & Auto-saved to database!")
+        if trading_db.save_ohlc_data(df, "main_dataset", preserve_full_data):
+            if preserve_full_data:
+                st.success(f"✅ {message} & Full dataset saved to database!")
+            else:
+                st.success(f"✅ {message} & Auto-saved to database!")
         else:
             st.success(f"✅ {message}")
             st.warning("⚠️ Data loaded but failed to save to database")
@@ -73,8 +93,11 @@ if uploaded_file is not None:
         with col2:
             if st.button("💾 Save to Database", type="primary"):
                 with st.spinner("Saving to database..."):
-                    if trading_db.save_ohlc_data(df, dataset_name):
-                        st.success(f"✅ Data saved to database as '{dataset_name}'")
+                    if trading_db.save_ohlc_data(df, dataset_name, preserve_full_data):
+                        if preserve_full_data:
+                            st.success(f"✅ Full dataset saved to database as '{dataset_name}'")
+                        else:
+                            st.success(f"✅ Data saved to database as '{dataset_name}' (optimized)")
                     else:
                         st.error("❌ Failed to save data to database. Try with a smaller dataset or different name.")
 

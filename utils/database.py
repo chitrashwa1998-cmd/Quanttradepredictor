@@ -12,17 +12,27 @@ class TradingDatabase:
     def __init__(self):
         self.db = db
         
-    def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset") -> bool:
-        """Save OHLC dataframe to database with chunking for large datasets."""
+    def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset", preserve_full_data: bool = False) -> bool:
+        """Save OHLC dataframe to database with optional full data preservation."""
         try:
-            # Limit data size - if too large, sample it
-            max_rows = 10000  # Limit to prevent database errors
-            if len(data) > max_rows:
-                # Sample data evenly across the time range
-                step = len(data) // max_rows
-                data_sampled = data.iloc[::step].copy()
-                print(f"Data too large ({len(data)} rows), sampled to {len(data_sampled)} rows")
-                data = data_sampled
+            original_rows = len(data)
+            
+            if not preserve_full_data:
+                # Increased limit for larger datasets
+                max_rows = 50000  # Increased limit for better data preservation
+                if len(data) > max_rows:
+                    # Use more sophisticated sampling to preserve data quality
+                    # Take recent data (last 30k) + evenly sampled older data (20k)
+                    recent_data = data.tail(30000)
+                    if len(data) > 30000:
+                        older_data = data.head(len(data) - 30000)
+                        step = max(1, len(older_data) // 20000)
+                        sampled_older = older_data.iloc[::step]
+                        data_sampled = pd.concat([sampled_older, recent_data])
+                    else:
+                        data_sampled = recent_data
+                    print(f"Data optimized ({len(data)} rows), preserved {len(data_sampled)} rows with recent data priority")
+                    data = data_sampled
             
             # Convert to simpler format to reduce size
             data_records = []
