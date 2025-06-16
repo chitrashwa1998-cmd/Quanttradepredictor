@@ -18,29 +18,85 @@ st.set_page_config(
 with open('style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
-# Initialize session state
-if 'data' not in st.session_state:
-    st.session_state.data = None
-if 'models' not in st.session_state:
-    st.session_state.models = {}
-if 'predictions' not in st.session_state:
-    st.session_state.predictions = None
-if 'features' not in st.session_state:
-    st.session_state.features = None
-if 'model_trainer' not in st.session_state:
-    st.session_state.model_trainer = None
+# Initialize session state with automatic data recovery
+def initialize_session_state():
+    """Initialize session state with automatic data and model recovery."""
+    if 'data' not in st.session_state:
+        st.session_state.data = None
+    if 'models' not in st.session_state:
+        st.session_state.models = {}
+    if 'predictions' not in st.session_state:
+        st.session_state.predictions = None
+    if 'features' not in st.session_state:
+        st.session_state.features = None
+    if 'model_trainer' not in st.session_state:
+        st.session_state.model_trainer = None
+    if 'auto_recovery_done' not in st.session_state:
+        st.session_state.auto_recovery_done = False
 
-# Auto-load data from database on app start
-if st.session_state.data is None:
-    try:
-        from utils.database import TradingDatabase
-        trading_db = TradingDatabase()
-        recovered_data = trading_db.load_ohlc_data("main_dataset")
-        if recovered_data is not None:
-            st.session_state.data = recovered_data
-            st.toast("📊 Data automatically loaded from database!")
-    except Exception as e:
-        pass  # Silently fail if database not available
+    # Auto-recovery system
+    if not st.session_state.auto_recovery_done:
+        try:
+            from utils.database import TradingDatabase
+            from models.xgboost_models import QuantTradingModels
+            from features.technical_indicators import TechnicalIndicators
+            
+            trading_db = TradingDatabase()
+            
+            # Recover OHLC data
+            if st.session_state.data is None:
+                recovered_data = trading_db.load_ohlc_data("main_dataset")
+                if recovered_data is not None:
+                    st.session_state.data = recovered_data
+                    
+                    # Auto-calculate features if data is recovered
+                    try:
+                        features_data = TechnicalIndicators.calculate_all_indicators(recovered_data)
+                        st.session_state.features = features_data
+                    except Exception:
+                        pass
+            
+            # Recover model trainer
+            if st.session_state.model_trainer is None:
+                st.session_state.model_trainer = QuantTradingModels()
+            
+            # Recover trained models from database
+            if not st.session_state.models:
+                try:
+                    model_names = ['direction', 'magnitude', 'profit_prob', 'volatility', 'trend_sideways', 'reversal', 'trading_signal']
+                    recovered_models = {}
+                    
+                    for model_name in model_names:
+                        model_data = trading_db.load_model_results(model_name)
+                        if model_data is not None:
+                            recovered_models[model_name] = model_data
+                    
+                    if recovered_models:
+                        st.session_state.models = recovered_models
+                        
+                except Exception:
+                    pass
+            
+            # Mark recovery as complete
+            st.session_state.auto_recovery_done = True
+            
+            # Show recovery status
+            recovery_items = []
+            if st.session_state.data is not None:
+                recovery_items.append("data")
+            if st.session_state.features is not None:
+                recovery_items.append("features")
+            if st.session_state.models:
+                recovery_items.append(f"{len(st.session_state.models)} trained models")
+            
+            if recovery_items:
+                st.success(f"System restored: {', '.join(recovery_items)} automatically recovered from database")
+                
+        except Exception as e:
+            st.session_state.auto_recovery_done = True  # Prevent repeated attempts
+
+# Initialize the system
+initialize_session_state()
 
 # Navigation
 nav_pages = {
