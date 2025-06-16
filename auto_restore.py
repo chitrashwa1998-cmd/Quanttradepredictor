@@ -18,7 +18,7 @@ def auto_restore_system():
         from models.xgboost_models import QuantTradingModels
         from features.technical_indicators import TechnicalIndicators
         
-        db = TradingDatabase()
+        db = DatabaseAdapter()
         restoration_status = []
         
         # 1. Restore OHLC data
