@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+from datetime import datetime
 from models.xgboost_models import QuantTradingModels
 from features.technical_indicators import TechnicalIndicators
 
@@ -158,8 +159,14 @@ if st.session_state.features is not None:
             st.info(f"Training {len(selected_models)} models...")
             
             try:
+                # Use recent data for faster training if dataset is large
+                features_data = st.session_state.features
+                if len(features_data) > 10000:
+                    st.info("Large dataset detected. Using most recent 10,000 rows for faster training...")
+                    features_data = features_data.tail(10000).copy()
+                
                 # Train models
-                results = st.session_state.model_trainer.train_all_models(st.session_state.features)
+                results = st.session_state.model_trainer.train_all_models(features_data)
                 
                 # Store results
                 st.session_state.models = results
@@ -168,15 +175,20 @@ if st.session_state.features is not None:
                 try:
                     from utils.database import TradingDatabase
                     trading_db = TradingDatabase()
+                    
+                    # Save model results
                     for model_name, model_result in results.items():
                         if model_result is not None:
-                            # Save model metrics and info (not the actual model object)
+                            # Save model metrics and info
                             model_data = {
                                 'metrics': model_result['metrics'],
                                 'task_type': model_result['task_type'],
                                 'trained_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                             }
                             trading_db.save_model_results(model_name, model_data)
+                    
+                    # Save the actual trained model objects for persistence
+                    trading_db.save_trained_models(st.session_state.model_trainer.models)
                     st.success("🎉 Model training completed & saved to database!")
                 except Exception as e:
                     st.success("🎉 Model training completed!")
