@@ -4,12 +4,15 @@ import xgboost as xgb
 from sklearn.model_selection import train_test_split, TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, mean_squared_error, mean_absolute_error
+from sklearn.ensemble import VotingClassifier, VotingRegressor, RandomForestClassifier, RandomForestRegressor
+from catboost import CatBoostClassifier, CatBoostRegressor
+import lightgbm as lgb
 from typing import Dict, Tuple, Any
 import streamlit as st
 from datetime import datetime
 
 class QuantTradingModels:
-    """XGBoost models for quantitative trading predictions."""
+    """Ensemble models using XGBoost, CatBoost, LightGBM, and Random Forest for quantitative trading predictions."""
 
     def __init__(self):
         self.models = {}
@@ -362,7 +365,7 @@ class QuantTradingModels:
         return targets
 
     def train_model(self, model_name: str, X: pd.DataFrame, y: pd.Series, task_type: str = 'classification') -> Dict[str, Any]:
-        """Train XGBoost model for specific task."""
+        """Train ensemble model using multiple algorithms with voting."""
 
         # Remove NaN values and ensure we have valid targets
         mask = ~(X.isna().any(axis=1) | y.isna())
@@ -400,56 +403,119 @@ class QuantTradingModels:
         X_train, X_test = X_clean.iloc[train_idx], X_clean.iloc[test_idx]
         y_train, y_test = y_clean.iloc[train_idx], y_clean.iloc[test_idx]
 
-        # Scale features for regression tasks
-        if task_type == 'regression':
-            scaler = StandardScaler()
-            X_train_scaled = scaler.fit_transform(X_train)
-            X_test_scaled = scaler.transform(X_test)
-            self.scalers[model_name] = scaler
-        else:
-            X_train_scaled = X_train.values
-            X_test_scaled = X_test.values
+        # Scale features for all models
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        self.scalers[model_name] = scaler
 
-        # Set up XGBoost parameters
+        # Define base model parameters
+        random_state = 42
+        
         if task_type == 'classification':
-            if len(np.unique(y_train)) > 2:
-                objective = 'multi:softprob'
-                num_class = len(np.unique(y_train))
-            else:
-                objective = 'binary:logistic'
-                num_class = None
+            # Classification ensemble: XGBoost + CatBoost + Random Forest
+            
+            # XGBoost Classifier
+            xgb_model = xgb.XGBClassifier(
+                max_depth=6,
+                learning_rate=0.1,
+                n_estimators=100,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=random_state,
+                n_jobs=-1,
+                eval_metric='logloss'
+            )
+            
+            # CatBoost Classifier
+            catboost_model = CatBoostClassifier(
+                iterations=100,
+                depth=6,
+                learning_rate=0.1,
+                random_seed=random_state,
+                verbose=False,
+                allow_writing_files=False
+            )
+            
+            # Random Forest Classifier
+            rf_model = RandomForestClassifier(
+                n_estimators=100,
+                max_depth=6,
+                random_state=random_state,
+                n_jobs=-1
+            )
+            
+            # Create voting classifier
+            ensemble_model = VotingClassifier(
+                estimators=[
+                    ('xgboost', xgb_model),
+                    ('catboost', catboost_model),
+                    ('random_forest', rf_model)
+                ],
+                voting='soft'
+            )
+            
         else:
-            objective = 'reg:squarederror'
-            num_class = None
+            # Regression ensemble: XGBoost + CatBoost + LightGBM + Random Forest
+            
+            # XGBoost Regressor
+            xgb_model = xgb.XGBRegressor(
+                max_depth=6,
+                learning_rate=0.1,
+                n_estimators=100,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=random_state,
+                n_jobs=-1
+            )
+            
+            # CatBoost Regressor
+            catboost_model = CatBoostRegressor(
+                iterations=100,
+                depth=6,
+                learning_rate=0.1,
+                random_seed=random_state,
+                verbose=False,
+                allow_writing_files=False
+            )
+            
+            # LightGBM Regressor
+            lgb_model = lgb.LGBMRegressor(
+                n_estimators=100,
+                max_depth=6,
+                learning_rate=0.1,
+                random_state=random_state,
+                n_jobs=-1,
+                verbose=-1
+            )
+            
+            # Random Forest Regressor
+            rf_model = RandomForestRegressor(
+                n_estimators=100,
+                max_depth=6,
+                random_state=random_state,
+                n_jobs=-1
+            )
+            
+            # Create voting regressor
+            ensemble_model = VotingRegressor(
+                estimators=[
+                    ('xgboost', xgb_model),
+                    ('catboost', catboost_model),
+                    ('lightgbm', lgb_model),
+                    ('random_forest', rf_model)
+                ]
+            )
 
-        params = {
-            'objective': objective,
-            'max_depth': 6,
-            'learning_rate': 0.1,
-            'n_estimators': 100,
-            'subsample': 0.8,
-            'colsample_bytree': 0.8,
-            'random_state': 42,
-            'n_jobs': -1
-        }
-
-        if num_class:
-            params['num_class'] = num_class
-
-        # Train model
-        if task_type == 'classification':
-            model = xgb.XGBClassifier(**params)
-        else:
-            model = xgb.XGBRegressor(**params)
-
-        model.fit(X_train_scaled, y_train)
+        # Train ensemble model
+        ensemble_model.fit(X_train_scaled, y_train)
 
         # Make predictions
         if task_type == 'classification':
-            y_pred = model.predict(X_test_scaled)
-            y_pred_proba = model.predict_proba(X_test_scaled)
+            y_pred = ensemble_model.predict(X_test_scaled)
+            y_pred_proba = ensemble_model.predict_proba(X_test_scaled)
         else:
-            y_pred = model.predict(X_test_scaled)
+            y_pred = ensemble_model.predict(X_test_scaled)
             y_pred_proba = None
 
         # Calculate metrics
@@ -459,6 +525,15 @@ class QuantTradingModels:
                 'accuracy': accuracy,
                 'classification_report': classification_report(y_test, y_pred, output_dict=True)
             }
+            
+            # Calculate individual model accuracies for comparison
+            individual_scores = {}
+            for name, model in ensemble_model.named_estimators_.items():
+                individual_pred = model.predict(X_test_scaled)
+                individual_scores[f'{name}_accuracy'] = accuracy_score(y_test, individual_pred)
+            
+            metrics.update(individual_scores)
+            
         else:
             mse = mean_squared_error(y_test, y_pred)
             mae = mean_absolute_error(y_test, y_pred)
@@ -467,16 +542,34 @@ class QuantTradingModels:
                 'mae': mae,
                 'rmse': np.sqrt(mse)
             }
+            
+            # Calculate individual model scores for comparison
+            individual_scores = {}
+            for name, model in ensemble_model.named_estimators_.items():
+                individual_pred = model.predict(X_test_scaled)
+                individual_scores[f'{name}_mse'] = mean_squared_error(y_test, individual_pred)
+                individual_scores[f'{name}_mae'] = mean_absolute_error(y_test, individual_pred)
+            
+            metrics.update(individual_scores)
+
+        # Get feature importance (use XGBoost as primary)
+        try:
+            xgb_estimator = ensemble_model.named_estimators_['xgboost']
+            feature_importance = dict(zip(self.feature_names, xgb_estimator.feature_importances_))
+        except:
+            feature_importance = {}
 
         # Store model
         self.models[model_name] = {
-            'model': model,
+            'model': ensemble_model,
             'metrics': metrics,
-            'feature_importance': dict(zip(self.feature_names, model.feature_importances_)),
+            'feature_importance': feature_importance,
             'task_type': task_type,
             'predictions': y_pred,
             'probabilities': y_pred_proba,
-            'test_indices': test_idx
+            'test_indices': test_idx,
+            'ensemble_type': 'voting_classifier' if task_type == 'classification' else 'voting_regressor',
+            'base_models': list(ensemble_model.named_estimators_.keys())
         }
 
         return self.models[model_name]
@@ -527,7 +620,7 @@ class QuantTradingModels:
         return results
 
     def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-        """Make predictions using trained model."""
+        """Make predictions using trained ensemble model."""
         if model_name not in self.models:
             raise ValueError(f"Model {model_name} not found. Available models: {list(self.models.keys())}")
 
@@ -537,13 +630,13 @@ class QuantTradingModels:
         # Prepare features
         X_features = X[self.feature_names]
 
-        # Scale if needed
+        # Scale features (all ensemble models use scaling)
         if model_name in self.scalers:
             X_scaled = self.scalers[model_name].transform(X_features)
         else:
             X_scaled = X_features.values
 
-        # Make predictions
+        # Make predictions using ensemble
         predictions = model.predict(X_scaled)
 
         # Get probabilities for classification tasks
