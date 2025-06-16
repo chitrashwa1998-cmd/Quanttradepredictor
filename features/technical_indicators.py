@@ -106,9 +106,7 @@ class TechnicalIndicators:
         
         # Price-based indicators
         result_df['sma_5'] = TechnicalIndicators.sma(df['Close'], 5)
-        result_df['sma_10'] = TechnicalIndicators.sma(df['Close'], 10)
-        result_df['sma_20'] = TechnicalIndicators.sma(df['Close'], 20)
-        result_df['sma_50'] = TechnicalIndicators.sma(df['Close'], 50)
+        # Removed: sma_10, sma_20, sma_50
         
         result_df['ema_5'] = TechnicalIndicators.ema(df['Close'], 5)
         result_df['ema_10'] = TechnicalIndicators.ema(df['Close'], 10)
@@ -116,24 +114,18 @@ class TechnicalIndicators:
         
         result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
         
-        # MACD
+        # MACD (removed macd and macd_signal, keeping only histogram)
         macd_data = TechnicalIndicators.macd(df['Close'])
-        result_df['macd'] = macd_data['macd']
-        result_df['macd_signal'] = macd_data['signal']
         result_df['macd_histogram'] = macd_data['histogram']
         
-        # Bollinger Bands
+        # Bollinger Bands (removed bb_middle)
         bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
         result_df['bb_upper'] = bb_data['upper']
-        result_df['bb_middle'] = bb_data['middle']
         result_df['bb_lower'] = bb_data['lower']
         result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
         result_df['bb_position'] = (df['Close'] - bb_data['lower']) / (bb_data['upper'] - bb_data['lower'])
         
-        # Stochastic
-        stoch_data = TechnicalIndicators.stochastic(df['High'], df['Low'], df['Close'])
-        result_df['stoch_k'] = stoch_data['k']
-        result_df['stoch_d'] = stoch_data['d']
+        # Stochastic (removed both stoch_k and stoch_d)
         
         # ATR
         result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
@@ -147,25 +139,22 @@ class TechnicalIndicators:
         result_df['high_close_diff'] = df['High'] - df['Close']
         result_df['close_low_diff'] = df['Close'] - df['Low']
         
-        # Price momentum
+        # Price momentum (removed price_momentum_10)
         result_df['price_momentum_1'] = df['Close'].pct_change(1)
         result_df['price_momentum_3'] = df['Close'].pct_change(3)
         result_df['price_momentum_5'] = df['Close'].pct_change(5)
-        result_df['price_momentum_10'] = df['Close'].pct_change(10)
         
         # Volatility indicators
         result_df['volatility_10'] = df['Close'].rolling(10).std()
         result_df['volatility_20'] = df['Close'].rolling(20).std()
         
-        # Volume indicators (if volume is available)
+        # Volume indicators (if volume is available) - removed volume_sma_10
         if 'Volume' in df.columns:
-            result_df['volume_sma_10'] = TechnicalIndicators.sma(df['Volume'], 10)
-            result_df['volume_ratio'] = df['Volume'] / result_df['volume_sma_10']
+            volume_sma_10 = TechnicalIndicators.sma(df['Volume'], 10)
+            result_df['volume_ratio'] = df['Volume'] / volume_sma_10
             result_df['obv'] = TechnicalIndicators.obv(df['Close'], df['Volume'])
         
-        # Additional features
-        result_df['day_of_week'] = result_df.index.dayofweek
-        result_df['month'] = result_df.index.month
+        # Additional features (removed day_of_week and month)
         result_df['hour'] = result_df.index.hour if hasattr(result_df.index, 'hour') else 0
         
         return result_df
