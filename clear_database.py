@@ -3,12 +3,12 @@
 Clear all data from TribexAlpha database
 """
 
-from utils.database import TradingDatabase
+from utils.database_adapter import DatabaseAdapter
 
 def clear_all_data():
     """Clear all data from the database with detailed logging"""
     try:
-        db = TradingDatabase()
+        db = DatabaseAdapter()
         
         # Show what's in the database before clearing
         print("=== DATABASE CONTENTS BEFORE CLEARING ===")
