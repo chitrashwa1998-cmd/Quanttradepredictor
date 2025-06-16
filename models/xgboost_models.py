@@ -463,7 +463,7 @@ class QuantTradingModels:
 
         return targets
 
-    def train_model(self, model_name: str, X: pd.DataFrame, y: pd.Series, task_type: str = 'classification') -> Dict[str, Any]:
+    def train_model(self, model_name: str, X: pd.DataFrame, y: pd.Series, task_type: str = 'classification', train_split: float = 0.8) -> Dict[str, Any]:
         """Train ensemble model using multiple algorithms with voting."""
 
         # Remove NaN values and ensure we have valid targets
@@ -494,8 +494,8 @@ class QuantTradingModels:
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training {model_name}. Need at least 100 samples, got {len(X_clean)}")
 
-        # Use 80/20 split with time-based ordering (no shuffling for time series data)
-        split_idx = int(len(X_clean) * 0.8)
+        # Use configurable split with time-based ordering (no shuffling for time series data)
+        split_idx = int(len(X_clean) * train_split)
         
         X_train = X_clean.iloc[:split_idx]
         X_test = X_clean.iloc[split_idx:]
@@ -664,7 +664,7 @@ class QuantTradingModels:
 
         return self.models[model_name]
 
-    def train_all_models(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def train_all_models(self, df: pd.DataFrame, train_split: float = 0.8) -> Dict[str, Any]:
         """Train all trading models."""
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -695,7 +695,7 @@ class QuantTradingModels:
 
             try:
                 if model_name in targets:
-                    result = self.train_model(model_name, X, targets[model_name], task_type)
+                    result = self.train_model(model_name, X, targets[model_name], task_type, train_split)
                     results[model_name] = result
                     st.success(f"✅ {model_name} model trained successfully")
                 else:

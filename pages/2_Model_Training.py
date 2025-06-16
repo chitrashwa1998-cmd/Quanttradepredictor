@@ -163,8 +163,8 @@ if st.session_state.features is not None:
                 features_data = st.session_state.features
                 st.info(f"Training on complete dataset: {len(features_data)} rows for maximum accuracy...")
                 
-                # Train models
-                results = st.session_state.model_trainer.train_all_models(features_data)
+                # Train models with configurable split
+                results = st.session_state.model_trainer.train_all_models(features_data, train_split)
                 
                 # Store results
                 st.session_state.models = results
