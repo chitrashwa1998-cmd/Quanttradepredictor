@@ -285,16 +285,24 @@ try:
                     recent_reversals = []
 
                     for idx, row in bull_reversals.tail(5).iterrows():
+                        try:
+                            date_str = pd.to_datetime(idx).strftime('%Y-%m-%d %H:%M')
+                        except:
+                            date_str = str(idx)
                         recent_reversals.append({
-                            'Date': idx.strftime('%Y-%m-%d %H:%M'),
+                            'Date': date_str,
                             'Type': 'Bullish 🟢',
                             'Price': f"${row['Price']:.2f}",
                             'Confidence': f"{row.get('Confidence', 0):.3f}" if 'Confidence' in pred_df.columns else 'N/A'
                         })
 
                     for idx, row in bear_reversals.tail(5).iterrows():
+                        try:
+                            date_str = pd.to_datetime(idx).strftime('%Y-%m-%d %H:%M')
+                        except:
+                            date_str = str(idx)
                         recent_reversals.append({
-                            'Date': idx.strftime('%Y-%m-%d %H:%M'),
+                            'Date': date_str,
                             'Type': 'Bearish 🔴',
                             'Price': f"${row['Price']:.2f}",
                             'Confidence': f"{row.get('Confidence', 0):.3f}" if 'Confidence' in pred_df.columns else 'N/A'
