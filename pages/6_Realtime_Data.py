@@ -8,6 +8,7 @@ from features.technical_indicators import TechnicalIndicators
 from models.xgboost_models import QuantTradingModels
 import time
 from datetime import datetime, timedelta
+import pytz
 
 st.set_page_config(page_title="Real-time Indian Market", page_icon="📈", layout="wide")
 
@@ -47,8 +48,10 @@ with col2:
         st.error("🔴 Market Closed")
 
 with col3:
-    current_time = datetime.now().strftime("%H:%M:%S IST")
-    st.info(f"🕐 {current_time}")
+    # Get correct Indian Standard Time
+    ist_tz = pytz.timezone('Asia/Kolkata')
+    current_time_ist = datetime.now(ist_tz).strftime("%H:%M:%S IST")
+    st.info(f"🕐 {current_time_ist}")
 
 # Nifty 50 Configuration
 st.header("Nifty 50 Index Configuration")
@@ -120,15 +123,16 @@ if selected_symbol:
 refresh_triggered = False
 
 if auto_refresh and is_open:
-    # Initialize or check last refresh time
+    # Initialize or check last refresh time using IST
+    ist_now = datetime.now(ist_tz)
     if 'last_refresh_time' not in st.session_state:
-        st.session_state.last_refresh_time = datetime.now()
+        st.session_state.last_refresh_time = ist_now
         refresh_triggered = True
     else:
         # Check if 30 seconds have passed since last refresh
-        time_since_refresh = datetime.now() - st.session_state.last_refresh_time
+        time_since_refresh = ist_now - st.session_state.last_refresh_time
         if time_since_refresh.total_seconds() >= 30:
-            st.session_state.last_refresh_time = datetime.now()
+            st.session_state.last_refresh_time = ist_now
             refresh_triggered = True
             
     # Show next refresh countdown and trigger page refresh

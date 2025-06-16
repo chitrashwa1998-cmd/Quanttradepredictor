@@ -8,6 +8,7 @@ except ImportError:
     YF_AVAILABLE = False
 import pandas as pd
 import numpy as np
+import pytz
 from datetime import datetime, timedelta
 import time
 import streamlit as st
@@ -418,15 +419,17 @@ class IndianMarketData:
     def is_market_open(self) -> bool:
         """Check if Indian market is currently open"""
         try:
-            now = datetime.now()
+            # Get current time in Indian Standard Time
+            ist_tz = pytz.timezone('Asia/Kolkata')
+            now_ist = datetime.now(ist_tz)
             
             # Indian market hours: 9:15 AM to 3:30 PM IST, Monday to Friday
-            market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
-            market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+            market_open = now_ist.replace(hour=9, minute=15, second=0, microsecond=0)
+            market_close = now_ist.replace(hour=15, minute=30, second=0, microsecond=0)
             
             # Check if it's a weekday and within market hours
-            is_weekday = now.weekday() < 5  # Monday = 0, Friday = 4
-            is_market_hours = market_open <= now <= market_close
+            is_weekday = now_ist.weekday() < 5  # Monday = 0, Friday = 4
+            is_market_hours = market_open <= now_ist <= market_close
             
             return is_weekday and is_market_hours
             
