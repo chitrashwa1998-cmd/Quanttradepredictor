@@ -5,12 +5,14 @@ from sklearn.model_selection import train_test_split, TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, mean_squared_error, mean_absolute_error
 from sklearn.ensemble import VotingClassifier, VotingRegressor, RandomForestClassifier, RandomForestRegressor
+from catboost import CatBoostClassifier, CatBoostRegressor
+import lightgbm as lgb
 from typing import Dict, Tuple, Any
 import streamlit as st
 from datetime import datetime
 
 class QuantTradingModels:
-    """Ensemble models using XGBoost and Random Forest for quantitative trading predictions."""
+    """Ensemble models using XGBoost, CatBoost, LightGBM, and Random Forest for quantitative trading predictions."""
 
     def __init__(self):
         self.models = {}
@@ -411,7 +413,7 @@ class QuantTradingModels:
         random_state = 42
         
         if task_type == 'classification':
-            # Classification ensemble: XGBoost + Random Forest
+            # Classification ensemble: XGBoost + CatBoost + Random Forest
             
             # XGBoost Classifier
             xgb_model = xgb.XGBClassifier(
@@ -423,6 +425,16 @@ class QuantTradingModels:
                 random_state=random_state,
                 n_jobs=-1,
                 eval_metric='logloss'
+            )
+            
+            # CatBoost Classifier
+            catboost_model = CatBoostClassifier(
+                iterations=100,
+                depth=6,
+                learning_rate=0.1,
+                random_seed=random_state,
+                verbose=False,
+                allow_writing_files=False
             )
             
             # Random Forest Classifier
@@ -437,13 +449,14 @@ class QuantTradingModels:
             ensemble_model = VotingClassifier(
                 estimators=[
                     ('xgboost', xgb_model),
+                    ('catboost', catboost_model),
                     ('random_forest', rf_model)
                 ],
                 voting='soft'
             )
             
         else:
-            # Regression ensemble: XGBoost + Random Forest
+            # Regression ensemble: XGBoost + CatBoost + LightGBM + Random Forest
             
             # XGBoost Regressor
             xgb_model = xgb.XGBRegressor(
@@ -454,6 +467,26 @@ class QuantTradingModels:
                 colsample_bytree=0.8,
                 random_state=random_state,
                 n_jobs=-1
+            )
+            
+            # CatBoost Regressor
+            catboost_model = CatBoostRegressor(
+                iterations=100,
+                depth=6,
+                learning_rate=0.1,
+                random_seed=random_state,
+                verbose=False,
+                allow_writing_files=False
+            )
+            
+            # LightGBM Regressor
+            lgb_model = lgb.LGBMRegressor(
+                n_estimators=100,
+                max_depth=6,
+                learning_rate=0.1,
+                random_state=random_state,
+                n_jobs=-1,
+                verbose=-1
             )
             
             # Random Forest Regressor
@@ -468,6 +501,8 @@ class QuantTradingModels:
             ensemble_model = VotingRegressor(
                 estimators=[
                     ('xgboost', xgb_model),
+                    ('catboost', catboost_model),
+                    ('lightgbm', lgb_model),
                     ('random_forest', rf_model)
                 ]
             )
