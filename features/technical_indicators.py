@@ -148,11 +148,7 @@ class TechnicalIndicators:
         result_df['volatility_10'] = df['Close'].rolling(10).std()
         result_df['volatility_20'] = df['Close'].rolling(20).std()
         
-        # Volume indicators (if volume is available) - removed volume_sma_10
-        if 'Volume' in df.columns:
-            volume_sma_10 = TechnicalIndicators.sma(df['Volume'], 10)
-            result_df['volume_ratio'] = df['Volume'] / volume_sma_10
-            result_df['obv'] = TechnicalIndicators.obv(df['Close'], df['Volume'])
+        # Volume indicators removed (obv and volume_ratio) to match optimized feature set
         
         # Additional features (removed day_of_week and month)
         result_df['hour'] = result_df.index.hour if hasattr(result_df.index, 'hour') else 0
