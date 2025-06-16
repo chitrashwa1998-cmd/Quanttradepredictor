@@ -13,16 +13,18 @@ class TradingDatabase:
         self.db = db
         
     def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset", preserve_full_data: bool = False) -> bool:
-        """Save OHLC dataframe to database with optional full data preservation."""
+        """Save OHLC dataframe to database with chunking for very large datasets."""
         try:
             original_rows = len(data)
             
-            if not preserve_full_data:
-                # Increased limit for larger datasets
-                max_rows = 50000  # Increased limit for better data preservation
+            if preserve_full_data and len(data) > 100000:
+                # For datasets over 100k rows, use chunked storage
+                print(f"Large dataset detected ({len(data)} rows), using chunked storage...")
+                return self._save_large_dataset_chunked(data, dataset_name)
+            elif not preserve_full_data:
+                # Standard sampling for manageable sizes
+                max_rows = 50000
                 if len(data) > max_rows:
-                    # Use more sophisticated sampling to preserve data quality
-                    # Take recent data (last 30k) + evenly sampled older data (20k)
                     recent_data = data.tail(30000)
                     if len(data) > 30000:
                         older_data = data.head(len(data) - 30000)
@@ -96,10 +98,138 @@ class TradingDatabase:
             
         except Exception as e:
             print(f"Error saving data: {str(e)}")
-            # Try fallback method with even smaller data
-            try:
-                # Save only essential data as fallback
-                essential_data = data[['Open', 'High', 'Low', 'Close']].tail(1000)
+            return False
+    
+    def _save_large_dataset_chunked(self, data: pd.DataFrame, dataset_name: str) -> bool:
+        """Save large datasets using chunked storage strategy."""
+        try:
+            print(f"Saving {len(data)} rows using chunked storage...")
+            
+            # Clear any existing chunks for this dataset
+            self._clear_dataset_chunks(dataset_name)
+            
+            # Convert to efficient format
+            data_records = []
+            for idx, row in data.iterrows():
+                record = {
+                    'date': idx.strftime('%Y-%m-%d %H:%M:%S'),
+                    'open': float(row['Open']),
+                    'high': float(row['High']),
+                    'low': float(row['Low']),
+                    'close': float(row['Close'])
+                }
+                if 'Volume' in row and pd.notna(row['Volume']):
+                    record['volume'] = float(row['Volume'])
+                data_records.append(record)
+            
+            # Save in chunks of 10,000 records each
+            chunk_size = 10000
+            total_chunks = (len(data_records) + chunk_size - 1) // chunk_size
+            
+            print(f"Splitting into {total_chunks} chunks of {chunk_size} records each...")
+            
+            for i in range(0, len(data_records), chunk_size):
+                chunk_num = i // chunk_size
+                chunk = data_records[i:i+chunk_size]
+                chunk_key = f"ohlc_chunk_{dataset_name}_{chunk_num}"
+                
+                # Save each chunk
+                self.db[chunk_key] = {
+                    'chunk_data': chunk,
+                    'chunk_number': chunk_num,
+                    'chunk_size': len(chunk)
+                }
+                print(f"Saved chunk {chunk_num + 1}/{total_chunks}")
+            
+            # Save metadata and chunk information
+            metadata = {
+                'total_rows': len(data),
+                'total_chunks': total_chunks,
+                'chunk_size': chunk_size,
+                'start_date': data.index.min().strftime('%Y-%m-%d %H:%M:%S'),
+                'end_date': data.index.max().strftime('%Y-%m-%d %H:%M:%S'),
+                'saved_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'columns': data.columns.tolist(),
+                'is_chunked': True
+            }
+            
+            self.db[f"ohlc_metadata_{dataset_name}"] = metadata
+            
+            # Update dataset list
+            existing_datasets = self.get_dataset_list()
+            if dataset_name not in existing_datasets:
+                existing_datasets.append(dataset_name)
+                self.db["dataset_list"] = existing_datasets
+            
+            print(f"Successfully saved {len(data)} rows in {total_chunks} chunks")
+            return True
+            
+        except Exception as e:
+            print(f"Error in chunked storage: {str(e)}")
+            return False
+    
+    def _clear_dataset_chunks(self, dataset_name: str):
+        """Clear existing chunks for a dataset."""
+        try:
+            # Find and delete existing chunks
+            keys_to_delete = []
+            for key in self.db.keys():
+                if key.startswith(f"ohlc_chunk_{dataset_name}_") or key == f"ohlc_metadata_{dataset_name}":
+                    keys_to_delete.append(key)
+            
+            for key in keys_to_delete:
+                del self.db[key]
+                
+        except Exception as e:
+            print(f"Error clearing chunks: {str(e)}")
+    
+    def _load_chunked_dataset(self, dataset_name: str, metadata: dict) -> Optional[pd.DataFrame]:
+        """Load a chunked dataset and reconstruct the complete DataFrame."""
+        try:
+            total_chunks = metadata['total_chunks']
+            print(f"Loading chunked dataset: {total_chunks} chunks, {metadata['total_rows']} total rows")
+            
+            all_records = []
+            
+            # Load all chunks in order
+            for chunk_num in range(total_chunks):
+                chunk_key = f"ohlc_chunk_{dataset_name}_{chunk_num}"
+                if chunk_key in self.db:
+                    chunk_data = self.db[chunk_key]
+                    chunk_records = chunk_data['chunk_data']
+                    all_records.extend(chunk_records)
+                    print(f"Loaded chunk {chunk_num + 1}/{total_chunks}")
+                else:
+                    print(f"Warning: Missing chunk {chunk_num}")
+            
+            if not all_records:
+                print("No chunk data found")
+                return None
+            
+            # Convert to DataFrame
+            df_data = []
+            for record in all_records:
+                row_data = {
+                    'Open': record['open'],
+                    'High': record['high'],
+                    'Low': record['low'],
+                    'Close': record['close']
+                }
+                if 'volume' in record:
+                    row_data['Volume'] = record['volume']
+                df_data.append(row_data)
+            
+            df = pd.DataFrame(df_data)
+            dates = [record['date'] for record in all_records]
+            df.index = pd.to_datetime(dates)
+            df.index.name = 'Date'
+            
+            print(f"Successfully reconstructed dataset: {len(df)} rows")
+            return df
+            
+        except Exception as e:
+            print(f"Error loading chunked dataset: {str(e)}")
+            return None
                 fallback_records = []
                 for idx, row in essential_data.iterrows():
                     fallback_records.append({
@@ -126,7 +256,14 @@ class TradingDatabase:
     def load_ohlc_data(self, dataset_name: str = "main_dataset") -> Optional[pd.DataFrame]:
         """Load OHLC dataframe from database, handling both chunked and regular data."""
         try:
-            # Try loading regular format first
+            # Check if this is a chunked dataset
+            metadata_key = f"ohlc_metadata_{dataset_name}"
+            if metadata_key in self.db:
+                metadata = self.db[metadata_key]
+                if metadata.get('is_chunked', False):
+                    return self._load_chunked_dataset(dataset_name, metadata)
+            
+            # Try loading regular format
             key = f"ohlc_data_{dataset_name}"
             if key in self.db:
                 data_dict = self.db[key]
