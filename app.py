@@ -63,6 +63,12 @@ def initialize_session_state():
             # Recover trained models from database
             if not st.session_state.models:
                 try:
+                    # First try to load trained model objects
+                    trained_models = trading_db.load_trained_models()
+                    if trained_models and st.session_state.model_trainer:
+                        st.session_state.model_trainer.models = trained_models
+                    
+                    # Then load model results/metadata
                     model_names = ['direction', 'magnitude', 'profit_prob', 'volatility', 'trend_sideways', 'reversal', 'trading_signal']
                     recovered_models = {}
                     
