@@ -265,8 +265,232 @@ try:
                 hide_index=True
             )
     
+    elif selected_model == 'magnitude':
+        tab1, tab2, tab3 = st.tabs(["📊 Magnitude Analysis", "📈 Price Movement", "📋 Data Table"])
+        
+        # Add magnitude-specific fields
+        pred_df['Magnitude'] = np.abs(predictions)
+        pred_df['Magnitude_Category'] = pd.cut(pred_df['Magnitude'], 
+                                             bins=[0, 0.01, 0.02, 0.05, float('inf')],
+                                             labels=['Low', 'Medium', 'High', 'Extreme'])
+        
+        with tab1:
+            st.subheader("📊 Price Movement Magnitude Analysis")
+            
+            # Magnitude distribution
+            fig = make_subplots(rows=2, cols=1, 
+                              subplot_titles=('Magnitude Over Time', 'Magnitude Distribution'),
+                              vertical_spacing=0.1)
+            
+            # Magnitude timeline
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Magnitude'],
+                mode='lines+markers',
+                name='Magnitude',
+                line=dict(color='purple', width=2),
+                marker=dict(size=4)
+            ), row=1, col=1)
+            
+            # Magnitude histogram
+            fig.add_trace(go.Histogram(
+                x=pred_df['Magnitude'],
+                nbinsx=30,
+                name='Distribution',
+                marker_color='lightblue'
+            ), row=2, col=1)
+            
+            fig.update_layout(height=600, showlegend=False)
+            fig.update_xaxes(title_text="Date", row=1, col=1)
+            fig.update_yaxes(title_text="Magnitude", row=1, col=1)
+            fig.update_xaxes(title_text="Magnitude Value", row=2, col=1)
+            fig.update_yaxes(title_text="Frequency", row=2, col=1)
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Statistics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Avg Magnitude", f"{pred_df['Magnitude'].mean():.4f}")
+            with col2:
+                st.metric("Max Magnitude", f"{pred_df['Magnitude'].max():.4f}")
+            with col3:
+                high_magnitude = (pred_df['Magnitude_Category'].isin(['High', 'Extreme'])).mean() * 100
+                st.metric("High Magnitude %", f"{high_magnitude:.1f}%")
+            with col4:
+                st.metric("Latest Magnitude", f"{pred_df['Magnitude'].iloc[-1]:.4f}")
+        
+        with tab2:
+            st.subheader("📈 Price Chart with Magnitude Indicators")
+            
+            fig = go.Figure()
+            
+            # Price line
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Price'],
+                mode='lines',
+                name='Price',
+                line=dict(color='blue', width=2)
+            ))
+            
+            # Color-coded magnitude markers
+            colors = {'Low': 'green', 'Medium': 'yellow', 'High': 'orange', 'Extreme': 'red'}
+            for category in colors:
+                category_data = pred_df[pred_df['Magnitude_Category'] == category]
+                if len(category_data) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=category_data.index,
+                        y=category_data['Price'],
+                        mode='markers',
+                        marker=dict(color=colors[category], size=8),
+                        name=f'{category} Magnitude',
+                        hovertemplate=f'<b>Magnitude:</b> {category}<br><b>Price:</b> $%{{y:.2f}}<extra></extra>'
+                    ))
+            
+            fig.update_layout(
+                height=500,
+                title="Price Movement with Magnitude Categories",
+                xaxis_title="Date",
+                yaxis_title="Price ($)"
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with tab3:
+            st.subheader("📋 Magnitude Predictions Data")
+            
+            display_df = create_display_dataframe(pred_df)
+            if 'Magnitude' in display_df.columns:
+                display_df['Magnitude'] = display_df['Magnitude'].apply(lambda x: f"{float(x):.4f}" if isinstance(x, (int, float, str)) else x)
+            
+            st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+    
+    elif selected_model == 'profit_probability':
+        tab1, tab2, tab3 = st.tabs(["🎯 Profit Probability", "📊 Risk Analysis", "📋 Data Table"])
+        
+        # Add profit probability specific fields
+        pred_df['Profit_Prob'] = predictions
+        pred_df['Risk_Level'] = pd.cut(pred_df['Profit_Prob'], 
+                                     bins=[0, 0.3, 0.6, 0.8, 1.0],
+                                     labels=['High Risk', 'Medium Risk', 'Low Risk', 'Very Low Risk'])
+        
+        with tab1:
+            st.subheader("🎯 Profit Probability Analysis")
+            
+            # Probability over time with risk zones
+            fig = go.Figure()
+            
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Profit_Prob'],
+                mode='lines+markers',
+                name='Profit Probability',
+                line=dict(color='green', width=2),
+                fill='tonexty'
+            ))
+            
+            # Add risk zone backgrounds
+            fig.add_hline(y=0.8, line_dash="dash", line_color="green", 
+                         annotation_text="Low Risk Zone")
+            fig.add_hline(y=0.6, line_dash="dash", line_color="orange", 
+                         annotation_text="Medium Risk Zone")
+            fig.add_hline(y=0.3, line_dash="dash", line_color="red", 
+                         annotation_text="High Risk Zone")
+            
+            fig.update_layout(
+                height=500,
+                title="Profit Probability Over Time",
+                xaxis_title="Date",
+                yaxis_title="Profit Probability",
+                yaxis=dict(range=[0, 1])
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Statistics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Avg Probability", f"{pred_df['Profit_Prob'].mean():.3f}")
+            with col2:
+                high_prob = (pred_df['Profit_Prob'] >= 0.6).mean() * 100
+                st.metric("High Confidence %", f"{high_prob:.1f}%")
+            with col3:
+                low_risk = (pred_df['Risk_Level'] == 'Low Risk').mean() * 100
+                st.metric("Low Risk %", f"{low_risk:.1f}%")
+            with col4:
+                st.metric("Latest Probability", f"{pred_df['Profit_Prob'].iloc[-1]:.3f}")
+        
+        with tab2:
+            st.subheader("📊 Risk Distribution Analysis")
+            
+            # Risk level pie chart
+            risk_counts = pred_df['Risk_Level'].value_counts()
+            
+            fig = go.Figure(data=[go.Pie(
+                labels=risk_counts.index,
+                values=risk_counts.values,
+                hole=0.3,
+                marker_colors=['red', 'orange', 'lightgreen', 'darkgreen']
+            )])
+            
+            fig.update_layout(
+                title="Risk Level Distribution",
+                height=400
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Price chart with risk indicators
+            st.subheader("Price Movement with Risk Levels")
+            
+            fig = go.Figure()
+            
+            # Price line
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Price'],
+                mode='lines',
+                name='Price',
+                line=dict(color='blue', width=2)
+            ))
+            
+            # Risk level markers
+            risk_colors = {'High Risk': 'red', 'Medium Risk': 'orange', 
+                          'Low Risk': 'lightgreen', 'Very Low Risk': 'darkgreen'}
+            
+            for risk_level in risk_colors:
+                risk_data = pred_df[pred_df['Risk_Level'] == risk_level]
+                if len(risk_data) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=risk_data.index,
+                        y=risk_data['Price'],
+                        mode='markers',
+                        marker=dict(color=risk_colors[risk_level], size=8),
+                        name=risk_level,
+                        hovertemplate=f'<b>Risk:</b> {risk_level}<br><b>Price:</b> $%{{y:.2f}}<extra></extra>'
+                    ))
+            
+            fig.update_layout(
+                height=500,
+                title="Price Movement with Risk Level Indicators",
+                xaxis_title="Date",
+                yaxis_title="Price ($)"
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with tab3:
+            st.subheader("📋 Profit Probability Data")
+            
+            display_df = create_display_dataframe(pred_df)
+            if 'Profit_Prob' in display_df.columns:
+                display_df['Profit_Prob'] = display_df['Profit_Prob'].apply(lambda x: f"{float(x):.3f}" if isinstance(x, (int, float, str)) else x)
+            
+            st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+    
     else:
-        # Handle other model types (trading_signal, profit_prob, etc.)
+        # Handle other model types (trading_signal, etc.)
         st.subheader(f"📊 {selected_model.replace('_', ' ').title()} Predictions")
         
         # Create display dataframe
