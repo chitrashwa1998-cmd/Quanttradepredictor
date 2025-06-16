@@ -12,33 +12,38 @@ def clear_all_data():
         
         # Show what's in the database before clearing
         print("=== DATABASE CONTENTS BEFORE CLEARING ===")
-        keys = list(db.db.keys())
-        print(f"Total keys found: {len(keys)}")
+        db_info = db.get_database_info()
         
-        # Group keys by type for better understanding
-        key_types = {}
-        for key in keys:
-            if key.startswith('ohlc_'):
-                key_type = 'OHLC Data'
-            elif key.startswith('model_results_'):
-                key_type = 'Model Results'
-            elif key.startswith('predictions_'):
-                key_type = 'Predictions'
-            elif key.startswith('trained_models'):
-                key_type = 'Trained Models'
-            elif key == 'dataset_list':
-                key_type = 'Dataset List'
-            else:
-                key_type = 'Other'
+        if 'available_keys' in db_info:
+            keys = db_info['available_keys']
+            print(f"Total keys found: {len(keys)}")
             
-            if key_type not in key_types:
-                key_types[key_type] = []
-            key_types[key_type].append(key)
-        
-        for key_type, key_list in key_types.items():
-            print(f"{key_type}: {len(key_list)} keys")
-            for key in key_list:
-                print(f"  - {key}")
+            # Group keys by type for better understanding
+            key_types = {}
+            for key in keys:
+                if key.startswith('ohlc_'):
+                    key_type = 'OHLC Data'
+                elif key.startswith('model_results_'):
+                    key_type = 'Model Results'
+                elif key.startswith('predictions_'):
+                    key_type = 'Predictions'
+                elif key.startswith('trained_models'):
+                    key_type = 'Trained Models'
+                elif key == 'dataset_list':
+                    key_type = 'Dataset List'
+                else:
+                    key_type = 'Other'
+                
+                if key_type not in key_types:
+                    key_types[key_type] = []
+                key_types[key_type].append(key)
+            
+            for key_type, key_list in key_types.items():
+                print(f"{key_type}: {len(key_list)} keys")
+                for key in key_list:
+                    print(f"  - {key}")
+        else:
+            print("No keys found or unable to retrieve key list")
         
         print("\n=== CLEARING DATABASE ===")
         
@@ -46,24 +51,24 @@ def clear_all_data():
         success = db.clear_all_data()
         
         if success:
-            # Verify clearing
-            remaining_keys = list(db.db.keys())
-            if remaining_keys:
-                print(f"✗ Warning: {len(remaining_keys)} keys still remain:")
-                for key in remaining_keys:
+            print("✓ Database clearing method executed successfully")
+            
+            # Verify clearing by checking database info again
+            final_db_info = db.get_database_info()
+            final_keys = final_db_info.get('available_keys', [])
+            
+            if final_keys:
+                print(f"✗ Warning: {len(final_keys)} keys still remain:")
+                for key in final_keys:
                     print(f"  - {key}")
-                    try:
-                        del db.db[key]
-                        print(f"    → Manually deleted {key}")
-                    except Exception as e:
-                        print(f"    → Failed to delete {key}: {str(e)}")
             else:
                 print("✓ All data cleared successfully from database")
         else:
             print("✗ Failed to clear data")
         
         # Final verification
-        final_keys = list(db.db.keys())
+        final_db_info = db.get_database_info()
+        final_keys = final_db_info.get('available_keys', [])
         print(f"\n=== FINAL STATUS ===")
         print(f"Keys remaining: {len(final_keys)}")
         if final_keys:
