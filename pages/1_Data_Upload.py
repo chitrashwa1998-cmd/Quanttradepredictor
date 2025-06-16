@@ -300,7 +300,7 @@ if uploaded_file is not None:
 
         # Show troubleshooting section
         with st.expander("🔧 Troubleshooting Guide", expanded=True):
-            st.markdown("""
+            st.markdown("""n("""
             **Common issues and solutions:**
 
             1. **Column Names**: Ensure your CSV has columns named Date/Datetime, Open, High, Low, Close

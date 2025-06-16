@@ -286,7 +286,7 @@ class DataProcessor:
         df_clean = df.copy()
         
         # Forward fill missing values
-        df_clean = df_clean.fillna(method='ffill')
+        df_clean = df_clean.ffill()
         
         # Remove any remaining NaN values
         df_clean = df_clean.dropna()

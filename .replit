@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "TribexAlpha"
+runButton = "Run Streamlit App"
 
 [[workflows.workflow]]
 name = "Project"
@@ -67,11 +67,24 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python3 -m pip install --user streamlit pandas numpy plotly scikit-learn xgboost catboost lightgbm replit"
+args = "/nix/store/rbg00q7j8bflgr0vqq1557m45lzljfav-python3-wrapper/bin/python3 -m pip install --user streamlit pandas numpy plotly scikit-learn xgboost catboost lightgbm replit"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python3 -m streamlit run app.py --server.port 5000 --server.address 0.0.0.0"
+args = "/nix/store/rbg00q7j8bflgr0vqq1557m45lzljfav-python3-wrapper/bin/python3 -m streamlit run app.py --server.port 5000 --server.address 0.0.0.0"
+
+[[workflows.workflow]]
+name = "Run Streamlit App"
+author = 40743738
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python -m pip install --upgrade streamlit pandas numpy plotly scikit-learn xgboost catboost lightgbm replit"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run app.py --server.port 5000 --server.address 0.0.0.0 --server.headless true"
 
 [[ports]]
 localPort = 5000
