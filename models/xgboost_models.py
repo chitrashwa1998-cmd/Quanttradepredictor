@@ -662,7 +662,7 @@ class QuantTradingModels:
             'task_type': task_type,
             'predictions': y_pred,
             'probabilities': y_pred_proba,
-            'test_indices': test_idx,
+            'test_indices': X_test.index,
             'ensemble_type': 'voting_classifier' if task_type == 'classification' else 'voting_regressor',
             'base_models': list(ensemble_model.named_estimators_.keys())
         }
