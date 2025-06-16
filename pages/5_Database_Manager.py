@@ -271,24 +271,40 @@ with col2:
 # Raw database view (for debugging)
 with st.expander("🔍 Raw Database View (Debug)"):
     st.write("**All Keys:**")
-    all_keys = list(trading_db.db.keys())
-    st.write(all_keys)
-    
-    # Show database size
-    st.write(f"**Total Keys:** {len(all_keys)}")
-    
-    if all_keys:
-        selected_key = st.selectbox("Select key to inspect:", all_keys)
-        if st.button("View Key Content"):
-            try:
-                content = trading_db.db[selected_key]
-                if isinstance(content, dict) and 'data' in content:
-                    st.write(f"Data type: {type(content)}")
-                    st.write(f"Keys: {list(content.keys())}")
-                    if 'metadata' in content:
-                        st.write("Metadata:")
-                        st.json(content['metadata'])
-                else:
-                    st.json(content)
-            except Exception as e:
-                st.error(f"Error viewing key: {str(e)}")
+    try:
+        # Get keys through the database info method
+        db_info = trading_db.get_database_info()
+        all_keys = db_info.get('available_keys', [])
+        st.write(all_keys)
+        
+        # Show database size
+        st.write(f"**Total Keys:** {len(all_keys)}")
+        st.write(f"**Database Type:** {db_info.get('adapter_type', 'Unknown')}")
+        
+        if all_keys:
+            selected_key = st.selectbox("Select key to inspect:", all_keys)
+            if st.button("View Key Content"):
+                try:
+                    # Access through the underlying database object
+                    if hasattr(trading_db.db, 'db'):
+                        # For TradingDatabase (Key-Value store)
+                        content = trading_db.db.db[selected_key]
+                    else:
+                        # For PostgreSQL or other databases
+                        st.warning("Key inspection not available for this database type")
+                        content = None
+                    
+                    if content is not None:
+                        if isinstance(content, dict) and 'data' in content:
+                            st.write(f"Data type: {type(content)}")
+                            st.write(f"Keys: {list(content.keys())}")
+                            if 'metadata' in content:
+                                st.write("Metadata:")
+                                st.json(content['metadata'])
+                        else:
+                            st.json(content)
+                except Exception as e:
+                    st.error(f"Error viewing key: {str(e)}")
+    except Exception as e:
+        st.error(f"Error accessing database keys: {str(e)}")
+        st.write("Database connection may be unavailable or using incompatible format")
