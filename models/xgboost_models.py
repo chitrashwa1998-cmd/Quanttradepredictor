@@ -494,13 +494,15 @@ class QuantTradingModels:
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training {model_name}. Need at least 100 samples, got {len(X_clean)}")
 
-        # Split data using time series split to avoid look-ahead bias
-        tscv = TimeSeriesSplit(n_splits=3)
-        splits = list(tscv.split(X_clean))
-        train_idx, test_idx = splits[-1]  # Use the last split
-
-        X_train, X_test = X_clean.iloc[train_idx], X_clean.iloc[test_idx]
-        y_train, y_test = y_clean.iloc[train_idx], y_clean.iloc[test_idx]
+        # Use 80/20 split with time-based ordering (no shuffling for time series data)
+        split_idx = int(len(X_clean) * 0.8)
+        
+        X_train = X_clean.iloc[:split_idx]
+        X_test = X_clean.iloc[split_idx:]
+        y_train = y_clean.iloc[:split_idx]
+        y_test = y_clean.iloc[split_idx:]
+        
+        print(f"Training on {len(X_train)} samples ({len(X_train)/len(X_clean)*100:.1f}%), testing on {len(X_test)} samples ({len(X_test)/len(X_clean)*100:.1f}%)")
 
         # Scale features for all models
         scaler = StandardScaler()
