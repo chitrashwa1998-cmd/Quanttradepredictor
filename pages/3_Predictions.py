@@ -95,11 +95,10 @@ try:
 
         # Create prediction dataframe
         pred_df = pd.DataFrame({
-            'Date': features_filtered.index,
             'Price': df_filtered['Close'],
             'Prediction': predictions,
             'Direction': ['Up' if p == 1 else 'Down' for p in predictions]
-        })
+        }, index=features_filtered.index)
 
         if probabilities is not None:
             pred_df['Confidence'] = np.max(probabilities, axis=1)
@@ -125,7 +124,7 @@ try:
 
             # Price line
             fig.add_trace(go.Scatter(
-                x=pred_df['Date'], 
+                x=pred_df.index, 
                 y=pred_df['Price'],
                 name='Price',
                 line=dict(color='#2E86C1', width=2),
@@ -134,7 +133,7 @@ try:
 
             # Moving average
             fig.add_trace(go.Scatter(
-                x=pred_df['Date'], 
+                x=pred_df.index, 
                 y=pred_df['SMA_10'],
                 name='SMA 10',
                 line=dict(color='gray', width=1, dash='dash'),
@@ -147,7 +146,7 @@ try:
 
             if len(up_predictions) > 0:
                 fig.add_trace(go.Scatter(
-                    x=up_predictions['Date'], 
+                    x=up_predictions.index, 
                     y=up_predictions['Price'],
                     mode='markers',
                     marker=dict(symbol='triangle-up', color='#27AE60', size=8),
@@ -157,7 +156,7 @@ try:
 
             if len(down_predictions) > 0:
                 fig.add_trace(go.Scatter(
-                    x=down_predictions['Date'], 
+                    x=down_predictions.index, 
                     y=down_predictions['Price'],
                     mode='markers',
                     marker=dict(symbol='triangle-down', color='#E74C3C', size=8),
@@ -205,7 +204,7 @@ try:
 
                 # Price line
                 fig.add_trace(go.Scatter(
-                    x=pred_df['Date'], 
+                    x=pred_df.index, 
                     y=pred_df['Price'],
                     name='Price',
                     line=dict(color='#2E86C1', width=2)
@@ -214,7 +213,7 @@ try:
                 # Reversal points
                 if len(bull_reversals) > 0:
                     fig.add_trace(go.Scatter(
-                        x=bull_reversals['Date'], 
+                        x=bull_reversals.index, 
                         y=bull_reversals['Price'],
                         mode='markers',
                         marker=dict(symbol='star', color='#27AE60', size=15, line=dict(width=2, color='darkgreen')),
@@ -224,7 +223,7 @@ try:
 
                 if len(bear_reversals) > 0:
                     fig.add_trace(go.Scatter(
-                        x=bear_reversals['Date'], 
+                        x=bear_reversals.index, 
                         y=bear_reversals['Price'],
                         mode='markers',
                         marker=dict(symbol='star', color='#E74C3C', size=15, line=dict(width=2, color='darkred')),
@@ -254,17 +253,17 @@ try:
 
                     recent_reversals = []
 
-                    for _, row in bull_reversals.tail(5).iterrows():
+                    for idx, row in bull_reversals.tail(5).iterrows():
                         recent_reversals.append({
-                            'Date': row['Date'].strftime('%Y-%m-%d %H:%M'),
+                            'Date': idx.strftime('%Y-%m-%d %H:%M'),
                             'Type': 'Bullish 🟢',
                             'Price': f"${row['Price']:.2f}",
                             'Confidence': f"{row.get('Confidence', 0):.3f}" if 'Confidence' in pred_df.columns else 'N/A'
                         })
 
-                    for _, row in bear_reversals.tail(5).iterrows():
+                    for idx, row in bear_reversals.tail(5).iterrows():
                         recent_reversals.append({
-                            'Date': row['Date'].strftime('%Y-%m-%d %H:%M'),
+                            'Date': idx.strftime('%Y-%m-%d %H:%M'),
                             'Type': 'Bearish 🔴',
                             'Price': f"${row['Price']:.2f}",
                             'Confidence': f"{row.get('Confidence', 0):.3f}" if 'Confidence' in pred_df.columns else 'N/A'
@@ -343,7 +342,7 @@ try:
 
             # Format the dataframe for display
             display_df = pred_df.copy()
-            display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d %H:%M')
+            display_df['Date'] = display_df.index.strftime('%Y-%m-%d %H:%M')
             display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
 
             if 'Confidence' in display_df.columns:
@@ -372,11 +371,10 @@ try:
         signal_colors = {0: '#E74C3C', 1: '#F39C12', 2: '#27AE60'}
 
         pred_df = pd.DataFrame({
-            'Date': features_filtered.index,
             'Price': df_filtered['Close'],
             'Signal': predictions,
             'Signal_Name': [signal_map[s] for s in predictions]
-        })
+        }, index=features_filtered.index)
 
         with tab1:
             st.subheader("📊 Trading Signal Overview")
@@ -385,7 +383,7 @@ try:
 
             # Price line
             fig.add_trace(go.Scatter(
-                x=pred_df['Date'], 
+                x=pred_df.index, 
                 y=pred_df['Price'],
                 name='Price',
                 line=dict(color='#2E86C1', width=2)
@@ -398,7 +396,7 @@ try:
                     marker_symbol = 'triangle-up' if signal_value == 2 else ('triangle-down' if signal_value == 0 else 'circle')
 
                     fig.add_trace(go.Scatter(
-                        x=signal_data['Date'],
+                        x=signal_data.index,
                         y=signal_data['Price'],
                         mode='markers',
                         marker=dict(
@@ -468,7 +466,7 @@ try:
 
             # Recent signals
             display_df = pred_df.copy()
-            display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d %H:%M')
+            display_df['Date'] = display_df.index.strftime('%Y-%m-%d %H:%M')
             display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
 
             st.dataframe(
@@ -482,25 +480,24 @@ try:
         st.subheader(f"{selected_model.replace('_', ' ').title()} Predictions")
 
         pred_df = pd.DataFrame({
-            'Date': features_filtered.index,
             'Price': df_filtered['Close'],
             'Prediction': predictions
-        })
+        }, index=features_filtered.index)
 
         # Simple chart
         fig = make_subplots(rows=2, cols=1,
                           subplot_titles=('Price', 'Predictions'),
                           vertical_spacing=0.1)
 
-        fig.add_trace(go.Scatter(x=pred_df['Date'], y=pred_df['Price'], name='Price'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=pred_df['Date'], y=pred_df['Prediction'], name='Prediction'), row=2, col=1)
+        fig.add_trace(go.Scatter(x=pred_df.index, y=pred_df['Price'], name='Price'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=pred_df.index, y=pred_df['Prediction'], name='Prediction'), row=2, col=1)
 
         fig.update_layout(height=600)
         st.plotly_chart(fig, use_container_width=True)
 
         # Show data table
         display_df = pred_df.copy()
-        display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d %H:%M')
+        display_df['Date'] = display_df.index.strftime('%Y-%m-%d %H:%M')
         display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
 
         st.subheader("Recent Predictions")
