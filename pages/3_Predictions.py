@@ -27,6 +27,82 @@ if st.session_state.data is None:
 
 if not st.session_state.models:
     st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
+    
+    # Add quick training button for convenience
+    st.markdown("---")
+    st.subheader("Quick Model Training")
+    st.info("Train essential models directly from this page for immediate predictions.")
+    
+    if st.button("🚀 Train Essential Models Now", type="primary"):
+        try:
+            from models.xgboost_models import QuantTradingModels
+            from features.technical_indicators import TechnicalIndicators
+            from utils.database import TradingDatabase
+            from datetime import datetime
+            
+            with st.spinner("Training models... This may take a few minutes."):
+                # Use recent data subset for faster training
+                data = st.session_state.data
+                if len(data) > 8000:
+                    recent_data = data.tail(8000).copy()
+                    st.info(f"Using most recent {len(recent_data)} rows for faster training")
+                else:
+                    recent_data = data.copy()
+                
+                # Calculate features
+                features_data = TechnicalIndicators.calculate_all_indicators(recent_data)
+                features_data = features_data.dropna()
+                
+                if len(features_data) < 100:
+                    st.error("Not enough clean data for training")
+                    st.stop()
+                
+                # Initialize trainer
+                model_trainer = QuantTradingModels()
+                st.session_state.model_trainer = model_trainer
+                
+                # Prepare data
+                X = model_trainer.prepare_features(features_data)
+                targets = model_trainer.create_targets(features_data)
+                
+                # Train essential models
+                essential_models = ['direction', 'magnitude', 'trading_signal']
+                results = {}
+                
+                for model_name in essential_models:
+                    if model_name in targets:
+                        y = targets[model_name]
+                        task_type = 'classification' if model_name in ['direction', 'trading_signal'] else 'regression'
+                        
+                        result = model_trainer.train_model(model_name, X, y, task_type)
+                        if result:
+                            results[model_name] = result
+                
+                # Save results
+                st.session_state.models = results
+                
+                # Save to database
+                try:
+                    db = TradingDatabase()
+                    for model_name, model_result in results.items():
+                        if model_result:
+                            model_data = {
+                                'metrics': model_result,
+                                'task_type': 'classification' if model_name in ['direction', 'trading_signal'] else 'regression',
+                                'trained_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            }
+                            db.save_model_results(model_name, model_data)
+                    db.save_trained_models(model_trainer.models)
+                except:
+                    pass
+                
+                st.success("Models trained successfully! Refreshing page...")
+                st.rerun()
+                
+        except Exception as e:
+            st.error(f"Training failed: {str(e)}")
+            st.info("Please try using the Model Training page instead.")
+    
     st.stop()
 
 if st.session_state.model_trainer is None:
