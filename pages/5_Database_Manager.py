@@ -225,12 +225,30 @@ with col1:
     st.subheader("Check Session Data")
     if 'data' in st.session_state and st.session_state.data is not None:
         st.success(f"✅ Session data exists: {len(st.session_state.data)} rows")
-        if st.button("💾 Save Session Data to Database"):
-            if trading_db.save_ohlc_data(st.session_state.data, "recovered_data"):
-                st.success("✅ Session data saved to database as 'recovered_data'")
+        
+        col1a, col1b = st.columns(2)
+        
+        with col1a:
+            if st.button("💾 Save Session Data to Database"):
+                if trading_db.save_ohlc_data(st.session_state.data, "recovered_data"):
+                    st.success("✅ Session data saved to database as 'recovered_data'")
+                    st.rerun()
+                else:
+                    st.error("Failed to save session data")
+        
+        with col1b:
+            if st.button("🗑️ Clear Session Data", type="secondary"):
+                # Clear all session state data
+                st.session_state.data = None
+                st.session_state.features = None
+                st.session_state.models = {}
+                st.session_state.predictions = None
+                st.session_state.model_trainer = None
+                if 'realtime_data' in st.session_state:
+                    st.session_state.realtime_data = None
+                
+                st.success("✅ Session data cleared")
                 st.rerun()
-            else:
-                st.error("Failed to save session data")
     else:
         st.warning("⚠️ No data in current session")
 
