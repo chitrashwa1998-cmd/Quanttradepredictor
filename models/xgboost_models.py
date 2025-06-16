@@ -121,16 +121,105 @@ class QuantTradingModels:
         if len(trend_counts) > 0:
             print(f"Trending percentage: {trend_counts.get(1, 0) / len(targets['trend_sideways']) * 100:.1f}%")
 
-        # 6. Reversal points
-        # Look for price reversals in next 3 periods
-        high_3 = df['High'].rolling(3).max().shift(-3)
-        low_3 = df['Low'].rolling(3).min().shift(-3)
-        current_high = df['High'].rolling(3).max()
-        current_low = df['Low'].rolling(3).min()
-
-        reversal_up = (df['Close'] <= current_low * 1.01) & (high_3 > df['Close'] * 1.02)
-        reversal_down = (df['Close'] >= current_high * 0.99) & (low_3 < df['Close'] * 0.98)
-        targets['reversal'] = (reversal_up | reversal_down).astype(int)
+        # 6. Reversal points - Enhanced detection
+        # Calculate momentum and trend indicators for reversal detection
+        price_change_1 = df['Close'].pct_change(1)
+        price_change_3 = df['Close'].pct_change(3)
+        price_change_5 = df['Close'].pct_change(5)
+        
+        # Calculate RSI-like momentum indicator
+        momentum_window = 14
+        gains = price_change_1.where(price_change_1 > 0, 0).rolling(momentum_window).mean()
+        losses = (-price_change_1.where(price_change_1 < 0, 0)).rolling(momentum_window).mean()
+        momentum_ratio = gains / (losses + 1e-10)  # Avoid division by zero
+        momentum_index = 100 - (100 / (1 + momentum_ratio))
+        
+        # Calculate moving averages for trend context
+        sma_short = df['Close'].rolling(5).mean()
+        sma_medium = df['Close'].rolling(10).mean()
+        sma_long = df['Close'].rolling(20).mean()
+        
+        # Price position relative to recent highs/lows
+        high_10 = df['High'].rolling(10).max()
+        low_10 = df['Low'].rolling(10).min()
+        price_position = (df['Close'] - low_10) / (high_10 - low_10 + 1e-10)
+        
+        # Volatility for adaptive thresholds
+        volatility = df['Close'].pct_change().rolling(20).std()
+        
+        # Future price movement for reversal confirmation (look ahead 3-5 periods)
+        future_return_3 = df['Close'].shift(-3) / df['Close'] - 1
+        future_return_5 = df['Close'].shift(-5) / df['Close'] - 1
+        
+        # BULLISH REVERSAL CONDITIONS
+        # 1. Price at or near recent lows
+        near_lows = price_position <= 0.3
+        
+        # 2. Oversold momentum
+        oversold = momentum_index <= 30
+        
+        # 3. Recent downward momentum
+        recent_decline = (price_change_1 < 0) & (price_change_3 < -0.005)
+        
+        # 4. Moving average support
+        ma_support = (df['Close'] <= sma_short) & (sma_short <= sma_medium)
+        
+        # 5. Future upward movement (confirmation)
+        future_bounce = future_return_3 > volatility * 1.5
+        
+        # BEARISH REVERSAL CONDITIONS
+        # 1. Price at or near recent highs
+        near_highs = price_position >= 0.7
+        
+        # 2. Overbought momentum
+        overbought = momentum_index >= 70
+        
+        # 3. Recent upward momentum
+        recent_rally = (price_change_1 > 0) & (price_change_3 > 0.005)
+        
+        # 4. Moving average resistance
+        ma_resistance = (df['Close'] >= sma_short) & (sma_short >= sma_medium)
+        
+        # 5. Future downward movement (confirmation)
+        future_decline = future_return_3 < -volatility * 1.5
+        
+        # Combine conditions for reversal detection
+        bullish_reversal = (
+            (near_lows & oversold & future_bounce) |
+            (recent_decline & ma_support & future_bounce) |
+            (oversold & recent_decline & future_bounce)
+        )
+        
+        bearish_reversal = (
+            (near_highs & overbought & future_decline) |
+            (recent_rally & ma_resistance & future_decline) |
+            (overbought & recent_rally & future_decline)
+        )
+        
+        # Final reversal signal: 1 = reversal expected, 0 = no reversal
+        reversal_signal = (bullish_reversal | bearish_reversal).astype(int)
+        targets['reversal'] = reversal_signal
+        
+        # Debug information for reversal detection
+        reversal_counts = reversal_signal.value_counts()
+        total_points = len(reversal_signal)
+        reversal_pct = (reversal_counts.get(1, 0) / total_points) * 100 if total_points > 0 else 0
+        
+        print(f"Reversal Detection Results:")
+        print(f"  Total data points: {total_points}")
+        print(f"  Reversal signals: {reversal_counts.get(1, 0)} ({reversal_pct:.1f}%)")
+        print(f"  No reversal: {reversal_counts.get(0, 0)} ({100-reversal_pct:.1f}%)")
+        print(f"  Bullish reversals detected: {bullish_reversal.sum()}")
+        print(f"  Bearish reversals detected: {bearish_reversal.sum()}")
+        
+        # Store additional reversal details for analysis
+        if hasattr(self, 'reversal_details'):
+            self.reversal_details = {
+                'bullish_reversals': bullish_reversal,
+                'bearish_reversals': bearish_reversal,
+                'momentum_index': momentum_index,
+                'price_position': price_position
+            }
 
         # 7. Buy/Sell/Hold signals - SCALPING STRATEGY FOR 5-MIN CANDLES
         # More aggressive signal generation with tighter thresholds
