@@ -363,14 +363,17 @@ try:
             # Format the dataframe for display
             display_df = pred_df.copy()
             display_df = display_df.reset_index()
-            display_df['Date'] = pd.to_datetime(display_df.iloc[:, 0]).dt.strftime('%Y-%m-%d %H:%M')
+            
+            # Get the index column name (it could be 'Date' or the actual index name)
+            index_col_name = display_df.columns[0]
+            display_df['Date'] = pd.to_datetime(display_df[index_col_name]).dt.strftime('%Y-%m-%d %H:%M')
             display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
 
             if 'Confidence' in display_df.columns:
                 display_df['Confidence'] = display_df['Confidence'].apply(lambda x: f"{x:.3f}")
 
             # Remove the original index column and reorder
-            display_df = display_df.drop(columns=display_df.columns[0])
+            display_df = display_df.drop(columns=[index_col_name])
             cols = ['Date'] + [col for col in display_df.columns if col != 'Date']
             display_df = display_df[cols]
 
@@ -493,11 +496,14 @@ try:
             # Recent signals
             display_df = pred_df.copy()
             display_df = display_df.reset_index()
-            display_df['Date'] = pd.to_datetime(display_df.iloc[:, 0]).dt.strftime('%Y-%m-%d %H:%M')
+            
+            # Get the index column name
+            index_col_name = display_df.columns[0]
+            display_df['Date'] = pd.to_datetime(display_df[index_col_name]).dt.strftime('%Y-%m-%d %H:%M')
             display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
 
             # Remove the original index column and select required columns
-            display_df = display_df.drop(columns=display_df.columns[0])
+            display_df = display_df.drop(columns=[index_col_name])
             
             st.dataframe(
                 display_df[['Date', 'Price', 'Signal_Name']].tail(50).sort_values('Date', ascending=False),
@@ -528,11 +534,14 @@ try:
         # Show data table
         display_df = pred_df.copy()
         display_df = display_df.reset_index()
-        display_df['Date'] = pd.to_datetime(display_df.iloc[:, 0]).dt.strftime('%Y-%m-%d %H:%M')
+        
+        # Get the index column name
+        index_col_name = display_df.columns[0]
+        display_df['Date'] = pd.to_datetime(display_df[index_col_name]).dt.strftime('%Y-%m-%d %H:%M')
         display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
         
         # Remove the original index column and reorder
-        display_df = display_df.drop(columns=display_df.columns[0])
+        display_df = display_df.drop(columns=[index_col_name])
         cols = ['Date'] + [col for col in display_df.columns if col != 'Date']
         display_df = display_df[cols]
 
