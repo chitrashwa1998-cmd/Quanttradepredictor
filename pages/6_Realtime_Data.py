@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -28,9 +29,9 @@ market_data = st.session_state.market_data
 
 st.markdown("""
 <div class="trading-header">
-    <h1 style="margin:0;">📊 REALTIME MARKET DATA</h1>
+    <h1 style="margin:0;">📊 NIFTY 50 REALTIME ANALYSIS</h1>
     <p style="font-size: 1.2rem; margin: 1rem 0 0 0; color: rgba(255,255,255,0.8);">
-        Live Market Analysis & Predictions
+        Live Market Data with ML Predictions
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -69,11 +70,8 @@ with col3:
 
 st.markdown("---")
 
-# Fixed to Nifty 50 only
+# NIFTY 50 Configuration
 st.markdown("### 📊 NIFTY 50 - 5 Minute Data")
-
-# Fixed parameters for Nifty 50
-selected_name = "NIFTY50"
 selected_symbol = "^NSEI"
 interval = "5m"
 
@@ -87,23 +85,19 @@ with col1:
     )
 
 with col2:
-    st.info("📈 Fixed to NIFTY 50 index with 5-minute intervals")
-
-# Auto-refresh toggle
-auto_refresh = st.checkbox("Auto Refresh (30s)", value=False)
+    auto_refresh = st.checkbox("Auto Refresh (30s)", value=False)
 
 if auto_refresh:
-    refresh_triggered = st.empty()
     time.sleep(30)
     st.rerun()
 
 # Fetch and display data
 try:
-    with st.spinner(f"Fetching data for {selected_name}..."):
+    with st.spinner("Fetching NIFTY 50 data..."):
         df = market_data.fetch_realtime_data(selected_symbol, period=period, interval=interval)
 
     if df is not None and not df.empty:
-        st.success(f"✅ Loaded {len(df)} data points for {selected_name}")
+        st.success(f"✅ Loaded {len(df)} data points for NIFTY 50")
 
         # Current Price Info
         current_price = df['Close'].iloc[-1]
@@ -136,17 +130,19 @@ try:
             high=df['High'],
             low=df['Low'],
             close=df['Close'],
-            name="Price"
+            name="NIFTY 50"
         )])
 
         current_time_display = datetime.now().strftime('%H:%M:%S IST')
 
         fig.update_layout(
-            title=f"{selected_name} - {interval} Candlestick Chart (Last Updated: {current_time_display})",
+            title=f"NIFTY 50 - 5m Candlestick Chart (Last Updated: {current_time_display})",
             xaxis_title="Time",
             yaxis_title="Price (₹)",
             height=500,
-            xaxis_rangeslider_visible=False
+            xaxis_rangeslider_visible=False,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
         )
 
         st.plotly_chart(fig, use_container_width=True)
@@ -158,14 +154,13 @@ try:
             # Calculate technical indicators
             tech_df = TechnicalIndicators.calculate_all_indicators(df)
 
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
 
             with col1:
                 if 'rsi' in tech_df.columns:
                     current_rsi = tech_df['rsi'].iloc[-1]
                     if not pd.isna(current_rsi):
                         st.metric("RSI", f"{current_rsi:.2f}")
-
                         rsi_signal = "Overbought" if current_rsi > 70 else "Oversold" if current_rsi < 30 else "Neutral"
                         st.info(f"RSI Signal: {rsi_signal}")
 
@@ -174,118 +169,116 @@ try:
                     current_macd = tech_df['macd_histogram'].iloc[-1]
                     if not pd.isna(current_macd):
                         st.metric("MACD Histogram", f"{current_macd:.4f}")
-
                         macd_signal = "Bullish" if current_macd > 0 else "Bearish"
                         st.info(f"MACD Signal: {macd_signal}")
+
+            with col3:
+                if 'bb_position' in tech_df.columns:
+                    bb_pos = tech_df['bb_position'].iloc[-1]
+                    if not pd.isna(bb_pos):
+                        st.metric("Bollinger Position", f"{bb_pos:.2f}")
+                        bb_signal = "Overbought" if bb_pos > 0.8 else "Oversold" if bb_pos < 0.2 else "Normal"
+                        st.info(f"BB Signal: {bb_signal}")
 
         except Exception as e:
             st.warning(f"⚠️ Could not calculate technical indicators: {str(e)}")
 
-        # Today's Predictions
-        st.subheader("🎯 Today's Predictions")
+        # ML Predictions Section
+        st.subheader("🤖 Machine Learning Predictions")
 
         try:
-            # Try to generate predictions using available models
-            from utils.database_adapter import DatabaseAdapter
-
-            db = DatabaseAdapter()
-            trained_models = db.load_trained_models()
-
-            if trained_models:
-                model_names = list(trained_models.keys())
-                selected_model_name = st.selectbox("Select Model for Predictions", model_names)
-
-                if selected_model_name in trained_models:
-                    model_info = trained_models[selected_model_name]
-
-                    # Prepare features for prediction
-                    if len(tech_df) >= 30:  # Need sufficient data for indicators
-                        try:
-                            # Get the last 30 data points for prediction
-                            recent_data = tech_df.tail(30).copy()
-
-                            # Initialize model trainer
-                            model_trainer = QuantTradingModels()
-
-                            # Generate predictions
-                            predictions = model_trainer.generate_predictions(
-                                recent_data, 
-                                selected_model_name
-                            )
-
-                            if predictions is not None and not predictions.empty:
-                                # Show recent predictions
-                                st.success("✅ Predictions generated successfully!")
-
-                                # Display predictions table
-                                display_predictions = predictions.tail(10).copy()
-
-                                if 'dir_conf' in display_predictions.columns and 'profit_conf' in display_predictions.columns:
-                                    st.markdown("### Recent Predictions")
-                                    st.dataframe(
-                                        display_predictions[['predicted_direction', 'dir_conf', 'profit_conf', 'predicted_return']].round(4),
-                                        use_container_width=True
-                                    )
-
-                                    # Trading signals
-                                    latest_prediction = display_predictions.iloc[-1]
-                                    dir_conf = latest_prediction.get('dir_conf', 0)
-                                    profit_conf = latest_prediction.get('profit_conf', 0)
-
-                                    col1, col2, col3 = st.columns(3)
-
-                                    with col1:
-                                        st.metric("Direction Confidence", f"{dir_conf:.2f}")
-
-                                    with col2:
-                                        st.metric("Profit Confidence", f"{profit_conf:.2f}")
-
-                                    with col3:
-                                        # Trading recommendation
-                                        if dir_conf > 0.7 and profit_conf > 0.7:
-                                            st.success("🟢 STRONG BUY SIGNAL")
-                                        elif dir_conf > 0.6 and profit_conf > 0.6:
-                                            st.info("🔵 MODERATE BUY SIGNAL")
-                                        else:
-                                            st.warning("🟡 HOLD/WAIT")
-
-                                else:
-                                    st.dataframe(display_predictions.tail(10))
-
-                            else:
-                                st.warning("⚠️ Could not generate predictions for current data")
-
-                        except Exception as e:
-                            st.error(f"❌ Error generating predictions: {str(e)}")
-
+            # Initialize model trainer
+            model_trainer = QuantTradingModels()
+            
+            # Prepare data for prediction
+            if len(tech_df) >= 30:
+                recent_data = tech_df.tail(30).copy()
+                
+                # Try to generate predictions
+                with st.spinner("Generating ML predictions..."):
+                    predictions = model_trainer.generate_predictions(recent_data, "nifty_5m_model")
+                
+                if predictions is not None and not predictions.empty:
+                    st.success("✅ ML predictions generated successfully!")
+                    
+                    # Display recent predictions
+                    st.markdown("#### Recent Predictions")
+                    display_predictions = predictions.tail(10).copy()
+                    
+                    # Check if confidence columns exist
+                    if 'dir_conf' in display_predictions.columns and 'profit_conf' in display_predictions.columns:
+                        # Show predictions with confidence
+                        st.dataframe(
+                            display_predictions[['predicted_direction', 'dir_conf', 'profit_conf', 'predicted_return']].round(4),
+                            use_container_width=True
+                        )
+                        
+                        # Latest prediction analysis
+                        latest = display_predictions.iloc[-1]
+                        dir_conf = latest.get('dir_conf', 0)
+                        profit_conf = latest.get('profit_conf', 0)
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        
+                        with col1:
+                            st.metric("Direction Confidence", f"{dir_conf:.3f}")
+                            
+                        with col2:
+                            st.metric("Profit Confidence", f"{profit_conf:.3f}")
+                            
+                        with col3:
+                            predicted_direction = latest.get('predicted_direction', 0)
+                            direction_text = "📈 BULLISH" if predicted_direction > 0 else "📉 BEARISH"
+                            st.metric("Predicted Direction", direction_text)
+                            
+                        with col4:
+                            predicted_return = latest.get('predicted_return', 0)
+                            st.metric("Expected Return", f"{predicted_return:.4f}")
+                        
+                        # Trading Signal
+                        st.markdown("#### Trading Signal")
+                        if dir_conf > 0.7 and profit_conf > 0.7:
+                            st.success("🟢 STRONG SIGNAL - High confidence for both direction and profit")
+                        elif dir_conf > 0.6 and profit_conf > 0.6:
+                            st.info("🔵 MODERATE SIGNAL - Good confidence levels")
+                        elif dir_conf > 0.5 or profit_conf > 0.5:
+                            st.warning("🟡 WEAK SIGNAL - Low confidence, exercise caution")
+                        else:
+                            st.error("🔴 NO SIGNAL - Very low confidence, avoid trading")
+                            
                     else:
-                        st.warning("⚠️ Insufficient data for predictions. Need at least 30 data points.")
-
+                        # Show basic predictions
+                        st.dataframe(display_predictions.tail(5))
+                        
+                else:
+                    st.warning("⚠️ Cannot generate predictions - insufficient technical indicator data")
+                    
             else:
-                st.info("ℹ️ No trained models available. Please train models first in the Model Training page.")
-
+                st.warning("⚠️ Need at least 30 data points for ML predictions")
+                
         except Exception as e:
-            st.warning(f"⚠️ Prediction system not available: {str(e)}")
+            st.error(f"❌ Error in ML prediction system: {str(e)}")
+            st.info("Tip: Train models first in the Model Training page")
 
-        # Data Export
-        st.subheader("📁 Data Export")
+        # Data Management
+        st.subheader("📁 Data Management")
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
             csv = df.to_csv()
             st.download_button(
-                "Download CSV",
+                "📥 Download CSV",
                 csv,
-                f"{selected_name}_{interval}_data.csv",
+                f"nifty50_{interval}_data.csv",
                 "text/csv"
             )
 
         with col2:
-            if st.button("Save to Database"):
+            if st.button("💾 Save to Database"):
                 try:
                     db = DatabaseAdapter()
-                    success = db.save_dataset(df, f"{selected_name}_{interval}_realtime")
+                    success = db.save_dataset(df, f"nifty50_{interval}_realtime")
                     if success:
                         st.success("✅ Data saved to database")
                     else:
@@ -294,16 +287,24 @@ try:
                     st.error(f"❌ Error saving data: {str(e)}")
 
         with col3:
-            if st.button("Refresh Data"):
+            if st.button("🔄 Refresh Data"):
                 st.rerun()
 
     else:
-        st.error(f"❌ Could not fetch data for {selected_name}")
+        st.error("❌ Could not fetch NIFTY 50 data")
         st.info("This might be due to:")
         st.write("• Market is closed")
-        st.write("• Symbol not available")
         st.write("• Network connectivity issues")
+        st.write("• API rate limits")
 
 except Exception as e:
     st.error(f"❌ Error loading realtime data: {str(e)}")
-    st.info("Please try refreshing the page or selecting a different symbol.")
+    st.info("Please try refreshing the page.")
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #666; margin-top: 2rem;">
+    <p>🔄 Auto-refresh available | 📊 Real-time NIFTY 50 analysis | 🤖 ML-powered predictions</p>
+</div>
+""", unsafe_allow_html=True)
