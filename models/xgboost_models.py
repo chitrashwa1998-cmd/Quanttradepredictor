@@ -22,8 +22,8 @@ class QuantTradingModels:
     def _load_existing_models(self):
         """Load previously trained models from database if available."""
         try:
-            from utils.database import TradingDatabase
-            db = TradingDatabase()
+            from utils.database_adapter import DatabaseAdapter
+            db = DatabaseAdapter()
             loaded_models = db.load_trained_models()
 
             if loaded_models:
@@ -61,8 +61,8 @@ class QuantTradingModels:
     def _save_models_to_database(self):
         """Save trained models to database for persistence."""
         try:
-            from utils.database import TradingDatabase
-            db = TradingDatabase()
+            from utils.database_adapter import DatabaseAdapter
+            db = DatabaseAdapter()
 
             # Prepare models for saving
             models_to_save = {}
