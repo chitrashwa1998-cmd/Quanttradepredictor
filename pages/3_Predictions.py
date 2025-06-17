@@ -1115,9 +1115,25 @@ try:
                 
                 st.plotly_chart(fig, use_container_width=True)
             
-            # Recent reversal analysis
+            # Reversal analysis and debugging
+            st.subheader("🔍 Reversal Detection Analysis")
+            
+            # Show reversal statistics
+            total_data_points = len(pred_df)
+            reversal_count = len(reversal_data)
+            reversal_percentage = (reversal_count / total_data_points * 100) if total_data_points > 0 else 0
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Data Points", total_data_points)
+            with col2:
+                st.metric("Reversal Signals", reversal_count)
+            with col3:
+                st.metric("Reversal Rate", f"{reversal_percentage:.1f}%")
+            
+            # Show recent reversal signals if any
             if len(reversal_data) > 0:
-                st.subheader("🔍 Recent Reversal Signals Analysis")
+                st.subheader("📋 Recent Reversal Signals")
                 
                 recent_reversals = reversal_data.tail(10)
                 
@@ -1136,6 +1152,30 @@ try:
                 
                 if analysis_data:
                     st.dataframe(pd.DataFrame(analysis_data), use_container_width=True, hide_index=True)
+            else:
+                st.info("ℹ️ No reversal signals detected in the current time period.")
+                
+                # Show debugging information
+                st.subheader("🔧 Reversal Detection Debug Info")
+                
+                # Check if we have the necessary data for analysis
+                debug_info = []
+                if 'Price_Position' in pred_df.columns:
+                    price_pos_stats = pred_df['Price_Position'].describe()
+                    debug_info.append(f"Price Position Range: {price_pos_stats['min']:.2f} to {price_pos_stats['max']:.2f}")
+                    debug_info.append(f"Low Range (<25%): {(pred_df['Price_Position'] <= 0.25).sum()} points")
+                    debug_info.append(f"High Range (>75%): {(pred_df['Price_Position'] >= 0.75).sum()} points")
+                
+                if 'Price_Change_3' in pred_df.columns:
+                    momentum_stats = pred_df['Price_Change_3'].describe()
+                    debug_info.append(f"3-Period Change Range: {momentum_stats['min']:.3f} to {momentum_stats['max']:.3f}")
+                    debug_info.append(f"Significant Declines (<-0.3%): {(pred_df['Price_Change_3'] < -0.003).sum()} points")
+                    debug_info.append(f"Significant Rallies (>0.3%): {(pred_df['Price_Change_3'] > 0.003).sum()} points")
+                
+                for info in debug_info:
+                    st.text(info)
+                
+                st.info("💡 Tip: Reversal signals depend on price reaching extreme positions (top/bottom 25% of recent range) combined with momentum conditions. Consider using a longer time period or different assets if no signals are detected.")
 
         with tab4:
             st.subheader("📋 Complete Reversal Detection Data")

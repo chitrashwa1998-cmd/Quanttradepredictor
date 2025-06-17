@@ -244,13 +244,13 @@ class QuantTradingModels:
         if len(trend_counts) > 0:
             print(f"Trending percentage: {trend_counts.get(1, 0) / len(targets['trend_sideways']) * 100:.1f}%")
 
-        # 6. Reversal points - Enhanced detection
+        # 6. Reversal points - PRACTICAL DETECTION (NO LOOK-AHEAD BIAS)
         # Calculate momentum and trend indicators for reversal detection
         price_change_1 = df['Close'].pct_change(1)
         price_change_3 = df['Close'].pct_change(3)
         price_change_5 = df['Close'].pct_change(5)
         
-        # Calculate RSI-like momentum indicator
+        # Calculate RSI-like momentum indicator (historical data only)
         momentum_window = 14
         gains = price_change_1.where(price_change_1 > 0, 0).rolling(momentum_window).mean()
         losses = (-price_change_1.where(price_change_1 < 0, 0)).rolling(momentum_window).mean()
@@ -268,59 +268,92 @@ class QuantTradingModels:
         price_position = (df['Close'] - low_10) / (high_10 - low_10 + 1e-10)
         
         # Volatility for adaptive thresholds
-        volatility = df['Close'].pct_change().rolling(20).std()
+        volatility = df['Close'].pct_change().rolling(10).std()
+        base_volatility_threshold = 0.005  # 0.5% base threshold
         
-        # Future price movement for reversal confirmation (look ahead 3-5 periods)
-        future_return_3 = df['Close'].shift(-3) / df['Close'] - 1
-        future_return_5 = df['Close'].shift(-5) / df['Close'] - 1
+        # HISTORICAL-ONLY REVERSAL CONDITIONS (NO FUTURE DATA)
         
-        # BULLISH REVERSAL CONDITIONS
-        # 1. Price at or near recent lows
-        near_lows = price_position <= 0.3
+        # BULLISH REVERSAL CONDITIONS (Price expected to bounce up)
+        # 1. Price at or near recent lows with oversold conditions
+        near_lows = price_position <= 0.25  # Bottom 25% of recent range
+        oversold_momentum = momentum_index <= 35  # Oversold RSI
+        recent_decline = price_change_3 < -0.003  # Recent decline of 0.3%+
         
-        # 2. Oversold momentum
-        oversold = momentum_index <= 30
+        # 2. Price below key moving averages (potential support)
+        below_sma_short = df['Close'] < sma_short
+        below_sma_medium = df['Close'] < sma_medium
         
-        # 3. Recent downward momentum
-        recent_decline = (price_change_1 < 0) & (price_change_3 < -0.005)
+        # 3. Volatility expansion (often precedes reversals)
+        vol_expansion = volatility > volatility.rolling(20).mean() * 1.2
         
-        # 4. Moving average support
-        ma_support = (df['Close'] <= sma_short) & (sma_short <= sma_medium)
+        # 4. Price action patterns (hammer-like candles)
+        candle_body = np.abs(df['Close'] - df['Open'])
+        candle_range = df['High'] - df['Low']
+        lower_wick = df['Open'].combine(df['Close'], min) - df['Low']
+        upper_wick = df['High'] - df['Open'].combine(df['Close'], max)
         
-        # 5. Future upward movement (confirmation)
-        future_bounce = future_return_3 > volatility * 1.5
-        
-        # BEARISH REVERSAL CONDITIONS
-        # 1. Price at or near recent highs
-        near_highs = price_position >= 0.7
-        
-        # 2. Overbought momentum
-        overbought = momentum_index >= 70
-        
-        # 3. Recent upward momentum
-        recent_rally = (price_change_1 > 0) & (price_change_3 > 0.005)
-        
-        # 4. Moving average resistance
-        ma_resistance = (df['Close'] >= sma_short) & (sma_short >= sma_medium)
-        
-        # 5. Future downward movement (confirmation)
-        future_decline = future_return_3 < -volatility * 1.5
-        
-        # Combine conditions for reversal detection
-        bullish_reversal = (
-            (near_lows & oversold & future_bounce) |
-            (recent_decline & ma_support & future_bounce) |
-            (oversold & recent_decline & future_bounce)
+        # Hammer pattern: small body, long lower wick, short upper wick
+        hammer_pattern = (
+            (lower_wick > candle_body * 2) &  # Lower wick > 2x body
+            (upper_wick < candle_body * 0.5) &  # Upper wick < 0.5x body
+            (candle_range > 0)  # Valid candle
         )
         
-        bearish_reversal = (
-            (near_highs & overbought & future_decline) |
-            (recent_rally & ma_resistance & future_decline) |
-            (overbought & recent_rally & future_decline)
+        # BEARISH REVERSAL CONDITIONS (Price expected to decline)
+        # 1. Price at or near recent highs with overbought conditions
+        near_highs = price_position >= 0.75  # Top 25% of recent range
+        overbought_momentum = momentum_index >= 65  # Overbought RSI
+        recent_rally = price_change_3 > 0.003  # Recent rally of 0.3%+
+        
+        # 2. Price above key moving averages (potential resistance)
+        above_sma_short = df['Close'] > sma_short
+        above_sma_medium = df['Close'] > sma_medium
+        
+        # 3. Shooting star pattern: small body, long upper wick, short lower wick
+        shooting_star_pattern = (
+            (upper_wick > candle_body * 2) &  # Upper wick > 2x body
+            (lower_wick < candle_body * 0.5) &  # Lower wick < 0.5x body
+            (candle_range > 0)  # Valid candle
         )
+        
+        # BULLISH REVERSAL SIGNAL (Multiple scenarios)
+        bullish_reversal_strict = (
+            near_lows & oversold_momentum & recent_decline  # Classic oversold bounce
+        )
+        
+        bullish_reversal_moderate = (
+            (near_lows & (oversold_momentum | recent_decline)) |  # Partial oversold
+            (below_sma_short & oversold_momentum & vol_expansion) |  # Support with momentum
+            (hammer_pattern & below_sma_medium & recent_decline)  # Hammer at support
+        )
+        
+        # BEARISH REVERSAL SIGNAL (Multiple scenarios)
+        bearish_reversal_strict = (
+            near_highs & overbought_momentum & recent_rally  # Classic overbought decline
+        )
+        
+        bearish_reversal_moderate = (
+            (near_highs & (overbought_momentum | recent_rally)) |  # Partial overbought
+            (above_sma_short & overbought_momentum & vol_expansion) |  # Resistance with momentum
+            (shooting_star_pattern & above_sma_medium & recent_rally)  # Shooting star at resistance
+        )
+        
+        # COMBINE ALL REVERSAL SIGNALS
+        # Use a balanced approach - not too strict, not too loose
+        bullish_reversal = bullish_reversal_strict | bullish_reversal_moderate
+        bearish_reversal = bearish_reversal_strict | bearish_reversal_moderate
+        
+        # Ensure we don't have conflicting signals
+        conflicting_reversals = bullish_reversal & bearish_reversal
+        bullish_reversal = bullish_reversal & ~conflicting_reversals
+        bearish_reversal = bearish_reversal & ~conflicting_reversals
         
         # Final reversal signal: 1 = reversal expected, 0 = no reversal
         reversal_signal = (bullish_reversal | bearish_reversal).astype(int)
+        
+        # Apply minimum data filter (need enough history for indicators)
+        reversal_signal.iloc[:momentum_window] = 0  # First 14 periods = no signal
+        
         targets['reversal'] = reversal_signal
         
         # Debug information for reversal detection
