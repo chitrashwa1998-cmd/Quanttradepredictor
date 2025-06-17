@@ -87,7 +87,7 @@ with col3:
     auto_refresh = st.checkbox(
         "Live Updates",
         value=True,
-        help="Automatically update every 30 seconds during market hours"
+        help="Automatically update every 10 seconds during market hours"
     )
 
 with col4:
@@ -129,9 +129,9 @@ if auto_refresh and is_open:
         st.session_state.last_refresh_time = ist_now
         refresh_triggered = True
     else:
-        # Check if 30 seconds have passed since last refresh
+        # Check if 10 seconds have passed since last refresh
         time_since_refresh = ist_now - st.session_state.last_refresh_time
-        if time_since_refresh.total_seconds() >= 30:
+        if time_since_refresh.total_seconds() >= 10:
             st.session_state.last_refresh_time = ist_now
             refresh_triggered = True
             st.rerun()  # Immediately trigger rerun
@@ -139,7 +139,7 @@ if auto_refresh and is_open:
     # Show next refresh countdown
     if not refresh_triggered:
         time_since_refresh = ist_now - st.session_state.last_refresh_time
-        next_refresh_in = max(0, 30 - int(time_since_refresh.total_seconds()))
+        next_refresh_in = max(0, 10 - int(time_since_refresh.total_seconds()))
         
         # Create a placeholder for dynamic countdown
         countdown_placeholder = st.empty()
@@ -257,7 +257,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
             # ML Predictions Section
             st.header("ML Predictions")
 
-            # Check if models are available in session state or try to load from database
+            # Check if models are available in session state (skip database check for speed)
             models_available = False
             model_trainer = None
 
@@ -265,32 +265,45 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                 models_available = True
                 model_trainer = st.session_state.model_trainer
             else:
-                # Try to load models from database
-                try:
-                    from models.xgboost_models import QuantTradingModels
-                    from utils.database_adapter import get_trading_database
+                # Only try to load models from database if not auto-refreshing to avoid delays
+                if not refresh_triggered:
+                    try:
+                        from models.xgboost_models import QuantTradingModels
+                        from utils.database_adapter import get_trading_database
 
-                    db = get_trading_database()
-                    trained_models = db.load_trained_models()
+                        db = get_trading_database()
+                        trained_models = db.load_trained_models()
 
-                    if trained_models:
-                        model_trainer = QuantTradingModels()
-                        model_trainer.models = trained_models
-                        st.session_state.model_trainer = model_trainer
-                        models_available = True
-                        st.success("✅ Loaded models from database")
+                        if trained_models:
+                            model_trainer = QuantTradingModels()
+                            model_trainer.models = trained_models
+                            st.session_state.model_trainer = model_trainer
+                            models_available = True
+                            st.success("✅ Loaded models from database")
 
-                except Exception as e:
-                    st.warning(f"⚠️ Could not load models from database: {str(e)}")
+                    except Exception as e:
+                        st.warning(f"⚠️ Could not load models from database: {str(e)}")
+                else:
+                    st.info("⏳ Models loading... (Auto-refresh in progress)")
 
             if models_available and model_trainer:
 
                 try:
-                    # Prepare features for prediction
-                    features_df = model_trainer.prepare_features(df_with_indicators)
-
-                    # Remove rows with NaN values
-                    clean_features = features_df.dropna()
+                    # Cache features preparation if data hasn't changed
+                    data_hash = hash(str(df_with_indicators.tail(10).values.tobytes()))
+                    
+                    if not hasattr(st.session_state, 'cached_features_hash') or st.session_state.cached_features_hash != data_hash:
+                        # Prepare features for prediction
+                        features_df = model_trainer.prepare_features(df_with_indicators)
+                        # Remove rows with NaN values
+                        clean_features = features_df.dropna()
+                        
+                        # Cache the results
+                        st.session_state.cached_features = clean_features
+                        st.session_state.cached_features_hash = data_hash
+                    else:
+                        # Use cached features
+                        clean_features = st.session_state.cached_features
 
                     if not clean_features.empty and len(clean_features) >= 1:
                         st.success(f"✅ {len(clean_features)} data points ready for prediction")
@@ -449,7 +462,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                             
                             # Always show auto-refresh status
                             if auto_refresh and is_open:
-                                st.info("🔄 Auto-refresh enabled - Data updates every 30 seconds during market hours")
+                                st.info("🔄 Auto-refresh enabled - Data updates every 10 seconds during market hours")
                             elif is_open:
                                 st.info("⏸️ Auto-refresh disabled - Enable for live updates")
 
@@ -802,7 +815,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
 if auto_refresh and is_open:
     st.markdown("""
     <script>
-    // Auto-refresh every 30 seconds during market hours
+    // Auto-refresh every 10 seconds during market hours
     if (window.autoRefreshInterval) {
         clearInterval(window.autoRefreshInterval);
     }
@@ -820,7 +833,7 @@ if auto_refresh and is_open:
         if (refreshButton) {
             refreshButton.click();
         }
-    }, 30000);
+    }, 10000);
     </script>
     """, unsafe_allow_html=True)
 
