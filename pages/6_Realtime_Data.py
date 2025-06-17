@@ -231,8 +231,14 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                 name="Price"
             ))
 
+            # Ensure current_time_ist is a datetime object
+            if isinstance(current_time_ist, str):
+                current_time_display = current_time_ist
+            else:
+                current_time_display = current_time_ist.strftime('%H:%M:%S IST')
+
             fig.update_layout(
-                title=f"{selected_name} - {interval} Candlestick Chart (Last Updated: {current_time_ist.strftime('%H:%M:%S IST')})",
+                title=f"{selected_name} - {interval} Candlestick Chart (Last Updated: {current_time_display})",
                 xaxis_title="Time",
                 yaxis_title="Price (₹)",
                 height=500,
