@@ -285,13 +285,19 @@ async def upload_data(file_content: str, filename: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-# Serve React static files
-app.mount("/static", StaticFiles(directory="build/static"), name="static")
-
-@app.get("/{full_path:path}")
-async def serve_react_app(full_path: str):
-    """Serve React app for all routes"""
-    return FileResponse("build/index.html")
+# Serve React static files (when built)
+try:
+    app.mount("/static", StaticFiles(directory="build/static"), name="static")
+    
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        """Serve React app for all routes"""
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        return FileResponse("build/index.html")
+except Exception:
+    # Build directory doesn't exist yet - React dev server will handle serving
+    pass
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5000)

@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "React Development Server"
+runButton = "React Frontend"
 
 [[workflows.workflow]]
 name = "Project"
@@ -42,6 +42,19 @@ args = "npm start"
 name = "FastAPI Backend"
 author = 40743738
 mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+
+[[workflows.workflow]]
+name = "React Frontend"
+author = 40743738
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm start"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
