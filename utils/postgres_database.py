@@ -1,89 +1,92 @@
 
-
 """
 PostgreSQL database implementation for TribexAlpha trading app
-Uses SQLAlchemy ORM for database operations
+Uses psycopg (version 3) for database operations
 """
 import os
 import json
 import pickle
 import base64
 import pandas as pd
-from sqlalchemy import create_engine, text, Column, Integer, String, Text, DateTime, Index
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.sql import func
+import psycopg
+from psycopg.rows import dict_row
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 import logging
 
-Base = declarative_base()
-
-class OHLCDataset(Base):
-    __tablename__ = 'ohlc_datasets'
-    
-    id = Column(Integer, primary_key=True)
-    dataset_name = Column(String(255), unique=True, nullable=False)
-    data_json = Column(Text, nullable=False)
-    metadata_json = Column(Text)
-    created_at = Column(DateTime, server_default=func.current_timestamp())
-    updated_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
-
-class ModelResult(Base):
-    __tablename__ = 'model_results'
-    
-    id = Column(Integer, primary_key=True)
-    model_name = Column(String(255), unique=True, nullable=False)
-    results_json = Column(Text, nullable=False)
-    created_at = Column(DateTime, server_default=func.current_timestamp())
-    updated_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
-
-class TrainedModel(Base):
-    __tablename__ = 'trained_models'
-    
-    id = Column(Integer, primary_key=True)
-    model_name = Column(String(255), unique=True, nullable=False)
-    model_data = Column(Text, nullable=False)
-    task_type = Column(String(100))
-    trained_at = Column(DateTime, server_default=func.current_timestamp())
-    updated_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
-
-class Prediction(Base):
-    __tablename__ = 'predictions'
-    
-    id = Column(Integer, primary_key=True)
-    model_name = Column(String(255), nullable=False)
-    predictions_json = Column(Text, nullable=False)
-    created_at = Column(DateTime, server_default=func.current_timestamp())
-    updated_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
-
 class PostgresTradingDatabase:
-    """PostgreSQL database using SQLAlchemy for storing trading data, models, and predictions."""
+    """PostgreSQL database using psycopg for storing trading data, models, and predictions."""
 
     def __init__(self):
-        """Initialize PostgreSQL connection with SQLAlchemy."""
+        """Initialize PostgreSQL connection with psycopg."""
         self.database_url = os.getenv('DATABASE_URL')
         if not self.database_url:
             raise ValueError("DATABASE_URL environment variable not set")
         
-        # Create SQLAlchemy engine
-        self.engine = create_engine(self.database_url, pool_pre_ping=True)
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-        
         self._create_tables()
+
+    def _get_connection(self):
+        """Get database connection."""
+        return psycopg.connect(self.database_url)
 
     def _create_tables(self):
         """Create necessary tables if they don't exist."""
         try:
-            Base.metadata.create_all(bind=self.engine)
-            
-            # Create indexes
-            with self.engine.connect() as connection:
-                connection.execute(text("CREATE INDEX IF NOT EXISTS idx_ohlc_dataset_name ON ohlc_datasets(dataset_name);"))
-                connection.execute(text("CREATE INDEX IF NOT EXISTS idx_model_name ON model_results(model_name);"))
-                connection.execute(text("CREATE INDEX IF NOT EXISTS idx_trained_model_name ON trained_models(model_name);"))
-                connection.execute(text("CREATE INDEX IF NOT EXISTS idx_predictions_model ON predictions(model_name);"))
-                connection.commit()
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # OHLC datasets table
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS ohlc_datasets (
+                            id SERIAL PRIMARY KEY,
+                            dataset_name VARCHAR(255) UNIQUE NOT NULL,
+                            data_json TEXT NOT NULL,
+                            metadata_json TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                    """)
+                    
+                    # Model results table
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS model_results (
+                            id SERIAL PRIMARY KEY,
+                            model_name VARCHAR(255) UNIQUE NOT NULL,
+                            results_json TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                    """)
+                    
+                    # Trained models table
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS trained_models (
+                            id SERIAL PRIMARY KEY,
+                            model_name VARCHAR(255) UNIQUE NOT NULL,
+                            model_data TEXT NOT NULL,
+                            task_type VARCHAR(100),
+                            trained_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                    """)
+                    
+                    # Predictions table
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS predictions (
+                            id SERIAL PRIMARY KEY,
+                            model_name VARCHAR(255) NOT NULL,
+                            predictions_json TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                    """)
+                    
+                    # Create indexes
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_ohlc_dataset_name ON ohlc_datasets(dataset_name);")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_model_name ON model_results(model_name);")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_trained_model_name ON trained_models(model_name);")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_predictions_model ON predictions(model_name);")
+                    
+                    conn.commit()
             
             print("✅ PostgreSQL tables created successfully")
         except Exception as e:
@@ -93,9 +96,11 @@ class PostgresTradingDatabase:
     def test_connection(self) -> bool:
         """Test PostgreSQL connection."""
         try:
-            with self.engine.connect() as connection:
-                result = connection.execute(text("SELECT 1;"))
-                return result.fetchone()[0] == 1
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT 1;")
+                    result = cursor.fetchone()
+                    return result[0] == 1
         except Exception as e:
             print(f"PostgreSQL connection test failed: {str(e)}")
             return False
@@ -117,23 +122,25 @@ class PostgresTradingDatabase:
             }
             metadata_json = json.dumps(metadata)
 
-            with self.SessionLocal() as session:
-                # Check if dataset exists
-                existing = session.query(OHLCDataset).filter_by(dataset_name=dataset_name).first()
-                
-                if existing:
-                    existing.data_json = data_json
-                    existing.metadata_json = metadata_json
-                    existing.updated_at = datetime.now()
-                else:
-                    new_dataset = OHLCDataset(
-                        dataset_name=dataset_name,
-                        data_json=data_json,
-                        metadata_json=metadata_json
-                    )
-                    session.add(new_dataset)
-                
-                session.commit()
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # Check if dataset exists
+                    cursor.execute("SELECT id FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
+                    existing = cursor.fetchone()
+                    
+                    if existing:
+                        cursor.execute("""
+                            UPDATE ohlc_datasets 
+                            SET data_json = %s, metadata_json = %s, updated_at = CURRENT_TIMESTAMP 
+                            WHERE dataset_name = %s;
+                        """, (data_json, metadata_json, dataset_name))
+                    else:
+                        cursor.execute("""
+                            INSERT INTO ohlc_datasets (dataset_name, data_json, metadata_json) 
+                            VALUES (%s, %s, %s);
+                        """, (dataset_name, data_json, metadata_json))
+                    
+                    conn.commit()
 
             print(f"✅ Successfully saved {len(data)} rows to PostgreSQL")
             return True
@@ -145,22 +152,24 @@ class PostgresTradingDatabase:
     def load_ohlc_data(self, dataset_name: str = "main_dataset") -> Optional[pd.DataFrame]:
         """Load OHLC dataframe from PostgreSQL database."""
         try:
-            with self.SessionLocal() as session:
-                dataset = session.query(OHLCDataset).filter_by(dataset_name=dataset_name).first()
-                
-                if dataset:
-                    df = pd.read_json(dataset.data_json, orient='records')
+            with self._get_connection() as conn:
+                with conn.cursor(row_factory=dict_row) as cursor:
+                    cursor.execute("SELECT data_json FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
+                    result = cursor.fetchone()
+                    
+                    if result:
+                        df = pd.read_json(result['data_json'], orient='records')
 
-                    # Set datetime index if present
-                    if 'timestamp' in df.columns:
-                        df['timestamp'] = pd.to_datetime(df['timestamp'])
-                        df.set_index('timestamp', inplace=True)
-                    elif 'Datetime' in df.columns:
-                        df['Datetime'] = pd.to_datetime(df['Datetime'])
-                        df.set_index('Datetime', inplace=True)
+                        # Set datetime index if present
+                        if 'timestamp' in df.columns:
+                            df['timestamp'] = pd.to_datetime(df['timestamp'])
+                            df.set_index('timestamp', inplace=True)
+                        elif 'Datetime' in df.columns:
+                            df['Datetime'] = pd.to_datetime(df['Datetime'])
+                            df.set_index('Datetime', inplace=True)
 
-                    print(f"✅ Loaded {len(df)} rows from PostgreSQL")
-                    return df
+                        print(f"✅ Loaded {len(df)} rows from PostgreSQL")
+                        return df
 
             return None
 
@@ -171,20 +180,22 @@ class PostgresTradingDatabase:
     def get_dataset_list(self) -> List[Dict[str, Any]]:
         """Get list of saved datasets."""
         try:
-            with self.SessionLocal() as session:
-                datasets_query = session.query(OHLCDataset).order_by(OHLCDataset.updated_at.desc()).all()
+            with self._get_connection() as conn:
+                with conn.cursor(row_factory=dict_row) as cursor:
+                    cursor.execute("SELECT * FROM ohlc_datasets ORDER BY updated_at DESC;")
+                    datasets_query = cursor.fetchall()
 
             datasets = []
             for dataset in datasets_query:
-                metadata = json.loads(dataset.metadata_json) if dataset.metadata_json else {}
+                metadata = json.loads(dataset['metadata_json']) if dataset['metadata_json'] else {}
                 datasets.append({
-                    'name': dataset.dataset_name,
+                    'name': dataset['dataset_name'],
                     'rows': metadata.get('rows', 0),
                     'columns': metadata.get('columns', []),
                     'start_date': metadata.get('start_date'),
                     'end_date': metadata.get('end_date'),
-                    'created_at': dataset.created_at,
-                    'updated_at': dataset.updated_at
+                    'created_at': dataset['created_at'],
+                    'updated_at': dataset['updated_at']
                 })
 
             return datasets
@@ -196,11 +207,13 @@ class PostgresTradingDatabase:
     def get_dataset_metadata(self, dataset_name: str = "main_dataset") -> Optional[Dict[str, Any]]:
         """Get metadata for a dataset."""
         try:
-            with self.SessionLocal() as session:
-                dataset = session.query(OHLCDataset).filter_by(dataset_name=dataset_name).first()
-                
-                if dataset and dataset.metadata_json:
-                    return json.loads(dataset.metadata_json)
+            with self._get_connection() as conn:
+                with conn.cursor(row_factory=dict_row) as cursor:
+                    cursor.execute("SELECT metadata_json FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
+                    result = cursor.fetchone()
+                    
+                    if result and result['metadata_json']:
+                        return json.loads(result['metadata_json'])
 
             return None
 
@@ -211,13 +224,11 @@ class PostgresTradingDatabase:
     def delete_dataset(self, dataset_name: str) -> bool:
         """Delete a dataset from database."""
         try:
-            with self.SessionLocal() as session:
-                dataset = session.query(OHLCDataset).filter_by(dataset_name=dataset_name).first()
-                if dataset:
-                    session.delete(dataset)
-                    session.commit()
-                    return True
-                return False
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
+                    conn.commit()
+                    return cursor.rowcount > 0
 
         except Exception as e:
             print(f"Error deleting dataset: {str(e)}")
@@ -228,20 +239,24 @@ class PostgresTradingDatabase:
         try:
             results_json = json.dumps(results, default=str)
 
-            with self.SessionLocal() as session:
-                existing = session.query(ModelResult).filter_by(model_name=model_name).first()
-                
-                if existing:
-                    existing.results_json = results_json
-                    existing.updated_at = datetime.now()
-                else:
-                    new_result = ModelResult(
-                        model_name=model_name,
-                        results_json=results_json
-                    )
-                    session.add(new_result)
-                
-                session.commit()
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT id FROM model_results WHERE model_name = %s;", (model_name,))
+                    existing = cursor.fetchone()
+                    
+                    if existing:
+                        cursor.execute("""
+                            UPDATE model_results 
+                            SET results_json = %s, updated_at = CURRENT_TIMESTAMP 
+                            WHERE model_name = %s;
+                        """, (results_json, model_name))
+                    else:
+                        cursor.execute("""
+                            INSERT INTO model_results (model_name, results_json) 
+                            VALUES (%s, %s);
+                        """, (model_name, results_json))
+                    
+                    conn.commit()
 
             return True
 
@@ -252,11 +267,13 @@ class PostgresTradingDatabase:
     def load_model_results(self, model_name: str) -> Optional[Dict[str, Any]]:
         """Load model training results."""
         try:
-            with self.SessionLocal() as session:
-                result = session.query(ModelResult).filter_by(model_name=model_name).first()
-                
-                if result:
-                    return json.loads(result.results_json)
+            with self._get_connection() as conn:
+                with conn.cursor(row_factory=dict_row) as cursor:
+                    cursor.execute("SELECT results_json FROM model_results WHERE model_name = %s;", (model_name,))
+                    result = cursor.fetchone()
+                    
+                    if result:
+                        return json.loads(result['results_json'])
 
             return None
 
@@ -277,22 +294,24 @@ class PostgresTradingDatabase:
 
                     task_type = model_data.get('task_type', 'unknown') if isinstance(model_data, dict) else 'unknown'
 
-                    with self.SessionLocal() as session:
-                        existing = session.query(TrainedModel).filter_by(model_name=model_name).first()
-                        
-                        if existing:
-                            existing.model_data = model_b64
-                            existing.task_type = task_type
-                            existing.updated_at = datetime.now()
-                        else:
-                            new_model = TrainedModel(
-                                model_name=model_name,
-                                model_data=model_b64,
-                                task_type=task_type
-                            )
-                            session.add(new_model)
-                        
-                        session.commit()
+                    with self._get_connection() as conn:
+                        with conn.cursor() as cursor:
+                            cursor.execute("SELECT id FROM trained_models WHERE model_name = %s;", (model_name,))
+                            existing = cursor.fetchone()
+                            
+                            if existing:
+                                cursor.execute("""
+                                    UPDATE trained_models 
+                                    SET model_data = %s, task_type = %s, updated_at = CURRENT_TIMESTAMP 
+                                    WHERE model_name = %s;
+                                """, (model_b64, task_type, model_name))
+                            else:
+                                cursor.execute("""
+                                    INSERT INTO trained_models (model_name, model_data, task_type) 
+                                    VALUES (%s, %s, %s);
+                                """, (model_name, model_b64, task_type))
+                            
+                            conn.commit()
 
                     success_count += 1
                     print(f"Serialized model: {model_name}")
@@ -310,8 +329,10 @@ class PostgresTradingDatabase:
     def load_trained_models(self) -> Optional[Dict[str, Any]]:
         """Load trained model objects from database."""
         try:
-            with self.SessionLocal() as session:
-                models_query = session.query(TrainedModel).all()
+            with self._get_connection() as conn:
+                with conn.cursor(row_factory=dict_row) as cursor:
+                    cursor.execute("SELECT model_name, model_data FROM trained_models;")
+                    models_query = cursor.fetchall()
 
             if not models_query:
                 return None
@@ -320,11 +341,11 @@ class PostgresTradingDatabase:
             for model in models_query:
                 try:
                     # Deserialize model data
-                    model_pickle = base64.b64decode(model.model_data.encode('utf-8'))
+                    model_pickle = base64.b64decode(model['model_data'].encode('utf-8'))
                     model_data = pickle.loads(model_pickle)
-                    models_dict[model.model_name] = model_data
+                    models_dict[model['model_name']] = model_data
                 except Exception as e:
-                    print(f"Error deserializing model {model.model_name}: {str(e)}")
+                    print(f"Error deserializing model {model['model_name']}: {str(e)}")
                     continue
 
             return models_dict if models_dict else None
@@ -338,13 +359,13 @@ class PostgresTradingDatabase:
         try:
             predictions_json = predictions.to_json(orient='records', date_format='iso')
 
-            with self.SessionLocal() as session:
-                new_prediction = Prediction(
-                    model_name=model_name,
-                    predictions_json=predictions_json
-                )
-                session.add(new_prediction)
-                session.commit()
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO predictions (model_name, predictions_json) 
+                        VALUES (%s, %s);
+                    """, (model_name, predictions_json))
+                    conn.commit()
 
             return True
 
@@ -355,11 +376,17 @@ class PostgresTradingDatabase:
     def load_predictions(self, model_name: str) -> Optional[pd.DataFrame]:
         """Load model predictions."""
         try:
-            with self.SessionLocal() as session:
-                prediction = session.query(Prediction).filter_by(model_name=model_name).order_by(Prediction.created_at.desc()).first()
-                
-                if prediction:
-                    return pd.read_json(prediction.predictions_json, orient='records')
+            with self._get_connection() as conn:
+                with conn.cursor(row_factory=dict_row) as cursor:
+                    cursor.execute("""
+                        SELECT predictions_json FROM predictions 
+                        WHERE model_name = %s 
+                        ORDER BY created_at DESC LIMIT 1;
+                    """, (model_name,))
+                    result = cursor.fetchone()
+                    
+                    if result:
+                        return pd.read_json(result['predictions_json'], orient='records')
 
             return None
 
@@ -370,27 +397,33 @@ class PostgresTradingDatabase:
     def get_database_info(self) -> Dict[str, Any]:
         """Get information about stored data."""
         try:
-            with self.SessionLocal() as session:
-                # Count datasets
-                dataset_count = session.query(OHLCDataset).count()
-                
-                # Count model results
-                model_count = session.query(ModelResult).count()
-                
-                # Count trained models
-                trained_model_count = session.query(TrainedModel).count()
-                
-                # Count predictions
-                prediction_count = session.query(Prediction).count()
-                
-                # Get dataset info
-                datasets_query = session.query(OHLCDataset).all()
+            with self._get_connection() as conn:
+                with conn.cursor(row_factory=dict_row) as cursor:
+                    # Count datasets
+                    cursor.execute("SELECT COUNT(*) as count FROM ohlc_datasets;")
+                    dataset_count = cursor.fetchone()['count']
+                    
+                    # Count model results
+                    cursor.execute("SELECT COUNT(*) as count FROM model_results;")
+                    model_count = cursor.fetchone()['count']
+                    
+                    # Count trained models
+                    cursor.execute("SELECT COUNT(*) as count FROM trained_models;")
+                    trained_model_count = cursor.fetchone()['count']
+                    
+                    # Count predictions
+                    cursor.execute("SELECT COUNT(*) as count FROM predictions;")
+                    prediction_count = cursor.fetchone()['count']
+                    
+                    # Get dataset info
+                    cursor.execute("SELECT dataset_name, metadata_json FROM ohlc_datasets;")
+                    datasets_query = cursor.fetchall()
 
             datasets = []
             for dataset in datasets_query:
-                metadata = json.loads(dataset.metadata_json) if dataset.metadata_json else {}
+                metadata = json.loads(dataset['metadata_json']) if dataset['metadata_json'] else {}
                 datasets.append({
-                    'name': dataset.dataset_name,
+                    'name': dataset['dataset_name'],
                     'rows': metadata.get('rows', 0),
                     'columns': metadata.get('columns', [])
                 })
@@ -426,12 +459,13 @@ class PostgresTradingDatabase:
     def clear_all_data(self) -> bool:
         """Clear all data from database."""
         try:
-            with self.SessionLocal() as session:
-                session.query(Prediction).delete()
-                session.query(TrainedModel).delete()
-                session.query(ModelResult).delete()
-                session.query(OHLCDataset).delete()
-                session.commit()
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM predictions;")
+                    cursor.execute("DELETE FROM trained_models;")
+                    cursor.execute("DELETE FROM model_results;")
+                    cursor.execute("DELETE FROM ohlc_datasets;")
+                    conn.commit()
 
             return True
 
