@@ -731,7 +731,6 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     st.info("✅ No significant alerts at current levels")
 
             # Data export options
-            ```python
             st.header("Data Export")
 
             col1, col2, col3 = st.columns(3)
