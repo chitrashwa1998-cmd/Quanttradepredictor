@@ -1,3 +1,4 @@
+
 """
 PostgreSQL database implementation for TribexAlpha trading app
 Replaces the key-value store with proper relational database
@@ -7,8 +8,8 @@ import json
 import pickle
 import base64
 import pandas as pd
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 import logging
@@ -25,7 +26,7 @@ class PostgresTradingDatabase:
 
     def _get_connection(self):
         """Get database connection."""
-        return psycopg2.connect(self.database_url)
+        return psycopg.connect(self.database_url)
 
     def test_connection(self) -> bool:
         """Test PostgreSQL connection."""
@@ -178,7 +179,7 @@ class PostgresTradingDatabase:
             """
 
             with self._get_connection() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                with conn.cursor(row_factory=dict_row) as cursor:
                     cursor.execute(sql)
                     results = cursor.fetchall()
 
