@@ -361,14 +361,14 @@ class QuantTradingModels:
         volatility_short = df['Close'].pct_change().rolling(10).std()
         volatility_long = df['Close'].pct_change().rolling(20).std()
 
-        # SCALPING THRESHOLDS - Much tighter for 5-min candles
-        base_threshold = 0.0015  # 0.15% base threshold for scalping
-        volatility_multiplier = 0.3  # Lower multiplier for tighter signals
+        # SCALPING THRESHOLDS - More aggressive for balanced signals
+        base_threshold = 0.0008  # 0.08% base threshold (more sensitive)
+        volatility_multiplier = 0.2  # Even lower multiplier for more signals
 
         # Dynamic thresholds based on recent volatility
         dynamic_threshold = np.maximum(base_threshold, volatility_short * volatility_multiplier)
-        buy_threshold = dynamic_threshold
-        sell_threshold = -dynamic_threshold
+        buy_threshold = dynamic_threshold * 0.7  # Make buy signals easier
+        sell_threshold = -dynamic_threshold * 0.7  # Make sell signals easier
 
         # SCALPING SIGNAL CRITERIA
 
@@ -421,28 +421,32 @@ class QuantTradingModels:
         price_above_sma = (df['Close'] > sma_5).fillna(False).astype(bool)
         price_below_sma = (df['Close'] < sma_5).fillna(False).astype(bool)
 
-        # SCALPING BUY SIGNALS (More aggressive)
+        # SCALPING BUY SIGNALS (Much more aggressive)
         scalp_buy_signals = (
-            (micro_up & ema_bullish & high_volume) |  # Strong micro momentum with trend
-            (breakout_up & vol_expansion) |           # Breakout with volume
-            (momentum_2_bullish & ema_bullish) |      # 2-candle momentum
-            (lower_range & micro_up & price_above_sma)    # Bounce from low with trend
+            (micro_up & ema_bullish) |                    # Micro momentum with trend (no volume requirement)
+            (breakout_up) |                               # Any breakout (no volume requirement)
+            (momentum_2_bullish) |                        # 2-candle momentum (standalone)
+            (lower_range & micro_up) |                    # Bounce from low (no SMA requirement)
+            (ema_bullish & price_above_sma) |             # Trend alignment
+            (micro_up & vol_expansion)                    # Momentum with volatility
         )
 
-        # SCALPING SELL SIGNALS (More aggressive)
+        # SCALPING SELL SIGNALS (Much more aggressive)
         scalp_sell_signals = (
-            (micro_down & ema_bearish & high_volume) |  # Strong micro momentum against trend
-            (breakout_down & vol_expansion) |           # Breakdown with volume
-            (momentum_2_bearish & ema_bearish) |        # 2-candle momentum down
-            (upper_range & micro_down & price_below_sma)  # Rejection from high against trend
+            (micro_down & ema_bearish) |                  # Micro momentum against trend (no volume requirement)
+            (breakout_down) |                             # Any breakdown (no volume requirement)
+            (momentum_2_bearish) |                        # 2-candle momentum down (standalone)
+            (upper_range & micro_down) |                  # Rejection from high (no SMA requirement)
+            (ema_bearish & price_below_sma) |             # Trend alignment
+            (micro_down & vol_expansion)                  # Momentum with volatility
         )
 
-        # Additional scalping filters to reduce whipsaws
-        # Avoid trading in very low volatility (sideways market)
-        volatility_quantile = volatility_short.rolling(50).quantile(0.3)
-        sufficient_volatility = (volatility_short > volatility_quantile).fillna(False).astype(bool)
+        # Additional scalping filters to reduce whipsaws (more permissive)
+        # Only avoid extremely low volatility periods
+        volatility_quantile = volatility_short.rolling(50).quantile(0.1)  # Only bottom 10%
+        sufficient_volatility = (volatility_short > volatility_quantile).fillna(True).astype(bool)  # Default to True
 
-        # Apply volatility filter
+        # Apply volatility filter (more permissive)
         scalp_buy_signals = scalp_buy_signals & sufficient_volatility
         scalp_sell_signals = scalp_sell_signals & sufficient_volatility
 
@@ -455,9 +459,25 @@ class QuantTradingModels:
         scalp_buy_signals = scalp_buy_signals & ~conflicting
         scalp_sell_signals = scalp_sell_signals & ~conflicting
 
-        # Create final scalping signals with reduced hold periods
+        # Create final scalping signals with balanced distribution
         signals = np.where(scalp_buy_signals, 2, 
                           np.where(scalp_sell_signals, 0, 1))  # 2=Buy, 1=Hold, 0=Sell
+
+        # Force better distribution if too many holds
+        signal_counts = pd.Series(signals).value_counts()
+        hold_percentage = signal_counts.get(1, 0) / len(signals) * 100
+        
+        if hold_percentage > 80:  # If more than 80% holds, be more aggressive
+            # Convert some holds to signals based on price momentum
+            price_change_small = df['Close'].pct_change(1).fillna(0)
+            
+            # Convert holds with positive momentum to buys
+            additional_buys = (signals == 1) & (price_change_small > 0.0005)
+            # Convert holds with negative momentum to sells
+            additional_sells = (signals == 1) & (price_change_small < -0.0005)
+            
+            signals = np.where(additional_buys, 2, signals)
+            signals = np.where(additional_sells, 0, signals)
 
         targets['trading_signal'] = pd.Series(signals, index=df.index)
 
