@@ -135,14 +135,17 @@ if auto_refresh and is_open:
             st.session_state.last_refresh_time = ist_now
             refresh_triggered = True
 
-    # Show next refresh countdown and trigger page refresh
+    # Show next refresh countdown
     if not refresh_triggered:
-        next_refresh_in = 30 - int(time_since_refresh.total_seconds())
+        next_refresh_in = max(0, 30 - int(time_since_refresh.total_seconds()))
         st.info(f"🔄 Next auto-refresh in {next_refresh_in} seconds")
-
-        # Auto-refresh the page when countdown reaches 0
-        if next_refresh_in <= 0:
+        
+        # Auto-refresh when countdown reaches 0
+        if next_refresh_in == 0:
+            time.sleep(1)  # Small delay to show 0 seconds
             st.rerun()
+    else:
+        st.info("🔄 Refreshing data...")
 
 elif auto_refresh and not is_open:
     st.info("🕐 Auto-refresh paused - Market is closed")
@@ -375,13 +378,22 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                             # Get current date in IST
                             current_date = datetime.now(ist_tz).date()
 
-                            # Filter data for current day - check if we have any data from today
-                            today_features = clean_features[clean_features.index.date == current_date]
+                            # Convert clean_features index to IST for proper comparison
+                            clean_features_ist = clean_features.copy()
+                            if not hasattr(clean_features_ist.index, 'tz') or clean_features_ist.index.tz is None:
+                                # If no timezone info, assume it's already in IST
+                                clean_features_ist.index = pd.to_datetime(clean_features_ist.index).tz_localize('Asia/Kolkata')
+                            else:
+                                # Convert to IST
+                                clean_features_ist.index = clean_features_ist.index.tz_convert('Asia/Kolkata')
+
+                            # Filter data for current day using IST timestamps
+                            today_features = clean_features_ist[clean_features_ist.index.date == current_date]
 
                             # Check if we have recent data (within last 2 hours during market hours)
                             if is_open:
                                 recent_cutoff = datetime.now(ist_tz) - timedelta(hours=2)
-                                very_recent_features = clean_features[clean_features.index >= recent_cutoff.replace(tzinfo=None)]
+                                very_recent_features = clean_features_ist[clean_features_ist.index >= recent_cutoff]
                             else:
                                 very_recent_features = pd.DataFrame()
 
@@ -394,8 +406,8 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                 st.info(f"📊 Showing {len(recent_features)} recent predictions (last 2 hours)")
                             else:
                                 # Fall back to most recent available data
-                                recent_count = min(20, len(clean_features))
-                                recent_features = clean_features.tail(recent_count)
+                                recent_count = min(20, len(clean_features_ist))
+                                recent_features = clean_features_ist.tail(recent_count)
                                 if is_open:
                                     st.warning("⚠️ No real-time data available yet. Market is open but data may be delayed.")
                                     st.info("💡 Try refreshing in a few minutes or check your internet connection.")
@@ -406,7 +418,13 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                             prediction_data = []
 
                             for idx, (timestamp, row) in enumerate(recent_features.iterrows()):
-                                row_data = {'Timestamp': timestamp.strftime('%Y-%m-%d %H:%M')}
+                                # Ensure timestamp is in IST format
+                                if hasattr(timestamp, 'tz') and timestamp.tz is not None:
+                                    ist_timestamp = timestamp.tz_convert('Asia/Kolkata')
+                                else:
+                                    ist_timestamp = pd.to_datetime(timestamp).tz_localize('Asia/Kolkata')
+                                
+                                row_data = {'Timestamp': ist_timestamp.strftime('%Y-%m-%d %H:%M IST')}
 
                                 # Get predictions for each available model
                                 single_row = row.to_frame().T
@@ -541,10 +559,16 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     historical_prediction_data = []
 
                     for idx, (timestamp, row) in enumerate(historical_features.iterrows()):
+                        # Ensure timestamp is in IST format
+                        if hasattr(timestamp, 'tz') and timestamp.tz is not None:
+                            ist_timestamp = timestamp.tz_convert('Asia/Kolkata')
+                        else:
+                            ist_timestamp = pd.to_datetime(timestamp).tz_localize('Asia/Kolkata')
+                        
                         row_data = {
-                            'Date': timestamp.strftime('%Y-%m-%d'),
-                            'Time': timestamp.strftime('%H:%M'),
-                            'Timestamp': timestamp.strftime('%Y-%m-%d %H:%M')
+                            'Date': ist_timestamp.strftime('%Y-%m-%d'),
+                            'Time': ist_timestamp.strftime('%H:%M IST'),
+                            'Timestamp': ist_timestamp.strftime('%Y-%m-%d %H:%M IST')
                         }
 
                         single_row = row.to_frame().T
@@ -715,10 +739,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
     # Reset trigger
     st.session_state.fetch_triggered = False
 
-# Auto-refresh functionality
-if auto_refresh:
-    time.sleep(300)  # Refresh every 5 minutes for Nifty 50
-    st.rerun()
+# Auto-refresh functionality handled above in the logic section
 
 # Instructions
 with st.expander("📋 Nifty 50 Real-Time Guide", expanded=False):
