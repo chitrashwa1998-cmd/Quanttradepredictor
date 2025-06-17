@@ -196,8 +196,31 @@ except Exception as e:
 # Check if features exist, if not prepare them
 if st.session_state.features is None:
     st.warning("Features not found. Preparing features from current data...")
-    features_filtered = model_trainer.prepare_features(df_filtered)
-    st.session_state.features = model_trainer.prepare_features(df)
+    try:
+        # First calculate technical indicators if not present
+        from features.technical_indicators import TechnicalIndicators
+        
+        # Check if technical indicators are already calculated
+        required_indicators = ['sma_5', 'ema_5', 'rsi', 'macd_histogram']
+        missing_indicators = [ind for ind in required_indicators if ind not in df_filtered.columns]
+        
+        if missing_indicators:
+            st.info("Calculating missing technical indicators...")
+            df_with_indicators = TechnicalIndicators.calculate_all_indicators(df_filtered)
+            df_full_indicators = TechnicalIndicators.calculate_all_indicators(df)
+        else:
+            df_with_indicators = df_filtered
+            df_full_indicators = df
+        
+        features_filtered = model_trainer.prepare_features(df_with_indicators)
+        st.session_state.features = model_trainer.prepare_features(df_full_indicators)
+        
+        st.success(f"✅ Prepared {len(features_filtered)} feature rows with {features_filtered.shape[1]} features")
+        
+    except Exception as e:
+        st.error(f"❌ Error preparing features: {str(e)}")
+        st.info("Please ensure your data has technical indicators calculated. Go to Model Training page first.")
+        st.stop()
 else:
     # Ensure features have proper datetime index
     features = st.session_state.features.copy()
@@ -209,6 +232,9 @@ else:
     
     try:
         features_filtered = features[features.index >= start_date].copy()
+        if features_filtered.empty:
+            st.warning("No features found for selected date range. Using recent data...")
+            features_filtered = features.tail(100).copy()
     except Exception as e:
         st.warning(f"Error filtering features: {str(e)}. Using all features.")
         features_filtered = features.copy()

@@ -86,15 +86,41 @@ class QuantTradingModels:
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Prepare features for model training."""
+        if df.empty:
+            raise ValueError("Input DataFrame is empty")
+        
         # Remove any rows with NaN values
         df_clean = df.dropna()
+        
+        if df_clean.empty:
+            raise ValueError("DataFrame is empty after removing NaN values")
 
         # Select feature columns (exclude OHLC and target columns)
         feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
         feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
 
-        self.feature_names = feature_cols
-        return df_clean[feature_cols]
+        # If we have stored feature names from previous training, use them for consistency
+        if hasattr(self, 'feature_names') and self.feature_names:
+            # Check if current data has the required features
+            missing_features = [col for col in self.feature_names if col not in df_clean.columns]
+            if missing_features:
+                raise ValueError(f"Missing required features: {missing_features}. Available features: {list(df_clean.columns)}")
+            
+            # Use the same feature order as training
+            feature_cols = self.feature_names
+        else:
+            # First time feature preparation
+            self.feature_names = feature_cols
+        
+        if not feature_cols:
+            raise ValueError("No feature columns found. Make sure technical indicators are calculated.")
+            
+        result_df = df_clean[feature_cols]
+        
+        if result_df.empty:
+            raise ValueError("Feature DataFrame is empty after column selection")
+            
+        return result_df
 
     def create_targets(self, df: pd.DataFrame) -> Dict[str, pd.Series]:
         """Create target variables for different prediction tasks."""
@@ -845,8 +871,22 @@ class QuantTradingModels:
         # Handle both new 'ensemble' and legacy 'model' keys
         model = model_info.get('ensemble') or model_info.get('model')
 
+        if not hasattr(self, 'feature_names') or not self.feature_names:
+            raise ValueError(f"No feature names found for model {model_name}. Model may not be properly trained.")
+
+        # Validate input features
+        if X.empty:
+            raise ValueError("Input DataFrame is empty")
+            
+        missing_features = [col for col in self.feature_names if col not in X.columns]
+        if missing_features:
+            raise ValueError(f"Missing required features: {missing_features}. Expected: {self.feature_names}, Got: {list(X.columns)}")
+
         # Prepare features
         X_features = X[self.feature_names]
+        
+        if X_features.empty:
+            raise ValueError("Feature DataFrame is empty after column selection")
 
         # Scale features (all ensemble models use scaling)
         if model_name in self.scalers:
