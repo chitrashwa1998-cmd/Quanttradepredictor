@@ -480,15 +480,36 @@ try:
                 pred_df['Profit_Prob'] = np.where(predictions == 1, 0.75, 0.25)
                 pred_df['Prediction_Type'] = 'Classification (Binary)'
 
-        # Create risk levels based on probability thresholds
-        pred_df['Risk_Level'] = pd.cut(pred_df['Profit_Prob'], 
-                                     bins=[0, 0.25, 0.5, 0.75, 1.0],
-                                     labels=['High Risk', 'Medium Risk', 'Low Risk', 'Very Low Risk'],
-                                     include_lowest=True)
+        # Create more balanced risk levels based on data distribution
+        # Use quantile-based binning for better distribution
+        prob_values = pred_df['Profit_Prob'].dropna()
+        
+        if len(prob_values) > 0:
+            # Create quartile-based risk levels for better balance
+            q25 = np.percentile(prob_values, 25)
+            q50 = np.percentile(prob_values, 50)
+            q75 = np.percentile(prob_values, 75)
+            
+            pred_df['Risk_Level'] = pd.cut(pred_df['Profit_Prob'], 
+                                         bins=[0, q25, q50, q75, 1.0],
+                                         labels=['High Risk', 'Medium Risk', 'Low Risk', 'Very Low Risk'],
+                                         include_lowest=True)
+        else:
+            # Fallback to original binning if no data
+            pred_df['Risk_Level'] = pd.cut(pred_df['Profit_Prob'], 
+                                         bins=[0, 0.25, 0.5, 0.75, 1.0],
+                                         labels=['High Risk', 'Medium Risk', 'Low Risk', 'Very Low Risk'],
+                                         include_lowest=True)
 
-        # Add signal interpretation
-        pred_df['Signal'] = np.where(pred_df['Profit_Prob'] >= 0.6, '🟢 HIGH PROFIT', 
-                                   np.where(pred_df['Profit_Prob'] >= 0.4, '🟡 MEDIUM PROFIT', '🔴 LOW PROFIT'))
+        # Dynamic signal interpretation based on actual data distribution
+        if len(pred_df) > 0:
+            prob_median = pred_df['Profit_Prob'].median()
+            prob_75th = pred_df['Profit_Prob'].quantile(0.75)
+            
+            pred_df['Signal'] = np.where(pred_df['Profit_Prob'] >= prob_75th, '🟢 HIGH PROFIT', 
+                                       np.where(pred_df['Profit_Prob'] >= prob_median, '🟡 MEDIUM PROFIT', '🔴 LOW PROFIT'))
+        else:
+            pred_df['Signal'] = '🔴 LOW PROFIT'
 
         with tab1:
             st.subheader("🎯 Profit Probability Analysis")

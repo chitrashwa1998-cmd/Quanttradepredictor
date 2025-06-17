@@ -94,10 +94,10 @@ class QuantTradingModels:
         returns = df['Close'].pct_change().dropna()
         volatility = returns.std()
 
-        # Profit threshold for 5-candle lookout (25 minutes for 5-min data)
-        base_profit_threshold = 0.002  # 0.2% minimum profit target for shorter timeframe
-        volatility_adjusted_threshold = max(base_profit_threshold, volatility * 1.0)
-
+        # More realistic profit threshold for 5-min scalping
+        # Use smaller threshold to capture more profit opportunities
+        base_profit_threshold = 0.001  # 0.1% minimum profit target (more realistic for 5-min)
+        
         # Look ahead only 5 candles (25 minutes for 5-min data)
         future_returns_list = []
         for i in range(5):
@@ -108,10 +108,10 @@ class QuantTradingModels:
         future_returns_df = pd.concat(future_returns_list, axis=1)
         max_future_return = future_returns_df.max(axis=1)
 
-        # Use a more adaptive threshold based on data volatility
-        returns = df['Close'].pct_change().dropna()
-        volatility = returns.std()
-        profit_threshold = min(0.005, volatility)  # Use 0.5% or data volatility, whichever is smaller
+        # Use adaptive threshold based on actual data distribution
+        # Aim for 30-40% profit opportunities (more balanced)
+        profit_threshold = np.percentile(max_future_return.dropna(), 65)  # Top 35% as profit opportunities
+        profit_threshold = max(profit_threshold, base_profit_threshold)  # Ensure minimum threshold
 
         targets['profit_prob'] = (max_future_return > profit_threshold).astype(int)
 
