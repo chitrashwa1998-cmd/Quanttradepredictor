@@ -69,37 +69,25 @@ with col3:
 
 st.markdown("---")
 
-# Stock Selection
-col1, col2, col3 = st.columns([2, 2, 1])
+# Fixed to Nifty 50 only
+st.markdown("### 📊 NIFTY 50 - 5 Minute Data")
+
+# Fixed parameters for Nifty 50
+selected_name = "NIFTY50"
+selected_symbol = "^NSEI"
+interval = "5m"
+
+col1, col2 = st.columns(2)
 
 with col1:
-    # Get available symbols
-    indian_stocks = market_data.get_indian_stock_symbols()
-    nifty_indices = market_data.get_nifty_symbols()
-
-    all_symbols = {**indian_stocks, **nifty_indices}
-
-    selected_name = st.selectbox(
-        "Select Stock/Index",
-        list(all_symbols.keys()),
-        index=0
-    )
-
-    selected_symbol = all_symbols[selected_name]
-
-with col2:
-    interval = st.selectbox(
-        "Data Interval",
-        ["5m", "15m", "30m", "1h"],
-        index=0
-    )
-
-with col3:
     period = st.selectbox(
         "Time Period",
         ["1d", "5d", "1mo"],
         index=1
     )
+
+with col2:
+    st.info("📈 Fixed to NIFTY 50 index with 5-minute intervals")
 
 # Auto-refresh toggle
 auto_refresh = st.checkbox("Auto Refresh (30s)", value=False)

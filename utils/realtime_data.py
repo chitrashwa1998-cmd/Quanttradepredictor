@@ -70,14 +70,14 @@ class IndianMarketData:
         # Check cache first to avoid unnecessary API calls
         cache_key = f"{symbol}_{period}_{interval}"
         current_time = datetime.now()
-        
+
         if hasattr(self, '_cache') and cache_key in self._cache:
             cached_data, cache_time = self._cache[cache_key]
             # Use cache if less than 1 minute old during market hours
             if (current_time - cache_time).total_seconds() < 60:
                 print(f"✅ Using cached data for {symbol}")
                 return cached_data
-        
+
         if not hasattr(self, '_cache'):
             self._cache = {}
 
@@ -144,7 +144,7 @@ class IndianMarketData:
         print(f"✅ Generated {len(demo_data)} demo data points")
         return demo_data
 
-    def _generate_demo_nifty_data(self, period: str = "5d") -> pd.DataFrame:
+    def _generate_nifty_demo_data(self, period: str = "5d") -> pd.DataFrame:
         """Generate realistic demo Nifty 50 data for visualization"""
 
         # Determine number of periods
