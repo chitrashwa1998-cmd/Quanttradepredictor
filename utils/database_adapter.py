@@ -1,47 +1,37 @@
+
 """
-Database adapter to switch between PostgreSQL and key-value store
-Provides a unified interface for the trading application
+Database adapter for PostgreSQL only
+Provides a unified interface for the trading application using PostgreSQL exclusively
 """
 import os
 from typing import Dict, List, Optional, Any
 
 class DatabaseAdapter:
-    """Unified database interface that automatically selects the best available database."""
+    """PostgreSQL-only database interface for the trading application."""
     
     def __init__(self):
-        """Initialize database adapter with the best available option."""
-        self.db_type = "replit_kv"
+        """Initialize database adapter with PostgreSQL only."""
+        self.db_type = "postgresql"
         
-        # Try PostgreSQL first if available
-        try:
-            if os.getenv('DATABASE_URL'):
-                from utils.postgres_database import PostgresTradingDatabase
-                self.db = PostgresTradingDatabase()
-                if self._test_connection():
-                    self.db_type = "postgresql"
-                    print("Using PostgreSQL database")
-                    return
-        except Exception as e:
-            print(f"PostgreSQL unavailable: {str(e)}")
+        # Check for PostgreSQL environment variable
+        if not os.getenv('DATABASE_URL'):
+            raise ValueError("DATABASE_URL environment variable not set. Please create a PostgreSQL database in Replit first.")
         
-        # Fallback to enhanced key-value store
         try:
-            from utils.database import TradingDatabase
-            self.db = TradingDatabase()
-            print("Using Replit Key-Value Store")
+            from utils.postgres_database import PostgresTradingDatabase
+            self.db = PostgresTradingDatabase()
+            if self._test_connection():
+                print("✅ Using PostgreSQL database")
+            else:
+                raise ConnectionError("Failed to connect to PostgreSQL")
         except Exception as e:
-            print(f"Database initialization failed: {str(e)}")
-            self.db_type = "error"
+            print(f"❌ PostgreSQL initialization failed: {str(e)}")
+            raise e
     
     def _test_connection(self) -> bool:
         """Test database connection."""
         try:
-            if hasattr(self.db, 'test_connection'):
-                return self.db.test_connection()
-            else:
-                # For key-value store, test by trying to access keys
-                list(self.db.db.keys())
-                return True
+            return self.db.test_connection()
         except Exception as e:
             print(f"Database connection test failed: {str(e)}")
             return False
