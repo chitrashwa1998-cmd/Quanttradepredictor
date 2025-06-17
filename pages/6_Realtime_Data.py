@@ -134,15 +134,20 @@ if auto_refresh and is_open:
         if time_since_refresh.total_seconds() >= 30:
             st.session_state.last_refresh_time = ist_now
             refresh_triggered = True
+            st.rerun()  # Immediately trigger rerun
 
     # Show next refresh countdown
     if not refresh_triggered:
+        time_since_refresh = ist_now - st.session_state.last_refresh_time
         next_refresh_in = max(0, 30 - int(time_since_refresh.total_seconds()))
-        st.info(f"🔄 Next auto-refresh in {next_refresh_in} seconds")
+        
+        # Create a placeholder for dynamic countdown
+        countdown_placeholder = st.empty()
+        countdown_placeholder.info(f"🔄 Next auto-refresh in {next_refresh_in} seconds")
         
         # Auto-refresh when countdown reaches 0
-        if next_refresh_in == 0:
-            time.sleep(1)  # Small delay to show 0 seconds
+        if next_refresh_in <= 1:
+            time.sleep(1)
             st.rerun()
     else:
         st.info("🔄 Refreshing data...")
@@ -380,40 +385,55 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
 
                             # Convert clean_features index to IST for proper comparison
                             clean_features_ist = clean_features.copy()
-                            if not hasattr(clean_features_ist.index, 'tz') or clean_features_ist.index.tz is None:
-                                # If no timezone info, assume it's already in IST
-                                clean_features_ist.index = pd.to_datetime(clean_features_ist.index).tz_localize('Asia/Kolkata')
-                            else:
-                                # Convert to IST
-                                clean_features_ist.index = clean_features_ist.index.tz_convert('Asia/Kolkata')
-
-                            # Filter data for current day using IST timestamps
-                            today_features = clean_features_ist[clean_features_ist.index.date == current_date]
-
-                            # Check if we have recent data (within last 2 hours during market hours)
-                            if is_open:
-                                recent_cutoff = datetime.now(ist_tz) - timedelta(hours=2)
-                                very_recent_features = clean_features_ist[clean_features_ist.index >= recent_cutoff]
-                            else:
-                                very_recent_features = pd.DataFrame()
-
-                            # Determine what data to show
-                            if len(today_features) > 0:
-                                recent_features = today_features
-                                st.success(f"✅ Showing {len(recent_features)} predictions for today ({current_date})")
-                            elif len(very_recent_features) > 0 and is_open:
-                                recent_features = very_recent_features
-                                st.info(f"📊 Showing {len(recent_features)} recent predictions (last 2 hours)")
-                            else:
-                                # Fall back to most recent available data
-                                recent_count = min(20, len(clean_features_ist))
-                                recent_features = clean_features_ist.tail(recent_count)
-                                if is_open:
-                                    st.warning("⚠️ No real-time data available yet. Market is open but data may be delayed.")
-                                    st.info("💡 Try refreshing in a few minutes or check your internet connection.")
+                            
+                            # Handle timezone conversion more robustly
+                            try:
+                                if not hasattr(clean_features_ist.index, 'tz') or clean_features_ist.index.tz is None:
+                                    # If no timezone info, assume it's already in IST
+                                    clean_features_ist.index = pd.to_datetime(clean_features_ist.index).tz_localize('Asia/Kolkata')
                                 else:
-                                    st.info(f"📈 Market is closed. Showing {len(recent_features)} most recent predictions.")
-                                st.info("💡 Data updates automatically every 30 seconds during market hours.")
+                                    # Convert to IST
+                                    clean_features_ist.index = clean_features_ist.index.tz_convert('Asia/Kolkata')
+                            except:
+                                # If timezone conversion fails, use as-is
+                                clean_features_ist.index = pd.to_datetime(clean_features_ist.index)
+
+                            # Filter data for current day and recent hours
+                            if is_open:
+                                # During market hours, show data from last 4 hours or today
+                                recent_cutoff = max(
+                                    datetime.now(ist_tz) - timedelta(hours=4),
+                                    datetime.now(ist_tz).replace(hour=9, minute=15, second=0, microsecond=0)
+                                )
+                                recent_features = clean_features_ist[clean_features_ist.index >= recent_cutoff.replace(tzinfo=None)]
+                                
+                                if len(recent_features) > 0:
+                                    st.success(f"✅ Showing {len(recent_features)} recent predictions (last 4 hours)")
+                                else:
+                                    # Fallback to today's data
+                                    today_features = clean_features_ist[
+                                        clean_features_ist.index.date == current_date
+                                    ]
+                                    recent_features = today_features if len(today_features) > 0 else clean_features_ist.tail(10)
+                                    st.info(f"📊 Showing {len(recent_features)} predictions for today")
+                            else:
+                                # Market closed - show today's data or most recent
+                                today_features = clean_features_ist[
+                                    clean_features_ist.index.date == current_date
+                                ]
+                                
+                                if len(today_features) > 0:
+                                    recent_features = today_features
+                                    st.info(f"📈 Market closed. Showing {len(recent_features)} predictions from today")
+                                else:
+                                    recent_features = clean_features_ist.tail(20)
+                                    st.info(f"📈 Market closed. Showing {len(recent_features)} most recent predictions")
+                            
+                            # Always show auto-refresh status
+                            if auto_refresh and is_open:
+                                st.info("🔄 Auto-refresh enabled - Data updates every 30 seconds during market hours")
+                            elif is_open:
+                                st.info("⏸️ Auto-refresh disabled - Enable for live updates")
 
                             prediction_data = []
 
@@ -739,7 +759,39 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
     # Reset trigger
     st.session_state.fetch_triggered = False
 
-# Auto-refresh functionality handled above in the logic section
+# Auto-refresh functionality with JavaScript timer
+if auto_refresh and is_open:
+    st.markdown("""
+    <script>
+    // Auto-refresh every 30 seconds during market hours
+    if (window.autoRefreshInterval) {
+        clearInterval(window.autoRefreshInterval);
+    }
+    
+    window.autoRefreshInterval = setInterval(function() {
+        // Force Streamlit to rerun
+        window.parent.postMessage({
+            type: 'streamlit:componentReady',
+            apiVersion: 1,
+        }, '*');
+        
+        // Alternative method - simulate button click
+        const buttons = window.parent.document.querySelectorAll('[data-testid="stButton"] button');
+        const refreshButton = Array.from(buttons).find(btn => btn.textContent.includes('Fetch'));
+        if (refreshButton) {
+            refreshButton.click();
+        }
+    }, 30000);
+    </script>
+    """, unsafe_allow_html=True)
+
+# Also add a manual refresh button that's always visible
+st.markdown("---")
+col1, col2, col3 = st.columns([1, 1, 1])
+with col2:
+    if st.button("🔄 Manual Refresh", key="manual_refresh", type="secondary"):
+        st.session_state.fetch_triggered = True
+        st.rerun()
 
 # Instructions
 with st.expander("📋 Nifty 50 Real-Time Guide", expanded=False):

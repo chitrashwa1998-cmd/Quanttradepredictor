@@ -67,11 +67,25 @@ class IndianMarketData:
             period: Data period ('1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max')
             interval: Data interval ('1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo')
         """
+        # Check cache first to avoid unnecessary API calls
+        cache_key = f"{symbol}_{period}_{interval}"
+        current_time = datetime.now()
+        
+        if hasattr(self, '_cache') and cache_key in self._cache:
+            cached_data, cache_time = self._cache[cache_key]
+            # Use cache if less than 1 minute old during market hours
+            if (current_time - cache_time).total_seconds() < 60:
+                print(f"✅ Using cached data for {symbol}")
+                return cached_data
+        
+        if not hasattr(self, '_cache'):
+            self._cache = {}
+
         # First try with yfinance if available
         if YF_AVAILABLE:
             try:
-                # Create ticker object
-                ticker = yf.Ticker(symbol, session=self.session)
+                # Create ticker object without session to avoid curl_cffi error
+                ticker = yf.Ticker(symbol)
 
                 # Fetch historical data
                 data = ticker.history(period=period, interval=interval)
@@ -97,6 +111,9 @@ class IndianMarketData:
 
                     # Add metadata
                     data.attrs = {'symbol': symbol, 'last_updated': datetime.now(), 'source': 'yfinance'}
+
+                    # Cache the result
+                    self._cache[cache_key] = (data, current_time)
 
                     print(f"✅ Successfully fetched {len(data)} data points from yfinance")
                     return data
