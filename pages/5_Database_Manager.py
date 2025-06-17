@@ -98,13 +98,35 @@ if len(datasets) > 0:
                     )
             
             with col3:
-                if st.button(f"Delete Dataset", key=f"delete_{i}", type="secondary"):
-                    if st.checkbox(f"Confirm deletion of {dataset['name']}", key=f"confirm_{i}"):
-                        if trading_db.delete_dataset(dataset['name']):
-                            st.success(f"✅ Deleted dataset: {dataset['name']}")
+                # Initialize confirmation state
+                confirm_key = f"confirm_delete_{dataset['name']}"
+                if confirm_key not in st.session_state:
+                    st.session_state[confirm_key] = False
+                
+                # Delete button
+                if st.button(f"🗑️ Delete", key=f"delete_{i}", type="secondary"):
+                    st.session_state[confirm_key] = True
+                
+                # Show confirmation if delete was clicked
+                if st.session_state[confirm_key]:
+                    st.warning(f"⚠️ Delete '{dataset['name']}'?")
+                    col3a, col3b = st.columns(2)
+                    
+                    with col3a:
+                        if st.button("✅ Yes", key=f"confirm_yes_{i}", type="primary"):
+                            if trading_db.delete_dataset(dataset['name']):
+                                st.success(f"✅ Deleted dataset: {dataset['name']}")
+                                # Reset confirmation state
+                                st.session_state[confirm_key] = False
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete dataset")
+                                st.session_state[confirm_key] = False
+                    
+                    with col3b:
+                        if st.button("❌ No", key=f"confirm_no_{i}"):
+                            st.session_state[confirm_key] = False
                             st.rerun()
-                        else:
-                            st.error("Failed to delete dataset")
 else:
     st.info("No datasets found in database. Upload data first!")
 
