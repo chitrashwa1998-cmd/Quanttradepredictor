@@ -53,8 +53,19 @@ if len(datasets) > 0:
             
             with col1:
                 st.write(f"**Rows:** {dataset['rows']}")
-                st.write(f"**Date Range:** {dataset['date_range']}")
-                st.write(f"**Saved:** {dataset['saved_at']}")
+                # Handle date range display safely
+                if dataset.get('start_date') and dataset.get('end_date'):
+                    st.write(f"**Date Range:** {dataset['start_date']} to {dataset['end_date']}")
+                else:
+                    st.write(f"**Date Range:** Not available")
+                
+                # Handle saved/created timestamp
+                if dataset.get('updated_at'):
+                    st.write(f"**Updated:** {dataset['updated_at']}")
+                elif dataset.get('created_at'):
+                    st.write(f"**Created:** {dataset['created_at']}")
+                else:
+                    st.write(f"**Saved:** Not available")
             
             with col2:
                 if st.button(f"Load Dataset", key=f"load_{i}"):
@@ -193,11 +204,17 @@ with col1:
     # Export all datasets from database
     if db_info.get('total_datasets', 0) > 0:
         st.write("**Export from Database:**")
-        selected_datasets = st.multiselect(
-            "Select datasets to export",
-            [dataset['name'] for dataset in db_info['datasets']],
-            key="bulk_export_selection"
-        )
+        # Get datasets with proper error handling
+        datasets_for_export = db_info.get('datasets', [])
+        if datasets_for_export:
+            selected_datasets = st.multiselect(
+                "Select datasets to export",
+                [dataset['name'] for dataset in datasets_for_export],
+                key="bulk_export_selection"
+            )
+        else:
+            selected_datasets = []
+            st.info("No datasets available for export")
         
         if selected_datasets:
             if st.button("📥 Export Selected Datasets", key="bulk_export"):

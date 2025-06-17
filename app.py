@@ -1,4 +1,4 @@
-
+# Applying the provided changes to fix date formatting error when data index is not datetime.
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -44,26 +44,26 @@ def initialize_session_state():
             from utils.database_adapter import get_trading_database
             from models.xgboost_models import QuantTradingModels
             from features.technical_indicators import TechnicalIndicators
-            
+
             trading_db = get_trading_database()
-            
+
             # Recover OHLC data
             if st.session_state.data is None:
                 recovered_data = trading_db.load_ohlc_data("main_dataset")
                 if recovered_data is not None:
                     st.session_state.data = recovered_data
-                    
+
                     # Auto-calculate features if data is recovered
                     try:
                         features_data = TechnicalIndicators.calculate_all_indicators(recovered_data)
                         st.session_state.features = features_data
                     except Exception:
                         pass
-            
+
             # Recover model trainer
             if st.session_state.model_trainer is None:
                 st.session_state.model_trainer = QuantTradingModels()
-            
+
             # Recover trained models from database
             if not st.session_state.models:
                 try:
@@ -71,25 +71,25 @@ def initialize_session_state():
                     trained_models = trading_db.load_trained_models()
                     if trained_models and st.session_state.model_trainer:
                         st.session_state.model_trainer.models = trained_models
-                    
+
                     # Then load model results/metadata
                     model_names = ['direction', 'magnitude', 'profit_prob', 'volatility', 'trend_sideways', 'reversal', 'trading_signal']
                     recovered_models = {}
-                    
+
                     for model_name in model_names:
                         model_data = trading_db.load_model_results(model_name)
                         if model_data is not None:
                             recovered_models[model_name] = model_data
-                    
+
                     if recovered_models:
                         st.session_state.models = recovered_models
-                        
+
                 except Exception:
                     pass
-            
+
             # Mark recovery as complete
             st.session_state.auto_recovery_done = True
-            
+
             # Show recovery status
             recovery_items = []
             if st.session_state.data is not None:
@@ -98,10 +98,10 @@ def initialize_session_state():
                 recovery_items.append("features")
             if st.session_state.models:
                 recovery_items.append(f"{len(st.session_state.models)} trained models")
-            
+
             if recovery_items:
                 st.success(f"System restored: {', '.join(recovery_items)} automatically recovered from database")
-                
+
         except Exception as e:
             st.session_state.auto_recovery_done = True  # Prevent repeated attempts
 
@@ -142,7 +142,7 @@ try:
     from utils.database_adapter import get_trading_database
     db = get_trading_database()
     db_status = db.get_connection_status()
-    
+
     if db_status['type'] == 'postgresql':
         db_icon = "🐘"
         db_name = "PostgreSQL"
@@ -151,7 +151,7 @@ try:
         db_icon = "🔑"
         db_name = "Key-Value Store"
         db_color = "#00ff41"
-    
+
     st.sidebar.markdown(f"""
     <div style="background: rgba(0, 255, 255, 0.05); border: 1px solid {db_color}; 
          border-radius: 8px; padding: 0.8rem; text-align: center; margin-bottom: 1rem;">
@@ -390,7 +390,7 @@ elif st.session_state.current_page == "about":
                 Revolutionizing quantitative trading through artificial intelligence
             </p>
         </div>
-        
+
         <div class="chart-container" style="margin: 3rem 0;">
             <h2 style="color: #00ffff; margin-bottom: 2rem;">🚀 Our Mission</h2>
             <p style="font-size: 1.2rem; line-height: 2; color: #e6e8eb; margin-bottom: 2rem;">
@@ -398,7 +398,7 @@ elif st.session_state.current_page == "about":
                 quantitative analysis tools. Our advanced machine learning platform empowers traders, analysts, 
                 and financial institutions to make data-driven investment decisions with unprecedented accuracy.
             </p>
-            
+
             <h3 style="color: #00ff41; margin: 2rem 0 1rem 0;">🎯 What We Do</h3>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0;">
                 <div style="background: rgba(0, 255, 255, 0.1); padding: 2rem; border-radius: 16px; border: 1px solid #00ffff;">
@@ -419,7 +419,7 @@ elif st.session_state.current_page == "about":
                 </div>
             </div>
         </div>
-        
+
         <div class="chart-container">
             <h2 style="color: #8b5cf6; margin-bottom: 2rem;">👥 Our Team</h2>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
@@ -443,7 +443,7 @@ elif st.session_state.current_page == "about":
                 </div>
             </div>
         </div>
-        
+
         <div class="chart-container">
             <h2 style="color: #ff6b35; margin-bottom: 2rem;">🏆 Why Choose Us</h2>
             <div style="font-size: 1.1rem; line-height: 2; color: #e6e8eb;">
@@ -473,26 +473,26 @@ elif st.session_state.current_page == "contact":
                 Ready to revolutionize your trading strategy?
             </p>
         </div>
-        
+
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin: 3rem 0;">
             <div class="contact-form">
                 <h2 style="color: #00ffff; margin-bottom: 2rem;">📧 Get In Touch</h2>
-                
+
                 <div style="margin: 1.5rem 0;">
                     <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Full Name</label>
                     <input type="text" placeholder="Enter your full name" style="width: 100%; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif;">
                 </div>
-                
+
                 <div style="margin: 1.5rem 0;">
                     <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Email Address</label>
                     <input type="email" placeholder="your.email@company.com" style="width: 100%; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif;">
                 </div>
-                
+
                 <div style="margin: 1.5rem 0;">
                     <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Company/Organization</label>
                     <input type="text" placeholder="Your company name" style="width: 100%; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif;">
                 </div>
-                
+
                 <div style="margin: 1.5rem 0;">
                     <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Inquiry Type</label>
                     <select style="width: 100%; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif;">
@@ -503,125 +503,7 @@ elif st.session_state.current_page == "contact":
                         <option>General Inquiry</option>
                     </select>
                 </div>
-                
+
                 <div style="margin: 1.5rem 0;">
                     <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Message</label>
-                    <textarea placeholder="Tell us about your trading requirements and how we can help..." style="width: 100%; height: 120px; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif; resize: vertical;"></textarea>
-                </div>
-                
-                <button style="width: 100%; padding: 1rem 2rem; background: linear-gradient(45deg, #00ffff, #00ff41); color: #0a0a0f; border: none; border-radius: 12px; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 1.1rem; cursor: pointer; transition: all 0.3s ease;">
-                    🚀 SEND MESSAGE
-                </button>
-            </div>
-            
-            <div>
-                <div class="chart-container">
-                    <h2 style="color: #00ff41; margin-bottom: 2rem;">📍 Contact Information</h2>
-                    
-                    <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(0, 255, 255, 0.1); border-radius: 12px; border: 1px solid #00ffff;">
-                        <h3 style="color: #00ffff; margin-bottom: 1rem;">🏢 Headquarters</h3>
-                        <p style="color: #e6e8eb; margin: 0.5rem 0;">123 Wall Street, Suite 4500</p>
-                        <p style="color: #e6e8eb; margin: 0.5rem 0;">New York, NY 10005</p>
-                        <p style="color: #e6e8eb; margin: 0.5rem 0;">United States</p>
-                    </div>
-                    
-                    <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(0, 255, 65, 0.1); border-radius: 12px; border: 1px solid #00ff41;">
-                        <h3 style="color: #00ff41; margin-bottom: 1rem;">📞 Phone & Email</h3>
-                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Sales:</strong> +1 (555) 123-4567</p>
-                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Support:</strong> +1 (555) 765-4321</p>
-                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Email:</strong> contact@quanttrading.ai</p>
-                    </div>
-                    
-                    <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(139, 92, 246, 0.1); border-radius: 12px; border: 1px solid #8b5cf6;">
-                        <h3 style="color: #8b5cf6; margin-bottom: 1rem;">🕒 Business Hours</h3>
-                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Monday - Friday:</strong> 9:00 AM - 6:00 PM EST</p>
-                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Emergency Support:</strong> 24/7 Available</p>
-                        <p style="color: #e6e8eb; margin: 0.5rem 0;"><strong style="color: #00ffff;">Response Time:</strong> < 2 hours</p>
-                    </div>
-                </div>
-                
-                <div class="chart-container">
-                    <h2 style="color: #ff0080; margin-bottom: 2rem;">🌐 Follow Us</h2>
-                    <div style="display: flex; gap: 1rem; justify-content: center;">
-                        <div style="padding: 1rem; background: rgba(0, 255, 255, 0.1); border-radius: 12px; border: 1px solid #00ffff; text-align: center; flex: 1;">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📘</div>
-                            <p style="color: #00ffff; margin: 0;">LinkedIn</p>
-                        </div>
-                        <div style="padding: 1rem; background: rgba(0, 255, 65, 0.1); border-radius: 12px; border: 1px solid #00ff41; text-align: center; flex: 1;">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🐦</div>
-                            <p style="color: #00ff41; margin: 0;">Twitter</p>
-                        </div>
-                        <div style="padding: 1rem; background: rgba(139, 92, 246, 0.1); border-radius: 12px; border: 1px solid #8b5cf6; text-align: center; flex: 1;">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📺</div>
-                            <p style="color: #8b5cf6; margin: 0;">YouTube</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-else:
-    # Redirect to appropriate pages
-    if st.session_state.current_page == "data":
-        st.switch_page("pages/1_Data_Upload.py")
-    elif st.session_state.current_page == "training":
-        st.switch_page("pages/2_Model_Training.py")
-    elif st.session_state.current_page == "predictions":
-        st.switch_page("pages/3_Predictions.py")
-    elif st.session_state.current_page == "backtesting":
-        st.switch_page("pages/4_Backtesting.py")
-    elif st.session_state.current_page == "database":
-        st.switch_page("pages/5_Database_Manager.py")
-
-# Enhanced Sidebar Status
-if st.session_state.data is not None:
-    st.sidebar.markdown("""
-    <div style="background: rgba(0, 255, 65, 0.1); border: 2px solid #00ff41; 
-         border-radius: 12px; padding: 1.5rem; margin: 2rem 0;">
-        <h4 style="color: #00ff41; margin-bottom: 1rem; font-family: 'Orbitron', monospace;">📊 DATASET STATUS</h4>
-    """, unsafe_allow_html=True)
-    
-    st.sidebar.markdown(f"""
-        <div style="font-family: 'JetBrains Mono', monospace; color: #e6e8eb; line-height: 1.8;">
-            <p><strong style="color: #00ffff;">Records:</strong> <span style="color: #00ff41;">{len(st.session_state.data):,}</span></p>
-            <p><strong style="color: #00ffff;">From:</strong> <span style="color: #ffd700;">{st.session_state.data.index.min().strftime('%Y-%m-%d')}</span></p>
-            <p><strong style="color: #00ffff;">To:</strong> <span style="color: #ffd700;">{st.session_state.data.index.max().strftime('%Y-%m-%d')}</span></p>
-            <p><strong style="color: #00ffff;">Features:</strong> <span style="color: #8b5cf6;">{len(st.session_state.data.columns)}</span></p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# Model status in sidebar
-if st.session_state.models:
-    st.sidebar.markdown("""
-    <div style="background: rgba(0, 255, 255, 0.1); border: 2px solid #00ffff; 
-         border-radius: 12px; padding: 1.5rem; margin: 2rem 0;">
-        <h4 style="color: #00ffff; margin-bottom: 1rem; font-family: 'Orbitron', monospace;">🤖 AI MODEL STATUS</h4>
-    """, unsafe_allow_html=True)
-    
-    for model_name, model in st.session_state.models.items():
-        status = "✅ TRAINED" if model is not None else "⏳ TRAINING"
-        color = "#00ff41" if model is not None else "#ffaa00"
-        st.sidebar.markdown(f"""
-        <div style="display: flex; justify-content: space-between; align-items: center; 
-             color: {color}; font-family: 'JetBrains Mono', monospace; margin: 0.8rem 0; 
-             padding: 0.5rem; background: rgba{color[3:-1]}, 0.1); border-radius: 8px;">
-            <span style="font-size: 0.9rem;">{model_name.replace('_', ' ').title()}</span>
-            <span style="font-size: 0.8rem; font-weight: bold;">{status}</span>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.sidebar.markdown("</div>", unsafe_allow_html=True)
-
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.markdown("""
-<div style="text-align: center; color: #9ca3af; font-family: 'JetBrains Mono', monospace; 
-     background: rgba(0, 255, 255, 0.05); padding: 1.5rem; border-radius: 12px; margin: 1rem 0;">
-    <p style="margin: 0; color: #00ffff; font-weight: 600;">TribexAlpha</p>
-    <p style="margin: 0.5rem 0 0 0; color: #8b5cf6;">v3.0 | Enterprise Edition</p>
-    <p style="margin: 0.5rem 0 0 0; color: #ffd700;">⚡ Powered by AI</p>
-</div>
-""", unsafe_allow_html=True)
+                    <textarea placeholder="Tell us about your trading requirements and how we can help..." style="width: 100%; height: 120px; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 25
