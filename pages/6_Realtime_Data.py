@@ -79,8 +79,8 @@ with col2:
     period = st.selectbox(
         "Period:",
         options=["1d", "5d", "1mo", "3mo", "6mo", "1y"],
-        index=1,
-        help="Historical data range"
+        index=2,  # Default to "1mo" instead of "5d" for better technical indicators
+        help="Historical data range - Use 1mo or longer for reliable technical indicators"
     )
 
 with col3:
@@ -293,10 +293,20 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     data_hash = hash(str(df_with_indicators.tail(10).values.tobytes()))
 
                     if not hasattr(st.session_state, 'cached_features_hash') or st.session_state.cached_features_hash != data_hash:
+                        # Ensure we have enough data for technical indicators
+                        if len(df_with_indicators) < 50:
+                            st.warning(f"⚠️ Only {len(df_with_indicators)} data points available. Technical indicators need at least 50 points for reliable calculations.")
+                            st.info("💡 Try selecting '1mo' or '3mo' period for better predictions.")
+                            
                         # Prepare features for prediction
                         features_df = model_trainer.prepare_features(df_with_indicators)
                         # Remove rows with NaN values
                         clean_features = features_df.dropna()
+                        
+                        if len(clean_features) < 10:
+                            st.error(f"❌ Insufficient clean data after technical indicator calculation: {len(clean_features)} rows. Need at least 10 rows.")
+                            st.info("💡 Select a longer time period (1mo or 3mo) to get more historical data for technical indicators.")
+                            clean_features = pd.DataFrame()  # Empty dataframe to prevent errors
 
                         # Cache the results
                         st.session_state.cached_features = clean_features
@@ -390,66 +400,12 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         st.error(f"Trading signal error: {str(e)}")
 
                         # Prediction history table
-                        st.subheader("Recent Predictions (Last 30 from Latest Close)")
+                        st.subheader("Recent Predictions (Last 30)")
 
                         if len(clean_features) >= 5:
-                            # Get the most recent market close time (3:30 PM IST)
-                            ist_tz = pytz.timezone('Asia/Kolkata')
-
-                            # Convert clean_features index to IST for proper comparison
-                            clean_features_ist = clean_features.copy()
-
-                            # Handle timezone conversion more robustly
-                            try:
-                                if not hasattr(clean_features_ist.index, 'tz') or clean_features_ist.index.tz is None:
-                                    # If no timezone info, assume it's already in IST
-                                    clean_features_ist.index = pd.to_datetime(clean_features_ist.index).tz_localize('Asia/Kolkata')
-                                else:
-                                    # Convert to IST
-                                    clean_features_ist.index = clean_features_ist.index.tz_convert('Asia/Kolkata')
-                            except:
-                                # If timezone conversion fails, use as-is
-                                clean_features_ist.index = pd.to_datetime(clean_features_ist.index)
-
-                            # Make timezone-naive for comparison
-                            if hasattr(clean_features_ist.index, 'tz') and clean_features_ist.index.tz is not None:
-                                clean_features_naive = clean_features_ist.copy()
-                                clean_features_naive.index = clean_features_naive.index.tz_localize(None)
-                            else:
-                                clean_features_naive = clean_features_ist.copy()
-
-                            # Find the most recent market close (3:30 PM) in the data
-                            # Look for the latest date that has data at or before 3:30 PM
-                            market_close_times = []
-
-                            for date in clean_features_naive.index.date:
-                                # Check if we have data for this date at market close time (3:30 PM)
-                                market_close_time = pd.to_datetime(f"{date} 15:30:00")
-
-                                # Find data points on this date at or before market close
-                                day_data = clean_features_naive[clean_features_naive.index.date == date]
-
-                                if len(day_data) > 0:
-                                    # Get the latest time for this date that's at or before market close
-                                    valid_times = day_data[day_data.index <= market_close_time].index
-                                    if len(valid_times) > 0:
-                                        market_close_times.append(valid_times.max())
-
-                            if market_close_times:
-                                # Get the most recent market close time
-                                latest_close_time = max(market_close_times)
-
-                                # Filter data up to the latest close time and get last 30 predictions
-                                closing_data = clean_features_naive[clean_features_naive.index <= latest_close_time]
-                                recent_features = closing_data.tail(30)
-
-                                # Format the latest close time for display
-                                latest_close_str = latest_close_time.strftime('%Y-%m-%d %H:%M IST')
-                                st.info(f"📊 Showing last {len(recent_features)} predictions ending at {latest_close_str}")
-                            else:
-                                # Fallback to last 30 if no proper market close time found
-                                recent_features = clean_features_naive.tail(30)
-                                st.info(f"📊 Showing {len(recent_features)} most recent predictions")
+                            # Simply get the last 30 predictions regardless of time filtering
+                            recent_features = clean_features.tail(30)
+                            st.info(f"📊 Showing {len(recent_features)} most recent predictions")
 
                             # Always show auto-refresh status
                             if auto_refresh and is_open:
