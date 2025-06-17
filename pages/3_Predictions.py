@@ -161,19 +161,37 @@ if st.session_state.features is not None:
     if hasattr(st.session_state.features, 'columns') and 'Date' in st.session_state.features.columns:
         st.session_state.features = st.session_state.features.drop(columns=['Date'], errors='ignore')
 
-# Filter data based on selection
-if date_range == "Last 30 days":
-    start_date = df.index.max() - timedelta(days=30)
-elif date_range == "Last 90 days":
-    start_date = df.index.max() - timedelta(days=90)
-elif date_range == "Last 6 months":
-    start_date = df.index.max() - timedelta(days=180)
-elif date_range == "Last year":
-    start_date = df.index.max() - timedelta(days=365)
-else:
-    start_date = df.index.min()
+# Ensure DataFrame has proper datetime index
+if not isinstance(df.index, pd.DatetimeIndex):
+    # Try to convert index to datetime
+    try:
+        df.index = pd.to_datetime(df.index)
+    except:
+        # If conversion fails, create a simple date range
+        if len(df) > 0:
+            df.index = pd.date_range(start='2020-01-01', periods=len(df), freq='D')
+        else:
+            st.error("Cannot create proper date index for the data")
+            st.stop()
 
-df_filtered = df[df.index >= start_date].copy()
+# Filter data based on selection
+try:
+    if date_range == "Last 30 days":
+        start_date = df.index.max() - timedelta(days=30)
+    elif date_range == "Last 90 days":
+        start_date = df.index.max() - timedelta(days=90)
+    elif date_range == "Last 6 months":
+        start_date = df.index.max() - timedelta(days=180)
+    elif date_range == "Last year":
+        start_date = df.index.max() - timedelta(days=365)
+    else:
+        start_date = df.index.min()
+
+    df_filtered = df[df.index >= start_date].copy()
+except Exception as e:
+    st.warning(f"Error filtering data by date range: {str(e)}. Using all available data.")
+    df_filtered = df.copy()
+    start_date = df.index.min() if len(df) > 0 else pd.Timestamp.now()
 
 # Check if features exist, if not prepare them
 if st.session_state.features is None:
@@ -181,7 +199,19 @@ if st.session_state.features is None:
     features_filtered = model_trainer.prepare_features(df_filtered)
     st.session_state.features = model_trainer.prepare_features(df)
 else:
-    features_filtered = st.session_state.features[st.session_state.features.index >= start_date].copy()
+    # Ensure features have proper datetime index
+    features = st.session_state.features.copy()
+    if not isinstance(features.index, pd.DatetimeIndex):
+        try:
+            features.index = pd.to_datetime(features.index)
+        except:
+            features.index = pd.date_range(start='2020-01-01', periods=len(features), freq='D')
+    
+    try:
+        features_filtered = features[features.index >= start_date].copy()
+    except Exception as e:
+        st.warning(f"Error filtering features: {str(e)}. Using all features.")
+        features_filtered = features.copy()
 
 def safe_format_date(idx):
     """Safely format date index to string"""
