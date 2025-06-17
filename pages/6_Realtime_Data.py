@@ -39,7 +39,7 @@ col1, col2, col3 = st.columns([2, 1, 1])
 
 with col1:
     st.header("Market Status")
-    
+
 with col2:
     is_open = market_data.is_market_open()
     if is_open:
@@ -97,23 +97,23 @@ with col4:
 # Current price display
 if selected_symbol:
     current_data = market_data.get_current_price(selected_symbol)
-    
+
     if current_data:
         col1, col2, col3, col4 = st.columns(4)
-        
+
         with col1:
             st.metric(
                 "Current Price",
                 f"₹{current_data['current_price']:.2f}",
                 delta=f"{current_data['change']:.2f} ({current_data['change_percent']:.2f}%)"
             )
-        
+
         with col2:
             st.metric("Previous Close", f"₹{current_data['previous_close']:.2f}")
-        
+
         with col3:
             st.metric("Volume", f"{current_data['volume']:,}")
-        
+
         with col4:
             if current_data['market_cap'] > 0:
                 market_cap_cr = current_data['market_cap'] / 10000000  # Convert to crores
@@ -134,12 +134,12 @@ if auto_refresh and is_open:
         if time_since_refresh.total_seconds() >= 30:
             st.session_state.last_refresh_time = ist_now
             refresh_triggered = True
-            
+
     # Show next refresh countdown and trigger page refresh
     if not refresh_triggered:
         next_refresh_in = 30 - int(time_since_refresh.total_seconds())
         st.info(f"🔄 Next auto-refresh in {next_refresh_in} seconds")
-        
+
         # Auto-refresh the page when countdown reaches 0
         if next_refresh_in <= 0:
             st.rerun()
@@ -149,58 +149,58 @@ elif auto_refresh and not is_open:
 
 # Data fetching and display
 if st.session_state.get('fetch_triggered', False) or refresh_triggered:
-    
+
     with st.spinner(f"Fetching real-time data for {selected_name}..."):
-        
+
         # Fetch data with extended period for technical indicators
         extended_period = "1mo" if period == "5d" else period  # Use longer period for indicator calculation
         df = market_data.fetch_realtime_data(selected_symbol, period=extended_period, interval=interval)
-        
+
         if df is not None and not df.empty:
             st.success(f"✅ Fetched {len(df)} data points for {selected_name}")
-            
+
             # Store in session state
             st.session_state.realtime_data = df
             st.session_state.realtime_symbol = selected_symbol
-            
+
             # Calculate technical indicators with minimum data check
             if len(df) < 50:
                 st.warning(f"⚠️ Only {len(df)} data points available. Need at least 50 for reliable technical indicators.")
                 st.info("💡 Try selecting '1mo' or '3mo' period for better indicator calculation.")
-            
+
             tech_indicators = TechnicalIndicators()
             df_with_indicators = tech_indicators.calculate_all_indicators(df)
-            
+
             # Remove NaN rows that result from indicator calculation
             clean_data_count = len(df_with_indicators.dropna())
             if clean_data_count < 10:
                 st.warning(f"⚠️ Only {clean_data_count} clean data points after indicator calculation. Need more historical data.")
             else:
                 st.info(f"✅ {clean_data_count} clean data points available for predictions")
-            
+
             # Display data summary
             col1, col2, col3, col4 = st.columns(4)
-            
+
             with col1:
                 st.metric("Data Points", len(df))
-            
+
             with col2:
                 date_range = f"{df.index.min().strftime('%Y-%m-%d')} to {df.index.max().strftime('%Y-%m-%d')}"
                 st.metric("Date Range", date_range)
-            
+
             with col3:
                 avg_volume = df['Volume'].mean()
                 st.metric("Avg Volume", f"{avg_volume:,.0f}")
-            
+
             with col4:
                 price_change = ((df['Close'].iloc[-1] / df['Close'].iloc[0]) - 1) * 100
                 st.metric("Period Change", f"{price_change:.2f}%")
-            
+
             # Price chart
             st.header("Price Chart")
-            
+
             fig = go.Figure()
-            
+
             # Candlestick chart
             fig.add_trace(go.Candlestick(
                 x=df.index,
@@ -210,7 +210,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                 close=df['Close'],
                 name="Price"
             ))
-            
+
             fig.update_layout(
                 title=f"{selected_name} - {interval} Candlestick Chart (Last Updated: {current_time_ist})",
                 xaxis_title="Time",
@@ -230,29 +230,29 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     )
                 ]
             )
-            
+
             st.plotly_chart(fig, use_container_width=True)
-            
+
             # Volume chart
             st.header("Volume Chart")
-            
+
             fig_vol = px.bar(
                 x=df.index,
                 y=df['Volume'],
                 title=f"{selected_name} - Volume",
                 labels={'x': 'Time', 'y': 'Volume'}
             )
-            
+
             fig_vol.update_layout(height=300)
             st.plotly_chart(fig_vol, use_container_width=True)
-            
+
             # ML Predictions Section
             st.header("ML Predictions")
-            
+
             # Check if models are available in session state or try to load from database
             models_available = False
             model_trainer = None
-            
+
             if 'model_trainer' in st.session_state and st.session_state.model_trainer and hasattr(st.session_state.model_trainer, 'models') and st.session_state.model_trainer.models:
                 models_available = True
                 model_trainer = st.session_state.model_trainer
@@ -261,40 +261,40 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                 try:
                     from models.xgboost_models import QuantTradingModels
                     from utils.database_adapter import get_trading_database
-                    
+
                     db = get_trading_database()
                     trained_models = db.load_trained_models()
-                    
+
                     if trained_models:
                         model_trainer = QuantTradingModels()
                         model_trainer.models = trained_models
                         st.session_state.model_trainer = model_trainer
                         models_available = True
                         st.success("✅ Loaded models from database")
-                    
+
                 except Exception as e:
                     st.warning(f"⚠️ Could not load models from database: {str(e)}")
-            
+
             if models_available and model_trainer:
-                
+
                 try:
                     # Prepare features for prediction
                     features_df = model_trainer.prepare_features(df_with_indicators)
-                    
+
                     # Remove rows with NaN values
                     clean_features = features_df.dropna()
-                    
+
                     if not clean_features.empty and len(clean_features) >= 1:
                         st.success(f"✅ {len(clean_features)} data points ready for prediction")
                         # Get latest data point for prediction
                         latest_features = clean_features.tail(1)
-                        
+
                         st.subheader("Latest Predictions")
-                        
+
                         pred_cols = st.columns(3)
-                        
+
                         available_models = [name for name in ['direction', 'profit_prob', 'trading_signal'] if name in model_trainer.models and model_trainer.models[name] is not None]
-                        
+
                         if not available_models:
                             st.warning("⚠️ No prediction models available")
                         else:
@@ -305,7 +305,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         direction_pred, direction_prob = model_trainer.predict('direction', latest_features)
                                         direction_text = "📈 BUY" if direction_pred[0] == 1 else "📉 SELL"
                                         confidence = direction_prob[0].max() * 100 if direction_prob is not None and len(direction_prob[0]) > 0 else 50
-                                        
+
                                         st.metric(
                                             "Direction",
                                             direction_text,
@@ -313,19 +313,19 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         )
                                     except Exception as e:
                                         st.error(f"Direction prediction error: {str(e)}")
-                            
+
                             # Profit probability
                             if 'profit_prob' in available_models:
                                 with pred_cols[1]:
                                     try:
                                         profit_pred, profit_prob = model_trainer.predict('profit_prob', latest_features)
-                                        
+
                                         # Handle different prediction formats
                                         if hasattr(profit_pred[0], '__iter__'):
                                             profit_value = profit_pred[0][0] if len(profit_pred[0]) > 0 else profit_pred[0]
                                         else:
                                             profit_value = profit_pred[0]
-                                            
+
                                         if isinstance(profit_value, (int, float)):
                                             if profit_value > 0.5:
                                                 profit_text = "✅ PROFIT"
@@ -335,7 +335,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         else:
                                             profit_text = "✅ PROFIT" if profit_value == 1 else "❌ LOSS"
                                             profit_confidence = profit_prob[0].max() * 100 if profit_prob is not None and len(profit_prob[0]) > 0 else 50
-                                        
+
                                         st.metric(
                                             "Profit Probability",
                                             profit_text,
@@ -343,13 +343,13 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         )
                                     except Exception as e:
                                         st.error(f"Profit prediction error: {str(e)}")
-                            
+
                             # Trading signal
                             if 'trading_signal' in available_models:
                                 with pred_cols[2]:
                                     try:
                                         signal_pred, signal_prob = model_trainer.predict('trading_signal', latest_features)
-                                        
+
                                         # Handle multi-class trading signals (0=sell, 1=hold, 2=buy)
                                         if signal_pred[0] == 2:
                                             signal_text = "🚀 STRONG BUY"
@@ -357,9 +357,9 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                             signal_text = "⏸️ HOLD"
                                         else:
                                             signal_text = "📉 SELL"
-                                            
+
                                         signal_confidence = signal_prob[0].max() * 100 if signal_prob is not None and len(signal_prob[0]) > 0 else 50
-                                        
+
                                         st.metric(
                                             "Trading Signal",
                                             signal_text,
@@ -367,40 +367,56 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         )
                                     except Exception as e:
                                         st.error(f"Trading signal error: {str(e)}")
-                        
+
                         # Prediction history table
                         st.subheader("Today's Predictions")
-                        
+
                         if len(clean_features) >= 5:
                             # Get current date in IST
                             current_date = datetime.now(ist_tz).date()
-                            
-                            # Filter data for current day
+
+                            # Filter data for current day - check if we have any data from today
                             today_features = clean_features[clean_features.index.date == current_date]
-                            
-                            # If no data for today, fall back to recent data
-                            if len(today_features) == 0:
-                                st.info("No data available for today. Showing recent predictions instead.")
+
+                            # Check if we have recent data (within last 2 hours during market hours)
+                            if is_open:
+                                recent_cutoff = datetime.now(ist_tz) - timedelta(hours=2)
+                                very_recent_features = clean_features[clean_features.index >= recent_cutoff.replace(tzinfo=None)]
+                            else:
+                                very_recent_features = pd.DataFrame()
+
+                            # Determine what data to show
+                            if len(today_features) > 0:
+                                recent_features = today_features
+                                st.success(f"✅ Showing {len(recent_features)} predictions for today ({current_date})")
+                            elif len(very_recent_features) > 0 and is_open:
+                                recent_features = very_recent_features
+                                st.info(f"📊 Showing {len(recent_features)} recent predictions (last 2 hours)")
+                            else:
+                                # Fall back to most recent available data
                                 recent_count = min(20, len(clean_features))
                                 recent_features = clean_features.tail(recent_count)
-                            else:
-                                recent_features = today_features
-                                st.info(f"Showing {len(recent_features)} predictions for {current_date}")
-                            
+                                if is_open:
+                                    st.warning("⚠️ No real-time data available yet. Market is open but data may be delayed.")
+                                    st.info("💡 Try refreshing in a few minutes or check your internet connection.")
+                                else:
+                                    st.info(f"📈 Market is closed. Showing {len(recent_features)} most recent predictions.")
+                                st.info("💡 Data updates automatically every 30 seconds during market hours.")
+
                             prediction_data = []
-                            
+
                             for idx, (timestamp, row) in enumerate(recent_features.iterrows()):
                                 row_data = {'Timestamp': timestamp.strftime('%Y-%m-%d %H:%M')}
-                                
+
                                 # Get predictions for each available model
                                 single_row = row.to_frame().T
-                                
+
                                 try:
                                     if 'direction' in available_models:
                                         dir_pred, dir_prob = model_trainer.predict('direction', single_row)
                                         row_data['Direction'] = "BUY" if dir_pred[0] == 1 else "SELL"
                                         row_data['Dir_Conf'] = f"{dir_prob[0].max() * 100:.1f}%" if dir_prob is not None and len(dir_prob[0]) > 0 else "N/A"
-                                
+
                                     if 'profit_prob' in available_models:
                                         profit_pred, profit_prob = model_trainer.predict('profit_prob', single_row)
                                         if isinstance(profit_pred[0], (int, float)):
@@ -409,7 +425,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         else:
                                             row_data['Profit'] = "YES" if profit_pred[0] == 1 else "NO"
                                             row_data['Profit_Conf'] = f"{profit_prob[0].max() * 100:.1f}%" if profit_prob is not None and len(profit_prob[0]) > 0 else "N/A"
-                                    
+
                                     if 'trading_signal' in available_models:
                                         signal_pred, signal_prob = model_trainer.predict('trading_signal', single_row)
                                         if signal_pred[0] == 2:
@@ -419,24 +435,24 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         else:
                                             row_data['Signal'] = "SELL"
                                         row_data['Signal_Conf'] = f"{signal_prob[0].max() * 100:.1f}%" if signal_prob is not None and len(signal_prob[0]) > 0 else "N/A"
-                                
+
                                 except Exception as e:
                                     row_data['Error'] = f"Prediction failed: {str(e)[:30]}"
-                                
+
                                 prediction_data.append(row_data)
-                            
+
                             if prediction_data:
                                 pred_df = pd.DataFrame(prediction_data)
                                 st.dataframe(pred_df, use_container_width=True)
                         else:
                             st.info("Need at least 5 data points for prediction history")
-                        
+
                         # Additional option to view all predictions
                         with st.expander("📊 View All Historical Predictions", expanded=False):
                             if len(clean_features) >= 10:
                                 # Date range selector for historical predictions
                                 col1, col2 = st.columns(2)
-                                
+
                                 with col1:
                                     days_back = st.selectbox(
                                         "Select time range:",
@@ -444,36 +460,36 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         format_func=lambda x: f"Last {x} day{'s' if x > 1 else ''}",
                                         index=2  # Default to 7 days
                                     )
-                                
+
                                 with col2:
                                     end_date = datetime.now(ist_tz).date()
                                     start_date = end_date - timedelta(days=days_back)
                                     st.info(f"From {start_date} to {end_date}")
-                                
+
                                 # Filter historical data
                                 historical_features = clean_features[
                                     (clean_features.index.date >= start_date) & 
                                     (clean_features.index.date <= end_date)
                                 ]
-                                
+
                                 if len(historical_features) > 0:
                                     historical_prediction_data = []
-                                    
+
                                     for idx, (timestamp, row) in enumerate(historical_features.iterrows()):
                                         row_data = {
                                             'Date': timestamp.strftime('%Y-%m-%d'),
                                             'Time': timestamp.strftime('%H:%M'),
                                             'Timestamp': timestamp.strftime('%Y-%m-%d %H:%M')
                                         }
-                                        
+
                                         single_row = row.to_frame().T
-                                        
+
                                         try:
                                             if 'direction' in available_models:
                                                 dir_pred, dir_prob = model_trainer.predict('direction', single_row)
                                                 row_data['Direction'] = "BUY" if dir_pred[0] == 1 else "SELL"
                                                 row_data['Dir_Conf'] = f"{dir_prob[0].max() * 100:.1f}%" if dir_prob is not None and len(dir_prob[0]) > 0 else "N/A"
-                                        
+
                                             if 'profit_prob' in available_models:
                                                 profit_pred, profit_prob = model_trainer.predict('profit_prob', single_row)
                                                 if isinstance(profit_pred[0], (int, float)):
@@ -482,7 +498,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                                 else:
                                                     row_data['Profit'] = "YES" if profit_pred[0] == 1 else "NO"
                                                     row_data['Profit_Conf'] = f"{profit_prob[0].max() * 100:.1f}%" if profit_prob is not None and len(profit_prob[0]) > 0 else "N/A"
-                                            
+
                                             if 'trading_signal' in available_models:
                                                 signal_pred, signal_prob = model_trainer.predict('trading_signal', single_row)
                                                 if signal_pred[0] == 2:
@@ -492,30 +508,30 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                                 else:
                                                     row_data['Signal'] = "SELL"
                                                 row_data['Signal_Conf'] = f"{signal_prob[0].max() * 100:.1f}%" if signal_prob is not None and len(signal_prob[0]) > 0 else "N/A"
-                                        
+
                                         except Exception as e:
                                             row_data['Error'] = f"Prediction failed: {str(e)[:30]}"
-                                        
+
                                         historical_prediction_data.append(row_data)
-                                    
+
                                     if historical_prediction_data:
                                         historical_pred_df = pd.DataFrame(historical_prediction_data)
-                                        
+
                                         # Group by date for better organization
                                         if 'Date' in historical_pred_df.columns:
                                             dates = historical_pred_df['Date'].unique()
-                                            
+
                                             # Show predictions grouped by date
                                             for date in sorted(dates, reverse=True):
                                                 date_data = historical_pred_df[historical_pred_df['Date'] == date]
-                                                
+
                                                 with st.expander(f"📅 {date} ({len(date_data)} predictions)", expanded=False):
                                                     # Remove Date column for display since it's in the expander title
                                                     display_cols = [col for col in date_data.columns if col != 'Date']
                                                     st.dataframe(date_data[display_cols], use_container_width=True, hide_index=True)
                                         else:
                                             st.dataframe(historical_pred_df, use_container_width=True, hide_index=True)
-                                        
+
                                         # Download option
                                         csv_data = pd.DataFrame(historical_prediction_data).to_csv(index=False)
                                         st.download_button(
@@ -528,17 +544,17 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                     st.warning(f"No prediction data available for the selected {days_back} day period.")
                             else:
                                 st.info("Need at least 10 data points for historical analysis")
-                    
+
                     else:
                         st.warning("⚠️ Cannot generate predictions - insufficient technical indicator data")
-                
+
                 except Exception as e:
                     st.error(f"❌ Error generating predictions: {str(e)}")
                     st.info("💡 Make sure you have trained models available")
-            
+
             else:
                 st.warning("⚠️ No trained models available for predictions.")
-                
+
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("🚀 Quick Train Models", type="primary"):
@@ -547,55 +563,55 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                 try:
                                     from models.xgboost_models import QuantTradingModels
                                     from features.technical_indicators import TechnicalIndicators
-                                    
+
                                     # Use existing data
                                     data = st.session_state.data
-                                    
+
                                     # Calculate features
                                     features_data = TechnicalIndicators.calculate_all_indicators(data)
                                     features_data = features_data.dropna()
-                                    
+
                                     if len(features_data) >= 100:
                                         # Initialize trainer
                                         model_trainer = QuantTradingModels()
-                                        
+
                                         # Prepare data
                                         X = model_trainer.prepare_features(features_data)
                                         targets = model_trainer.create_targets(features_data)
-                                        
+
                                         # Train essential models for real-time predictions
                                         essential_models = ['direction', 'trading_signal', 'profit_prob']
                                         trained_count = 0
-                                        
+
                                         for model_name in essential_models:
                                             if model_name in targets:
                                                 y = targets[model_name]
                                                 task_type = 'classification' if model_name in ['direction', 'trading_signal'] else 'regression'
-                                                
+
                                                 result = model_trainer.train_model(model_name, X, y, task_type)
                                                 if result:
                                                     trained_count += 1
-                                        
+
                                         if trained_count > 0:
                                             st.session_state.model_trainer = model_trainer
                                             st.success(f"✅ Trained {trained_count} models successfully!")
                                             st.rerun()
                                     else:
                                         st.error("❌ Need at least 100 clean data points for training")
-                                
+
                                 except Exception as e:
                                     st.error(f"❌ Training failed: {str(e)}")
                         else:
                             st.error("❌ No data available. Please upload data first.")
-                
+
                 with col2:
                     st.info("💡 Go to **Model Training** page for comprehensive model training with full configuration options.")
-            
+
             # Real-time Trading Insights
             st.header("Real-time Trading Insights")
-            
+
             col1, col2, col3 = st.columns(3)
-            
+
             with col1:
                 # Price momentum
                 if len(df) >= 5:
@@ -608,7 +624,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                         delta=f"{momentum:.2f}%",
                         delta_color=momentum_color
                     )
-            
+
             with col2:
                 # Volume analysis
                 if len(df) >= 10:
@@ -621,7 +637,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                         delta=f"{volume_ratio - 100:.0f}%",
                         delta_color="normal" if volume_ratio > 120 else "off"
                     )
-            
+
             with col3:
                 # Volatility indicator
                 if len(df) >= 20:
@@ -629,49 +645,49 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     volatility = returns.std() * 100
                     vol_level = "High" if volatility > 2 else "Medium" if volatility > 1 else "Low"
                     st.metric("20-Period Volatility", f"{volatility:.2f}%", delta=vol_level)
-            
+
             # Real-time alerts
             if len(df) >= 2:
                 st.subheader("Real-time Alerts")
                 alerts = []
-                
+
                 # Price breakout alert
                 current_price = df['Close'].iloc[-1]
                 prev_price = df['Close'].iloc[-2]
                 price_change = ((current_price - prev_price) / prev_price) * 100
-                
+
                 if abs(price_change) > 0.5:
                     direction = "🔴 Sharp Move Up" if price_change > 0 else "🔴 Sharp Move Down"
                     alerts.append(f"{direction}: {price_change:.2f}% in latest candle")
-                
+
                 # Volume spike alert
                 if len(df) >= 5:
                     avg_vol = df['Volume'].tail(5).mean()
                     current_vol = df['Volume'].iloc[-1]
                     if current_vol > avg_vol * 1.5:
                         alerts.append(f"🔊 Volume Spike: {((current_vol/avg_vol-1)*100):.0f}% above average")
-                
+
                 # Technical level alerts
                 if len(df) >= 20:
                     high_20 = df['High'].tail(20).max()
                     low_20 = df['Low'].tail(20).min()
-                    
+
                     if current_price >= high_20 * 0.999:
                         alerts.append(f"📈 Near 20-period High: ₹{high_20:.2f}")
                     elif current_price <= low_20 * 1.001:
                         alerts.append(f"📉 Near 20-period Low: ₹{low_20:.2f}")
-                
+
                 if alerts:
                     for alert in alerts:
                         st.warning(alert)
                 else:
                     st.info("✅ No significant alerts at current levels")
-            
+
             # Data export options
             st.header("Data Export")
-            
+
             col1, col2, col3 = st.columns(3)
-            
+
             with col1:
                 if st.button("Save to Database"):
                     db = st.session_state.db
@@ -680,7 +696,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                         st.success("✅ Data saved to database")
                     else:
                         st.error("❌ Failed to save data")
-            
+
             with col2:
                 if st.button("Update Existing Dataset"):
                     if st.session_state.data is not None:
@@ -694,7 +710,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                         st.success("✅ Main dataset updated with new data")
                     else:
                         st.warning("⚠️ No existing dataset to update")
-            
+
             with col3:
                 csv_data = df.to_csv()
                 st.download_button(
@@ -703,10 +719,10 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     file_name=f"{selected_symbol}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                     mime="text/csv"
                 )
-        
+
         else:
             st.error(f"❌ No data found for {selected_symbol}. Please check the symbol or try again.")
-    
+
     # Reset trigger
     st.session_state.fetch_triggered = False
 
@@ -719,30 +735,30 @@ if auto_refresh:
 with st.expander("📋 Nifty 50 Real-Time Guide", expanded=False):
     st.markdown("""
     ### Nifty 50 Index Trading System
-    
+
     **Configuration:**
     - **Index**: Nifty 50 (^NSEI) - Top 50 stocks by market cap
     - **Timeframe**: 5-minute candles (Fixed)
     - **Market Hours**: 9:15 AM to 3:30 PM IST, Monday to Friday
     - **Auto Refresh**: Updates every 5 minutes during market hours
-    
+
     **Features:**
     - Live Nifty 50 price, volume, and market data
     - Technical indicators calculated automatically on 5-min data
     - ML predictions for index movement direction
     - Profit probability analysis for scalping/intraday
     - Trading signal generation with confidence levels
-    
+
     **ML Predictions Available:**
     - **Direction**: BUY/SELL signal for next 5-minute candle
     - **Profit Probability**: Likelihood of profitable trade
     - **Trading Signal**: Strong BUY/HOLD recommendation
-    
+
     **Data Export:**
     - Save Nifty 50 data to database for model training
     - Update existing datasets with latest 5-min data
     - Download CSV for external analysis
-    
+
     **Trading Strategy:**
     - Use ML predictions as guidance for manual trades
     - High confidence signals (>70%) are more reliable

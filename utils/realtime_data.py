@@ -67,47 +67,55 @@ class IndianMarketData:
             period: Data period ('1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max')
             interval: Data interval ('1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo')
         """
-        if not YF_AVAILABLE:
-            print("yfinance not available - attempting to use requests for data fetching...")
-            return self._fetch_with_requests(symbol, period, interval)
-            
-        try:
-            # Create ticker object
-            ticker = yf.Ticker(symbol, session=self.session)
-            
-            # Fetch historical data
-            data = ticker.history(period=period, interval=interval)
-            
-            if data.empty:
-                print(f"No data found for symbol: {symbol}, using demo data")
-                return self._generate_demo_nifty_data(period=period)
-            
-            # Clean and format data
-            data = data.dropna()
-            
-            # Keep only OHLCV columns if they exist
-            available_cols = []
-            required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-            
-            for col in required_cols:
-                if col in data.columns:
-                    available_cols.append(col)
-            
-            if available_cols:
-                data = data[available_cols]
-            
-            # Convert timezone-aware index to timezone-naive for consistency
-            if hasattr(data.index, 'tz') and data.index.tz is not None:
-                data.index = data.index.tz_convert('Asia/Kolkata').tz_localize(None)
-            
-            # Add metadata
-            data.attrs = {'symbol': symbol, 'last_updated': datetime.now()}
-            
-            return data
-            
-        except Exception as e:
-            print(f"Error fetching data for {symbol}: {str(e)}, using demo data")
-            return self._generate_demo_nifty_data(period=period)
+        # First try with yfinance if available
+        if YF_AVAILABLE:
+            try:
+                # Create ticker object
+                ticker = yf.Ticker(symbol, session=self.session)
+                
+                # Fetch historical data
+                data = ticker.history(period=period, interval=interval)
+                
+                if not data.empty:
+                    # Clean and format data
+                    data = data.dropna()
+                    
+                    # Keep only OHLCV columns if they exist
+                    available_cols = []
+                    required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+                    
+                    for col in required_cols:
+                        if col in data.columns:
+                            available_cols.append(col)
+                    
+                    if available_cols:
+                        data = data[available_cols]
+                    
+                    # Convert timezone-aware index to timezone-naive for consistency
+                    if hasattr(data.index, 'tz') and data.index.tz is not None:
+                        data.index = data.index.tz_convert('Asia/Kolkata').tz_localize(None)
+                    
+                    # Add metadata
+                    data.attrs = {'symbol': symbol, 'last_updated': datetime.now(), 'source': 'yfinance'}
+                    
+                    print(f"✅ Successfully fetched {len(data)} data points from yfinance")
+                    return data
+                
+            except Exception as e:
+                print(f"yfinance failed for {symbol}: {str(e)}, trying alternative methods...")
+        
+        # Try HTTP requests as fallback
+        print("Attempting to fetch data via HTTP requests...")
+        http_data = self._fetch_with_requests(symbol, period, interval)
+        if http_data is not None and not http_data.empty:
+            print(f"✅ Successfully fetched {len(http_data)} data points via HTTP")
+            return http_data
+        
+        # If all else fails, generate realistic demo data
+        print(f"All data sources failed for {symbol}, generating demo data...")
+        demo_data = self._generate_demo_nifty_data(period=period)
+        print(f"✅ Generated {len(demo_data)} demo data points")
+        return demo_data
     
     def _generate_demo_nifty_data(self, period: str = "5d") -> pd.DataFrame:
         """Generate realistic demo Nifty 50 data for visualization"""
