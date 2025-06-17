@@ -401,32 +401,50 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                             # Filter data for current day and recent hours
                             if is_open:
                                 # During market hours, show data from last 4 hours or today
-                                recent_cutoff = max(
+                                recent_cutoff_ist = max(
                                     datetime.now(ist_tz) - timedelta(hours=4),
                                     datetime.now(ist_tz).replace(hour=9, minute=15, second=0, microsecond=0)
                                 )
-                                recent_features = clean_features_ist[clean_features_ist.index >= recent_cutoff.replace(tzinfo=None)]
+                                
+                                # Convert cutoff to timezone-naive for comparison
+                                recent_cutoff_naive = recent_cutoff_ist.replace(tzinfo=None)
+                                
+                                # Ensure clean_features_ist index is timezone-naive
+                                if hasattr(clean_features_ist.index, 'tz') and clean_features_ist.index.tz is not None:
+                                    clean_features_naive = clean_features_ist.copy()
+                                    clean_features_naive.index = clean_features_naive.index.tz_localize(None)
+                                else:
+                                    clean_features_naive = clean_features_ist.copy()
+                                
+                                recent_features = clean_features_naive[clean_features_naive.index >= recent_cutoff_naive]
                                 
                                 if len(recent_features) > 0:
                                     st.success(f"✅ Showing {len(recent_features)} recent predictions (last 4 hours)")
                                 else:
                                     # Fallback to today's data
-                                    today_features = clean_features_ist[
-                                        clean_features_ist.index.date == current_date
+                                    today_features = clean_features_naive[
+                                        clean_features_naive.index.date == current_date
                                     ]
-                                    recent_features = today_features if len(today_features) > 0 else clean_features_ist.tail(10)
+                                    recent_features = today_features if len(today_features) > 0 else clean_features_naive.tail(10)
                                     st.info(f"📊 Showing {len(recent_features)} predictions for today")
                             else:
                                 # Market closed - show today's data or most recent
-                                today_features = clean_features_ist[
-                                    clean_features_ist.index.date == current_date
+                                # Ensure clean_features_ist index is timezone-naive for date comparison
+                                if hasattr(clean_features_ist.index, 'tz') and clean_features_ist.index.tz is not None:
+                                    clean_features_naive = clean_features_ist.copy()
+                                    clean_features_naive.index = clean_features_naive.index.tz_localize(None)
+                                else:
+                                    clean_features_naive = clean_features_ist.copy()
+                                
+                                today_features = clean_features_naive[
+                                    clean_features_naive.index.date == current_date
                                 ]
                                 
                                 if len(today_features) > 0:
                                     recent_features = today_features
                                     st.info(f"📈 Market closed. Showing {len(recent_features)} predictions from today")
                                 else:
-                                    recent_features = clean_features_ist.tail(20)
+                                    recent_features = clean_features_naive.tail(20)
                                     st.info(f"📈 Market closed. Showing {len(recent_features)} most recent predictions")
                             
                             # Always show auto-refresh status
@@ -438,13 +456,18 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                             prediction_data = []
 
                             for idx, (timestamp, row) in enumerate(recent_features.iterrows()):
-                                # Ensure timestamp is in IST format
-                                if hasattr(timestamp, 'tz') and timestamp.tz is not None:
-                                    ist_timestamp = timestamp.tz_convert('Asia/Kolkata')
-                                else:
-                                    ist_timestamp = pd.to_datetime(timestamp).tz_localize('Asia/Kolkata')
-                                
-                                row_data = {'Timestamp': ist_timestamp.strftime('%Y-%m-%d %H:%M IST')}
+                                # Format timestamp consistently (assume it's already in IST since we converted earlier)
+                                try:
+                                    if hasattr(timestamp, 'tz') and timestamp.tz is not None:
+                                        ist_timestamp = timestamp.tz_convert('Asia/Kolkata')
+                                    else:
+                                        # Treat as timezone-naive IST timestamp
+                                        ist_timestamp = pd.to_datetime(timestamp)
+                                    
+                                    row_data = {'Timestamp': ist_timestamp.strftime('%Y-%m-%d %H:%M IST')}
+                                except Exception as e:
+                                    # Fallback to simple string conversion
+                                    row_data = {'Timestamp': str(timestamp)[:19] + ' IST'}
 
                                 # Get predictions for each available model
                                 single_row = row.to_frame().T
@@ -569,27 +592,43 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     start_date = end_date - timedelta(days=days_back)
                     st.info(f"From {start_date} to {end_date}")
 
-                # Filter historical data
-                historical_features = clean_features[
-                    (clean_features.index.date >= start_date) & 
-                    (clean_features.index.date <= end_date)
+                # Filter historical data - ensure timezone-naive comparison
+                if hasattr(clean_features.index, 'tz') and clean_features.index.tz is not None:
+                    historical_features_naive = clean_features.copy()
+                    historical_features_naive.index = historical_features_naive.index.tz_localize(None)
+                else:
+                    historical_features_naive = clean_features.copy()
+                
+                historical_features = historical_features_naive[
+                    (historical_features_naive.index.date >= start_date) & 
+                    (historical_features_naive.index.date <= end_date)
                 ]
 
                 if len(historical_features) > 0:
                     historical_prediction_data = []
 
                     for idx, (timestamp, row) in enumerate(historical_features.iterrows()):
-                        # Ensure timestamp is in IST format
-                        if hasattr(timestamp, 'tz') and timestamp.tz is not None:
-                            ist_timestamp = timestamp.tz_convert('Asia/Kolkata')
-                        else:
-                            ist_timestamp = pd.to_datetime(timestamp).tz_localize('Asia/Kolkata')
-                        
-                        row_data = {
-                            'Date': ist_timestamp.strftime('%Y-%m-%d'),
-                            'Time': ist_timestamp.strftime('%H:%M IST'),
-                            'Timestamp': ist_timestamp.strftime('%Y-%m-%d %H:%M IST')
-                        }
+                        # Format timestamp consistently (assume it's already in IST since we converted earlier)
+                        try:
+                            if hasattr(timestamp, 'tz') and timestamp.tz is not None:
+                                ist_timestamp = timestamp.tz_convert('Asia/Kolkata')
+                            else:
+                                # Treat as timezone-naive IST timestamp
+                                ist_timestamp = pd.to_datetime(timestamp)
+                            
+                            row_data = {
+                                'Date': ist_timestamp.strftime('%Y-%m-%d'),
+                                'Time': ist_timestamp.strftime('%H:%M IST'),
+                                'Timestamp': ist_timestamp.strftime('%Y-%m-%d %H:%M IST')
+                            }
+                        except Exception as e:
+                            # Fallback to simple string conversion
+                            timestamp_str = str(timestamp)[:19]
+                            row_data = {
+                                'Date': timestamp_str[:10],
+                                'Time': timestamp_str[11:16] + ' IST',
+                                'Timestamp': timestamp_str + ' IST'
+                            }
 
                         single_row = row.to_frame().T
 

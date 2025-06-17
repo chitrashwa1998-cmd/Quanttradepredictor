@@ -107,7 +107,9 @@ class IndianMarketData:
 
                     # Convert timezone-aware index to timezone-naive for consistency
                     if hasattr(data.index, 'tz') and data.index.tz is not None:
-                        data.index = data.index.tz_convert('Asia/Kolkata').tz_localize(None)
+                        # Convert to IST first, then remove timezone info
+                        ist_tz = pytz.timezone('Asia/Kolkata')
+                        data.index = data.index.tz_convert(ist_tz).tz_localize(None)
 
                     # Add metadata
                     data.attrs = {'symbol': symbol, 'last_updated': datetime.now(), 'source': 'yfinance'}
