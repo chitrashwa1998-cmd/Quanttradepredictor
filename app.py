@@ -552,3 +552,4 @@ elif st.session_state.current_page == "contact":
             </div>
         </div>
     </div>
+    """, unsafe_allow_html=True)
