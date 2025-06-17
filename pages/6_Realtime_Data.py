@@ -124,21 +124,22 @@ refresh_triggered = False
 
 if auto_refresh and is_open:
     # Initialize or check last refresh time using IST
-    ist_now = datetime.now(ist_tz)
+    ist_tz = pytz.timezone('Asia/Kolkata')
+    current_time_ist = datetime.now(ist_tz)
     if 'last_refresh_time' not in st.session_state:
-        st.session_state.last_refresh_time = ist_now
+        st.session_state.last_refresh_time = current_time_ist
         refresh_triggered = True
     else:
         # Check if 10 seconds have passed since last refresh
-        time_since_refresh = ist_now - st.session_state.last_refresh_time
+        time_since_refresh = current_time_ist - st.session_state.last_refresh_time
         if time_since_refresh.total_seconds() >= 10:
-            st.session_state.last_refresh_time = ist_now
+            st.session_state.last_refresh_time = current_time_ist
             refresh_triggered = True
             st.rerun()  # Immediately trigger rerun
 
     # Show next refresh countdown
     if not refresh_triggered:
-        time_since_refresh = ist_now - st.session_state.last_refresh_time
+        time_since_refresh = current_time_ist - st.session_state.last_refresh_time
         next_refresh_in = max(0, 10 - int(time_since_refresh.total_seconds()))
 
         # Create a placeholder for dynamic countdown
@@ -159,9 +160,15 @@ elif auto_refresh and not is_open:
 if st.session_state.get('fetch_triggered', False) or refresh_triggered:
 
     with st.spinner(f"Fetching real-time data for {selected_name}..."):
+        # Always fetch longer period for technical indicators - minimum 3 months
+        if period in ["1d", "5d"]:
+            extended_period = "3mo"  # Force longer period for indicators
+        elif period == "1mo":
+            extended_period = "3mo"  # Still use 3mo for better indicators
+        else:
+            extended_period = period
 
-        # Fetch data with extended period for technical indicators
-        extended_period = "1mo" if period == "5d" else period  # Use longer period for indicator calculation
+        st.info(f"📊 Fetching {extended_period} of data for reliable technical indicators...")
         df = market_data.fetch_realtime_data(selected_symbol, period=extended_period, interval=interval)
 
         if df is not None and not df.empty:
@@ -172,19 +179,24 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
             st.session_state.realtime_symbol = selected_symbol
 
             # Calculate technical indicators with minimum data check
-            if len(df) < 50:
-                st.warning(f"⚠️ Only {len(df)} data points available. Need at least 50 for reliable technical indicators.")
-                st.info("💡 Try selecting '1mo' or '3mo' period for better indicator calculation.")
+            if len(df) < 100:
+                st.warning(f"⚠️ Only {len(df)} data points available. Technical indicators work best with 100+ points.")
+                if len(df) < 50:
+                    st.error("❌ Insufficient data for technical indicators. Using longer period automatically.")
 
             tech_indicators = TechnicalIndicators()
             df_with_indicators = tech_indicators.calculate_all_indicators(df)
 
             # Remove NaN rows that result from indicator calculation
             clean_data_count = len(df_with_indicators.dropna())
-            if clean_data_count < 10:
-                st.warning(f"⚠️ Only {clean_data_count} clean data points after indicator calculation. Need more historical data.")
+            if clean_data_count < 50:
+                st.error(f"❌ Only {clean_data_count} clean data points after indicator calculation. Need at least 50 for predictions.")
+                st.info("💡 This usually happens with insufficient historical data. The system will show charts but predictions may be limited.")
+
+                # Show the raw data even if predictions can't be made
+                clean_data_count = max(clean_data_count, len(df))  # At least show raw data count
             else:
-                st.info(f"✅ {clean_data_count} clean data points available for predictions")
+                st.success(f"✅ {clean_data_count} clean data points available for predictions")
 
             # Display data summary
             col1, col2, col3, col4 = st.columns(4)
@@ -220,7 +232,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
             ))
 
             fig.update_layout(
-                title=f"{selected_name} - {interval} Candlestick Chart (Last Updated: {current_time_ist})",
+                title=f"{selected_name} - {interval} Candlestick Chart (Last Updated: {current_time_ist.strftime('%H:%M:%S IST')})",
                 xaxis_title="Time",
                 yaxis_title="Price (₹)",
                 height=500,
@@ -297,12 +309,12 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                         if len(df_with_indicators) < 50:
                             st.warning(f"⚠️ Only {len(df_with_indicators)} data points available. Technical indicators need at least 50 points for reliable calculations.")
                             st.info("💡 Try selecting '1mo' or '3mo' period for better predictions.")
-                            
+
                         # Prepare features for prediction
                         features_df = model_trainer.prepare_features(df_with_indicators)
                         # Remove rows with NaN values
                         clean_features = features_df.dropna()
-                        
+
                         if len(clean_features) < 10:
                             st.error(f"❌ Insufficient clean data after technical indicator calculation: {len(clean_features)} rows. Need at least 10 rows.")
                             st.info("💡 Select a longer time period (1mo or 3mo) to get more historical data for technical indicators.")
@@ -719,6 +731,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     st.info("✅ No significant alerts at current levels")
 
             # Data export options
+            ```python
             st.header("Data Export")
 
             col1, col2, col3 = st.columns(3)
