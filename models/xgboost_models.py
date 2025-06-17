@@ -25,11 +25,28 @@ class QuantTradingModels:
             from utils.database import TradingDatabase
             db = TradingDatabase()
             loaded_models = db.load_trained_models()
-            
+
             if loaded_models:
+                # Extract feature names and ensure task_type is present
+                for model_name, model_data in loaded_models.items():
+                    if 'feature_names' in model_data and model_data['feature_names']:
+                        self.feature_names = model_data['feature_names']
+
+                    # Ensure task_type is present, infer if missing
+                    if 'task_type' not in model_data:
+                        if model_name in ['direction', 'profit_prob', 'trend_sideways', 'reversal', 'trading_signal']:
+                            model_data['task_type'] = 'classification'
+                        elif model_name in ['magnitude', 'volatility']:
+                            model_data['task_type'] = 'regression'
+                        else:
+                            model_data['task_type'] = 'classification'  # Default
+
+                        # Update the loaded model with the inferred task_type
+                        loaded_models[model_name] = model_data
+
                 self.models = loaded_models
                 print(f"Loaded {len(loaded_models)} existing trained models from database")
-                
+
                 # Extract feature names from first available model
                 for model_name, model_data in loaded_models.items():
                     if 'feature_names' in model_data and model_data['feature_names']:
@@ -37,7 +54,7 @@ class QuantTradingModels:
                         break
             else:
                 print("No existing models found in database")
-                
+
         except Exception as e:
             print(f"Could not load existing models: {str(e)}")
 
@@ -46,7 +63,7 @@ class QuantTradingModels:
         try:
             from utils.database import TradingDatabase
             db = TradingDatabase()
-            
+
             # Prepare models for saving
             models_to_save = {}
             for model_name, model_data in self.models.items():
@@ -56,14 +73,14 @@ class QuantTradingModels:
                         'feature_names': self.feature_names,
                         'task_type': model_data.get('task_type', 'classification')
                     }
-            
+
             if models_to_save:
                 success = db.save_trained_models(models_to_save)
                 if success:
                     print(f"Saved {len(models_to_save)} trained models to database")
                 else:
                     print("Failed to save models to database")
-            
+
         except Exception as e:
             print(f"Error saving models to database: {str(e)}")
 
@@ -97,7 +114,7 @@ class QuantTradingModels:
         # More realistic profit threshold for 5-min scalping
         # Use smaller threshold to capture more profit opportunities
         base_profit_threshold = 0.001  # 0.1% minimum profit target (more realistic for 5-min)
-        
+
         # Look ahead only 5 candles (25 minutes for 5-min data)
         future_returns_list = []
         for i in range(5):
@@ -117,7 +134,7 @@ class QuantTradingModels:
 
         # 4. Volatility forecasting (next period volatility)
         volatility_window = 10
-        
+
         # Calculate rolling volatility using percentage returns for better scaling
         returns = df['Close'].pct_change()
         current_vol = returns.rolling(volatility_window).std()
@@ -129,7 +146,7 @@ class QuantTradingModels:
         # Ensure volatility is positive and finite
         future_vol = future_vol.clip(lower=0.0001)  # Minimum volatility threshold
         future_vol = future_vol[np.isfinite(future_vol)]
-        
+
         # Debug volatility distribution
         if len(future_vol) > 0:
             vol_stats = future_vol.describe()
@@ -146,67 +163,67 @@ class QuantTradingModels:
 
         # 5. Trend vs sideways classification - IMPROVED ALGORITHM
         # Use historical data only (no look-ahead bias)
-        
+
         # Calculate moving averages for trend detection
         sma_5 = df['Close'].rolling(5).mean()
         sma_10 = df['Close'].rolling(10).mean()
         sma_20 = df['Close'].rolling(20).mean()
         ema_8 = df['Close'].ewm(span=8).mean()
         ema_21 = df['Close'].ewm(span=21).mean()
-        
+
         # Calculate price momentum (historical only)
         price_change_5 = df['Close'] / df['Close'].shift(5) - 1  # 5-period momentum
         price_change_10 = df['Close'] / df['Close'].shift(10) - 1  # 10-period momentum
         price_change_20 = df['Close'] / df['Close'].shift(20) - 1  # 20-period momentum
-        
+
         # Calculate volatility for adaptive thresholds
         returns = df['Close'].pct_change()
         volatility_10 = returns.rolling(10).std()
         volatility_20 = returns.rolling(20).std()
-        
+
         # Data-adaptive trend threshold based on actual volatility distribution
         # Calculate percentiles of actual data volatility
         vol_25th = volatility_20.quantile(0.25)
         vol_50th = volatility_20.quantile(0.50)
         vol_75th = volatility_20.quantile(0.75)
-        
+
         # Use adaptive base threshold based on data characteristics
         base_threshold = np.maximum(0.001, vol_50th * 0.8)  # 80% of median volatility
         volatility_multiplier = 1.0
         trend_threshold = np.maximum(base_threshold, volatility_20 * volatility_multiplier)
-        
+
         # 1. MOVING AVERAGE TREND STRENGTH
         # EMA alignment (strong trend indicator)
         ema_bullish_trend = (ema_8 > ema_21) & (df['Close'] > ema_8)
         ema_bearish_trend = (ema_8 < ema_21) & (df['Close'] < ema_8)
         ema_trend_strength = ema_bullish_trend | ema_bearish_trend
-        
+
         # SMA slope analysis
         sma_20_slope = (sma_20 - sma_20.shift(5)) / sma_20.shift(5)
         strong_sma_trend = np.abs(sma_20_slope) > (trend_threshold * 0.5)
-        
+
         # 2. MOMENTUM ANALYSIS
         # Consistent momentum across multiple timeframes
         momentum_5_strong = np.abs(price_change_5) > trend_threshold
         momentum_10_strong = np.abs(price_change_10) > (trend_threshold * 1.2)
         momentum_20_strong = np.abs(price_change_20) > (trend_threshold * 1.5)
-        
+
         # Momentum consistency (same direction across timeframes)
         momentum_consistent = (
             (price_change_5 > 0) & (price_change_10 > 0) & (price_change_20 > 0)
         ) | (
             (price_change_5 < 0) & (price_change_10 < 0) & (price_change_20 < 0)
         )
-        
+
         # 3. VOLATILITY REGIME
         # Higher volatility often indicates trending market
         volatility_expansion = volatility_10 > (volatility_20 * 1.2)
-        
+
         # 4. PRICE POSITION RELATIVE TO MOVING AVERAGES
         # Price consistently above/below key moving averages
         price_vs_sma20 = df['Close'] / sma_20 - 1
         strong_price_position = np.abs(price_vs_sma20) > (trend_threshold * 0.5)
-        
+
         # 5. TREND PERSISTENCE
         # Check if trend conditions have persisted
         trend_persistence_3 = (
@@ -214,10 +231,10 @@ class QuantTradingModels:
             ema_trend_strength.shift(1) & 
             ema_trend_strength.shift(2)
         )
-        
+
         # MULTI-REGIME TREND CLASSIFICATION
         # Create three trend strength levels for better market regime detection
-        
+
         # 1. STRONG TRENDS (high conviction)
         strong_trend_strict = (
             momentum_consistent & 
@@ -225,31 +242,31 @@ class QuantTradingModels:
             ema_trend_strength &
             strong_price_position
         )
-        
+
         # 2. MODERATE TRENDS (medium conviction)
         moderate_trend = (
             ((momentum_10_strong | momentum_20_strong) & ema_trend_strength) |
             (momentum_consistent & strong_sma_trend) |
             (volatility_expansion & strong_price_position & ema_trend_strength)
         ) & ~strong_trend_strict
-        
+
         # 3. WEAK TRENDS (low conviction but still directional)
         weak_trend = (
             (momentum_5_strong & ema_trend_strength) |
             (trend_persistence_3 & (strong_price_position | strong_sma_trend)) |
             (volatility_expansion & (momentum_5_strong | strong_sma_trend))
         ) & ~strong_trend_strict & ~moderate_trend
-        
+
         # FINAL BINARY CLASSIFICATION with adaptive thresholds
         # Use percentile-based approach to maintain reasonable balance
         all_trend_strength = strong_trend_strict.astype(int) * 3 + moderate_trend.astype(int) * 2 + weak_trend.astype(int) * 1
-        
+
         # Adaptive threshold: aim for 10-20% trending periods (realistic for 5-min data)
         trend_threshold_percentile = 85  # Top 15% as trending
         trend_cutoff = np.percentile(all_trend_strength, trend_threshold_percentile)
-        
+
         strong_trend = all_trend_strength >= trend_cutoff
-        
+
         # Convert to binary: 1 = trending, 0 = sideways
         targets['trend_sideways'] = strong_trend.astype(int)
 
@@ -264,125 +281,125 @@ class QuantTradingModels:
         price_change_1 = df['Close'].pct_change(1)
         price_change_3 = df['Close'].pct_change(3)
         price_change_5 = df['Close'].pct_change(5)
-        
+
         # Calculate RSI-like momentum indicator (historical data only)
         momentum_window = 14
         gains = price_change_1.where(price_change_1 > 0, 0).rolling(momentum_window).mean()
         losses = (-price_change_1.where(price_change_1 < 0, 0)).rolling(momentum_window).mean()
         momentum_ratio = gains / (losses + 1e-10)  # Avoid division by zero
         momentum_index = 100 - (100 / (1 + momentum_ratio))
-        
+
         # Calculate moving averages for trend context
         sma_short = df['Close'].rolling(5).mean()
         sma_medium = df['Close'].rolling(10).mean()
         sma_long = df['Close'].rolling(20).mean()
-        
+
         # Price position relative to recent highs/lows
         high_10 = df['High'].rolling(10).max()
         low_10 = df['Low'].rolling(10).min()
         price_position = (df['Close'] - low_10) / (high_10 - low_10 + 1e-10)
-        
+
         # Volatility for adaptive thresholds
         volatility = df['Close'].pct_change().rolling(10).std()
         base_volatility_threshold = 0.005  # 0.5% base threshold
-        
+
         # HISTORICAL-ONLY REVERSAL CONDITIONS (NO FUTURE DATA)
-        
+
         # BULLISH REVERSAL CONDITIONS (Price expected to bounce up)
         # 1. Price at or near recent lows with oversold conditions
         near_lows = price_position <= 0.25  # Bottom 25% of recent range
         oversold_momentum = momentum_index <= 35  # Oversold RSI
         recent_decline = price_change_3 < -0.003  # Recent decline of 0.3%+
-        
+
         # 2. Price below key moving averages (potential support)
         below_sma_short = df['Close'] < sma_short
         below_sma_medium = df['Close'] < sma_medium
-        
+
         # 3. Volatility expansion (often precedes reversals)
         vol_expansion = volatility > volatility.rolling(20).mean() * 1.2
-        
+
         # 4. Price action patterns (hammer-like candles)
         candle_body = np.abs(df['Close'] - df['Open'])
         candle_range = df['High'] - df['Low']
         lower_wick = df['Open'].combine(df['Close'], min) - df['Low']
         upper_wick = df['High'] - df['Open'].combine(df['Close'], max)
-        
+
         # Hammer pattern: small body, long lower wick, short upper wick
         hammer_pattern = (
             (lower_wick > candle_body * 2) &  # Lower wick > 2x body
             (upper_wick < candle_body * 0.5) &  # Upper wick < 0.5x body
             (candle_range > 0)  # Valid candle
         )
-        
+
         # BEARISH REVERSAL CONDITIONS (Price expected to decline)
         # 1. Price at or near recent highs with overbought conditions
         near_highs = price_position >= 0.75  # Top 25% of recent range
         overbought_momentum = momentum_index >= 65  # Overbought RSI
         recent_rally = price_change_3 > 0.003  # Recent rally of 0.3%+
-        
+
         # 2. Price above key moving averages (potential resistance)
         above_sma_short = df['Close'] > sma_short
         above_sma_medium = df['Close'] > sma_medium
-        
+
         # 3. Shooting star pattern: small body, long upper wick, short lower wick
         shooting_star_pattern = (
             (upper_wick > candle_body * 2) &  # Upper wick > 2x body
             (lower_wick < candle_body * 0.5) &  # Lower wick < 0.5x body
             (candle_range > 0)  # Valid candle
         )
-        
+
         # BULLISH REVERSAL SIGNAL (Multiple scenarios)
         bullish_reversal_strict = (
             near_lows & oversold_momentum & recent_decline  # Classic oversold bounce
         )
-        
+
         bullish_reversal_moderate = (
             (near_lows & (oversold_momentum | recent_decline)) |  # Partial oversold
             (below_sma_short & oversold_momentum & vol_expansion) |  # Support with momentum
             (hammer_pattern & below_sma_medium & recent_decline)  # Hammer at support
         )
-        
+
         # BEARISH REVERSAL SIGNAL (Multiple scenarios)
         bearish_reversal_strict = (
             near_highs & overbought_momentum & recent_rally  # Classic overbought decline
         )
-        
+
         bearish_reversal_moderate = (
             (near_highs & (overbought_momentum | recent_rally)) |  # Partial overbought
             (above_sma_short & overbought_momentum & vol_expansion) |  # Resistance with momentum
             (shooting_star_pattern & above_sma_medium & recent_rally)  # Shooting star at resistance
         )
-        
+
         # COMBINE ALL REVERSAL SIGNALS
         # Use a balanced approach - not too strict, not too loose
         bullish_reversal = bullish_reversal_strict | bullish_reversal_moderate
         bearish_reversal = bearish_reversal_strict | bearish_reversal_moderate
-        
+
         # Ensure we don't have conflicting signals
         conflicting_reversals = bullish_reversal & bearish_reversal
         bullish_reversal = bullish_reversal & ~conflicting_reversals
         bearish_reversal = bearish_reversal & ~conflicting_reversals
-        
+
         # Final reversal signal: 1 = reversal expected, 0 = no reversal
         reversal_signal = (bullish_reversal | bearish_reversal).astype(int)
-        
+
         # Apply minimum data filter (need enough history for indicators)
         reversal_signal.iloc[:momentum_window] = 0  # First 14 periods = no signal
-        
+
         targets['reversal'] = reversal_signal
-        
+
         # Debug information for reversal detection
         reversal_counts = reversal_signal.value_counts()
         total_points = len(reversal_signal)
         reversal_pct = (reversal_counts.get(1, 0) / total_points) * 100 if total_points > 0 else 0
-        
+
         print(f"Reversal Detection Results:")
         print(f"  Total data points: {total_points}")
         print(f"  Reversal signals: {reversal_counts.get(1, 0)} ({reversal_pct:.1f}%)")
         print(f"  No reversal: {reversal_counts.get(0, 0)} ({100-reversal_pct:.1f}%)")
         print(f"  Bullish reversals detected: {bullish_reversal.sum()}")
         print(f"  Bearish reversals detected: {bearish_reversal.sum()}")
-        
+
         # Store additional reversal details for analysis
         if hasattr(self, 'reversal_details'):
             self.reversal_details = {
@@ -514,16 +531,16 @@ class QuantTradingModels:
         # Force better distribution if too many holds
         signal_counts = pd.Series(signals).value_counts()
         hold_percentage = signal_counts.get(1, 0) / len(signals) * 100
-        
+
         if hold_percentage > 80:  # If more than 80% holds, be more aggressive
             # Convert some holds to signals based on price momentum
             price_change_small = df['Close'].pct_change(1).fillna(0)
-            
+
             # Convert holds with positive momentum to buys
             additional_buys = (signals == 1) & (price_change_small > 0.0005)
             # Convert holds with negative momentum to sells
             additional_sells = (signals == 1) & (price_change_small < -0.0005)
-            
+
             signals = np.where(additional_buys, 2, signals)
             signals = np.where(additional_sells, 0, signals)
 
@@ -585,17 +602,18 @@ class QuantTradingModels:
             if len(y_clean) == 0:
                 raise ValueError(f"No valid target values for {model_name} after cleaning")
 
+        ```python
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training {model_name}. Need at least 100 samples, got {len(X_clean)}")
 
         # Use configurable split with time-based ordering (no shuffling for time series data)
         split_idx = int(len(X_clean) * train_split)
-        
+
         X_train = X_clean.iloc[:split_idx]
         X_test = X_clean.iloc[split_idx:]
         y_train = y_clean.iloc[:split_idx]
         y_test = y_clean.iloc[split_idx:]
-        
+
         print(f"Training on {len(X_train)} samples ({len(X_train)/len(X_clean)*100:.1f}%), testing on {len(X_test)} samples ({len(X_test)/len(X_clean)*100:.1f}%)")
 
         # Scale features for all models
@@ -606,10 +624,10 @@ class QuantTradingModels:
 
         # Define base model parameters
         random_state = 42
-        
+
         if task_type == 'classification':
             # Classification ensemble: XGBoost + CatBoost + Random Forest
-            
+
             # XGBoost Classifier
             xgb_model = xgb.XGBClassifier(
                 max_depth=6,
@@ -621,7 +639,7 @@ class QuantTradingModels:
                 n_jobs=-1,
                 eval_metric='logloss'
             )
-            
+
             # CatBoost Classifier
             catboost_model = CatBoostClassifier(
                 iterations=100,
@@ -631,7 +649,7 @@ class QuantTradingModels:
                 verbose=False,
                 allow_writing_files=False
             )
-            
+
             # Random Forest Classifier
             rf_model = RandomForestClassifier(
                 n_estimators=100,
@@ -639,7 +657,7 @@ class QuantTradingModels:
                 random_state=random_state,
                 n_jobs=-1
             )
-            
+
             # Create voting classifier
             ensemble_model = VotingClassifier(
                 estimators=[
@@ -649,10 +667,10 @@ class QuantTradingModels:
                 ],
                 voting='soft'
             )
-            
+
         else:
             # Regression ensemble: XGBoost + CatBoost + Random Forest
-            
+
             # XGBoost Regressor
             xgb_model = xgb.XGBRegressor(
                 max_depth=6,
@@ -663,7 +681,7 @@ class QuantTradingModels:
                 random_state=random_state,
                 n_jobs=-1
             )
-            
+
             # CatBoost Regressor
             catboost_model = CatBoostRegressor(
                 iterations=100,
@@ -673,7 +691,7 @@ class QuantTradingModels:
                 verbose=False,
                 allow_writing_files=False
             )
-            
+
             # Random Forest Regressor
             rf_model = RandomForestRegressor(
                 n_estimators=100,
@@ -681,7 +699,7 @@ class QuantTradingModels:
                 random_state=random_state,
                 n_jobs=-1
             )
-            
+
             # Create voting regressor
             ensemble_model = VotingRegressor(
                 estimators=[
@@ -709,15 +727,15 @@ class QuantTradingModels:
                 'accuracy': accuracy,
                 'classification_report': classification_report(y_test, y_pred, output_dict=True)
             }
-            
+
             # Calculate individual model accuracies for comparison
             individual_scores = {}
             for name, model in ensemble_model.named_estimators_.items():
                 individual_pred = model.predict(X_test_scaled)
                 individual_scores[f'{name}_accuracy'] = accuracy_score(y_test, individual_pred)
-            
+
             metrics.update(individual_scores)
-            
+
         else:
             mse = mean_squared_error(y_test, y_pred)
             mae = mean_absolute_error(y_test, y_pred)
@@ -726,14 +744,14 @@ class QuantTradingModels:
                 'mae': mae,
                 'rmse': np.sqrt(mse)
             }
-            
+
             # Calculate individual model scores for comparison
             individual_scores = {}
             for name, model in ensemble_model.named_estimators_.items():
                 individual_pred = model.predict(X_test_scaled)
                 individual_scores[f'{name}_mse'] = mean_squared_error(y_test, individual_pred)
                 individual_scores[f'{name}_mae'] = mean_absolute_error(y_test, individual_pred)
-            
+
             metrics.update(individual_scores)
 
         # Get feature importance (use XGBoost as primary)
@@ -792,15 +810,15 @@ class QuantTradingModels:
                     # Ensure X and target are properly aligned by using common index
                     target_series = targets[model_name]
                     common_index = X.index.intersection(target_series.index)
-                    
+
                     if len(common_index) == 0:
                         st.warning(f"⚠️ No common indices between features and {model_name} target")
                         results[model_name] = None
                         continue
-                    
+
                     X_aligned = X.loc[common_index]
                     y_aligned = target_series.loc[common_index]
-                    
+
                     result = self.train_model(model_name, X_aligned, y_aligned, task_type, train_split)
                     results[model_name] = result
                     st.success(f"✅ {model_name} model trained successfully")
@@ -815,7 +833,7 @@ class QuantTradingModels:
         status_text.text("Saving trained models to database...")
         # Automatically save all trained models for persistence
         self._save_models_to_database()
-        
+
         status_text.text("All models trained and saved!")
         return results
 
@@ -845,25 +863,25 @@ class QuantTradingModels:
             # Get individual model predictions and probabilities
             individual_predictions = []
             individual_probabilities = []
-            
+
             for name, individual_model in model.named_estimators_.items():
                 ind_pred = individual_model.predict(X_scaled)
                 individual_predictions.append(ind_pred)
-                
+
                 # Get probabilities if available
                 if hasattr(individual_model, 'predict_proba'):
                     ind_proba = individual_model.predict_proba(X_scaled)
                     individual_probabilities.append(ind_proba)
-            
+
             # Calculate confidence based on model agreement and probability strength
             n_samples = len(predictions)
             confidence_scores = np.zeros(n_samples)
-            
+
             for i in range(n_samples):
                 # Method 1: Model agreement (how many models agree with final prediction)
                 individual_preds_at_i = [pred[i] for pred in individual_predictions]
                 agreement_score = sum(1 for pred in individual_preds_at_i if pred == predictions[i]) / len(individual_preds_at_i)
-                
+
                 # Method 2: Average probability strength (how confident individual models are)
                 if individual_probabilities:
                     prob_strengths = []
@@ -873,14 +891,14 @@ class QuantTradingModels:
                     avg_prob_strength = np.mean(prob_strengths)
                 else:
                     avg_prob_strength = 0.5
-                
+
                 # Combined confidence: weighted average of agreement and probability strength
                 confidence_scores[i] = 0.6 * agreement_score + 0.4 * avg_prob_strength
-                
+
                 # Ensure minimum confidence for unanimous decisions
                 if agreement_score == 1.0:  # All models agree
                     confidence_scores[i] = max(confidence_scores[i], 0.75)
-            
+
             # Create probability matrix with confidence as max probability
             probabilities = np.zeros((n_samples, 2))
             for i in range(n_samples):

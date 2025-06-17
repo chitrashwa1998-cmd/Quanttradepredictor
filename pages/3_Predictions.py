@@ -141,7 +141,17 @@ with col2:
     )
 
 with col3:
-    st.metric("Model Type", models[selected_model]['task_type'].title())
+    # Handle missing task_type with fallback
+    task_type = models[selected_model].get('task_type', 'unknown')
+    if not task_type or task_type == 'unknown':
+        # Try to infer task type from model name
+        if selected_model in ['direction', 'profit_prob', 'trend_sideways', 'reversal', 'trading_signal']:
+            task_type = 'classification'
+        elif selected_model in ['magnitude', 'volatility']:
+            task_type = 'regression'
+        else:
+            task_type = 'unknown'
+    st.metric("Model Type", task_type.title())
 
 # Ensure Date is not both index and column
 if 'Date' in df.columns:
