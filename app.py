@@ -506,4 +506,49 @@ elif st.session_state.current_page == "contact":
 
                 <div style="margin: 1.5rem 0;">
                     <label style="color: #00ff41; font-weight: 600; display: block; margin-bottom: 0.5rem;">Message</label>
-                    <textarea placeholder="Tell us about your trading requirements and how we can help..." style="width: 100%; height: 120px; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 25
+                    <textarea placeholder="Tell us about your trading requirements and how we can help..." style="width: 100%; height: 120px; padding: 1rem; background: rgba(25, 25, 45, 0.9); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 8px; color: white; font-family: 'Space Grotesk', sans-serif;"></textarea>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <button style="width: 100%; padding: 1rem 2rem; background: linear-gradient(135deg, #00ffff, #8b5cf6); border: none; border-radius: 8px; color: white; font-weight: 600; font-size: 1.1rem; cursor: pointer; font-family: 'Orbitron', monospace;">
+                        🚀 SEND MESSAGE
+                    </button>
+                </div>
+            </div>
+
+            <div class="contact-info">
+                <h2 style="color: #00ff41; margin-bottom: 2rem;">📍 Contact Information</h2>
+
+                <div style="background: rgba(0, 255, 255, 0.1); border: 2px solid #00ffff; border-radius: 16px; padding: 2rem; margin: 2rem 0;">
+                    <h3 style="color: #00ffff; margin-bottom: 1.5rem;">🏢 Headquarters</h3>
+                    <p style="color: #e6e8eb; line-height: 1.8; margin: 0;">
+                        <strong style="color: #00ff41;">Address:</strong><br>
+                        TribexAlpha Technologies<br>
+                        Financial District, Level 42<br>
+                        Mumbai, Maharashtra 400051<br>
+                        India
+                    </p>
+                </div>
+
+                <div style="background: rgba(0, 255, 65, 0.1); border: 2px solid #00ff41; border-radius: 16px; padding: 2rem; margin: 2rem 0;">
+                    <h3 style="color: #00ff41; margin-bottom: 1.5rem;">📞 Get In Touch</h3>
+                    <p style="color: #e6e8eb; line-height: 2; margin: 0;">
+                        <strong style="color: #00ffff;">Phone:</strong> +91 22 6789 0123<br>
+                        <strong style="color: #00ffff;">Email:</strong> contact@tribexalpha.com<br>
+                        <strong style="color: #00ffff;">Support:</strong> support@tribexalpha.com<br>
+                        <strong style="color: #00ffff;">Sales:</strong> sales@tribexalpha.com
+                    </p>
+                </div>
+
+                <div style="background: rgba(139, 92, 246, 0.1); border: 2px solid #8b5cf6; border-radius: 16px; padding: 2rem; margin: 2rem 0;">
+                    <h3 style="color: #8b5cf6; margin-bottom: 1.5rem;">⏰ Business Hours</h3>
+                    <p style="color: #e6e8eb; line-height: 2; margin: 0;">
+                        <strong style="color: #00ffff;">Trading Hours:</strong> 9:15 AM - 3:30 PM IST<br>
+                        <strong style="color: #00ffff;">Support:</strong> 24/7 Available<br>
+                        <strong style="color: #00ffff;">Sales:</strong> Mon-Fri, 9:00 AM - 6:00 PM IST<br>
+                        <strong style="color: #00ffff;">Emergency:</strong> 24/7 Technical Support
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
