@@ -602,7 +602,6 @@ class QuantTradingModels:
             if len(y_clean) == 0:
                 raise ValueError(f"No valid target values for {model_name} after cleaning")
 
-        ```python
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training {model_name}. Need at least 100 samples, got {len(X_clean)}")
 
