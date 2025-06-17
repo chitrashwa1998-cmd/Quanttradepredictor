@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from utils.realtime_data import IndianMarketData
-from utils.database import TradingDatabase
+from utils.database_adapter import DatabaseAdapter
 from features.technical_indicators import TechnicalIndicators
 from models.xgboost_models import QuantTradingModels
 import time
@@ -30,7 +30,7 @@ if 'market_data' not in st.session_state:
     st.session_state.market_data = IndianMarketData()
 
 if 'db' not in st.session_state:
-    st.session_state.db = TradingDatabase()
+    st.session_state.db = DatabaseAdapter()
 
 market_data = st.session_state.market_data
 
@@ -269,9 +269,9 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                 if not refresh_triggered:
                     try:
                         from models.xgboost_models import QuantTradingModels
-                        from utils.database_adapter import get_trading_database
+                        from utils.database_adapter import DatabaseAdapter
 
-                        db = get_trading_database()
+                        db = DatabaseAdapter()
                         trained_models = db.load_trained_models()
 
                         if trained_models:
