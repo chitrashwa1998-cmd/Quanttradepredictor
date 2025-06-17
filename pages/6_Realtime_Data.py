@@ -140,11 +140,11 @@ if auto_refresh and is_open:
     if not refresh_triggered:
         time_since_refresh = ist_now - st.session_state.last_refresh_time
         next_refresh_in = max(0, 10 - int(time_since_refresh.total_seconds()))
-        
+
         # Create a placeholder for dynamic countdown
         countdown_placeholder = st.empty()
         countdown_placeholder.info(f"🔄 Next auto-refresh in {next_refresh_in} seconds")
-        
+
         # Auto-refresh when countdown reaches 0
         if next_refresh_in <= 1:
             time.sleep(1)
@@ -291,13 +291,13 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                 try:
                     # Cache features preparation if data hasn't changed
                     data_hash = hash(str(df_with_indicators.tail(10).values.tobytes()))
-                    
+
                     if not hasattr(st.session_state, 'cached_features_hash') or st.session_state.cached_features_hash != data_hash:
                         # Prepare features for prediction
                         features_df = model_trainer.prepare_features(df_with_indicators)
                         # Remove rows with NaN values
                         clean_features = features_df.dropna()
-                        
+
                         # Cache the results
                         st.session_state.cached_features = clean_features
                         st.session_state.cached_features_hash = data_hash
@@ -390,15 +390,15 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                         st.error(f"Trading signal error: {str(e)}")
 
                         # Prediction history table
-                        st.subheader("Today's Predictions")
+                        st.subheader("Recent Predictions (Last 30 from Latest Close)")
 
                         if len(clean_features) >= 5:
-                            # Get current date in IST
-                            current_date = datetime.now(ist_tz).date()
+                            # Get the most recent market close time (3:30 PM IST)
+                            ist_tz = pytz.timezone('Asia/Kolkata')
 
                             # Convert clean_features index to IST for proper comparison
                             clean_features_ist = clean_features.copy()
-                            
+
                             # Handle timezone conversion more robustly
                             try:
                                 if not hasattr(clean_features_ist.index, 'tz') or clean_features_ist.index.tz is None:
@@ -411,120 +411,114 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                                 # If timezone conversion fails, use as-is
                                 clean_features_ist.index = pd.to_datetime(clean_features_ist.index)
 
-                            # Filter data for current day and recent hours
-                            if is_open:
-                                # During market hours, show data from last 4 hours or today
-                                recent_cutoff_ist = max(
-                                    datetime.now(ist_tz) - timedelta(hours=4),
-                                    datetime.now(ist_tz).replace(hour=9, minute=15, second=0, microsecond=0)
-                                )
-                                
-                                # Convert cutoff to timezone-naive for comparison
-                                recent_cutoff_naive = recent_cutoff_ist.replace(tzinfo=None)
-                                
-                                # Ensure clean_features_ist index is timezone-naive
-                                if hasattr(clean_features_ist.index, 'tz') and clean_features_ist.index.tz is not None:
-                                    clean_features_naive = clean_features_ist.copy()
-                                    clean_features_naive.index = clean_features_naive.index.tz_localize(None)
-                                else:
-                                    clean_features_naive = clean_features_ist.copy()
-                                
-                                recent_features = clean_features_naive[clean_features_naive.index >= recent_cutoff_naive]
-                                
-                                if len(recent_features) > 0:
-                                    st.success(f"✅ Showing {len(recent_features)} recent predictions (last 4 hours)")
-                                else:
-                                    # Fallback to today's data
-                                    today_features = clean_features_naive[
-                                        clean_features_naive.index.date == current_date
-                                    ]
-                                    recent_features = today_features if len(today_features) > 0 else clean_features_naive.tail(10)
-                                    st.info(f"📊 Showing {len(recent_features)} predictions for today")
+                            # Make timezone-naive for comparison
+                            if hasattr(clean_features_ist.index, 'tz') and clean_features_ist.index.tz is not None:
+                                clean_features_naive = clean_features_ist.copy()
+                                clean_features_naive.index = clean_features_naive.index.tz_localize(None)
                             else:
-                                # Market closed - show today's data or most recent
-                                # Ensure clean_features_ist index is timezone-naive for date comparison
-                                if hasattr(clean_features_ist.index, 'tz') and clean_features_ist.index.tz is not None:
-                                    clean_features_naive = clean_features_ist.copy()
-                                    clean_features_naive.index = clean_features_naive.index.tz_localize(None)
-                                else:
-                                    clean_features_naive = clean_features_ist.copy()
-                                
-                                today_features = clean_features_naive[
-                                    clean_features_naive.index.date == current_date
-                                ]
-                                
-                                if len(today_features) > 0:
-                                    recent_features = today_features
-                                    st.info(f"📈 Market closed. Showing {len(recent_features)} predictions from today")
-                                else:
-                                    recent_features = clean_features_naive.tail(20)
-                                    st.info(f"📈 Market closed. Showing {len(recent_features)} most recent predictions")
-                            
+                                clean_features_naive = clean_features_ist.copy()
+
+                            # Find the most recent market close (3:30 PM) in the data
+                            # Look for the latest date that has data at or before 3:30 PM
+                            market_close_times = []
+
+                            for date in clean_features_naive.index.date:
+                                # Check if we have data for this date at market close time (3:30 PM)
+                                market_close_time = pd.to_datetime(f"{date} 15:30:00")
+
+                                # Find data points on this date at or before market close
+                                day_data = clean_features_naive[clean_features_naive.index.date == date]
+
+                                if len(day_data) > 0:
+                                    # Get the latest time for this date that's at or before market close
+                                    valid_times = day_data[day_data.index <= market_close_time].index
+                                    if len(valid_times) > 0:
+                                        market_close_times.append(valid_times.max())
+
+                            if market_close_times:
+                                # Get the most recent market close time
+                                latest_close_time = max(market_close_times)
+
+                                # Filter data up to the latest close time and get last 30 predictions
+                                closing_data = clean_features_naive[clean_features_naive.index <= latest_close_time]
+                                recent_features = closing_data.tail(30)
+
+                                # Format the latest close time for display
+                                latest_close_str = latest_close_time.strftime('%Y-%m-%d %H:%M IST')
+                                st.info(f"📊 Showing last {len(recent_features)} predictions ending at {latest_close_str}")
+                            else:
+                                # Fallback to last 30 if no proper market close time found
+                                recent_features = clean_features_naive.tail(30)
+                                st.info(f"📊 Showing {len(recent_features)} most recent predictions")
+
                             # Always show auto-refresh status
                             if auto_refresh and is_open:
-                                st.info("🔄 Auto-refresh enabled - Data updates every 10 seconds during market hours")
-                            elif is_open:
-                                st.info("⏸️ Auto-refresh disabled - Enable for live updates")
 
-                            prediction_data = []
+                            # Always show auto-refresh status
+                                if auto_refresh and is_open:
+                                    st.info("🔄 Auto-refresh enabled - Data updates every 10 seconds during market hours")
+                                elif is_open:
+                                    st.info("⏸️ Auto-refresh disabled - Enable for live updates")
 
-                            for idx, (timestamp, row) in enumerate(recent_features.iterrows()):
-                                # Format timestamp consistently (assume it's already in IST since we converted earlier)
-                                try:
-                                    if hasattr(timestamp, 'tz') and timestamp.tz is not None:
-                                        ist_timestamp = timestamp.tz_convert('Asia/Kolkata')
-                                    else:
-                                        # Treat as timezone-naive IST timestamp
-                                        ist_timestamp = pd.to_datetime(timestamp)
-                                    
-                                    row_data = {'Timestamp': ist_timestamp.strftime('%Y-%m-%d %H:%M IST')}
-                                except Exception as e:
-                                    # Fallback to simple string conversion
-                                    row_data = {'Timestamp': str(timestamp)[:19] + ' IST'}
+                                prediction_data = []
 
-                                # Get predictions for each available model
-                                single_row = row.to_frame().T
-
-                                try:
-                                    if 'direction' in available_models:
-                                        dir_pred, dir_prob = model_trainer.predict('direction', single_row)
-                                        row_data['Direction'] = "BUY" if dir_pred[0] == 1 else "SELL"
-                                        row_data['Dir_Conf'] = f"{dir_prob[0].max() * 100:.1f}%" if dir_prob is not None and len(dir_prob[0]) > 0 else "N/A"
-
-                                    if 'profit_prob' in available_models:
-                                        profit_pred, profit_prob = model_trainer.predict('profit_prob', single_row)
-                                        if isinstance(profit_pred[0], (int, float)):
-                                            row_data['Profit'] = "YES" if profit_pred[0] > 0.5 else "NO"
-                                            row_data['Profit_Conf'] = f"{profit_pred[0] * 100:.1f}%"
+                                for idx, (timestamp, row) in enumerate(recent_features.iterrows()):
+                                    # Format timestamp consistently (assume it's already in IST since we converted earlier)
+                                    try:
+                                        if hasattr(timestamp, 'tz') and timestamp.tz is not None:
+                                            ist_timestamp = timestamp.tz_convert('Asia/Kolkata')
                                         else:
-                                            row_data['Profit'] = "YES" if profit_pred[0] == 1 else "NO"
-                                            row_data['Profit_Conf'] = f"{profit_prob[0].max() * 100:.1f}%" if profit_prob is not None and len(profit_prob[0]) > 0 else "N/A"
+                                            # Treat as timezone-naive IST timestamp
+                                            ist_timestamp = pd.to_datetime(timestamp)
 
-                                    if 'trading_signal' in available_models:
-                                        signal_pred, signal_prob = model_trainer.predict('trading_signal', single_row)
-                                        if signal_pred[0] == 2:
-                                            row_data['Signal'] = "STRONG BUY"
-                                        elif signal_pred[0] == 1:
-                                            row_data['Signal'] = "HOLD"
-                                        else:
-                                            row_data['Signal'] = "SELL"
-                                        row_data['Signal_Conf'] = f"{signal_prob[0].max() * 100:.1f}%" if signal_prob is not None and len(signal_prob[0]) > 0 else "N/A"
+                                        row_data = {'Timestamp': ist_timestamp.strftime('%Y-%m-%d %H:%M IST')}
+                                    except Exception as e:
+                                        # Fallback to simple string conversion
+                                        row_data = {'Timestamp': str(timestamp)[:19] + ' IST'}
 
-                                except Exception as e:
-                                    row_data['Error'] = f"Prediction failed: {str(e)[:30]}"
+                                    # Get predictions for each available model
+                                    single_row = row.to_frame().T
 
-                                prediction_data.append(row_data)
+                                    try:
+                                        if 'direction' in available_models:
+                                            dir_pred, dir_prob = model_trainer.predict('direction', single_row)
+                                            row_data['Direction'] = "BUY" if dir_pred[0] == 1 else "SELL"
+                                            row_data['Dir_Conf'] = f"{dir_prob[0].max() * 100:.1f}%" if dir_prob is not None and len(dir_prob[0]) > 0 else "N/A"
 
-                            if prediction_data:
-                                pred_df = pd.DataFrame(prediction_data)
-                                st.dataframe(pred_df, use_container_width=True)
-                        else:
-                            st.info("Need at least 5 data points for prediction history")
+                                        if 'profit_prob' in available_models:
+                                            profit_pred, profit_prob = model_trainer.predict('profit_prob', single_row)
+                                            if isinstance(profit_pred[0], (int, float)):
+                                                row_data['Profit'] = "YES" if profit_pred[0] > 0.5 else "NO"
+                                                row_data['Profit_Conf'] = f"{profit_pred[0] * 100:.1f}%"
+                                            else:
+                                                row_data['Profit'] = "YES" if profit_pred[0] == 1 else "NO"
+                                                row_data['Profit_Conf'] = f"{profit_prob[0].max() * 100:.1f}%" if profit_prob is not None and len(profit_prob[0]) > 0 else "N/A"
 
-                        
+                                        if 'trading_signal' in available_models:
+                                            signal_pred, signal_prob = model_trainer.predict('trading_signal', single_row)
+                                            if signal_pred[0] == 2:
+                                                row_data['Signal'] = "STRONG BUY"
+                                            elif signal_pred[0] == 1:
+                                                row_data['Signal'] = "HOLD"
+                                            else:
+                                                row_data['Signal'] = "SELL"
+                                            row_data['Signal_Conf'] = f"{signal_prob[0].max() * 100:.1f}%" if signal_prob is not None and len(signal_prob[0]) > 0 else "N/A"
 
-                    else:
-                        st.warning("⚠️ Cannot generate predictions - insufficient technical indicator data")
+                                    except Exception as e:
+                                        row_data['Error'] = f"Prediction failed: {str(e)[:30]}"
+
+                                    prediction_data.append(row_data)
+
+                                if prediction_data:
+                                    pred_df = pd.DataFrame(prediction_data)
+                                    st.dataframe(pred_df, use_container_width=True)
+                                else:
+                                    st.info("Need at least 5 data points for prediction history")
+
+
+
+                            else:
+                                st.warning("⚠️ Cannot generate predictions - insufficient technical indicator data")
 
                 except Exception as e:
                     st.error(f"❌ Error generating predictions: {str(e)}")
@@ -588,7 +582,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
             # Historical Predictions Section (separate from ML Predictions)
             if models_available and model_trainer and len(clean_features) >= 10:
                 st.header("📊 Historical Predictions Analysis")
-                
+
                 # Date range selector for historical predictions
                 col1, col2 = st.columns(2)
 
@@ -611,7 +605,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                     historical_features_naive.index = historical_features_naive.index.tz_localize(None)
                 else:
                     historical_features_naive = clean_features.copy()
-                
+
                 historical_features = historical_features_naive[
                     (historical_features_naive.index.date >= start_date) & 
                     (historical_features_naive.index.date <= end_date)
@@ -628,7 +622,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                             else:
                                 # Treat as timezone-naive IST timestamp
                                 ist_timestamp = pd.to_datetime(timestamp)
-                            
+
                             row_data = {
                                 'Date': ist_timestamp.strftime('%Y-%m-%d'),
                                 'Time': ist_timestamp.strftime('%H:%M IST'),
@@ -677,7 +671,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
 
                     if historical_prediction_data:
                         historical_pred_df = pd.DataFrame(historical_prediction_data)
-                        
+
                         # Show all data in a single table
                         st.dataframe(historical_pred_df, use_container_width=True, hide_index=True)
 
@@ -741,7 +735,7 @@ if st.session_state.get('fetch_triggered', False) or refresh_triggered:
                 prev_price = df['Close'].iloc[-2]
                 price_change = ((current_price - prev_price) / prev_price) * 100
 
-                if abs(price_change) > 0.5:
+                if abs(price_change)> 0.5:
                     direction = "🔴 Sharp Move Up" if price_change > 0 else "🔴 Sharp Move Down"
                     alerts.append(f"{direction}: {price_change:.2f}% in latest candle")
 
@@ -819,14 +813,14 @@ if auto_refresh and is_open:
     if (window.autoRefreshInterval) {
         clearInterval(window.autoRefreshInterval);
     }
-    
+
     window.autoRefreshInterval = setInterval(function() {
         // Force Streamlit to rerun
         window.parent.postMessage({
             type: 'streamlit:componentReady',
             apiVersion: 1,
         }, '*');
-        
+
         // Alternative method - simulate button click
         const buttons = window.parent.document.querySelectorAll('[data-testid="stButton"] button');
         const refreshButton = Array.from(buttons).find(btn => btn.textContent.includes('Fetch'));
