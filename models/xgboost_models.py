@@ -117,7 +117,10 @@ class QuantTradingModels:
 
         # 4. Volatility forecasting (next period volatility)
         volatility_window = 10
-        current_vol = df['Close'].rolling(volatility_window).std()
+        
+        # Calculate rolling volatility using percentage returns for better scaling
+        returns = df['Close'].pct_change()
+        current_vol = returns.rolling(volatility_window).std()
         future_vol = current_vol.shift(-1)
 
         # Remove NaN values and ensure we have valid volatility data
@@ -126,6 +129,18 @@ class QuantTradingModels:
         # Ensure volatility is positive and finite
         future_vol = future_vol.clip(lower=0.0001)  # Minimum volatility threshold
         future_vol = future_vol[np.isfinite(future_vol)]
+        
+        # Debug volatility distribution
+        if len(future_vol) > 0:
+            vol_stats = future_vol.describe()
+            print(f"Volatility Target Statistics:")
+            print(f"  Count: {vol_stats['count']}")
+            print(f"  Mean: {vol_stats['mean']:.6f}")
+            print(f"  Std: {vol_stats['std']:.6f}")
+            print(f"  Min: {vol_stats['min']:.6f}")
+            print(f"  Max: {vol_stats['max']:.6f}")
+            print(f"  25th percentile: {vol_stats['25%']:.6f}")
+            print(f"  75th percentile: {vol_stats['75%']:.6f}")
 
         targets['volatility'] = future_vol
 

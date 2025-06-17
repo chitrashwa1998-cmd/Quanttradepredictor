@@ -632,9 +632,25 @@ try:
 
         # Add volatility-specific fields
         pred_df['Volatility_Forecast'] = predictions
-        pred_df['Volatility_Category'] = pd.cut(pred_df['Volatility_Forecast'], 
-                                               bins=[0, 0.01, 0.02, 0.05, float('inf')],
-                                               labels=['Low Vol', 'Medium Vol', 'High Vol', 'Extreme Vol'])
+        
+        # Create balanced volatility categories using data distribution
+        vol_values = pred_df['Volatility_Forecast'].dropna()
+        
+        if len(vol_values) > 0:
+            # Use quartile-based binning for balanced distribution
+            q25 = np.percentile(vol_values, 25)
+            q50 = np.percentile(vol_values, 50) 
+            q75 = np.percentile(vol_values, 75)
+            
+            pred_df['Volatility_Category'] = pd.cut(pred_df['Volatility_Forecast'], 
+                                                   bins=[0, q25, q50, q75, float('inf')],
+                                                   labels=['Low Vol', 'Medium Vol', 'High Vol', 'Extreme Vol'],
+                                                   include_lowest=True)
+        else:
+            # Fallback to original binning if no data
+            pred_df['Volatility_Category'] = pd.cut(pred_df['Volatility_Forecast'], 
+                                                   bins=[0, 0.01, 0.02, 0.05, float('inf')],
+                                                   labels=['Low Vol', 'Medium Vol', 'High Vol', 'Extreme Vol'])
 
         with tab1:
             st.subheader("📊 Volatility Forecasting Analysis")
@@ -670,17 +686,57 @@ try:
 
             st.plotly_chart(fig, use_container_width=True)
 
-            # Statistics
-            col1, col2, col3, col4 = st.columns(4)
+            # Volatility distribution pie chart
+            vol_counts = pred_df['Volatility_Category'].value_counts()
+            
+            col1, col2 = st.columns(2)
+            
             with col1:
-                st.metric("Avg Volatility", f"{pred_df['Volatility_Forecast'].mean():.4f}")
+                fig_pie = go.Figure(data=[go.Pie(
+                    labels=vol_counts.index,
+                    values=vol_counts.values,
+                    hole=0.3,
+                    marker_colors=['green', 'yellow', 'orange', 'red']
+                )])
+
+                fig_pie.update_layout(
+                    title="Volatility Distribution",
+                    height=400
+                )
+
+                st.plotly_chart(fig_pie, use_container_width=True)
+            
             with col2:
-                st.metric("Max Volatility", f"{pred_df['Volatility_Forecast'].max():.4f}")
-            with col3:
-                high_vol = (pred_df['Volatility_Category'].isin(['High Vol', 'Extreme Vol'])).mean() * 100
-                st.metric("High Volatility %", f"{high_vol:.1f}%")
-            with col4:
-                st.metric("Latest Volatility", f"{pred_df['Volatility_Forecast'].iloc[-1]:.4f}")
+                # Statistics
+                col1a, col2a = st.columns(2)
+                with col1a:
+                    st.metric("Avg Volatility", f"{pred_df['Volatility_Forecast'].mean():.4f}")
+                    st.metric("Max Volatility", f"{pred_df['Volatility_Forecast'].max():.4f}")
+                with col2a:
+                    high_vol = (pred_df['Volatility_Category'].isin(['High Vol', 'Extreme Vol'])).mean() * 100
+                    st.metric("High Volatility %", f"{high_vol:.1f}%")
+                    st.metric("Latest Volatility", f"{pred_df['Volatility_Forecast'].iloc[-1]:.4f}")
+                
+                # Volatility range info
+                st.subheader("📊 Volatility Ranges")
+                if len(vol_counts) > 0:
+                    vol_ranges = []
+                    vol_values = pred_df['Volatility_Forecast'].dropna()
+                    if len(vol_values) > 0:
+                        q25 = np.percentile(vol_values, 25)
+                        q50 = np.percentile(vol_values, 50)
+                        q75 = np.percentile(vol_values, 75)
+                        vol_max = vol_values.max()
+                        
+                        vol_ranges = [
+                            f"Low: 0 - {q25:.4f}",
+                            f"Medium: {q25:.4f} - {q50:.4f}",
+                            f"High: {q50:.4f} - {q75:.4f}",
+                            f"Extreme: {q75:.4f} - {vol_max:.4f}"
+                        ]
+                        
+                        for range_info in vol_ranges:
+                            st.text(range_info)
 
         with tab2:
             st.subheader("📈 Price with Volatility Indicators")
