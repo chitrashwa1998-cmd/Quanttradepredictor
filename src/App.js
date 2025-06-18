@@ -14,18 +14,20 @@ function App() {
   return (
     <Router>
       <div className="App">
-        <Navbar />
-        <main>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/data-upload" element={<DataUpload />} />
-            <Route path="/model-training" element={<ModelTraining />} />
-            <Route path="/predictions" element={<Predictions />} />
-            <Route path="/backtesting" element={<Backtesting />} />
-            <Route path="/realtime-data" element={<RealtimeData />} />
-            <Route path="/database" element={<DatabaseManager />} />
-          </Routes>
-        </main>
+        <div className="app-layout">
+          <Navbar />
+          <main className="main-content">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/data-upload" element={<DataUpload />} />
+              <Route path="/model-training" element={<ModelTraining />} />
+              <Route path="/predictions" element={<Predictions />} />
+              <Route path="/backtesting" element={<Backtesting />} />
+              <Route path="/realtime-data" element={<RealtimeData />} />
+              <Route path="/database" element={<DatabaseManager />} />
+            </Routes>
+          </main>
+        </div>
       </div>
     </Router>
   );

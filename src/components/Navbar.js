@@ -16,27 +16,27 @@ const Navbar = () => {
   ];
 
   return (
-    <nav className="nav">
-      <div className="container">
-        <div className="nav-container">
-          <Link to="/" className="nav-brand">
-            ⚡ TribexAlpha
-          </Link>
-          <ul className="nav-links">
-            {navItems.map((item) => (
-              <li key={item.path}>
-                <Link
-                  to={item.path}
-                  className={location.pathname === item.path ? 'active' : ''}
-                >
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
+    <div className="sidebar">
+      <div className="sidebar-header">
+        <Link to="/" className="sidebar-brand">
+          ⚡ TribexAlpha
+        </Link>
       </div>
-    </nav>
+      <nav className="sidebar-nav">
+        <ul className="sidebar-links">
+          {navItems.map((item) => (
+            <li key={item.path}>
+              <Link
+                to={item.path}
+                className={location.pathname === item.path ? 'active' : ''}
+              >
+                {item.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </div>
   );
 };
 
