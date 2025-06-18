@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 const DatabaseManager = () => {
@@ -27,4 +26,4 @@ const DatabaseManager = () => {
   );
 };
 
-export default DatabaseManager;nager;
+export default DatabaseManager;
