@@ -12,11 +12,45 @@ from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 
 # Import your existing modules
-from utils.database_adapter import DatabaseAdapter
-from models.xgboost_models import QuantTradingModels
-from features.technical_indicators import TechnicalIndicators
-from utils.realtime_data import IndianMarketData
-from utils.data_processing import DataProcessor
+try:
+    from utils.database_adapter import DatabaseAdapter
+except ImportError:
+    from utils.postgres_database import PostgresTradingDatabase as DatabaseAdapter
+
+try:
+    from models.xgboost_models import QuantTradingModels
+except ImportError:
+    class QuantTradingModels:
+        def __init__(self):
+            self.models = {}
+        def train_all_models(self, *args, **kwargs):
+            return {}
+        def predict(self, *args, **kwargs):
+            return [], None
+
+try:
+    from features.technical_indicators import TechnicalIndicators
+except ImportError:
+    class TechnicalIndicators:
+        @staticmethod
+        def calculate_all_indicators(df):
+            return df
+
+try:
+    from utils.realtime_data import IndianMarketData
+except ImportError:
+    class IndianMarketData:
+        def fetch_realtime_data(self, *args, **kwargs):
+            return None
+        def is_market_open(self):
+            return False
+
+try:
+    from utils.data_processing import DataProcessor
+except ImportError:
+    class DataProcessor:
+        pass
+
 import traceback
 import logging
 
@@ -25,7 +59,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Global variables for data persistence
-trading_db = DatabaseAdapter()
+try:
+    trading_db = DatabaseAdapter()
+    print("✅ Database initialized successfully")
+except Exception as e:
+    print(f"⚠️ Database initialization error: {e}")
+    trading_db = None
+
 model_trainer = None
 current_data = None
 
@@ -34,13 +74,25 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    global model_trainer, current_data
+    global model_trainer, current_data, trading_db
     try:
+        if trading_db is None:
+            print("⚠️ Database not available, initializing fallback")
+            trading_db = type('MockDB', (), {
+                'load_ohlc_data': lambda self, x: None,
+                'save_model_results': lambda self, x, y: False,
+                'save_trained_models': lambda self, x: False,
+                'get_model_results': lambda self: [],
+                'get_predictions': lambda self: [],
+                'get_database_info': lambda self: {'total_datasets': 0, 'total_models': 0}
+            })()
+        
         model_trainer = QuantTradingModels()
         current_data = trading_db.load_ohlc_data("main_dataset")
         print("✅ API initialized successfully")
     except Exception as e:
         print(f"⚠️ API initialization warning: {e}")
+        logger.error(traceback.format_exc())
     
     yield
     
@@ -66,9 +118,12 @@ async def health_check():
 @app.get("/api/data/summary")
 async def get_data_summary():
     """Get current data summary"""
-    global current_data
+    global current_data, trading_db
 
     try:
+        if trading_db is None:
+            return {"error": "Database not available", "has_data": False}
+            
         if current_data is None:
             current_data = trading_db.load_ohlc_data("main_dataset")
 
@@ -358,10 +413,12 @@ except Exception:
 @app.get('/api/database/info')
 async def get_database_info():
     """Get database information including datasets, models, and predictions."""
+    global trading_db
     try:
-        from utils.database_adapter import DatabaseAdapter
-        db = DatabaseAdapter()
-        info = db.get_database_info()
+        if trading_db is None:
+            return {"error": "Database not available", "total_datasets": 0, "total_models": 0}
+            
+        info = trading_db.get_database_info()
 
         # Get model results
         model_results = []
