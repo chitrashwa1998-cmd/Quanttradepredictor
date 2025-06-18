@@ -7,6 +7,30 @@ import streamlit as st
 from datetime import datetime
 
 def auto_restore_system():
+    """Automatically restore models and data from database on app start"""
+    try:
+        from utils.database_adapter import get_trading_database
+        
+        # Only run once per session
+        if 'auto_restore_complete' in st.session_state:
+            return
+            
+        db = get_trading_database()
+        
+        # Try to restore data
+        if 'data' not in st.session_state or st.session_state.data is None:
+            restored_data = db.load_ohlc_data("main_dataset")
+            if restored_data is not None:
+                st.session_state.data = restored_data
+        
+        # Mark as complete
+        st.session_state.auto_restore_complete = True
+        
+    except Exception:
+        # Silently fail if restore doesn't work
+        pass
+
+def auto_restore_system():
     """Automatically restore data and models on app startup"""
 
     # Only run once per session

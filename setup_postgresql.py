@@ -57,7 +57,7 @@ def main():
     else:
         print("\n❌ PostgreSQL setup incomplete.")
         print("Please follow the instructions above to set up PostgreSQL.")
-        sys.exit(1)
 
 if __name__ == "__main__":
+    main()_ == "__main__":
     main()

@@ -27,4 +27,4 @@ const DatabaseManager = () => {
   );
 };
 
-export default DatabaseManager;
+export default DatabaseManager;nager;

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -31,7 +30,7 @@ const ModelTraining = () => {
 
     setTraining(true);
     try {
-      const response = await axios.post('/api/models/train', selectedModels);
+      await axios.post('/api/models/train', selectedModels);
       alert('✅ Model training completed successfully!');
       fetchModelsStatus();
     } catch (error) {
@@ -116,7 +115,7 @@ const ModelTraining = () => {
 
       <div className="card">
         <h3>⚙️ Training Configuration</h3>
-        
+
         <div className="grid grid-3" style={{marginBottom: '2rem'}}>
           <div>
             <label style={{display: 'block', marginBottom: '0.5rem', color: '#00ffff'}}>

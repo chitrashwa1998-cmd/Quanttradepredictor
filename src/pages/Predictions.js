@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
@@ -11,41 +10,39 @@ const Predictions = () => {
   const [period, setPeriod] = useState('30d');
 
   useEffect(() => {
-    fetchAvailableModels();
+    const loadModels = async () => {
+      try {
+        const response = await fetch('/api/models/status');
+        const data = await response.json();
+        const models = Object.keys(data.models || []);
+        setAvailableModels(models);
+        if (models.length > 0 && !selectedModel) {
+          setSelectedModel(models[0]);
+        }
+      } catch (error) {
+        console.error('Error fetching models:', error);
+      }
+    };
+    loadModels();
   }, []);
 
-  const fetchAvailableModels = async () => {
-    try {
-      const response = await axios.get('/api/models/status');
-      const models = Object.keys(response.data.models);
-      setAvailableModels(models);
-      if (models.length > 0 && !selectedModel) {
-        setSelectedModel(models[0]);
-      }
-    } catch (error) {
-      console.error('Failed to fetch models:', error);
-    }
-  };
-
-  const fetchPredictions = async () => {
-    if (!selectedModel) return;
-
-    setLoading(true);
-    try {
-      const response = await axios.get(`/api/predictions/${selectedModel}?period=${period}`);
-      setPredictions(response.data);
-    } catch (error) {
-      console.error('Failed to fetch predictions:', error);
-      alert('Failed to generate predictions: ' + (error.response?.data?.detail || error.message));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (selectedModel) {
-      fetchPredictions();
-    }
+    const loadPredictions = async () => {
+      if (!selectedModel) return;
+
+      setLoading(true);
+      try {
+        const response = await axios.get(`/api/predictions/${selectedModel}?period=${period}`);
+        const data = response.data;
+        setPredictions(data);
+      } catch (error) {
+        console.error('Error fetching predictions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPredictions();
   }, [selectedModel, period]);
 
   if (availableModels.length === 0) {
@@ -55,7 +52,7 @@ const Predictions = () => {
           <h1>🎯 Prediction Engine</h1>
           <p>Real-time Market Analysis & Forecasting</p>
         </div>
-        
+
         <div className="alert alert-warning">
           ⚠️ No trained models found. Please go to the <strong>Model Training</strong> page first.
         </div>
@@ -67,7 +64,7 @@ const Predictions = () => {
     if (!predictions || !predictions.predictions) return null;
 
     const data = predictions.predictions;
-    
+
     // Price line
     const priceTrace = {
       x: data.map(d => d.date),
@@ -199,7 +196,7 @@ const Predictions = () => {
       {predictions && predictions.predictions && !loading && (
         <div className="card">
           <h3>📊 Prediction Statistics</h3>
-          
+
           <div className="grid grid-4" style={{marginBottom: '2rem'}}>
             <div className="metric-card">
               <div className="metric-label">Total Predictions</div>

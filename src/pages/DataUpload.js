@@ -1,6 +1,5 @@
 
 import React, { useState } from 'react';
-import axios from 'axios';
 
 const DataUpload = () => {
   const [file, setFile] = useState(null);
