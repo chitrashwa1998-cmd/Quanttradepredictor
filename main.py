@@ -17,6 +17,12 @@ from models.xgboost_models import QuantTradingModels
 from features.technical_indicators import TechnicalIndicators
 from utils.realtime_data import IndianMarketData
 from utils.data_processing import DataProcessor
+import traceback
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Global variables for data persistence
 trading_db = DatabaseAdapter()
@@ -62,14 +68,14 @@ async def get_data_summary():
     """Get current data summary"""
     global current_data
 
-    if current_data is None:
-        current_data = trading_db.load_ohlc_data("main_dataset")
-
-    if current_data is None:
-        return {"error": "No data available", "has_data": False}
-
     try:
-        summary = DataProcessor.get_data_summary(current_data)
+        if current_data is None:
+            current_data = trading_db.load_ohlc_data("main_dataset")
+
+        if current_data is None:
+            return {"error": "No data available", "has_data": False}
+
+        # Simplified summary without DataProcessor dependency
         return {
             "has_data": True,
             "total_rows": len(current_data),
@@ -78,10 +84,20 @@ async def get_data_summary():
                 "end": current_data.index.max().isoformat(),
                 "days": (current_data.index.max() - current_data.index.min()).days
             },
-            "price_summary": summary["price_summary"],
-            "returns": summary["returns"]
+            "price_summary": {
+                "current_price": float(current_data['Close'].iloc[-1]),
+                "price_change": float(current_data['Close'].iloc[-1] - current_data['Close'].iloc[-2]),
+                "high": float(current_data['High'].max()),
+                "low": float(current_data['Low'].min())
+            },
+            "returns": {
+                "daily_mean": float(current_data['Close'].pct_change().mean()),
+                "daily_std": float(current_data['Close'].pct_change().std())
+            }
         }
     except Exception as e:
+        logger.error(f"Error in get_data_summary: {str(e)}")
+        logger.error(traceback.format_exc())
         return {"error": str(e), "has_data": False}
 
 @app.get("/api/data/chart")
@@ -123,24 +139,29 @@ async def get_models_status():
     """Get status of trained models"""
     global model_trainer
 
-    if model_trainer is None:
-        return {"models": {}, "total_models": 0}
+    try:
+        if model_trainer is None:
+            return {"models": {}, "total_models": 0}
 
-    models_info = {}
-    if hasattr(model_trainer, 'models') and model_trainer.models:
-        for name, model_data in model_trainer.models.items():
-            if model_data:
-                models_info[name] = {
-                    "name": name.replace('_', ' ').title(),
-                    "trained": True,
-                    "task_type": model_data.get('task_type', 'unknown'),
-                    "trained_at": model_data.get('trained_at', 'unknown')
-                }
+        models_info = {}
+        if hasattr(model_trainer, 'models') and model_trainer.models:
+            for name, model_data in model_trainer.models.items():
+                if model_data:
+                    models_info[name] = {
+                        "name": name.replace('_', ' ').title(),
+                        "trained": True,
+                        "task_type": model_data.get('task_type', 'unknown'),
+                        "trained_at": model_data.get('trained_at', 'unknown')
+                    }
 
-    return {
-        "models": models_info,
-        "total_models": len(models_info)
-    }
+        return {
+            "models": models_info,
+            "total_models": len(models_info)
+        }
+    except Exception as e:
+        logger.error(f"Error in get_models_status: {str(e)}")
+        logger.error(traceback.format_exc())
+        return {"models": {}, "total_models": 0, "error": str(e)}
 
 @app.post("/api/models/train")
 async def train_models(models_to_train: List[str]):
