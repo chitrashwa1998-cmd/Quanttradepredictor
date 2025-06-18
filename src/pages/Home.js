@@ -2,6 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
+// Connect to the working Flask server on port 8080
+const API_BASE_URL = 'http://localhost:8080/api';
+
 const Home = () => {
   const [systemStatus, setSystemStatus] = useState({
     hasData: false,
@@ -17,8 +20,8 @@ const Home = () => {
   const fetchSystemStatus = async () => {
     try {
       const [dataResponse, modelsResponse] = await Promise.all([
-        axios.get('/api/data/summary'),
-        axios.get('/api/models/status')
+        axios.get(`${API_BASE_URL}/data/summary`),
+        axios.get(`${API_BASE_URL}/models/status`)
       ]);
 
       setSystemStatus({
