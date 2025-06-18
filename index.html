@@ -259,11 +259,7 @@
         // Real API calls to Python backend
         const fetchNiftyData = async () => {
             try {
-                const response = await fetch('/api/nifty-data', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action: 'get_current_price', symbol: '^NSEI'})
-                });
+                const response = await fetch('/api/nifty-data');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -273,17 +269,22 @@
                 return data.success ? data.data : null;
             } catch (error) {
                 console.error('Failed to fetch Nifty data:', error);
-                return null;
+                // Return fallback structure to prevent UI crashes
+                return {
+                    price: 0,
+                    change: 0,
+                    changePercent: 0,
+                    volume: 0,
+                    high: 0,
+                    low: 0,
+                    open: 0
+                };
             }
         };
 
         const fetchPredictions = async () => {
             try {
-                const response = await fetch('/api/predictions', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({action: 'get_predictions'})
-                });
+                const response = await fetch('/api/predictions');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -293,7 +294,16 @@
                 return data.success ? data.data : null;
             } catch (error) {
                 console.error('Failed to fetch predictions:', error);
-                return null;
+                // Return fallback structure to prevent UI crashes
+                return {
+                    direction: 'UNKNOWN',
+                    directionConfidence: 0.5,
+                    priceTarget: 0,
+                    targetConfidence: 0.5,
+                    trend: 'UNKNOWN',
+                    trendConfidence: 0.5,
+                    volatility: 'MEDIUM'
+                };
             }
         };
 
@@ -579,8 +589,9 @@
             );
         };
 
-        // Render the application
-        ReactDOM.render(<TradingDashboard />, document.getElementById('root'));
+        // Render the application using React 18 createRoot
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<TradingDashboard />);
     </script>
 </body>
 </html>
