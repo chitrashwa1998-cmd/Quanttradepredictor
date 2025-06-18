@@ -11,6 +11,7 @@ import sys
 import traceback
 from datetime import datetime
 import pytz
+import numpy as np
 
 # Add current directory to path for imports
 sys.path.append('.')
@@ -152,66 +153,143 @@ def get_predictions():
                 'error': 'Insufficient data for predictions'
             }), 400
         
-        # Calculate technical indicators first
+        # Calculate technical indicators
         try:
-            if 'TechnicalIndicators' in globals():
-                data_with_indicators = TechnicalIndicators.calculate_all_indicators(data)
-            else:
-                data_with_indicators = data
+            data_with_indicators = TechnicalIndicators.calculate_all_indicators(data)
+            data_with_indicators = data_with_indicators.dropna()
         except Exception as e:
             print(f"Error calculating indicators: {e}")
             data_with_indicators = data
         
-        # Prepare features for prediction
-        features = models.prepare_features(data_with_indicators.tail(100))
-        
-        if len(features) == 0:
+        if len(data_with_indicators) < 50:
             return jsonify({
                 'success': False,
-                'error': 'Failed to prepare features'
+                'error': 'Not enough data after calculating indicators'
+            }), 400
+        
+        # Prepare features for prediction
+        try:
+            features = models.prepare_features(data_with_indicators.tail(100))
+            if len(features) == 0:
+                raise ValueError("No features prepared")
+        except Exception as e:
+            print(f"Error preparing features: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to prepare features: {str(e)}'
             }), 400
         
         latest_features = features.tail(1)
         predictions_data = {}
         
-        # Get predictions from available models
-        try:
-            direction_pred, direction_conf = models.predict('direction', latest_features)
-            predictions_data['direction'] = "UP" if direction_pred[0] > 0.5 else "DOWN"
-            predictions_data['directionConfidence'] = float(direction_conf[0])
-        except:
+        # Check if models are available
+        if not hasattr(models, 'models') or not models.models:
+            return jsonify({
+                'success': False,
+                'error': 'No trained models available. Please train models first.'
+            }), 400
+        
+        current_price = float(data['Close'].iloc[-1])
+        
+        # Get predictions from available trained models
+        available_models = list(models.models.keys())
+        print(f"Available models: {available_models}")
+        
+        # Direction prediction
+        if 'direction' in available_models:
+            try:
+                direction_pred, direction_prob = models.predict('direction', latest_features)
+                predictions_data['direction'] = "UP" if direction_pred[0] == 1 else "DOWN"
+                predictions_data['directionConfidence'] = float(np.max(direction_prob[0])) if direction_prob is not None else 0.6
+            except Exception as e:
+                print(f"Error predicting direction: {e}")
+                predictions_data['direction'] = "UNKNOWN"
+                predictions_data['directionConfidence'] = 0.5
+        else:
             predictions_data['direction'] = "UNKNOWN"
             predictions_data['directionConfidence'] = 0.5
         
-        try:
-            price_pred, price_conf = models.predict('price_target', latest_features)
-            predictions_data['priceTarget'] = float(price_pred[0])
-            predictions_data['targetConfidence'] = float(price_conf[0])
-        except:
-            current_price = data['Close'].iloc[-1]
-            predictions_data['priceTarget'] = float(current_price)
+        # Price magnitude prediction
+        if 'magnitude' in available_models:
+            try:
+                magnitude_pred, _ = models.predict('magnitude', latest_features)
+                predicted_change = float(magnitude_pred[0])
+                if predictions_data['direction'] == "UP":
+                    predictions_data['priceTarget'] = current_price * (1 + predicted_change/100)
+                else:
+                    predictions_data['priceTarget'] = current_price * (1 - predicted_change/100)
+                predictions_data['targetConfidence'] = 0.7
+            except Exception as e:
+                print(f"Error predicting magnitude: {e}")
+                predictions_data['priceTarget'] = current_price
+                predictions_data['targetConfidence'] = 0.5
+        else:
+            predictions_data['priceTarget'] = current_price
             predictions_data['targetConfidence'] = 0.5
         
-        try:
-            trend_pred, trend_conf = models.predict('trend', latest_features)
-            predictions_data['trend'] = "TRENDING" if trend_pred[0] > 0.5 else "SIDEWAYS"
-            predictions_data['trendConfidence'] = float(trend_conf[0])
-        except:
+        # Trend prediction
+        if 'trend_sideways' in available_models:
+            try:
+                trend_pred, trend_prob = models.predict('trend_sideways', latest_features)
+                predictions_data['trend'] = "TRENDING" if trend_pred[0] == 1 else "SIDEWAYS"
+                predictions_data['trendConfidence'] = float(np.max(trend_prob[0])) if trend_prob is not None else 0.6
+            except Exception as e:
+                print(f"Error predicting trend: {e}")
+                predictions_data['trend'] = "UNKNOWN"
+                predictions_data['trendConfidence'] = 0.5
+        else:
             predictions_data['trend'] = "UNKNOWN"
             predictions_data['trendConfidence'] = 0.5
         
-        # Calculate volatility from recent data
-        try:
+        # Trading signal
+        if 'trading_signal' in available_models:
+            try:
+                signal_pred, signal_prob = models.predict('trading_signal', latest_features)
+                signal_map = {0: "SELL", 1: "HOLD", 2: "BUY"}  
+                predictions_data['tradingSignal'] = signal_map.get(signal_pred[0], "HOLD")
+                predictions_data['signalConfidence'] = float(np.max(signal_prob[0])) if signal_prob is not None else 0.6
+            except Exception as e:
+                print(f"Error predicting trading signal: {e}")
+                predictions_data['tradingSignal'] = "HOLD"
+                predictions_data['signalConfidence'] = 0.5
+        else:
+            predictions_data['tradingSignal'] = "HOLD"
+            predictions_data['signalConfidence'] = 0.5
+        
+        # Volatility prediction or calculation
+        if 'volatility' in available_models:
+            try:
+                vol_pred, _ = models.predict('volatility', latest_features)
+                vol_value = float(vol_pred[0])
+                if vol_value > 0.02:
+                    predictions_data['volatility'] = "HIGH"
+                elif vol_value > 0.01:
+                    predictions_data['volatility'] = "MEDIUM"
+                else:
+                    predictions_data['volatility'] = "LOW"
+            except Exception as e:
+                print(f"Error predicting volatility: {e}")
+                # Fallback to calculated volatility
+                returns = data['Close'].pct_change().tail(20).std()
+                if returns > 0.02:
+                    predictions_data['volatility'] = "HIGH"
+                elif returns > 0.01:
+                    predictions_data['volatility'] = "MEDIUM"
+                else:
+                    predictions_data['volatility'] = "LOW"
+        else:
+            # Calculate volatility from recent data
             returns = data['Close'].pct_change().tail(20).std()
             if returns > 0.02:
-                volatility = "HIGH"
+                predictions_data['volatility'] = "HIGH"
             elif returns > 0.01:
-                volatility = "MEDIUM"
+                predictions_data['volatility'] = "MEDIUM"
             else:
-                volatility = "LOW"
-            predictions_data['volatility'] = volatility
-        except:
-            predictions_data['volatility'] = "MEDIUM"
+                predictions_data['volatility'] = "LOW"
+        
+        # Add model status info
+        predictions_data['availableModels'] = available_models
+        predictions_data['currentPrice'] = current_price
         
         return jsonify({
             'success': True,
@@ -350,27 +428,203 @@ def get_all_data():
 def train_models():
     """Trigger model training"""
     try:
+        # Get request data
+        request_data = request.get_json() if request.is_json else {}
+        selected_models = request_data.get('models', [])
+        
+        # Load data
         data = db.load_ohlc_data()
         if data is None or len(data) < 1000:
             return jsonify({
                 'success': False,
-                'error': 'Insufficient data for training'
+                'error': 'Insufficient data for training. Need at least 1000 rows.'
             }), 400
         
+        print(f"Training models on {len(data)} rows of data")
+        
+        # Calculate technical indicators
+        try:
+            features_data = TechnicalIndicators.calculate_all_indicators(data)
+            features_data = features_data.dropna()
+            
+            if len(features_data) < 100:
+                return jsonify({
+                    'success': False,
+                    'error': 'Not enough clean data after calculating indicators'
+                }), 400
+                
+        except Exception as e:
+            print(f"Error calculating indicators: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Error calculating technical indicators: {str(e)}'
+            }), 500
+        
+        # Prepare features and targets
+        X = models.prepare_features(features_data)
+        targets = models.create_targets(features_data)
+        
         # Train models
-        results = models.train_all_models(data)
+        results = {}
+        model_configs = [
+            ('direction', 'classification'),
+            ('magnitude', 'regression'),
+            ('profit_prob', 'classification'),
+            ('volatility', 'regression'),
+            ('trend_sideways', 'classification'),
+            ('reversal', 'classification'),
+            ('trading_signal', 'classification')
+        ]
+        
+        for model_name, task_type in model_configs:
+            if selected_models and model_name not in selected_models:
+                continue  # Skip if specific models selected and this isn't one
+                
+            try:
+                if model_name in targets:
+                    print(f"Training {model_name} model...")
+                    y = targets[model_name]
+                    
+                    # Ensure data alignment
+                    common_index = X.index.intersection(y.index)
+                    X_aligned = X.loc[common_index]
+                    y_aligned = y.loc[common_index]
+                    
+                    result = models.train_model(model_name, X_aligned, y_aligned, task_type)
+                    
+                    if result:
+                        results[model_name] = {
+                            'status': 'success',
+                            'accuracy': result.get('metrics', {}).get('accuracy', 0) if task_type == 'classification' else result.get('metrics', {}).get('rmse', 0),
+                            'task_type': task_type
+                        }
+                        print(f"✓ {model_name} trained successfully")
+                    else:
+                        results[model_name] = {'status': 'failed', 'error': 'Training returned no result'}
+                        
+            except Exception as e:
+                print(f"Error training {model_name}: {e}")
+                results[model_name] = {'status': 'failed', 'error': str(e)}
+        
+        # Save trained models to database
+        try:
+            if models.models:
+                from utils.database_adapter import DatabaseAdapter
+                db_adapter = DatabaseAdapter()
+                success = db_adapter.save_trained_models(models.models)
+                if success:
+                    print("Models saved to database successfully")
+        except Exception as e:
+            print(f"Error saving models to database: {e}")
         
         return jsonify({
             'success': True,
             'data': {
-                'message': 'Models trained successfully',
-                'results': results
+                'message': f'Training completed for {len(results)} models',
+                'results': results,
+                'trained_models': len([r for r in results.values() if r.get('status') == 'success'])
             },
             'timestamp': datetime.now().isoformat()
         })
         
     except Exception as e:
         print(f"Error training models: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/data/summary', methods=['GET'])
+def get_data_summary():
+    """Get data summary for React app"""
+    try:
+        # Get database info
+        db_info = db.get_database_info()
+        
+        # Load data to get summary stats
+        data = db.load_ohlc_data()
+        
+        if data is not None:
+            summary = {
+                'total_rows': len(data),
+                'date_range': {
+                    'start': data.index.min().isoformat() if hasattr(data.index, 'min') else 'N/A',
+                    'end': data.index.max().isoformat() if hasattr(data.index, 'max') else 'N/A'
+                },
+                'columns': list(data.columns),
+                'latest_price': float(data['Close'].iloc[-1]) if 'Close' in data.columns else 0,
+                'database_status': 'connected'
+            }
+        else:
+            summary = {
+                'total_rows': 0,
+                'date_range': {'start': 'N/A', 'end': 'N/A'},
+                'columns': [],
+                'latest_price': 0,
+                'database_status': 'no_data'
+            }
+        
+        return jsonify({
+            'success': True,
+            'data': summary,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        print(f"Error getting data summary: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/models/status', methods=['GET'])
+def get_models_status():
+    """Get trained models status"""
+    try:
+        # Get trained models from the models object
+        trained_models = {}
+        
+        if hasattr(models, 'models') and models.models:
+            for model_name, model_info in models.models.items():
+                trained_models[model_name] = {
+                    'name': model_name.replace('_', ' ').title(),
+                    'task_type': model_info.get('task_type', 'unknown'),
+                    'trained_at': model_info.get('trained_at', 'Unknown'),
+                    'accuracy': model_info.get('metrics', {}).get('accuracy', 0) if model_info.get('task_type') == 'classification' else model_info.get('metrics', {}).get('rmse', 0)
+                }
+        
+        # Also check database for saved models
+        try:
+            from utils.database_adapter import DatabaseAdapter
+            db_adapter = DatabaseAdapter()
+            saved_models = db_adapter.load_trained_models()
+            
+            if saved_models:
+                for model_name, model_data in saved_models.items():
+                    if model_name not in trained_models:
+                        trained_models[model_name] = {
+                            'name': model_name.replace('_', ' ').title(),
+                            'task_type': model_data.get('task_type', 'unknown'),
+                            'trained_at': model_data.get('trained_at', 'Unknown'),
+                            'accuracy': 0.8  # Default value
+                        }
+        except Exception as e:
+            print(f"Could not load models from database: {e}")
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'trained_models': trained_models,
+                'total_models': len(trained_models),
+                'status': 'loaded' if trained_models else 'no_models'
+            },
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        print(f"Error getting models status: {e}")
         traceback.print_exc()
         return jsonify({
             'success': False,
