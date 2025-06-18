@@ -34,7 +34,7 @@ trading_db = DatabaseAdapter()
 model_trainer = None
 current_data = None
 
-@app.on_startup
+@app.on_event("startup")
 async def startup_event():
     """Initialize models and data on startup"""
     global model_trainer, current_data
