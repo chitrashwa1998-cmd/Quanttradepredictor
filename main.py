@@ -18,8 +18,6 @@ from features.technical_indicators import TechnicalIndicators
 from utils.realtime_data import IndianMarketData
 from utils.data_processing import DataProcessor
 
-app = FastAPI(title="TribexAlpha API", version="1.0.0")
-
 # Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
@@ -34,9 +32,11 @@ trading_db = DatabaseAdapter()
 model_trainer = None
 current_data = None
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize models and data on startup"""
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     global model_trainer, current_data
     try:
         model_trainer = QuantTradingModels()
@@ -44,6 +44,13 @@ async def startup_event():
         print("✅ API initialized successfully")
     except Exception as e:
         print(f"⚠️ API initialization warning: {e}")
+    
+    yield
+    
+    # Shutdown (if needed)
+    pass
+
+app = FastAPI(title="TribexAlpha API", version="1.0.0", lifespan=lifespan)
 
 @app.get("/api/health")
 async def health_check():
