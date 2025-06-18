@@ -35,7 +35,7 @@ const Predictions = () => {
 
       setLoading(true);
       try {
-        const response = await axios.get(`/api/predictions/${selectedModel}?period=${period}`);
+        const response = await axios.get(`${API_BASE_URL}/predictions/${selectedModel}?period=${period}`);
         const data = response.data;
         setPredictions(data);
       } catch (error) {

@@ -5,6 +5,9 @@ import axios from 'axios';
 // Connect to the working Flask server on port 8080
 const API_BASE_URL = 'http://localhost:8080/api';
 
+// Connect to the working Flask server on port 8080
+const API_BASE_URL = 'http://localhost:8080/api';
+
 const Home = () => {
   const [systemStatus, setSystemStatus] = useState({
     hasData: false,
@@ -25,9 +28,9 @@ const Home = () => {
       ]);
 
       setSystemStatus({
-        hasData: dataResponse.data.has_data,
-        totalModels: modelsResponse.data.total_models,
-        dataRows: dataResponse.data.total_rows || 0
+        hasData: dataResponse.data.success && dataResponse.data.data.total_rows > 0,
+        totalModels: modelsResponse.data.success ? modelsResponse.data.data.total_models : 0,
+        dataRows: dataResponse.data.success ? dataResponse.data.data.total_rows : 0
       });
     } catch (error) {
       console.error('Failed to fetch system status:', error);

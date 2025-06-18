@@ -14,6 +14,37 @@ const DataUpload = () => {
     setUploadResult(null);
   };
 
+  const uploadFile = async () => {
+    if (!file) {
+      alert('Please select a file first');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await axios.post(`${API_BASE_URL}/upload-data`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      setUploadResult({
+        success: true,
+        message: 'File uploaded successfully!'
+      });
+    } catch (error) {
+      setUploadResult({
+        success: false,
+        message: error.response?.data?.error || 'Upload failed'
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleUpload = async () => {
     if (!file) return;
 
@@ -83,7 +114,7 @@ const DataUpload = () => {
 
         <button
           className="btn btn-primary"
-          onClick={handleUpload}
+          onClick={uploadFile}
           disabled={!file || uploading}
           style={{opacity: (!file || uploading) ? 0.5 : 1}}
         >

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -21,13 +20,8 @@ const DatabaseManager = () => {
   const fetchDatabaseInfo = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/database/info');
-      const data = response.data;
-      
-      setDbInfo(data);
-      setDatasets(data.datasets || []);
-      setModelResults(data.model_results || []);
-      setPredictions(data.predictions || []);
+      const response = await axios.get(`${API_BASE_URL}/database-info`);
+      setDbInfo(response.data.success ? response.data.data : null);
     } catch (error) {
       console.error('Failed to fetch database info:', error);
     } finally {
@@ -70,7 +64,7 @@ const DatabaseManager = () => {
       const response = await axios.get(`/api/database/export/${datasetName}`, {
         responseType: 'blob'
       });
-      
+
       const blob = new Blob([response.data], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -186,7 +180,7 @@ const DatabaseManager = () => {
                       <strong>Updated:</strong> {formatDate(dataset.updated_at)}
                     </p>
                   </div>
-                  
+
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <button 
                       onClick={() => handleLoadDataset(dataset.name)}
@@ -203,7 +197,7 @@ const DatabaseManager = () => {
                       📥 Export CSV
                     </button>
                   </div>
-                  
+
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     {!confirmDelete[dataset.name] ? (
                       <button 
@@ -367,7 +361,7 @@ const DatabaseManager = () => {
               </div>
             )}
           </div>
-          
+
           <div>
             <h4 style={{ color: '#ff6b6b' }}>⚠️ Danger Zone</h4>
             <p style={{ color: '#b8bcc8', lineHeight: 1.6 }}>

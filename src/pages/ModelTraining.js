@@ -33,7 +33,7 @@ const ModelTraining = () => {
 
     setTraining(true);
     try {
-      await axios.post(`${API_BASE_URL}/models/train`, { models: selectedModels });
+      await axios.post(`${API_BASE_URL}/train-models`, { models: selectedModels });
       alert('✅ Model training completed successfully!');
       fetchModelsStatus();
     } catch (error) {
