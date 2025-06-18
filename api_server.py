@@ -21,17 +21,42 @@ try:
     from models.xgboost_models import QuantTradingModels
     from utils.database_adapter import get_trading_database
     from features.technical_indicators import TechnicalIndicators
+    
+    # Initialize components
+    market_data = IndianMarketData()
+    models = QuantTradingModels()
+    db = get_trading_database()
+    
 except ImportError as e:
     print(f"Error importing modules: {e}")
     print("Make sure all required modules are available")
+    
+    # Create minimal fallback classes to prevent crashes
+    class IndianMarketData:
+        def is_market_open(self): return False
+        def fetch_realtime_data(self, *args, **kwargs): return None
+    
+    class QuantTradingModels:
+        def __init__(self): self.models = {}
+        def predict(self, *args, **kwargs): return [], []
+        def train_all_models(self, *args, **kwargs): return {}
+    
+    class TechnicalIndicators:
+        @staticmethod
+        def calculate_all_indicators(df): return df
+    
+    def get_trading_database():
+        class MockDB:
+            def get_database_info(self): return {"status": "error", "message": "Database not connected"}
+            def load_ohlc_data(self): return None
+        return MockDB()
+    
+    market_data = IndianMarketData()
+    models = QuantTradingModels()
+    db = get_trading_database()
 
 app = Flask(__name__)
 CORS(app)
-
-# Initialize components
-market_data = IndianMarketData()
-models = QuantTradingModels()
-db = get_trading_database()
 
 def get_ist_time():
     """Get current Indian Standard Time"""
@@ -386,9 +411,9 @@ def internal_error(error):
 
 if __name__ == '__main__':
     print("Starting TribexAlpha Trading Dashboard API Server...")
-    print("Dashboard will be available at: http://0.0.0.0:8080")
-    print("API endpoints available at: http://0.0.0.0:8080/api/")
+    print("Dashboard will be available at: http://0.0.0.0:5000")
+    print("API endpoints available at: http://0.0.0.0:5000/api/")
     print(f"Market is currently: {'OPEN' if is_market_open() else 'CLOSED'}")
     print(f"Current IST time: {get_ist_time().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
