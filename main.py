@@ -18,15 +18,6 @@ from features.technical_indicators import TechnicalIndicators
 from utils.realtime_data import IndianMarketData
 from utils.data_processing import DataProcessor
 
-# Enable CORS for React frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Global variables for data persistence
 trading_db = DatabaseAdapter()
 model_trainer = None
@@ -51,6 +42,15 @@ async def lifespan(app: FastAPI):
     pass
 
 app = FastAPI(title="TribexAlpha API", version="1.0.0", lifespan=lifespan)
+
+# Enable CORS for React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/api/health")
 async def health_check():
