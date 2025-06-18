@@ -5,9 +5,6 @@ import axios from 'axios';
 // Connect to the working Flask server on port 8080
 const API_BASE_URL = 'http://localhost:8080/api';
 
-// Connect to the working Flask server on port 8080
-const API_BASE_URL = 'http://localhost:8080/api';
-
 const Home = () => {
   const [systemStatus, setSystemStatus] = useState({
     hasData: false,

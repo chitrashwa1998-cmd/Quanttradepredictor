@@ -45,29 +45,7 @@ const DataUpload = () => {
     }
   };
 
-  const handleUpload = async () => {
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      // For now, we'll show a placeholder response
-      // In a real implementation, you'd process the file content
-      setUploadResult({
-        success: true,
-        message: 'File upload simulation - actual processing would happen here'
-      });
-    } catch (error) {
-      setUploadResult({
-        success: false,
-        message: 'Upload failed: ' + error.message
-      });
-    } finally {
-      setUploading(false);
-    }
-  };
+  
 
   return (
     <div className="container">
