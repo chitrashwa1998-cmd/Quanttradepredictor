@@ -4,7 +4,7 @@ Flask API server for React Trading Dashboard
 Provides REST endpoints to access existing Python trading models and data
 """
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_cors import CORS
 import os
 import sys
@@ -56,8 +56,9 @@ def is_market_open():
 def serve_dashboard():
     """Serve the React dashboard"""
     try:
-        with open('index.html', 'r') as f:
-            return f.read()
+        with open('index.html', 'r', encoding='utf-8') as f:
+            content = f.read()
+        return Response(content, mimetype='text/html')
     except FileNotFoundError:
         return jsonify({
             'error': 'Dashboard not found',
