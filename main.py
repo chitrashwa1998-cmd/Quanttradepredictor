@@ -76,14 +76,32 @@ async def get_data_summary():
             return {"error": "No data available", "has_data": False}
 
         # Simplified summary without DataProcessor dependency
+        date_range = {}
+        try:
+            # Check if index is datetime-like
+            if hasattr(current_data.index.min(), 'isoformat'):
+                date_range = {
+                    "start": current_data.index.min().isoformat(),
+                    "end": current_data.index.max().isoformat(),
+                    "days": (current_data.index.max() - current_data.index.min()).days
+                }
+            else:
+                date_range = {
+                    "start": str(current_data.index.min()),
+                    "end": str(current_data.index.max()),
+                    "days": current_data.index.max() - current_data.index.min()
+                }
+        except Exception:
+            date_range = {
+                "start": "N/A",
+                "end": "N/A", 
+                "days": 0
+            }
+
         return {
             "has_data": True,
             "total_rows": len(current_data),
-            "date_range": {
-                "start": current_data.index.min().isoformat(),
-                "end": current_data.index.max().isoformat(),
-                "days": (current_data.index.max() - current_data.index.min()).days
-            },
+            "date_range": date_range,
             "price_summary": {
                 "current_price": float(current_data['Close'].iloc[-1]),
                 "price_change": float(current_data['Close'].iloc[-1] - current_data['Close'].iloc[-2]),
@@ -120,19 +138,23 @@ async def get_chart_data(period: str = "30d"):
 
     filtered_data = current_data[current_data.index >= start_date]
 
-    return {
-        "data": [
-            {
-                "date": idx.isoformat(),
-                "open": row["Open"],
-                "high": row["High"],
-                "low": row["Low"],
-                "close": row["Close"],
-                "volume": row.get("Volume", 0)
-            }
-            for idx, row in filtered_data.iterrows()
-        ]
-    }
+    chart_data = []
+    for idx, row in filtered_data.iterrows():
+        try:
+            date_str = idx.isoformat() if hasattr(idx, 'isoformat') else str(idx)
+        except:
+            date_str = str(idx)
+        
+        chart_data.append({
+            "date": date_str,
+            "open": float(row["Open"]) if pd.notna(row["Open"]) else 0,
+            "high": float(row["High"]) if pd.notna(row["High"]) else 0,
+            "low": float(row["Low"]) if pd.notna(row["Low"]) else 0,
+            "close": float(row["Close"]) if pd.notna(row["Close"]) else 0,
+            "volume": float(row.get("Volume", 0)) if pd.notna(row.get("Volume", 0)) else 0
+        })
+
+    return {"data": chart_data}
 
 @app.get("/api/models/status")
 async def get_models_status():
@@ -229,9 +251,14 @@ async def get_predictions(model_name: str, period: str = "30d"):
         # Format response
         result = []
         for i, (idx, price_row) in enumerate(price_filtered.iterrows()):
+            try:
+                date_str = idx.isoformat() if hasattr(idx, 'isoformat') else str(idx)
+            except:
+                date_str = str(idx)
+                
             pred_data = {
-                "date": idx.isoformat(),
-                "price": price_row["Close"],
+                "date": date_str,
+                "price": float(price_row["Close"]) if pd.notna(price_row["Close"]) else 0,
                 "prediction": int(predictions[i]) if i < len(predictions) else None
             }
 
@@ -288,12 +315,12 @@ async def get_realtime_nifty():
             },
             "chart_data": [
                 {
-                    "date": idx.isoformat(),
-                    "open": row["Open"],
-                    "high": row["High"],
-                    "low": row["Low"],
-                    "close": row["Close"],
-                    "volume": row.get("Volume", 0)
+                    "date": idx.isoformat() if hasattr(idx, 'isoformat') else str(idx),
+                    "open": float(row["Open"]) if pd.notna(row["Open"]) else 0,
+                    "high": float(row["High"]) if pd.notna(row["High"]) else 0,
+                    "low": float(row["Low"]) if pd.notna(row["Low"]) else 0,
+                    "close": float(row["Close"]) if pd.notna(row["Close"]) else 0,
+                    "volume": float(row.get("Volume", 0)) if pd.notna(row.get("Volume", 0)) else 0
                 }
                 for idx, row in df.tail(50).iterrows()
             ]
