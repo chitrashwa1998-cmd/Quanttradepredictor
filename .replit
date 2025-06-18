@@ -9,6 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "React Development Server"
@@ -53,6 +54,24 @@ args = "python3 main.py"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm start"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "React Dashboard"
+
+[[workflows.workflow]]
+name = "React Dashboard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python api_server.py"
+waitForPort = 8080
 
 [[ports]]
 localPort = 3000

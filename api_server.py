@@ -55,7 +55,7 @@ except ImportError as e:
     models = QuantTradingModels()
     db = get_trading_database()
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='public', static_url_path='')
 CORS(app)
 
 def get_ist_time():
@@ -80,15 +80,7 @@ def is_market_open():
 @app.route('/')
 def serve_dashboard():
     """Serve the React dashboard"""
-    try:
-        with open('index.html', 'r', encoding='utf-8') as f:
-            content = f.read()
-        return Response(content, mimetype='text/html')
-    except FileNotFoundError:
-        return jsonify({
-            'error': 'Dashboard not found',
-            'message': 'React dashboard HTML file is missing'
-        }), 404
+    return app.send_static_file('simple.html')
 
 @app.route('/api/market-status', methods=['GET'])
 def get_market_status():
@@ -160,8 +152,18 @@ def get_predictions():
                 'error': 'Insufficient data for predictions'
             }), 400
         
+        # Calculate technical indicators first
+        try:
+            if 'TechnicalIndicators' in globals():
+                data_with_indicators = TechnicalIndicators.calculate_all_indicators(data)
+            else:
+                data_with_indicators = data
+        except Exception as e:
+            print(f"Error calculating indicators: {e}")
+            data_with_indicators = data
+        
         # Prepare features for prediction
-        features = models.prepare_features(data.tail(100))
+        features = models.prepare_features(data_with_indicators.tail(100))
         
         if len(features) == 0:
             return jsonify({
@@ -411,9 +413,9 @@ def internal_error(error):
 
 if __name__ == '__main__':
     print("Starting TribexAlpha Trading Dashboard API Server...")
-    print("Dashboard will be available at: http://0.0.0.0:5000")
-    print("API endpoints available at: http://0.0.0.0:5000/api/")
+    print("Dashboard will be available at: http://0.0.0.0:8080")
+    print("API endpoints available at: http://0.0.0.0:8080/api/")
     print(f"Market is currently: {'OPEN' if is_market_open() else 'CLOSED'}")
     print(f"Current IST time: {get_ist_time().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=True)

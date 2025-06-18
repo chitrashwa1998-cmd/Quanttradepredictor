@@ -39,7 +39,7 @@ function TribexAlpha() {
             const [market, pred, models] = await Promise.all([
                 fetchData('market-status'),
                 fetchData('predictions'),
-                fetchData('models-status')
+                fetchData('database-info')
             ]);
             
             setMarketData(market);
