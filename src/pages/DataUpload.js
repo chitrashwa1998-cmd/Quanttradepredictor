@@ -1,5 +1,8 @@
-
 import React, { useState } from 'react';
+import axios from 'axios';
+
+// Connect to the working Flask server on port 8080
+const API_BASE_URL = 'http://localhost:8080/api';
 
 const DataUpload = () => {
   const [file, setFile] = useState(null);

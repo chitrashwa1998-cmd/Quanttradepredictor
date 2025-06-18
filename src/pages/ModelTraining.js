@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
+// Connect to the working Flask server on port 8080
+const API_BASE_URL = 'http://localhost:8080/api';
+
 const ModelTraining = () => {
   const [modelsStatus, setModelsStatus] = useState({});
   const [training, setTraining] = useState(false);
@@ -15,8 +18,8 @@ const ModelTraining = () => {
 
   const fetchModelsStatus = async () => {
     try {
-      const response = await axios.get('/api/models/status');
-      setModelsStatus(response.data.models);
+      const response = await axios.get(`${API_BASE_URL}/models/status`);
+      setModelsStatus(response.data.data.trained_models || {});
     } catch (error) {
       console.error('Failed to fetch models status:', error);
     }
@@ -30,11 +33,11 @@ const ModelTraining = () => {
 
     setTraining(true);
     try {
-      await axios.post('/api/models/train', selectedModels);
+      await axios.post(`${API_BASE_URL}/models/train`, { models: selectedModels });
       alert('✅ Model training completed successfully!');
       fetchModelsStatus();
     } catch (error) {
-      alert('❌ Training failed: ' + (error.response?.data?.detail || error.message));
+      alert('❌ Training failed: ' + (error.response?.data?.error || error.message));
     } finally {
       setTraining(false);
     }

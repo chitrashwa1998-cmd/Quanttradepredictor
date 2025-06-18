@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+
+// Connect to the working Flask server on port 8080
+const API_BASE_URL = 'http://localhost:8080/api';
 import Plot from 'react-plotly.js';
 
 const Predictions = () => {
