@@ -57,9 +57,13 @@ except ImportError as e:
     db = get_trading_database()
 
 app = Flask(__name__, static_folder='public', static_url_path='')
-CORS(app, origins=["http://localhost:3000", "https://*.replit.dev"], 
-     allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+
+# Enhanced CORS configuration for Replit
+CORS(app, 
+     origins=["http://localhost:3000", "https://*.replit.dev", "https://*.replit.app"],
+     allow_headers=["Content-Type", "Authorization", "Accept"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     supports_credentials=True)
 
 def get_ist_time():
     """Get current Indian Standard Time"""
@@ -108,6 +112,16 @@ def serve_static(path):
         return jsonify({'error': 'API endpoint not found'}), 404
     # For any non-API route, serve the React app
     return serve_dashboard()
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """API health check endpoint"""
+    return jsonify({
+        'success': True,
+        'status': 'healthy',
+        'message': 'TribexAlpha API is running',
+        'timestamp': datetime.now().isoformat()
+    })
 
 @app.route('/api/market-status', methods=['GET'])
 def get_market_status():
