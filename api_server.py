@@ -82,8 +82,32 @@ def is_market_open():
 
 @app.route('/')
 def serve_dashboard():
-    """Serve the React dashboard"""
-    return app.send_static_file('simple.html')
+    """Serve the React dashboard HTML"""
+    return '''
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#000000" />
+        <meta name="description" content="TribexAlpha Trading Dashboard" />
+        <title>TribexAlpha Trading Dashboard</title>
+      </head>
+      <body>
+        <noscript>You need to enable JavaScript to run this app.</noscript>
+        <div id="root"></div>
+        <script crossorigin src="http://localhost:3000/static/js/bundle.js"></script>
+      </body>
+    </html>
+    '''
+
+@app.route('/<path:path>')
+def serve_static(path):
+    """Serve static files or fallback to index"""
+    if path.startswith('api/'):
+        return jsonify({'error': 'API endpoint not found'}), 404
+    # For any non-API route, serve the React app
+    return serve_dashboard()
 
 @app.route('/api/market-status', methods=['GET'])
 def get_market_status():

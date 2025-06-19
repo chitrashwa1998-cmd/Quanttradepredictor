@@ -4,7 +4,7 @@ import axios from 'axios';
 import Plot from 'react-plotly.js';
 
 // Connect to the working Flask server on port 8080
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = '/api';
 
 const Predictions = () => {
   const [availableModels, setAvailableModels] = useState([]);

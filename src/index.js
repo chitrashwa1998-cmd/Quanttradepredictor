@@ -4,23 +4,31 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 
-// Wait for DOM to be ready
-const renderApp = () => {
+// Ensure DOM is ready before mounting React
+const mountReactApp = () => {
   const rootElement = document.getElementById('root');
-  if (rootElement) {
+  
+  if (!rootElement) {
+    console.error('Root element not found! Make sure there is a div with id="root" in your HTML.');
+    return;
+  }
+
+  try {
     const root = ReactDOM.createRoot(rootElement);
     root.render(
       <React.StrictMode>
         <App />
       </React.StrictMode>
     );
-  } else {
-    console.error('Root element not found');
+    console.log('✅ React app mounted successfully');
+  } catch (error) {
+    console.error('Error mounting React app:', error);
   }
 };
 
+// Wait for DOM to be ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', renderApp);
+  document.addEventListener('DOMContentLoaded', mountReactApp);
 } else {
-  renderApp();
+  mountReactApp();
 }
