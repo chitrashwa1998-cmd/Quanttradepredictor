@@ -57,7 +57,9 @@ except ImportError as e:
     db = get_trading_database()
 
 app = Flask(__name__, static_folder='public', static_url_path='')
-CORS(app)
+CORS(app, origins=["http://localhost:3000", "https://*.replit.dev"], 
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 def get_ist_time():
     """Get current Indian Standard Time"""
