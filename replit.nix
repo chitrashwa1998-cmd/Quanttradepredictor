@@ -12,5 +12,7 @@
     pkgs.libgcc
     pkgs.glibc
     pkgs.gcc-unwrapped.lib
+    pkgs.libstdcxx5
+    pkgs.zlib
   ];
 }
