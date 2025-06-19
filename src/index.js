@@ -26,6 +26,7 @@ const renderApp = () => {
           <App />
         </React.StrictMode>
       );
+      window.ReactAppMounted = true;
       console.log('✅ React app mounted successfully');
     } else {
       console.error('❌ Root element not found or invalid:', rootElement);
@@ -40,12 +41,24 @@ const renderApp = () => {
 
 // Wait for DOM to be completely ready
 const waitForDOM = () => {
-  if (document.readyState === 'complete') {
-    setTimeout(renderApp, 100); // Small delay to ensure DOM is fully rendered
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(renderApp, 200); // Slightly longer delay to ensure DOM is fully rendered
   } else {
-    setTimeout(waitForDOM, 50);
+    setTimeout(waitForDOM, 100);
   }
 };
 
-// Start the initialization process
-waitForDOM();
+// Multiple initialization strategies
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', waitForDOM);
+} else {
+  waitForDOM();
+}
+
+// Fallback initialization
+setTimeout(() => {
+  if (!window.ReactAppMounted) {
+    console.log('🔄 Fallback React initialization...');
+    renderApp();
+  }
+}, 2000);
