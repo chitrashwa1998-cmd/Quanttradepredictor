@@ -8,18 +8,9 @@ const renderApp = () => {
   try {
     const rootElement = document.getElementById('root');
     
-    // More thorough DOM element validation
-    if (rootElement && 
-        rootElement.nodeType === Node.ELEMENT_NODE && 
-        rootElement.tagName === 'DIV') {
-      
+    if (rootElement) {
       console.log('✅ Root element found, mounting React app...');
       
-      // Clear any existing content safely
-      while (rootElement.firstChild) {
-        rootElement.removeChild(rootElement.firstChild);
-      }
-
       const root = ReactDOM.createRoot(rootElement);
       root.render(
         <React.StrictMode>
@@ -29,8 +20,7 @@ const renderApp = () => {
       window.ReactAppMounted = true;
       console.log('✅ React app mounted successfully');
     } else {
-      console.error('❌ Root element not found or invalid:', rootElement);
-      // Retry with shorter interval
+      console.error('❌ Root element not found');
       setTimeout(renderApp, 100);
     }
   } catch (error) {
