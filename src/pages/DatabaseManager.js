@@ -29,7 +29,7 @@ const DatabaseManager = () => {
 
   const handleLoadDataset = async (datasetName) => {
     try {
-      const response = await axios.post('/api/data/load', { dataset_name: datasetName });
+      const response = await axios.post(`${API_BASE_URL}/data/load`, { dataset_name: datasetName });
       if (response.data.success) {
         alert(`✅ Loaded dataset: ${datasetName}`);
       } else {
@@ -43,7 +43,7 @@ const DatabaseManager = () => {
 
   const handleDeleteDataset = async (datasetName) => {
     try {
-      const response = await axios.delete(`/api/database/dataset/${datasetName}`);
+      const response = await axios.delete(`${API_BASE_URL}/database/dataset/${datasetName}`);
       if (response.data.success) {
         alert(`✅ Deleted dataset: ${datasetName}`);
         fetchDatabaseInfo(); // Refresh the list
@@ -59,7 +59,7 @@ const DatabaseManager = () => {
 
   const handleExportDataset = async (datasetName) => {
     try {
-      const response = await axios.get(`/api/database/export/${datasetName}`, {
+      const response = await axios.get(`${API_BASE_URL}/database/export/${datasetName}`, {
         responseType: 'blob'
       });
 
@@ -80,7 +80,7 @@ const DatabaseManager = () => {
 
   const handleClearAllData = async () => {
     try {
-      const response = await axios.delete('/api/database/clear-all');
+      const response = await axios.delete(`${API_BASE_URL}/database/clear-all`);
       if (response.data.success) {
         alert('✅ All database data cleared');
         fetchDatabaseInfo();

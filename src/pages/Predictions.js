@@ -13,7 +13,7 @@ const Predictions = () => {
   useEffect(() => {
     const loadModels = async () => {
       try {
-        const response = await fetch('/api/models/status');
+        const response = await fetch(`${API_BASE_URL}/models/status`);
         const data = await response.json();
         const models = Object.keys(data.models || []);
         setAvailableModels(models);

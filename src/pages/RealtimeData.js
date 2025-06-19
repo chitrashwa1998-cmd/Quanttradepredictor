@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
+import { API_BASE_URL } from '../config/api';
 
 const RealtimeData = () => {
   const [marketData, setMarketData] = useState(null);
@@ -24,7 +25,7 @@ const RealtimeData = () => {
 
   const fetchMarketData = async () => {
     try {
-      const response = await axios.get('/api/realtime/nifty');
+      const response = await axios.get(`${API_BASE_URL}/realtime/nifty`);
       setMarketData(response.data);
     } catch (error) {
       console.error('Failed to fetch market data:', error);
