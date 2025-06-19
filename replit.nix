@@ -1,3 +1,4 @@
+
 { pkgs }: {
   deps = [
     pkgs.nodejs_20
@@ -10,9 +11,13 @@
     pkgs.postgresql
     pkgs.stdenv.cc.cc.lib
     pkgs.libgcc
-    pkgs.glibc
     pkgs.gcc-unwrapped.lib
     pkgs.libstdcxx5
     pkgs.zlib
   ];
+
+  # Set library path for NumPy
+  env = {
+    LD_LIBRARY_PATH = "${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.libgcc}/lib:${pkgs.gcc-unwrapped.lib}/lib";
+  };
 }
