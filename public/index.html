@@ -44,5 +44,18 @@
     <div id="root">
       <div class="loading">Loading TribexAlpha Dashboard...</div>
     </div>
+    
+    <!-- Ensure React bundle is loaded -->
+    <script>
+      // Verify root element exists
+      document.addEventListener('DOMContentLoaded', function() {
+        const root = document.getElementById('root');
+        if (!root) {
+          console.error('❌ Root element not found in DOM');
+        } else {
+          console.log('✅ Root element found in DOM');
+        }
+      });
+    </script>
   </body>
 </html>

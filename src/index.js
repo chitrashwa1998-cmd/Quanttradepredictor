@@ -7,9 +7,18 @@ import App from './App';
 const renderApp = () => {
   try {
     const rootElement = document.getElementById('root');
-    if (rootElement && rootElement.nodeType === Node.ELEMENT_NODE) {
-      // Clear any existing content
-      rootElement.innerHTML = '';
+    
+    // More thorough DOM element validation
+    if (rootElement && 
+        rootElement.nodeType === Node.ELEMENT_NODE && 
+        rootElement.tagName === 'DIV') {
+      
+      console.log('✅ Root element found, mounting React app...');
+      
+      // Clear any existing content safely
+      while (rootElement.firstChild) {
+        rootElement.removeChild(rootElement.firstChild);
+      }
 
       const root = ReactDOM.createRoot(rootElement);
       root.render(
@@ -19,13 +28,13 @@ const renderApp = () => {
       );
       console.log('✅ React app mounted successfully');
     } else {
-      console.error('❌ Root element not found or invalid');
-      // Retry with exponential backoff
-      setTimeout(renderApp, 200);
+      console.error('❌ Root element not found or invalid:', rootElement);
+      // Retry with shorter interval
+      setTimeout(renderApp, 100);
     }
   } catch (error) {
     console.error('❌ React mounting error:', error);
-    setTimeout(renderApp, 500);
+    setTimeout(renderApp, 300);
   }
 };
 
