@@ -115,11 +115,24 @@ def serve_dashboard():
         <meta name="theme-color" content="#000000" />
         <meta name="description" content="TribexAlpha Trading Dashboard" />
         <title>TribexAlpha Trading Dashboard</title>
+        <style>
+          body { margin: 0; background: #0f0f23; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+          .loading { display: flex; justify-content: center; align-items: center; height: 100vh; font-size: 18px; color: #00ffff; }
+        </style>
       </head>
       <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
-        <div id="root"></div>
-        <script crossorigin src="http://localhost:3000/static/js/bundle.js"></script>
+        <div id="root">
+          <div class="loading">Loading TribexAlpha Dashboard...</div>
+        </div>
+        <script>
+          // Fallback if React bundle fails to load
+          setTimeout(function() {
+            if (!window.React) {
+              document.getElementById('root').innerHTML = '<div class="loading">Failed to load React app. Please refresh the page.</div>';
+            }
+          }, 10000);
+        </script>
       </body>
     </html>
     '''

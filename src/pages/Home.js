@@ -1,15 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-// Configure axios defaults for Replit environment
-const API_BASE_URL = window.location.hostname === 'localhost' ? 
-  'http://localhost:8080' : 
-  `${window.location.protocol}//${window.location.hostname}:8080`;
-
-axios.defaults.baseURL = API_BASE_URL;
-axios.defaults.timeout = 10000;
-
-// Connect to the working Flask server on port 8080
+// Connect to the working Flask server on port 8080 via proxy
 const API_BASE_URL = '/api';
 
 const Home = () => {

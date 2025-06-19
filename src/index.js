@@ -8,6 +8,9 @@ const renderApp = () => {
   try {
     const rootElement = document.getElementById('root');
     if (rootElement && rootElement.nodeType === Node.ELEMENT_NODE) {
+      // Clear any existing content
+      rootElement.innerHTML = '';
+
       const root = ReactDOM.createRoot(rootElement);
       root.render(
         <React.StrictMode>
@@ -17,24 +20,23 @@ const renderApp = () => {
       console.log('✅ React app mounted successfully');
     } else {
       console.error('❌ Root element not found or invalid');
-      if (document.readyState === 'complete') {
-        setTimeout(renderApp, 500); // Retry after 500ms if DOM is complete
-      }
+      // Retry with exponential backoff
+      setTimeout(renderApp, 200);
     }
   } catch (error) {
     console.error('❌ React mounting error:', error);
-    setTimeout(renderApp, 1000); // Retry after error
+    setTimeout(renderApp, 500);
   }
 };
 
-// Wait for DOM to be fully ready
-const initApp = () => {
+// Wait for DOM to be completely ready
+const waitForDOM = () => {
   if (document.readyState === 'complete') {
-    renderApp();
+    setTimeout(renderApp, 100); // Small delay to ensure DOM is fully rendered
   } else {
-    setTimeout(initApp, 100);
+    setTimeout(waitForDOM, 50);
   }
 };
 
-// Start initialization
-initApp();
+// Start the initialization process
+waitForDOM();
