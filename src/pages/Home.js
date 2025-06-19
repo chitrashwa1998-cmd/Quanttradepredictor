@@ -1,9 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-
-// Connect to the working Flask server on port 8080
-const API_BASE_URL = '/api';
+import { API_BASE_URL } from '../config/api';
 
 const Home = () => {
   const [systemStatus, setSystemStatus] = useState({
