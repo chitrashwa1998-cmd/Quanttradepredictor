@@ -10,5 +10,7 @@
     pkgs.postgresql
     pkgs.stdenv.cc.cc.lib
     pkgs.libgcc
+    pkgs.glibc
+    pkgs.gcc-unwrapped.lib
   ];
 }
