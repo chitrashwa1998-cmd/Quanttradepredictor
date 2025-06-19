@@ -22,36 +22,36 @@ try:
     from models.xgboost_models import QuantTradingModels
     from utils.database_adapter import get_trading_database
     from features.technical_indicators import TechnicalIndicators
-    
+
     # Initialize components
     market_data = IndianMarketData()
     models = QuantTradingModels()
     db = get_trading_database()
-    
+
 except ImportError as e:
     print(f"Error importing modules: {e}")
     print("Make sure all required modules are available")
-    
+
     # Create minimal fallback classes to prevent crashes
     class IndianMarketData:
         def is_market_open(self): return False
         def fetch_realtime_data(self, *args, **kwargs): return None
-    
+
     class QuantTradingModels:
         def __init__(self): self.models = {}
         def predict(self, *args, **kwargs): return [], []
         def train_all_models(self, *args, **kwargs): return {}
-    
+
     class TechnicalIndicators:
         @staticmethod
         def calculate_all_indicators(df): return df
-    
+
     def get_trading_database():
         class MockDB:
             def get_database_info(self): return {"status": "error", "message": "Database not connected"}
             def load_ohlc_data(self): return None
         return MockDB()
-    
+
     market_data = IndianMarketData()
     models = QuantTradingModels()
     db = get_trading_database()
@@ -95,12 +95,12 @@ def is_market_open():
     hour = ist_now.hour
     minute = ist_now.minute
     weekday = ist_now.weekday()  # 0 = Monday, 6 = Sunday
-    
+
     # Market open: Monday-Friday (0-4), 9:15 AM - 3:30 PM IST
     is_weekday = weekday < 5
     is_market_hours = (hour > 9 or (hour == 9 and minute >= 15)) and \
                      (hour < 15 or (hour == 15 and minute <= 30))
-    
+
     return is_weekday and is_market_hours
 
 @app.route('/')
@@ -181,7 +181,7 @@ def get_nifty_data():
     try:
         # Get current price data
         symbol = "^NSEI"  # Nifty 50 symbol
-        
+
         # Fallback data if real-time fails
         fallback_data = {
             'price': 22500.0,
@@ -193,7 +193,7 @@ def get_nifty_data():
             'open': 22400.0,
             'market_cap': 0
         }
-        
+
         try:
             current_data = market_data.get_current_price(symbol)
             if not current_data:
@@ -201,7 +201,7 @@ def get_nifty_data():
         except Exception as e:
             print(f"Using fallback data due to error: {e}")
             current_data = fallback_data
-        
+
         return jsonify({
             'success': True,
             'data': {
@@ -216,7 +216,7 @@ def get_nifty_data():
             },
             'timestamp': datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         print(f"Error fetching Nifty data: {e}")
         traceback.print_exc()
@@ -231,13 +231,13 @@ def get_predictions():
     try:
         # Load existing data for predictions
         data = db.load_ohlc_data()
-        
+
         if data is None or len(data) < 100:
             return jsonify({
                 'success': False,
                 'error': 'Insufficient data for predictions'
             }), 400
-        
+
         # Calculate technical indicators
         try:
             data_with_indicators = TechnicalIndicators.calculate_all_indicators(data)
@@ -245,13 +245,13 @@ def get_predictions():
         except Exception as e:
             print(f"Error calculating indicators: {e}")
             data_with_indicators = data
-        
+
         if len(data_with_indicators) < 50:
             return jsonify({
                 'success': False,
                 'error': 'Not enough data after calculating indicators'
             }), 400
-        
+
         # Prepare features for prediction
         try:
             features = models.prepare_features(data_with_indicators.tail(100))
@@ -263,23 +263,23 @@ def get_predictions():
                 'success': False,
                 'error': f'Failed to prepare features: {str(e)}'
             }), 400
-        
+
         latest_features = features.tail(1)
         predictions_data = {}
-        
+
         # Check if models are available
         if not hasattr(models, 'models') or not models.models:
             return jsonify({
                 'success': False,
                 'error': 'No trained models available. Please train models first.'
             }), 400
-        
+
         current_price = float(data['Close'].iloc[-1])
-        
+
         # Get predictions from available trained models
         available_models = list(models.models.keys())
         print(f"Available models: {available_models}")
-        
+
         # Direction prediction
         if 'direction' in available_models:
             try:
@@ -293,7 +293,7 @@ def get_predictions():
         else:
             predictions_data['direction'] = "UNKNOWN"
             predictions_data['directionConfidence'] = 0.5
-        
+
         # Price magnitude prediction
         if 'magnitude' in available_models:
             try:
@@ -311,7 +311,7 @@ def get_predictions():
         else:
             predictions_data['priceTarget'] = current_price
             predictions_data['targetConfidence'] = 0.5
-        
+
         # Trend prediction
         if 'trend_sideways' in available_models:
             try:
@@ -325,7 +325,7 @@ def get_predictions():
         else:
             predictions_data['trend'] = "UNKNOWN"
             predictions_data['trendConfidence'] = 0.5
-        
+
         # Trading signal
         if 'trading_signal' in available_models:
             try:
@@ -340,7 +340,7 @@ def get_predictions():
         else:
             predictions_data['tradingSignal'] = "HOLD"
             predictions_data['signalConfidence'] = 0.5
-        
+
         # Volatility prediction or calculation
         if 'volatility' in available_models:
             try:
@@ -371,17 +371,17 @@ def get_predictions():
                 predictions_data['volatility'] = "MEDIUM"
             else:
                 predictions_data['volatility'] = "LOW"
-        
+
         # Add model status info
         predictions_data['availableModels'] = available_models
         predictions_data['currentPrice'] = current_price
-        
+
         return jsonify({
             'success': True,
             'data': predictions_data,
             'timestamp': datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         print(f"Error getting predictions: {e}")
         traceback.print_exc()
@@ -395,25 +395,25 @@ def get_technical_indicators():
     """Get technical indicators for current data"""
     try:
         data = db.load_ohlc_data()
-        
+
         if data is None or len(data) < 50:
             return jsonify({
                 'success': False,
                 'error': 'Insufficient data for technical indicators'
             }), 400
-        
+
         # Calculate technical indicators
         recent_data = data.tail(50)
         indicators = TechnicalIndicators.calculate_all_indicators(recent_data)
-        
+
         if len(indicators) == 0:
             return jsonify({
                 'success': False,
                 'error': 'Failed to calculate indicators'
             }), 400
-        
+
         latest_indicators = indicators.iloc[-1]
-        
+
         return jsonify({
             'success': True,
             'data': {
@@ -429,7 +429,7 @@ def get_technical_indicators():
             },
             'timestamp': datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         print(f"Error getting technical indicators: {e}")
         traceback.print_exc()
@@ -446,7 +446,7 @@ def get_all_data():
         nifty_data = None
         predictions = None
         indicators = None
-        
+
         # Get Nifty data
         try:
             current_data = market_data.get_current_price("^NSEI")
@@ -462,7 +462,7 @@ def get_all_data():
                 }
         except Exception as e:
             print(f"Error fetching Nifty data in all-data: {e}")
-        
+
         # Get predictions
         try:
             data = db.load_ohlc_data()
@@ -470,11 +470,11 @@ def get_all_data():
                 features = models.prepare_features(data.tail(100))
                 if len(features) > 0:
                     latest_features = features.tail(1)
-                    
+
                     direction_pred, direction_conf = models.predict('direction', latest_features)
                     price_pred, price_conf = models.predict('price_target', latest_features)
                     trend_pred, trend_conf = models.predict('trend', latest_features)
-                    
+
                     predictions = {
                         'direction': "UP" if direction_pred[0] > 0.5 else "DOWN",
                         'directionConfidence': float(direction_conf[0]),
@@ -486,7 +486,7 @@ def get_all_data():
                     }
         except Exception as e:
             print(f"Error fetching predictions in all-data: {e}")
-        
+
         return jsonify({
             'success': True,
             'data': {
@@ -500,7 +500,7 @@ def get_all_data():
             },
             'timestamp': datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         print(f"Error getting all data: {e}")
         traceback.print_exc()
@@ -516,7 +516,7 @@ def train_models():
         # Get request data
         request_data = request.get_json() if request.is_json else {}
         selected_models = request_data.get('models', [])
-        
+
         # Load data
         data = db.load_ohlc_data()
         if data is None or len(data) < 1000:
@@ -524,31 +524,31 @@ def train_models():
                 'success': False,
                 'error': 'Insufficient data for training. Need at least 1000 rows.'
             }), 400
-        
+
         print(f"Training models on {len(data)} rows of data")
-        
+
         # Calculate technical indicators
         try:
             features_data = TechnicalIndicators.calculate_all_indicators(data)
             features_data = features_data.dropna()
-            
+
             if len(features_data) < 100:
                 return jsonify({
                     'success': False,
                     'error': 'Not enough clean data after calculating indicators'
                 }), 400
-                
+
         except Exception as e:
             print(f"Error calculating indicators: {e}")
             return jsonify({
                 'success': False,
                 'error': f'Error calculating technical indicators: {str(e)}'
             }), 500
-        
+
         # Prepare features and targets
         X = models.prepare_features(features_data)
         targets = models.create_targets(features_data)
-        
+
         # Train models
         results = {}
         model_configs = [
@@ -560,23 +560,23 @@ def train_models():
             ('reversal', 'classification'),
             ('trading_signal', 'classification')
         ]
-        
+
         for model_name, task_type in model_configs:
             if selected_models and model_name not in selected_models:
                 continue  # Skip if specific models selected and this isn't one
-                
+
             try:
                 if model_name in targets:
                     print(f"Training {model_name} model...")
                     y = targets[model_name]
-                    
+
                     # Ensure data alignment
                     common_index = X.index.intersection(y.index)
                     X_aligned = X.loc[common_index]
                     y_aligned = y.loc[common_index]
-                    
+
                     result = models.train_model(model_name, X_aligned, y_aligned, task_type)
-                    
+
                     if result:
                         results[model_name] = {
                             'status': 'success',
@@ -586,11 +586,11 @@ def train_models():
                         print(f"✓ {model_name} trained successfully")
                     else:
                         results[model_name] = {'status': 'failed', 'error': 'Training returned no result'}
-                        
+
             except Exception as e:
                 print(f"Error training {model_name}: {e}")
                 results[model_name] = {'status': 'failed', 'error': str(e)}
-        
+
         # Save trained models to database
         try:
             if models.models:
@@ -601,7 +601,7 @@ def train_models():
                     print("Models saved to database successfully")
         except Exception as e:
             print(f"Error saving models to database: {e}")
-        
+
         return jsonify({
             'success': True,
             'data': {
@@ -611,7 +611,7 @@ def train_models():
             },
             'timestamp': datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         print(f"Error training models: {e}")
         traceback.print_exc()
@@ -626,16 +626,37 @@ def get_data_summary():
     try:
         # Get database info
         db_info = db.get_database_info()
-        
+
         # Load data to get summary stats
         data = db.load_ohlc_data()
-        
+
         if data is not None:
+            # Handle date formatting properly
+            start_date = 'N/A'
+            end_date = 'N/A'
+
+            try:
+                if hasattr(data.index, 'min') and len(data) > 0:
+                    min_idx = data.index.min()
+                    if hasattr(min_idx, 'isoformat'):
+                        start_date = min_idx.isoformat()
+                    else:
+                        start_date = str(min_idx)
+
+                if hasattr(data.index, 'max') and len(data) > 0:
+                    max_idx = data.index.max()
+                    if hasattr(max_idx, 'isoformat'):
+                        end_date = max_idx.isoformat()
+                    else:
+                        end_date = str(max_idx)
+            except Exception as e:
+                print(f"Date formatting warning: {e}")
+
             summary = {
                 'total_rows': len(data),
                 'date_range': {
-                    'start': data.index.min().isoformat() if hasattr(data.index, 'min') else 'N/A',
-                    'end': data.index.max().isoformat() if hasattr(data.index, 'max') else 'N/A'
+                    'start': start_date,
+                    'end': end_date
                 },
                 'columns': list(data.columns),
                 'latest_price': float(data['Close'].iloc[-1]) if 'Close' in data.columns else 0,
@@ -649,13 +670,13 @@ def get_data_summary():
                 'latest_price': 0,
                 'database_status': 'no_data'
             }
-        
+
         return jsonify({
             'success': True,
             'data': summary,
             'timestamp': datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         print(f"Error getting data summary: {e}")
         traceback.print_exc()
@@ -670,7 +691,7 @@ def get_models_status():
     try:
         # Get trained models from the models object
         trained_models = {}
-        
+
         if hasattr(models, 'models') and models.models:
             for model_name, model_info in models.models.items():
                 trained_models[model_name] = {
@@ -679,13 +700,13 @@ def get_models_status():
                     'trained_at': model_info.get('trained_at', 'Unknown'),
                     'accuracy': model_info.get('metrics', {}).get('accuracy', 0) if model_info.get('task_type') == 'classification' else model_info.get('metrics', {}).get('rmse', 0)
                 }
-        
+
         # Also check database for saved models
         try:
             from utils.database_adapter import DatabaseAdapter
             db_adapter = DatabaseAdapter()
             saved_models = db_adapter.load_trained_models()
-            
+
             if saved_models:
                 for model_name, model_data in saved_models.items():
                     if model_name not in trained_models:
@@ -697,7 +718,7 @@ def get_models_status():
                         }
         except Exception as e:
             print(f"Could not load models from database: {e}")
-        
+
         return jsonify({
             'success': True,
             'data': {
@@ -707,7 +728,7 @@ def get_models_status():
             },
             'timestamp': datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         print(f"Error getting models status: {e}")
         traceback.print_exc()
@@ -721,13 +742,13 @@ def get_database_info():
     """Get database information"""
     try:
         info = db.get_database_info()
-        
+
         return jsonify({
             'success': True,
             'data': info,
             'timestamp': datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         print(f"Error getting database info: {e}")
         traceback.print_exc()
@@ -756,5 +777,5 @@ if __name__ == '__main__':
     print("API endpoints available at: http://0.0.0.0:8080/api/")
     print(f"Market is currently: {'OPEN' if is_market_open() else 'CLOSED'}")
     print(f"Current IST time: {get_ist_time().strftime('%Y-%m-%d %H:%M:%S')}")
-    
+
     app.run(host='0.0.0.0', port=8080, debug=True)

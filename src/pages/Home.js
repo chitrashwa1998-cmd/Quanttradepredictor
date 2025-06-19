@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-// Connect to the working Flask server on port 8080 via proxy
 const API_BASE_URL = '/api';
 
 const Home = () => {
