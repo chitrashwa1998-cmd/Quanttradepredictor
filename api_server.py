@@ -216,6 +216,27 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/api/system/status', methods=['GET'])
+def get_system_status():
+    """Get system status"""
+    try:
+        return jsonify({
+            'success': True,
+            'data': {
+                'status': 'operational',
+                'api_server': 'running',
+                'database': 'connected',
+                'market_open': is_market_open(),
+                'current_time': get_ist_time().isoformat()
+            },
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/market-status', methods=['GET'])
 def get_market_status():
     """Get current market status and time"""
@@ -1439,6 +1460,7 @@ def clear_all_database():
         }), 500
 
 @app.route('/api/database-info', methods=['GET'])
+@app.route('/api/database/info', methods=['GET'])
 def get_database_info():
     """Get database information"""
     try:
