@@ -1660,10 +1660,28 @@ def load_dataset():
 def clear_all_database():
     """Clear all data from the database"""
     try:
-        from utils.database_adapter import DatabaseAdapter
-        db_adapter = DatabaseAdapter()
-
-        success = db_adapter.clear_all_data()
+        # Use existing global db instance to avoid connection conflicts
+        global db
+        
+        if hasattr(db, 'clear_all_data'):
+            success = db.clear_all_data()
+        else:
+            # Direct database clearing to avoid deadlocks
+            import psycopg
+            import os
+            
+            database_url = os.getenv('DATABASE_URL')
+            if not database_url:
+                raise Exception("Database URL not available")
+            
+            with psycopg.connect(database_url) as conn:
+                with conn.cursor() as cursor:
+                    # Clear tables in proper order
+                    cursor.execute("TRUNCATE TABLE model_predictions RESTART IDENTITY CASCADE;")
+                    cursor.execute("TRUNCATE TABLE trained_models RESTART IDENTITY CASCADE;")
+                    cursor.execute("TRUNCATE TABLE ohlc_datasets RESTART IDENTITY CASCADE;")
+                    conn.commit()
+            success = True
 
         if success:
             # Also clear in-memory models
