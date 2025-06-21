@@ -108,6 +108,18 @@ class DatabaseAdapter:
         """Try to recover any available OHLC data from database."""
         return self.db.recover_data()
 
+    def delete_model_results(self, model_name: str) -> bool:
+        """Delete model results for a specific model."""
+        return self.db.delete_model_results(model_name)
+
+    def delete_predictions(self, model_name: str) -> bool:
+        """Delete predictions for a specific model."""
+        return self.db.delete_predictions(model_name)
+
+    def delete_trained_model(self, model_name: str) -> bool:
+        """Delete a trained model."""
+        return self.db.delete_trained_model(model_name)
+
     def clear_all_data(self) -> bool:
         """Clear all data from database"""
         try:

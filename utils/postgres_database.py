@@ -225,12 +225,28 @@ class PostgresTradingDatabase:
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
+                    # Check if dataset exists first
+                    cursor.execute("SELECT id FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
+                    existing = cursor.fetchone()
+                    
+                    if not existing:
+                        print(f"Dataset '{dataset_name}' not found")
+                        return False
+                    
+                    # Delete the dataset
                     cursor.execute("DELETE FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
                     conn.commit()
-                    return cursor.rowcount > 0
+                    
+                    rows_deleted = cursor.rowcount
+                    if rows_deleted > 0:
+                        print(f"✅ Successfully deleted dataset: {dataset_name}")
+                        return True
+                    else:
+                        print(f"❌ No rows deleted for dataset: {dataset_name}")
+                        return False
 
         except Exception as e:
-            print(f"Error deleting dataset: {str(e)}")
+            print(f"❌ Error deleting dataset '{dataset_name}': {str(e)}")
             return False
 
     def save_model_results(self, model_name: str, results: Dict[str, Any]) -> bool:
@@ -454,6 +470,45 @@ class PostgresTradingDatabase:
         except Exception as e:
             print(f"Error recovering data: {str(e)}")
             return None
+
+    def delete_model_results(self, model_name: str) -> bool:
+        """Delete model results for a specific model."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM model_results WHERE model_name = %s;", (model_name,))
+                    conn.commit()
+                    return cursor.rowcount > 0
+
+        except Exception as e:
+            print(f"Error deleting model results: {str(e)}")
+            return False
+
+    def delete_predictions(self, model_name: str) -> bool:
+        """Delete predictions for a specific model."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM predictions WHERE model_name = %s;", (model_name,))
+                    conn.commit()
+                    return cursor.rowcount > 0
+
+        except Exception as e:
+            print(f"Error deleting predictions: {str(e)}")
+            return False
+
+    def delete_trained_model(self, model_name: str) -> bool:
+        """Delete a trained model."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM trained_models WHERE model_name = %s;", (model_name,))
+                    conn.commit()
+                    return cursor.rowcount > 0
+
+        except Exception as e:
+            print(f"Error deleting trained model: {str(e)}")
+            return False
 
     def clear_all_data(self) -> bool:
         """Clear all data from database."""

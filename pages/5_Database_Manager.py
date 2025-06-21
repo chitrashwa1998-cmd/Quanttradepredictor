@@ -98,35 +98,46 @@ if len(datasets) > 0:
                     )
             
             with col3:
-                # Initialize confirmation state
-                confirm_key = f"confirm_delete_{dataset['name']}"
-                if confirm_key not in st.session_state:
-                    st.session_state[confirm_key] = False
-                
-                # Delete button
+                # Direct delete with confirmation
                 if st.button(f"🗑️ Delete", key=f"delete_{i}", type="secondary"):
-                    st.session_state[confirm_key] = True
+                    # Use a simple confirmation dialog
+                    st.warning(f"⚠️ Are you sure you want to delete '{dataset['name']}'?")
                 
-                # Show confirmation if delete was clicked
-                if st.session_state[confirm_key]:
-                    st.warning(f"⚠️ Delete '{dataset['name']}'?")
+                # Add confirmation buttons only after delete is clicked
+                if f"delete_{i}" in st.session_state and st.session_state.get(f"delete_confirm_{i}", False):
                     col3a, col3b = st.columns(2)
                     
                     with col3a:
-                        if st.button("✅ Yes", key=f"confirm_yes_{i}", type="primary"):
-                            if trading_db.delete_dataset(dataset['name']):
-                                st.success(f"✅ Deleted dataset: {dataset['name']}")
-                                # Reset confirmation state
-                                st.session_state[confirm_key] = False
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete dataset")
-                                st.session_state[confirm_key] = False
+                        if st.button("✅ Confirm Delete", key=f"confirm_yes_{i}", type="primary"):
+                            try:
+                                if trading_db.delete_dataset(dataset['name']):
+                                    st.success(f"✅ Deleted dataset: {dataset['name']}")
+                                    # Clear the confirmation state
+                                    if f"delete_confirm_{i}" in st.session_state:
+                                        del st.session_state[f"delete_confirm_{i}"]
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete dataset from database")
+                            except Exception as e:
+                                st.error(f"Error deleting dataset: {str(e)}")
                     
                     with col3b:
-                        if st.button("❌ No", key=f"confirm_no_{i}"):
-                            st.session_state[confirm_key] = False
+                        if st.button("❌ Cancel", key=f"confirm_no_{i}"):
+                            # Clear the confirmation state
+                            if f"delete_confirm_{i}" in st.session_state:
+                                del st.session_state[f"delete_confirm_{i}"]
                             st.rerun()
+                else:
+                    # Show the confirmation option when delete is first clicked
+                    if st.button(f"⚠️ Confirm Delete {dataset['name']}", key=f"delete_confirm_{i}", type="primary"):
+                        try:
+                            if trading_db.delete_dataset(dataset['name']):
+                                st.success(f"✅ Deleted dataset: {dataset['name']}")
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete dataset from database")
+                        except Exception as e:
+                            st.error(f"Error deleting dataset: {str(e)}")
 else:
     st.info("No datasets found in database. Upload data first!")
 
@@ -158,13 +169,8 @@ if model_keys:
                 
                 if st.button(f"Delete {model_name} Results", key=f"delete_model_{model_name}"):
                     try:
-                        # For PostgreSQL, we need to implement delete methods
-                        if hasattr(trading_db.db, 'delete_model_results'):
-                            success = trading_db.db.delete_model_results(model_name)
-                        else:
-                            # Fallback for key-value store
-                            del trading_db.db.db[key]
-                            success = True
+                        # Use the database adapter to delete model results
+                        success = trading_db.delete_model_results(model_name)
                         
                         if success:
                             st.success(f"✅ Deleted {model_name} model results")
@@ -197,11 +203,14 @@ if pred_keys:
                 
                 if st.button(f"Delete {model_name} Predictions", key=f"delete_pred_{model_name}"):
                     try:
-                        del trading_db.db[key]
-                        st.success(f"✅ Deleted {model_name} predictions")
-                        st.rerun()
-                    except:
-                        st.error("Failed to delete predictions")
+                        success = trading_db.delete_predictions(model_name)
+                        if success:
+                            st.success(f"✅ Deleted {model_name} predictions")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete predictions")
+                    except Exception as e:
+                        st.error(f"Failed to delete predictions: {str(e)}")
 else:
     st.info("No predictions found. Generate predictions first!")
 
