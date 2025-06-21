@@ -1223,9 +1223,13 @@ def upload_data():
                     'error': f'Failed to read CSV file: {str(csv_error)}'
                 }), 400
             
-            # Basic validation
+            # Basic validation - handle case-insensitive column names
             required_columns = ['Open', 'High', 'Low', 'Close']
-            missing_columns = [col for col in required_columns if col not in df.columns]
+            df_columns_lower = [col.lower() for col in df.columns]
+            required_columns_lower = [col.lower() for col in required_columns]
+            
+            # Check for missing columns (case-insensitive)
+            missing_columns = [col for col in required_columns_lower if col not in df_columns_lower]
             
             if missing_columns:
                 print(f"Missing required columns: {missing_columns}")
@@ -1233,6 +1237,28 @@ def upload_data():
                     'success': False,
                     'error': f'Missing required columns: {", ".join(missing_columns)}'
                 }), 400
+            
+            # Standardize column names to proper case
+            column_mapping = {}
+            for col in df.columns:
+                col_lower = col.lower()
+                if col_lower == 'open':
+                    column_mapping[col] = 'Open'
+                elif col_lower == 'high':
+                    column_mapping[col] = 'High'
+                elif col_lower == 'low':
+                    column_mapping[col] = 'Low'
+                elif col_lower == 'close':
+                    column_mapping[col] = 'Close'
+                elif col_lower == 'volume':
+                    column_mapping[col] = 'Volume'
+                elif col_lower in ['date', 'datetime', 'timestamp']:
+                    column_mapping[col] = 'Date'
+            
+            if column_mapping:
+                df = df.rename(columns=column_mapping)
+                print(f"Renamed columns: {column_mapping}")
+                print(f"New columns: {list(df.columns)}")
             
             # Convert date column if exists
             if 'Date' in df.columns:
