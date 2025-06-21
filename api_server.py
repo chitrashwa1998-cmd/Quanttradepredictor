@@ -127,6 +127,17 @@ def is_market_open():
     
     return is_weekday and is_market_hours
 
+# Static file routes (must come before catch-all)
+@app.route('/static/css/<filename>')
+def serve_css(filename):
+    """Serve CSS files"""
+    return send_from_directory('build/static/css', filename)
+
+@app.route('/static/js/<filename>')
+def serve_js(filename):
+    """Serve JavaScript files"""
+    return send_from_directory('build/static/js', filename)
+
 # React app routes
 @app.route('/')
 def serve_react_app():
@@ -191,22 +202,31 @@ def serve_development_page():
 @app.route('/<path:path>')
 def serve_react_routes(path):
     """Handle React router paths"""
+    print(f"Route requested: {path}")
+    
     # First check if this is a static file request
     if path.startswith('static/'):
         try:
             # Handle CSS files
             if path.startswith('static/css/'):
-                return send_from_directory('build/static/css', path[11:])
+                filename = path[11:]  # Remove 'static/css/' prefix
+                print(f"Serving CSS file: {filename}")
+                return send_from_directory('build/static/css', filename)
             # Handle JS files
             elif path.startswith('static/js/'):
-                return send_from_directory('build/static/js', path[10:])
+                filename = path[10:]  # Remove 'static/js/' prefix
+                print(f"Serving JS file: {filename} from build/static/js")
+                return send_from_directory('build/static/js', filename)
             else:
-                return send_from_directory('build/static', path[7:])
+                filename = path[7:]  # Remove 'static/' prefix
+                print(f"Serving static file: {filename}")
+                return send_from_directory('build/static', filename)
         except Exception as e:
-            print(f"Static file error: {e}")
+            print(f"Static file error for {path}: {e}")
             return "File not found", 404
     
     # Handle React routes
+    print(f"Serving React app for route: {path}")
     try:
         return send_from_directory('build', 'index.html')
     except Exception:
