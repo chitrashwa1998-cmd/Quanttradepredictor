@@ -89,12 +89,12 @@ except ImportError as e:
 except Exception as e:
     print(f"❌ Critical error during initialization: {e}")
     print("Creating minimal fallback system")
-    
+
     # Ultra-minimal fallback
     class MinimalFallback:
         def __getattr__(self, name):
             return lambda *args, **kwargs: None
-    
+
     market_data = MinimalFallback()
     models = MinimalFallback()
     db = MinimalFallback()
@@ -563,14 +563,14 @@ def train_models():
 
         # Load data - try different dataset names
         data = db.load_ohlc_data("main_dataset")
-        
+
         # If main_dataset doesn't exist, try to create it from latest upload
         if data is None or len(data) == 0:
             print("Main dataset not found, trying to create from latest upload...")
             success = db.create_main_dataset_from_latest()
             if success:
                 data = db.load_ohlc_data("main_dataset")
-        
+
         # If still no data, try to find any available dataset
         if data is None or len(data) == 0:
             try:
@@ -584,14 +584,14 @@ def train_models():
                         data = db.load_ohlc_data(latest_dataset)
             except Exception as e:
                 print(f"Error finding datasets: {e}")
-        
+
         if data is None or len(data) < 1000:
             # Try to get actual row count for better error message
             try:
                 db_info = db.get_database_info()
                 total_rows = db_info.get('total_rows', 0) if db_info else 0
                 datasets_info = db_info.get('datasets', {}) if db_info else {}
-                
+
                 return jsonify({
                     'success': False,
                     'error': f'Insufficient data for training. Need at least 1000 rows, but found {len(data) if data is not None else 0} rows. Database shows {total_rows} total rows across {len(datasets_info)} datasets. Please upload more data first.',
@@ -822,8 +822,7 @@ def get_models_status():
         return jsonify({
             'success': True,
             'data': {
-                'trained_models': trained_models,
-                'total_models': len(trained_models),
+                'trained_models': trained_models,                'total_models': len(trained_models),
                 'status': 'loaded' if trained_models else 'no_models'
             },
             'timestamp': datetime.now().isoformat()
@@ -843,7 +842,7 @@ def upload_data():
     try:
         print(f"Upload request received. Files in request: {list(request.files.keys())}")
         print(f"Request content type: {request.content_type}")
-        
+
         if 'file' not in request.files:
             print("No 'file' key found in request.files")
             return jsonify({
@@ -853,7 +852,7 @@ def upload_data():
 
         file = request.files['file']
         print(f"File received: {file.filename}, size: {file.content_length if hasattr(file, 'content_length') else 'unknown'}")
-        
+
         if file.filename == '':
             return jsonify({
                 'success': False,
@@ -869,14 +868,14 @@ def upload_data():
         try:
             # Import data processing modules
             from utils.data_processing import DataProcessor
-            
+
             # Read file content and reset stream
             file_content = file.read()
             file.seek(0)  # Reset file pointer
-            
+
             # Process the uploaded file directly
             df, message = DataProcessor.load_and_process_data(file)
-            
+
             if df is None:
                 return jsonify({
                     'success': False,
@@ -886,14 +885,14 @@ def upload_data():
             # Save to database
             from utils.database_adapter import DatabaseAdapter
             trading_db = DatabaseAdapter()
-            
+
             dataset_name = f"uploaded_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             success = trading_db.save_ohlc_data(df, dataset_name, preserve_full_data=False)
-            
+
             if success:
                 # Get data summary
                 summary = DataProcessor.get_data_summary(df)
-                
+
                 return jsonify({
                     'success': True,
                     'message': f'File processed successfully! {len(df)} rows loaded.',
@@ -935,7 +934,7 @@ def get_model_predictions(model_name):
     """Get predictions for a specific model"""
     try:
         period = request.args.get('period', '30d')
-        
+
         # Load data
         data = db.load_ohlc_data()
         if data is None or len(data) < 100:
@@ -987,7 +986,7 @@ def get_model_predictions(model_name):
         # Get predictions from the model
         try:
             predictions, probabilities = models.predict(model_name, features)
-            
+
             # Create predictions dataframe
             pred_data = []
             for i, (date, price) in enumerate(zip(data_with_indicators.index, data_with_indicators['Close'])):
@@ -1027,7 +1026,7 @@ def delete_dataset(dataset_name):
     """Delete a specific dataset"""
     try:
         success = db.delete_dataset(dataset_name)
-        
+
         if success:
             return jsonify({
                 'success': True,
@@ -1053,18 +1052,18 @@ def export_dataset(dataset_name):
     """Export a dataset as CSV"""
     try:
         data = db.load_ohlc_data(dataset_name)
-        
+
         if data is None:
             return jsonify({
                 'success': False,
                 'error': f'Dataset {dataset_name} not found'
             }), 404
-        
+
         # Convert to CSV
         csv_buffer = io.StringIO()
         data.to_csv(csv_buffer, index=True)
         csv_content = csv_buffer.getvalue()
-        
+
         # Create response
         response = Response(
             csv_content,
@@ -1073,7 +1072,7 @@ def export_dataset(dataset_name):
                 'Content-Disposition': f'attachment; filename={dataset_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
             }
         )
-        
+
         return response
 
     except Exception as e:
@@ -1090,9 +1089,9 @@ def load_dataset():
     try:
         request_data = request.get_json() if request.is_json else {}
         dataset_name = request_data.get('dataset_name', 'main_dataset')
-        
+
         data = db.load_ohlc_data(dataset_name)
-        
+
         if data is not None:
             return jsonify({
                 'success': True,
@@ -1118,14 +1117,21 @@ def load_dataset():
             'error': str(e)
         }), 500
 
-@app.route('/api/database/clear-all', methods=['DELETE'])
+@app.route('/api/database/clear-all', methods=['DELETE', 'POST'])
 def clear_all_database():
-    """Clear all data from database"""
+    """Clear all data from the database"""
     try:
-        # Clear all data using the database adapter
-        success = db.clear_all_data()
-        
+        from utils.database_adapter import DatabaseAdapter
+        db_adapter = DatabaseAdapter()
+
+        success = db_adapter.clear_all_data()
+
         if success:
+            # Also clear in-memory models
+            global models
+            if models:
+                models.models = {}
+
             return jsonify({
                 'success': True,
                 'message': 'All database data cleared successfully',
@@ -1134,7 +1140,7 @@ def clear_all_database():
         else:
             return jsonify({
                 'success': False,
-                'error': 'Failed to clear database data'
+                'error': 'Failed to clear database'
             }), 500
 
     except Exception as e:
@@ -1181,6 +1187,26 @@ def internal_error(error):
 
 if __name__ == '__main__':
     print("Starting TribexAlpha Trading Dashboard API Server...")
+
+    # Load existing models from database if available
+    try:
+        from utils.database_adapter import DatabaseAdapter
+        db_adapter = DatabaseAdapter()
+
+        # Check if database actually has data before loading models
+        db_info = db_adapter.get_database_info()
+        if db_info.get('total_trained_models', 0) > 0:
+            saved_models = db_adapter.load_trained_models()
+            if saved_models:
+                models.models = saved_models
+                print(f"Loaded {len(saved_models)} existing trained models from database")
+            else:
+                print("No existing models found in database")
+        else:
+            print("No trained models in database")
+    except Exception as e:
+        print(f"Could not load existing models: {str(e)}")
+
     print("Dashboard will be available at: http://0.0.0.0:8080")
     print("API endpoints available at: http://0.0.0.0:8080/api/")
     print(f"Market is currently: {'OPEN' if is_market_open() else 'CLOSED'}")
