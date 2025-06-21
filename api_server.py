@@ -1,247 +1,178 @@
-"""
-Flask API server for React Trading Dashboard
-Provides REST endpoints to access existing Python trading models and data
-"""
-
-import os
-import sys
-import traceback
-import pytz
-from datetime import datetime, timedelta
+from flask import Flask, request, jsonify, render_template_string
+from flask_cors import CORS
 import pandas as pd
 import numpy as np
-from flask import Flask, jsonify, request, send_from_directory, send_file
-from flask_cors import CORS
+from datetime import datetime, timedelta
+import json
+from typing import Optional, Dict, Any, List
+import traceback
+import logging
 
-# Import existing modules
+# Import your existing modules
+try:
+    from utils.database_adapter import get_trading_database
+except ImportError:
+    from utils.postgres_database import PostgresTradingDatabase as get_trading_database
+
 try:
     from models.xgboost_models import QuantTradingModels
-    from utils.database_adapter import get_trading_database
-    from features.technical_indicators import TechnicalIndicators
-    print("✅ All modules imported successfully")
-except ImportError as e:
-    print(f"❌ Import error: {e}")
-    
-    # Minimal fallback classes
+except ImportError:
     class QuantTradingModels:
-        def __init__(self): 
+        def __init__(self):
             self.models = {}
-        def train_all_models(self, *args, **kwargs): 
-            return {'status': 'no_models'}
-        def predict(self, *args, **kwargs): 
-            return np.array([0]), np.array([0.5])
-        def prepare_features(self, data):
-            return data
+        def train_all_models(self, *args, **kwargs):
+            return {}
+        def predict(self, *args, **kwargs):
+            return [], None
 
+try:
+    from features.technical_indicators import TechnicalIndicators
+except ImportError:
     class TechnicalIndicators:
         @staticmethod
-        def calculate_all_indicators(df): 
+        def calculate_all_indicators(df):
             return df
 
+try:
+    from utils.realtime_data import IndianMarketData
+except ImportError:
     class IndianMarketData:
         def fetch_realtime_data(self, *args, **kwargs):
             return None
         def is_market_open(self):
             return False
 
-    class DataProcessor:
-        pass
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-    def get_trading_database():
-        class MockDB:
-            def get_database_info(self): 
-                return {}
-            def load_ohlc_data(self, *args): 
-                return None
-            def get_connection_status(self):
-                return {'status': 'disconnected'}
-        return MockDB()
-
-    class MinimalFallback:
-        def __getattr__(self, name):
-            return lambda *args, **kwargs: None
-
+# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
 # Global variables
-models = None
-db = None
-
-# Initialize components
 try:
-    models = QuantTradingModels()
-    db = get_trading_database()
-    print("✅ PostgreSQL tables created successfully")
-    print("✅ Using PostgreSQL database")
-    
-    # Try to load existing models
-    try:
-        if hasattr(db, 'load_trained_models'):
-            existing_models = db.load_trained_models()
-            if existing_models:
-                models.models = existing_models
-                print(f"✅ Loaded {len(existing_models)} existing models from database")
-            else:
-                print("No existing models found in database")
-        else:
-            print("No trained models in database")
-    except Exception as e:
-        print(f"Error loading existing models: {e}")
-        
+    trading_db = get_trading_database()
+    print("✅ Database initialized successfully")
 except Exception as e:
-    print(f"❌ Initialization error: {e}")
-    models = MinimalFallback()
-    db = MinimalFallback()
+    print(f"⚠️ Database initialization error: {e}")
+    trading_db = None
 
-@app.before_request
-def before_request():
-    """Handle preflight requests"""
-    if request.method == 'OPTIONS':
-        return '', 200
-
-@app.after_request
-def after_request(response):
-    """Add CORS headers to all responses"""
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
+model_trainer = None
+current_data = None
 
 def get_ist_time():
-    """Get current Indian Standard Time"""
+    """Get current IST time"""
+    import pytz
     ist = pytz.timezone('Asia/Kolkata')
     return datetime.now(ist)
 
-def is_market_open():
-    """Check if Indian market is currently open"""
-    ist_time = get_ist_time()
-    current_time = ist_time.time()
-    
-    # Market hours: 9:15 AM to 3:30 PM IST, Monday to Friday
-    market_start = datetime.strptime("09:15", "%H:%M").time()
-    market_end = datetime.strptime("15:30", "%H:%M").time()
-    
-    is_weekday = ist_time.weekday() < 5  # Monday = 0, Friday = 4
-    is_market_hours = market_start <= current_time <= market_end
-    
-    return is_weekday and is_market_hours
-
-# Static file routes (must come before catch-all)
-@app.route('/static/css/<filename>')
-def serve_css(filename):
-    """Serve CSS files"""
-    return send_from_directory('build/static/css', filename)
-
-@app.route('/static/js/<filename>')
-def serve_js(filename):
-    """Serve JavaScript files"""
-    return send_from_directory('build/static/js', filename)
-
-# React app routes
 @app.route('/')
-def serve_react_app():
-    """Serve the React app"""
-    try:
-        return send_from_directory('build', 'index.html')
-    except Exception:
-        return serve_development_page()
-
-def serve_development_page():
-    """Serve a development page with working dashboard"""
-    return """
+def dashboard():
+    """Serve the main dashboard"""
+    html_template = '''
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
-        <title>TribexAlpha Trading Dashboard</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TribexAlpha Dashboard - Redirecting to Streamlit</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
-            .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .header { text-align: center; margin-bottom: 30px; }
-            .status { padding: 15px; margin: 10px 0; border-radius: 5px; }
-            .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-            .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-            .api-list { background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }
-            .endpoint { margin: 10px 0; padding: 10px; background: white; border-radius: 3px; }
+            body {
+                font-family: 'Arial', sans-serif;
+                margin: 0;
+                padding: 0;
+                background: linear-gradient(135deg, #1e1e2e, #2d3748);
+                color: white;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+            }
+            .container {
+                text-align: center;
+                padding: 2rem;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 16px;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            .logo {
+                font-size: 3rem;
+                margin-bottom: 1rem;
+            }
+            .title {
+                font-size: 2rem;
+                color: #00ffff;
+                margin-bottom: 1rem;
+            }
+            .subtitle {
+                font-size: 1.2rem;
+                color: #b8bcc8;
+                margin-bottom: 2rem;
+            }
+            .redirect-info {
+                background: rgba(0, 255, 255, 0.1);
+                border: 1px solid #00ffff;
+                border-radius: 8px;
+                padding: 1.5rem;
+                margin: 2rem 0;
+            }
+            .countdown {
+                font-size: 1.5rem;
+                color: #00ff41;
+                font-weight: bold;
+            }
         </style>
     </head>
     <body>
         <div class="container">
-            <div class="header">
-                <h1>🚀 TribexAlpha Trading Dashboard</h1>
-                <p>Advanced AI-Powered Trading Intelligence Platform</p>
-            </div>
-            
-            <div class="status success">
-                ✅ API Server Running Successfully
-            </div>
-            
-            <div class="status info">
-                📊 Current IST Time: """ + get_ist_time().strftime('%Y-%m-%d %H:%M:%S %Z') + """<br>
-                📈 Market Status: """ + ('🟢 Open' if is_market_open() else '🔴 Closed') + """
-            </div>
-            
-            <div class="api-list">
-                <h3>🔗 Available API Endpoints:</h3>
-                <div class="endpoint"><strong>GET</strong> /api/health - Health check</div>
-                <div class="endpoint"><strong>GET</strong> /api/data/summary - Data summary</div>
-                <div class="endpoint"><strong>GET</strong> /api/models/status - Models status</div>
-                <div class="endpoint"><strong>GET</strong> /api/predictions/{model} - Get predictions</div>
-                <div class="endpoint"><strong>POST</strong> /api/upload-data - Upload trading data</div>
-                <div class="endpoint"><strong>POST</strong> /api/train-models - Train AI models</div>
-            </div>
-            
-            <div style="text-align: center; margin-top: 30px;">
-                <p>🎯 Ready for AI Trading Analysis</p>
+            <div class="logo">⚡</div>
+            <h1 class="title">TribexAlpha Dashboard</h1>
+            <p class="subtitle">Advanced Trading Analytics Platform</p>
+
+            <div class="redirect-info">
+                <p>🔄 Redirecting to Streamlit Application...</p>
+                <div class="countdown" id="countdown">5</div>
+                <p>You will be redirected automatically to the main Streamlit dashboard.</p>
             </div>
         </div>
+
+        <script>
+            let countdown = 5;
+            const countdownElement = document.getElementById('countdown');
+
+            const timer = setInterval(() => {
+                countdown--;
+                countdownElement.textContent = countdown;
+
+                if (countdown <= 0) {
+                    clearInterval(timer);
+                    window.location.href = 'https://{{repl_url}}';
+                }
+            }, 1000);
+        </script>
     </body>
     </html>
-    """
+    '''
+    return render_template_string(html_template)
 
-@app.route('/<path:path>')
-def serve_react_routes(path):
-    """Handle React router paths"""
-    print(f"Route requested: {path}")
-    
-    # First check if this is a static file request
-    if path.startswith('static/'):
-        try:
-            # Handle CSS files
-            if path.startswith('static/css/'):
-                filename = path[11:]  # Remove 'static/css/' prefix
-                print(f"Serving CSS file: {filename}")
-                return send_from_directory('build/static/css', filename)
-            # Handle JS files
-            elif path.startswith('static/js/'):
-                filename = path[10:]  # Remove 'static/js/' prefix
-                print(f"Serving JS file: {filename} from build/static/js")
-                return send_from_directory('build/static/js', filename)
-            else:
-                filename = path[7:]  # Remove 'static/' prefix
-                print(f"Serving static file: {filename}")
-                return send_from_directory('build/static', filename)
-        except Exception as e:
-            print(f"Static file error for {path}: {e}")
-            return "File not found", 404
-    
-    # Handle React routes
-    print(f"Serving React app for route: {path}")
-    try:
-        return send_from_directory('build', 'index.html')
-    except Exception:
-        return serve_development_page()
-
-# API endpoints
 @app.route('/api/health')
 def health_check():
-    """API health check endpoint"""
+    """Health check endpoint"""
     return jsonify({
-        'status': 'healthy',
-        'message': 'TribexAlpha API Server is running',
-        'timestamp': datetime.now().isoformat(),
-        'ist_time': get_ist_time().isoformat(),
-        'market_open': is_market_open()
+        "status": "healthy", 
+        "timestamp": get_ist_time().isoformat(),
+        "message": "TribexAlpha API Server Running"
+    })
+
+@app.route('/api/redirect-info')
+def redirect_info():
+    """Provide redirect information"""
+    return jsonify({
+        "message": "This API server is now supporting the Streamlit application",
+        "streamlit_url": f"https://{request.host}",
+        "timestamp": get_ist_time().isoformat()
     })
 
 @app.route('/api/data/summary')
@@ -249,7 +180,7 @@ def get_data_summary():
     """Get current data summary"""
     try:
         # Get actual database information
-        db_info = db.get_database_info()
+        db_info = trading_db.get_database_info()
         
         return jsonify({
             'success': True,
@@ -281,12 +212,12 @@ def get_models_status():
     """Get status of all trained models."""
     try:
         # Check database for actual trained models
-        global db
+        global trading_db
         trained_models = {}
         
         try:
-            if hasattr(db, 'load_trained_models'):
-                db_models = db.load_trained_models()
+            if hasattr(trading_db, 'load_trained_models'):
+                db_models = trading_db.load_trained_models()
                 if db_models:
                     # Models exist in database
                     for model_name, model_data in db_models.items():
@@ -340,17 +271,17 @@ def get_model_predictions(model_name):
         period = request.args.get('period', '30d')
         
         # Load the data from database
-        global db
+        global trading_db
         
         # Try to load main dataset first, fallback to latest if not found
         try:
-            df = db.load_ohlc_data('main_dataset')
+            df = trading_db.load_ohlc_data('main_dataset')
             if df is None or df.empty:
-                datasets = db.get_dataset_list()
+                datasets = trading_db.get_dataset_list()
                 if datasets:
                     latest_dataset = datasets[0]['name']
                     print(f"Main dataset not found, loading latest dataset: {latest_dataset}")
-                    df = db.load_ohlc_data(latest_dataset)
+                    df = trading_db.load_ohlc_data(latest_dataset)
                 else:
                     raise ValueError("No datasets available")
         except Exception as e:
@@ -408,14 +339,14 @@ def get_model_predictions(model_name):
 
         # Prepare features using the model's feature preparation
         try:
-            features_df = models.prepare_features(df_with_indicators)
+            features_df = model_trainer.prepare_features(df_with_indicators)
         except Exception as e:
             print(f"Error preparing features: {e}")
             features_df = df_with_indicators
 
         # Make predictions using the trained model
         try:
-            predictions, probabilities = models.predict(model_name, features_df)
+            predictions, probabilities = model_trainer.predict(model_name, features_df)
             print(f"Generated {len(predictions)} predictions for {model_name}")
         except Exception as e:
             print(f"Error making predictions with model {model_name}: {e}")
@@ -507,12 +438,12 @@ def train_models():
         selected_models = request.json.get('models', []) if request.is_json else []
         
         # Load data for training
-        df = db.load_ohlc_data('main_dataset')
+        df = trading_db.load_ohlc_data('main_dataset')
         if df is None or df.empty:
             # Try to use the latest dataset
             try:
-                db.create_main_dataset_from_latest()
-                df = db.load_ohlc_data('main_dataset')
+                trading_db.create_main_dataset_from_latest()
+                df = trading_db.load_ohlc_data('main_dataset')
             except:
                 pass
             
@@ -553,7 +484,7 @@ def train_models():
                 
             try:
                 # Create targets for this model
-                targets = models.create_targets(df)
+                targets = model_trainer.create_targets(df)
                 
                 if model_name not in targets:
                     print(f"Target {model_name} not available, skipping...")
@@ -562,11 +493,11 @@ def train_models():
                 target_data = targets[model_name]
                 
                 # Align features with targets
-                features_df = models.prepare_features(df)
+                features_df = model_trainer.prepare_features(df)
                 features_df = features_df.loc[target_data.index]
                 
                 # Train the model
-                result = models.train_model(model_name, features_df, target_data, task_type)
+                result = model_trainer.train_model(model_name, features_df, target_data, task_type)
                 
                 print(f"✅ Trained {model_name} - Accuracy: {result.get('accuracy', 'N/A')}")
                 
@@ -576,8 +507,8 @@ def train_models():
 
         # Save trained models to database
         try:
-            if hasattr(models, 'models') and models.models:
-                db.save_trained_models(models.models)
+            if hasattr(model_trainer, 'models') and model_trainer.models:
+                trading_db.save_trained_models(model_trainer.models)
                 print("✅ Models saved to database")
         except Exception as e:
             print(f"Error saving models: {e}")
@@ -600,7 +531,7 @@ def train_models():
 def get_database_info():
     """Get database information"""
     try:
-        info = db.get_database_info()
+        info = trading_db.get_database_info()
         return jsonify({
             'success': True,
             'data': info,
@@ -618,10 +549,10 @@ def clear_all_database():
     """Clear all data from the database"""
     try:
         # Use existing global db instance to avoid connection conflicts
-        global db
+        global trading_db
         
-        if hasattr(db, 'clear_all_data'):
-            success = db.clear_all_data()
+        if hasattr(trading_db, 'clear_all_data'):
+            success = trading_db.clear_all_data()
         else:
             # Direct database clearing to avoid deadlocks
             import psycopg
@@ -642,9 +573,9 @@ def clear_all_database():
 
         if success:
             # Clear in-memory models
-            global models
-            if models and hasattr(models, 'models'):
-                models.models = {}
+            global model_trainer
+            if model_trainer and hasattr(model_trainer, 'models'):
+                model_trainer.models = {}
 
             return jsonify({
                 'success': True,
@@ -746,7 +677,7 @@ def upload_data():
         dataset_name = f"dataset_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         try:
-            success1 = db.save_ohlc_data(df, dataset_name, preserve_full_data=True)
+            success1 = trading_db.save_ohlc_data(df, dataset_name, preserve_full_data=True)
             print(f"✅ Successfully saved {len(df)} rows to PostgreSQL")
         except Exception as e:
             print(f"Error saving to database: {e}")
@@ -757,15 +688,15 @@ def upload_data():
         
         # Also save as main dataset
         try:
-            success2 = db.save_ohlc_data(df, 'main_dataset', preserve_full_data=True)
+            success2 = trading_db.save_ohlc_data(df, 'main_dataset', preserve_full_data=True)
             print(f"✅ Successfully saved {len(df)} rows to PostgreSQL")
         except Exception as e:
             print(f"Error saving main dataset: {e}")
 
         # Clear any existing in-memory models since we have new data
-        global models
-        if models and hasattr(models, 'models'):
-            models.models = {}
+        global model_trainer
+        if model_trainer and hasattr(model_trainer, 'models'):
+            model_trainer.models = {}
 
         return jsonify({
             'success': True,
@@ -790,16 +721,23 @@ def not_found(error):
     if request.path.startswith('/api/'):
         return jsonify({'error': 'API endpoint not found'}), 404
     else:
-        return serve_development_page()
+        return render_template_string("<h1>Page not found</h1><p>Please access the Streamlit dashboard.</p>")
 
 @app.errorhandler(500)
 def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    print("Starting TribexAlpha Trading Dashboard API Server...")
-    print(f"Dashboard will be available at: http://0.0.0.0:8080")
-    print(f"API endpoints available at: http://0.0.0.0:8080/api/")
+    print("Starting TribexAlpha API Server...")
+    print(f"Server will be available at: http://0.0.0.0:5000")
+    print(f"Streamlit dashboard will be the main interface")
     print(f"Current IST time: {get_ist_time().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    try:
+        model_trainer = QuantTradingModels()
+        print("✅ Model trainer initialized")
+    except Exception as e:
+        print(f"⚠️ Model trainer initialization error: {e}")
+        model_trainer = None
+    
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)

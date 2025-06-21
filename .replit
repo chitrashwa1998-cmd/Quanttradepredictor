@@ -6,10 +6,10 @@ packages = ["gcc", "glibc", "glibcLocales", "ocl-icd", "opencl-headers", "postgr
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["streamlit", "run", "app.py", "--server.port", "5000"]
+run = ["sh", "-c", "streamlit run app.py --server.port 5000 --server.address 0.0.0.0"]
 
 [workflows]
-runButton = "Unified Trading Dashboard"
+runButton = "Streamlit Dashboard"
 
 [[workflows.workflow]]
 name = "React Development Server"
@@ -129,6 +129,15 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python api_server.py"
+
+[[workflows.workflow]]
+name = "Streamlit Dashboard"
+author = 40743738
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run app.py --server.port 5000 --server.address 0.0.0.0"
 
 [[ports]]
 localPort = 3000
