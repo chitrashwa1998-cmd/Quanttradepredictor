@@ -1177,20 +1177,28 @@ def get_database_info():
 def upload_data():
     """Handle file upload and data processing"""
     try:
+        print(f"Upload request received. Files: {list(request.files.keys())}")
+        print(f"Form data: {list(request.form.keys())}")
+        
         if 'file' not in request.files:
+            print("No 'file' key in request.files")
             return jsonify({
                 'success': False,
                 'error': 'No file provided'
             }), 400
         
         file = request.files['file']
+        print(f"File received: {file.filename}, content type: {file.content_type}")
+        
         if file.filename == '':
+            print("Empty filename")
             return jsonify({
                 'success': False,
                 'error': 'No file selected'
             }), 400
         
         if not file.filename.lower().endswith('.csv'):
+            print(f"Invalid file extension for: {file.filename}")
             return jsonify({
                 'success': False,
                 'error': 'Only CSV files are supported'
