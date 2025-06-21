@@ -129,8 +129,13 @@ const Predictions = () => {
     return {
       data: traces,
       layout: {
-        title: `${selectedModel.replace('_', ' ').toUpperCase()} Predictions`,
-        xaxis: { title: 'Date', color: '#ffffff' },
+        title: `${selectedModel.replace('_', ' ').toUpperCase()} Predictions (IST)`,
+        xaxis: { 
+          title: 'Date & Time (IST)', 
+          color: '#ffffff',
+          tickangle: -45,
+          tickformat: '%Y-%m-%d %H:%M'
+        },
         yaxis: { title: 'Price ($)', color: '#ffffff' },
         height: 500,
         paper_bgcolor: 'rgba(0,0,0,0)',
