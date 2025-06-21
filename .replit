@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Full Trading Dashboard"
+runButton = "Fixed API Server"
 
 [[workflows.workflow]]
 name = "React Development Server"
@@ -75,7 +75,7 @@ args = "python api_server.py"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=3000 DANGEROUSLY_DISABLE_HOST_CHECK=true npm start"
+args = "npm start"
 
 [[workflows.workflow]]
 name = "React Frontend"
@@ -120,6 +120,15 @@ args = "python api_server.py"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "PORT=3000 DANGEROUSLY_DISABLE_HOST_CHECK=true npm start"
+
+[[workflows.workflow]]
+name = "Fixed API Server"
+author = 40743738
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python api_server.py"
 
 [[ports]]
 localPort = 3000

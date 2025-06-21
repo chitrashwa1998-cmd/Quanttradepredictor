@@ -824,7 +824,6 @@ def get_data_summary():
             'error': 'Data summary unavailable',
             'details': str(e),
             'data': {
-```python
                 'total_rows': 0,
                 'date_range': {'start': 'N/A', 'end': 'N/A'},
                 'columns': [],
