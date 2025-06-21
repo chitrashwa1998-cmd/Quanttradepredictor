@@ -871,13 +871,13 @@ def get_model_predictions(model_name):
 
         # Try to load main dataset first, fallback to latest if not found
         try:
-            df = db.load_data('main_dataset')
+            df = db.load_ohlc_data('main_dataset')
             if df is None or df.empty:
-                datasets = db.list_datasets()
+                datasets = db.get_dataset_list()
                 if datasets:
                     latest_dataset = datasets[0]['name']  # Get the first (most recent) dataset
                     print(f"Main dataset not found, loading latest dataset: {latest_dataset}")
-                    df = db.load_data(latest_dataset)
+                    df = db.load_ohlc_data(latest_dataset)
                 else:
                     raise ValueError("No datasets available")
         except Exception as e:
