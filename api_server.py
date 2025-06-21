@@ -1210,13 +1210,25 @@ def upload_data():
             from datetime import datetime
             
             # Read CSV data
-            df = pd.read_csv(file)
+            print(f"Reading CSV file: {file.filename}")
+            try:
+                df = pd.read_csv(file)
+                print(f"CSV loaded successfully. Shape: {df.shape}")
+                print(f"Columns: {list(df.columns)}")
+                print(f"First few rows:\n{df.head()}")
+            except Exception as csv_error:
+                print(f"Failed to read CSV: {csv_error}")
+                return jsonify({
+                    'success': False,
+                    'error': f'Failed to read CSV file: {str(csv_error)}'
+                }), 400
             
             # Basic validation
             required_columns = ['Open', 'High', 'Low', 'Close']
             missing_columns = [col for col in required_columns if col not in df.columns]
             
             if missing_columns:
+                print(f"Missing required columns: {missing_columns}")
                 return jsonify({
                     'success': False,
                     'error': f'Missing required columns: {", ".join(missing_columns)}'
