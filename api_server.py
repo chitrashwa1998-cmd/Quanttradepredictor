@@ -832,12 +832,12 @@ def upload_data():
             # Import data processing modules
             from utils.data_processing import DataProcessor
             
-            # Create a file-like object from the uploaded file
-            file_stream = io.BytesIO(file.read())
-            file_stream.name = file.filename
+            # Read file content and reset stream
+            file_content = file.read()
+            file.seek(0)  # Reset file pointer
             
-            # Process the uploaded file
-            df, message = DataProcessor.load_and_process_data(file_stream)
+            # Process the uploaded file directly
+            df, message = DataProcessor.load_and_process_data(file)
             
             if df is None:
                 return jsonify({
