@@ -709,7 +709,7 @@ class QuantTradingModels:
         else:
             # Fallback to original predictions
             if model_info['task_type'] == 'classification':
-predictions = model.predict(X_scaled)
+                predictions = model.predict(X_scaled)
             else:
                 raw_pred = model.predict(X_scaled)
                 threshold = np.median(raw_pred)
@@ -943,4 +943,3 @@ predictions = model.predict(X_scaled)
             return {}
 
         return self.models[model_name]['feature_importance']
-```
