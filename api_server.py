@@ -153,13 +153,8 @@ def serve_react_app():
         if os.path.exists('build') and os.path.exists('build/index.html'):
             return send_from_directory('build', 'index.html')
         else:
-            # Build the React app first
-            import subprocess
-            result = subprocess.run(['npm', 'run', 'build'], capture_output=True, text=True)
-            if result.returncode == 0 and os.path.exists('build/index.html'):
-                return send_from_directory('build', 'index.html')
-            else:
-                return serve_development_page()
+            print("Build directory not found, serving development page...")
+            return serve_development_page()
     except Exception as e:
         print(f"Error serving React app: {e}")
         return serve_development_page()
