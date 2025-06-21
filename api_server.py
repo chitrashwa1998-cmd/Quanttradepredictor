@@ -339,7 +339,7 @@ def get_predictions():
             predictions_data['direction'] = "UNKNOWN"
             predictions_data['directionConfidence'] = 0.5
 
-        # Price magnitude prediction
+        # Price magnitude prediction (with fallback calculation)
         if 'magnitude' in available_models:
             try:
                 magnitude_pred, _ = models.predict('magnitude', latest_features)
@@ -348,14 +348,24 @@ def get_predictions():
                     predictions_data['priceTarget'] = current_price * (1 + predicted_change/100)
                 else:
                     predictions_data['priceTarget'] = current_price * (1 - predicted_change/100)
-                predictions_data['targetConfidence'] = 0.7
             except Exception as e:
                 print(f"Error predicting magnitude: {e}")
-                predictions_data['priceTarget'] = current_price
-                predictions_data['targetConfidence'] = 0.5
+                # Calculate magnitude using recent volatility as fallback
+                recent_returns = data['Close'].pct_change().tail(20)
+                avg_magnitude = abs(recent_returns).mean()
+                if predictions_data['direction'] == "UP":
+                    predictions_data['priceTarget'] = current_price * (1 + avg_magnitude)
+                else:
+                    predictions_data['priceTarget'] = current_price * (1 - avg_magnitude)
         else:
-            predictions_data['priceTarget'] = current_price
-            predictions_data['targetConfidence'] = 0.5
+            # Calculate magnitude using recent volatility as fallback
+            recent_returns = data['Close'].pct_change().tail(20)
+            avg_magnitude = abs(recent_returns).mean()
+            if predictions_data['direction'] == "UP":
+                predictions_data['priceTarget'] = current_price * (1 + avg_magnitude)
+            else:
+                predictions_data['priceTarget'] = current_price * (1 - avg_magnitude)
+            predictions_data['targetConfidence'] = 0.7
 
         # Trend prediction
         if 'trend_sideways' in available_models:
