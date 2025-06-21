@@ -188,17 +188,25 @@ def serve_development_page():
     </html>
     """
 
-@app.route('/static/<path:filename>')
-def serve_static_files(filename):
-    """Serve static files from React build"""
-    try:
-        return send_from_directory('build/static', filename)
-    except Exception:
-        return "File not found", 404
-
 @app.route('/<path:path>')
 def serve_react_routes(path):
     """Handle React router paths"""
+    # First check if this is a static file request
+    if path.startswith('static/'):
+        try:
+            # Handle CSS files
+            if path.startswith('static/css/'):
+                return send_from_directory('build/static/css', path[11:])
+            # Handle JS files
+            elif path.startswith('static/js/'):
+                return send_from_directory('build/static/js', path[10:])
+            else:
+                return send_from_directory('build/static', path[7:])
+        except Exception as e:
+            print(f"Static file error: {e}")
+            return "File not found", 404
+    
+    # Handle React routes
     try:
         return send_from_directory('build', 'index.html')
     except Exception:
