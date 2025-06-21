@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "API Server"
+runButton = "Start API Server"
 
 [[workflows.workflow]]
 name = "React Development Server"
@@ -88,6 +88,15 @@ waitForPort = 3000
 
 [[workflows.workflow]]
 name = "API Server"
+author = 40743738
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python api_server.py"
+
+[[workflows.workflow]]
+name = "Start API Server"
 author = 40743738
 mode = "sequential"
 
