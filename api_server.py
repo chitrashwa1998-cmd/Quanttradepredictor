@@ -4,7 +4,7 @@ Flask API server for React Trading Dashboard
 Provides REST endpoints to access existing Python trading models and data
 """
 
-from flask import Flask, jsonify, request, send_from_directory, Response, make_response
+from flask import Flask, jsonify, request, make_response, send_from_directory
 from flask_cors import CORS
 import os
 import sys
@@ -198,7 +198,7 @@ def serve_react_routes(path):
     # Skip API routes
     if path.startswith('api/'):
         return jsonify({'error': 'API endpoint not found'}), 404
-    
+
     # For any other route, serve the React app (SPA routing)
     try:
         return send_from_directory('build', 'index.html')
@@ -823,7 +823,8 @@ def get_data_summary():
             'error': 'Data summary unavailable',
             'details': str(e),
             'data': {
-                'total_rows': 0,
+                'total_rows': ```python
+0,
                 'date_range': {'start': 'N/A', 'end': 'N/A'},
                 'columns': [],
                 'latest_price': 0,
@@ -1054,8 +1055,8 @@ def get_model_predictions(model_name):
 
                 ohlc_data.append({
                     'Open': open_price,
-                    'High': max(high, open_price, close),
-                    'Low': min(low, open_price, close),
+                    'High': high,
+                    'Low': low,
                     'Close': close,
                     'Volume': np.random.randint(10000, 50000)
                 })
