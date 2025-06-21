@@ -3,6 +3,20 @@ import axios from 'axios';
 import Plot from 'react-plotly.js';
 import { API_BASE_URL } from '../config/api';
 
+// Helper function to get model-specific colors
+const getModelColor = (modelName) => {
+  const colors = {
+    'direction': '#00ff88',
+    'magnitude': '#ff6b6b', 
+    'profit_prob': '#4ecdc4',
+    'volatility': '#ffe66d',
+    'trend_sideways': '#a8e6cf',
+    'reversal': '#ff8b94',
+    'trading_signal': '#b4b7ff'
+  };
+  return colors[modelName] || '#00ffff';
+};
+
 const Predictions = () => {
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
@@ -47,6 +61,17 @@ const Predictions = () => {
           
           // Log first few predictions to see differences
           console.log(`${selectedModel} first 5 predictions:`, data.predictions.slice(0, 5));
+          
+          // Log prediction distribution
+          const predDistribution = data.predictions.reduce((acc, pred) => {
+            acc[pred.prediction] = (acc[pred.prediction] || 0) + 1;
+            return acc;
+          }, {});
+          console.log(`${selectedModel} prediction distribution:`, predDistribution);
+          
+          // Add model-specific styling to differentiate charts
+          data.modelColor = getModelColor(selectedModel);
+          data.modelName = selectedModel;
         }
         
         setPredictions(data);
