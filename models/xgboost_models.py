@@ -126,66 +126,36 @@ class QuantTradingModels:
         """Create target variables for different prediction tasks."""
         targets = {}
 
-        # 1. Direction prediction (up/down)
-        future_return = df['Close'].shift(-1) / df['Close'] - 1
-        targets['direction'] = (future_return > 0).astype(int)
+        # 1. Direction prediction (next candle up/down) - Simple binary
+        future_return_1 = df['Close'].shift(-1) / df['Close'] - 1
+        targets['direction'] = (future_return_1 > 0).astype(int)
 
-        # 2. Magnitude of move (percentage change)
-        targets['magnitude'] = np.abs(future_return) * 100
+        # 2. Magnitude classification (small/large moves) - More balanced approach
+        abs_return = np.abs(future_return_1)
+        # Use median as threshold for balanced classes
+        magnitude_threshold = abs_return.quantile(0.6)  # Top 40% are "large" moves
+        targets['magnitude'] = (abs_return > magnitude_threshold).astype(int)
 
-        # 3. Probability of profit (based on next 5 periods only)
-        returns = df['Close'].pct_change().dropna()
-        volatility = returns.std()
-
-        # More realistic profit threshold for 5-min scalping
-        # Use smaller threshold to capture more profit opportunities
-        base_profit_threshold = 0.001  # 0.1% minimum profit target (more realistic for 5-min)
-
-        # Look ahead only 5 candles (25 minutes for 5-min data)
-        future_returns_list = []
-        for i in range(5):
+        # 3. Multi-period profit probability (next 3 periods) - More realistic
+        future_returns_3 = []
+        for i in range(3):  # Look ahead 3 periods (15 min for 5-min data)
             future_return = df['Close'].shift(-i-1) / df['Close'] - 1
-            future_returns_list.append(future_return)
+            future_returns_3.append(future_return)
+        
+        future_returns_df = pd.concat(future_returns_3, axis=1)
+        max_return_3 = future_returns_df.max(axis=1)
+        
+        # Use 70th percentile for more balanced profit opportunities (30% positive)
+        profit_threshold = max_return_3.quantile(0.7)
+        targets['profit_prob'] = (max_return_3 > profit_threshold).astype(int)
 
-        # Get maximum return within 5 periods
-        future_returns_df = pd.concat(future_returns_list, axis=1)
-        max_future_return = future_returns_df.max(axis=1)
-
-        # Use adaptive threshold based on actual data distribution
-        # Aim for 30-40% profit opportunities (more balanced)
-        profit_threshold = np.percentile(max_future_return.dropna(), 65)  # Top 35% as profit opportunities
-        profit_threshold = max(profit_threshold, base_profit_threshold)  # Ensure minimum threshold
-
-        targets['profit_prob'] = (max_future_return > profit_threshold).astype(int)
-
-        # 4. Volatility forecasting (next period volatility)
-        volatility_window = 10
-
-        # Calculate rolling volatility using percentage returns for better scaling
+        # 4. Volatility regime classification (high/low volatility)
         returns = df['Close'].pct_change()
-        current_vol = returns.rolling(volatility_window).std()
-        future_vol = current_vol.shift(-1)
-
-        # Remove NaN values and ensure we have valid volatility data
-        future_vol = future_vol.fillna(method='ffill').fillna(method='bfill')
-
-        # Ensure volatility is positive and finite
-        future_vol = future_vol.clip(lower=0.0001)  # Minimum volatility threshold
-        future_vol = future_vol[np.isfinite(future_vol)]
-
-        # Debug volatility distribution
-        if len(future_vol) > 0:
-            vol_stats = future_vol.describe()
-            print(f"Volatility Target Statistics:")
-            print(f"  Count: {vol_stats['count']}")
-            print(f"  Mean: {vol_stats['mean']:.6f}")
-            print(f"  Std: {vol_stats['std']:.6f}")
-            print(f"  Min: {vol_stats['min']:.6f}")
-            print(f"  Max: {vol_stats['max']:.6f}")
-            print(f"  25th percentile: {vol_stats['25%']:.6f}")
-            print(f"  75th percentile: {vol_stats['75%']:.6f}")
-
-        targets['volatility'] = future_vol
+        current_vol = returns.rolling(20).std()  # 20-period volatility
+        
+        # Create binary volatility target: 1 = high volatility, 0 = low volatility
+        vol_threshold = current_vol.quantile(0.65)  # Top 35% are high volatility
+        targets['volatility'] = (current_vol > vol_threshold).astype(int)
 
         # 5. Trend vs sideways classification - IMPROVED ALGORITHM
         # Use historical data only (no look-ahead bias)
