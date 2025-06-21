@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Complete Trading System"
+runButton = "Full Trading Dashboard"
 
 [[workflows.workflow]]
 name = "React Development Server"
@@ -75,7 +75,7 @@ args = "python api_server.py"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm start"
+args = "PORT=3000 DANGEROUSLY_DISABLE_HOST_CHECK=true npm start"
 
 [[workflows.workflow]]
 name = "React Frontend"

@@ -15,7 +15,7 @@
     "react-router-dom": "^6.8.0",
     "react-scripts": "5.0.1"
   },
-  "proxy": "http://localhost:8080",
+  "proxy": "http://0.0.0.0:8080",
   "scripts": {
     "start": "DANGEROUSLY_DISABLE_HOST_CHECK=true react-scripts start",
     "build": "react-scripts build",
