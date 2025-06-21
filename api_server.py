@@ -984,6 +984,129 @@ def get_model_predictions(model_name):
             'error': str(e)
         }), 500
 
+@app.route('/api/database/dataset/<dataset_name>', methods=['DELETE'])
+def delete_dataset(dataset_name):
+    """Delete a specific dataset"""
+    try:
+        success = db.delete_dataset(dataset_name)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Dataset {dataset_name} deleted successfully',
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to delete dataset {dataset_name}'
+            }), 404
+
+    except Exception as e:
+        print(f"Error deleting dataset {dataset_name}: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/database/export/<dataset_name>', methods=['GET'])
+def export_dataset(dataset_name):
+    """Export a dataset as CSV"""
+    try:
+        data = db.load_ohlc_data(dataset_name)
+        
+        if data is None:
+            return jsonify({
+                'success': False,
+                'error': f'Dataset {dataset_name} not found'
+            }), 404
+        
+        # Convert to CSV
+        csv_buffer = io.StringIO()
+        data.to_csv(csv_buffer, index=True)
+        csv_content = csv_buffer.getvalue()
+        
+        # Create response
+        response = Response(
+            csv_content,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename={dataset_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            }
+        )
+        
+        return response
+
+    except Exception as e:
+        print(f"Error exporting dataset {dataset_name}: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/data/load', methods=['POST'])
+def load_dataset():
+    """Load a specific dataset"""
+    try:
+        request_data = request.get_json() if request.is_json else {}
+        dataset_name = request_data.get('dataset_name', 'main_dataset')
+        
+        data = db.load_ohlc_data(dataset_name)
+        
+        if data is not None:
+            return jsonify({
+                'success': True,
+                'message': f'Dataset {dataset_name} loaded successfully',
+                'data': {
+                    'dataset_name': dataset_name,
+                    'total_rows': len(data),
+                    'columns': list(data.columns)
+                },
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Dataset {dataset_name} not found'
+            }), 404
+
+    except Exception as e:
+        print(f"Error loading dataset: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/database/clear-all', methods=['DELETE'])
+def clear_all_database():
+    """Clear all data from database"""
+    try:
+        # Clear all data using the database adapter
+        success = db.clear_all_data()
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'All database data cleared successfully',
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to clear database data'
+            }), 500
+
+    except Exception as e:
+        print(f"Error clearing database: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/database-info', methods=['GET'])
 def get_database_info():
     """Get database information"""

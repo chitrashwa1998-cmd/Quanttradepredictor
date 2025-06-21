@@ -19,7 +19,13 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/database-info`);
-      setDbInfo(response.data.success ? response.data.data : null);
+      const dbData = response.data.success ? response.data.data : null;
+      setDbInfo(dbData);
+      
+      // Set datasets from database info
+      if (dbData && dbData.datasets) {
+        setDatasets(dbData.datasets);
+      }
     } catch (error) {
       console.error('Failed to fetch database info:', error);
     } finally {
