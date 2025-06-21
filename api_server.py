@@ -699,7 +699,7 @@ def train_models():
         # Count successful and failed models
         successful_models = len([r for r in results.values() if r.get('status') == 'success'])
         failed_models = len([r for r in results.values() if r.get('status') == 'failed'])
-        
+
         return jsonify({
             'success': True,
             'data': {
@@ -803,241 +803,198 @@ def get_data_summary():
             }
         }), 200  # Return 200 instead of 500 to prevent frontend errors
 
-@app.route('/api/models/status', methods=['GET'])
+@app.route('/api/models/status')
 def get_models_status():
-    """Get trained models status"""
+    """Get status of all trained models."""
     try:
-        # Get trained models from the models object
-        trained_models = {}
+        db = get_trading_database()
+        models_info = db.get_models_info()
 
-        if hasattr(models, 'models') and models.models:
-            for model_name, model_info in models.models.items():
-                trained_models[model_name] = {
-                    'name': model_name.replace('_', ' ').title(),
-                    'task_type': model_info.get('task_type', 'unknown'),
-                    'trained_at': model_info.get('trained_at', 'Unknown'),
-                    'accuracy': model_info.get('metrics', {}).get('accuracy', 0) if model_info.get('task_type') == 'classification' else model_info.get('metrics', {}).get('rmse', 0)
-                }
+        if not models_info:
+            return jsonify({
+                'success': False,
+                'data': {'status': 'no_models', 'total_models': 0, 'trained_models': {}},
+                'message': 'No trained models found'
+            })
 
-        # Also check database for saved models
-        try:
-            from utils.database_adapter import DatabaseAdapter
-            db_adapter = DatabaseAdapter()
-            saved_models = db_adapter.load_trained_models()
+        # Format model info for frontend
+        formatted_models = {}
+        for model_name, info in models_info.items():
+            # Get accuracy from metrics
+            accuracy = 0
+            if 'metrics' in info:
+                if 'accuracy' in info['metrics']:
+                    accuracy = info['metrics']['accuracy']
+                elif 'rmse' in info['metrics']:
+                    # For regression models, use 1/rmse as a proxy for accuracy
+                    accuracy = 1 / (1 + info['metrics']['rmse'])
 
-            if saved_models:
-                for model_name, model_data in saved_models.items():
-                    if model_name not in trained_models:
-                        trained_models[model_name] = {
-                            'name': model_name.replace('_', ' ').title(),
-                            'task_type': model_data.get('task_type', 'unknown'),
-                            'trained_at': model_data.get('trained_at', 'Unknown'),
-                            'accuracy': 0.8  # Default value
-                        }
-        except Exception as e:
-            print(f"Could not load models from database: {e}")
+            formatted_```python
+models[model_name] = {
+                'name': model_name.replace('_', ' ').title(),
+                'accuracy': accuracy,
+                'task_type': info.get('task_type', 'classification'),
+                'trained_at': info.get('trained_at', 'Unknown')
+            }
 
         return jsonify({
             'success': True,
             'data': {
-                'trained_models': trained_models,                'total_models': len(trained_models),
-                'status': 'loaded' if trained_models else 'no_models'
+                'status': 'loaded',
+                'total_models': len(formatted_models),
+                'trained_models': formatted_models
             },
             'timestamp': datetime.now().isoformat()
         })
 
     except Exception as e:
-        print(f"Error getting models status: {e}")
-        traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'data': {'status': 'error', 'total_models': 0, 'trained_models': {}}
         }), 500
 
-@app.route('/api/upload-data', methods=['POST'])
-def upload_data():
-    """Handle file upload and data processing"""
-    try:
-        print(f"Upload request received. Files in request: {list(request.files.keys())}")
-        print(f"Request content type: {request.content_type}")
-
-        if 'file' not in request.files:
-            print("No 'file' key found in request.files")
-            return jsonify({
-                'success': False,
-                'error': 'No file uploaded'
-            }), 400
-
-        file = request.files['file']
-        print(f"File received: {file.filename}, size: {file.content_length if hasattr(file, 'content_length') else 'unknown'}")
-
-        if file.filename == '':
-            return jsonify({
-                'success': False,
-                'error': 'No file selected'
-            }), 400
-
-        if not file.filename.lower().endswith('.csv'):
-            return jsonify({
-                'success': False,
-                'error': 'Only CSV files are supported'
-            }), 400
-
-        try:
-            # Import data processing modules
-            from utils.data_processing import DataProcessor
-
-            # Read file content and reset stream
-            file_content = file.read()
-            file.seek(0)  # Reset file pointer
-
-            # Process the uploaded file directly
-            df, message = DataProcessor.load_and_process_data(file)
-
-            if df is None:
-                return jsonify({
-                    'success': False,
-                    'error': f'Failed to process file: {message}'
-                }), 400
-
-            # Save to database
-            from utils.database_adapter import DatabaseAdapter
-            trading_db = DatabaseAdapter()
-
-            dataset_name = f"uploaded_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            success = trading_db.save_ohlc_data(df, dataset_name, preserve_full_data=False)
-
-            if success:
-                # Get data summary
-                summary = DataProcessor.get_data_summary(df)
-
-                return jsonify({
-                    'success': True,
-                    'message': f'File processed successfully! {len(df)} rows loaded.',
-                    'data': {
-                        'dataset_name': dataset_name,
-                        'total_rows': len(df),
-                        'date_range': {
-                            'start': df.index.min().isoformat() if hasattr(df.index.min(), 'isoformat') else str(df.index.min()),
-                            'end': df.index.max().isoformat() if hasattr(df.index.max(), 'isoformat') else str(df.index.max())
-                        },
-                        'columns': list(df.columns),
-                        'latest_price': float(df['Close'].iloc[-1]) if 'Close' in df.columns else 0
-                    }
-                })
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': 'Data processed but failed to save to database'
-                }), 500
-
-        except Exception as processing_error:
-            print(f"Data processing error: {processing_error}")
-            traceback.print_exc()
-            return jsonify({
-                'success': False,
-                'error': f'Error processing file: {str(processing_error)}'
-            }), 500
-
-    except Exception as e:
-        print(f"Upload error: {e}")
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': f'Upload failed: {str(e)}'
-        }), 500
-
-@app.route('/api/predictions/<model_name>', methods=['GET'])
-def get_model_predictions(model_name):
-    """Get predictions for a specific model"""
+@app.route('/api/predictions/<model_name>')
+def get_predictions(model_name):
+    """Get predictions for a specific model."""
     try:
         period = request.args.get('period', '30d')
 
-        # Load data
-        data = db.load_ohlc_data()
-        if data is None or len(data) < 100:
+        # Load the data
+        db = get_trading_database()
+
+        # Try to load main dataset first, fallback to latest if not found
+        try:
+            df = db.load_data('main_dataset')
+            if df is None or df.empty:
+                datasets = db.list_datasets()
+                if datasets:
+                    latest_dataset = datasets[0]['name']  # Get the first (most recent) dataset
+                    print(f"Main dataset not found, loading latest dataset: {latest_dataset}")
+                    df = db.load_data(latest_dataset)
+                else:
+                    raise ValueError("No datasets available")
+        except Exception as e:
+            print(f"Error loading data: {e}")
             return jsonify({
                 'success': False,
-                'error': 'Insufficient data for predictions'
-            }), 400
+                'error': 'No data available for predictions'
+            }), 404
+
+        if df is None or df.empty:
+            return jsonify({
+                'success': False,
+                'error': 'No data available for predictions'
+            }), 404
 
         # Filter data based on period
         if period == '30d':
-            data = data.tail(30)
+            df = df.tail(30 * 24 * 12)  # Assuming 5-min data, 30 days
         elif period == '90d':
-            data = data.tail(90)
-        # 'all' uses all data
+            df = df.tail(90 * 24 * 12)  # 90 days
+        # For 'all', use all data
 
-        # Calculate technical indicators
-        try:
-            data_with_indicators = TechnicalIndicators.calculate_all_indicators(data)
-            data_with_indicators = data_with_indicators.dropna()
-        except Exception as e:
-            print(f"Error calculating indicators: {e}")
-            data_with_indicators = data
+        # Load the trained model
+        from models.xgboost_models import QuantTradingModels
+        from features.technical_indicators import TechnicalIndicators
 
-        if len(data_with_indicators) < 10:
+        # Initialize the model trainer and load existing models
+        model_trainer = QuantTradingModels()
+
+        # Check if the requested model exists
+        if model_name not in model_trainer.models:
             return jsonify({
                 'success': False,
-                'error': 'Not enough data after calculating indicators'
-            }), 400
+                'error': f'Model {model_name} not found. Available models: {list(model_trainer.models.keys())}'
+            }), 404
+
+        # Calculate technical indicators if not present
+        required_indicators = ['sma_5', 'ema_5', 'rsi', 'macd_histogram']
+        missing_indicators = [ind for ind in required_indicators if ind not in df.columns]
+
+        if missing_indicators:
+            print("Calculating missing technical indicators...")
+            df_with_indicators = TechnicalIndicators.calculate_all_indicators(df)
+        else:
+            df_with_indicators = df
 
         # Prepare features for prediction
-        try:
-            features = models.prepare_features(data_with_indicators)
-            if len(features) == 0:
-                raise ValueError("No features prepared")
-        except Exception as e:
-            print(f"Error preparing features: {e}")
-            return jsonify({
-                'success': False,
-                'error': f'Failed to prepare features: {str(e)}'
-            }), 400
+        features = model_trainer.prepare_features(df_with_indicators)
 
-        # Check if the specific model exists
-        if not hasattr(models, 'models') or model_name not in models.models:
-            return jsonify({
-                'success': False,
-                'error': f'Model {model_name} not found. Available models: {list(models.models.keys()) if hasattr(models, "models") else []}'
-            }), 400
+        # Generate predictions
+        predictions, probabilities = model_trainer.predict(model_name, features)
 
-        # Get predictions from the model
-        try:
-            predictions, probabilities = models.predict(model_name, features)
+        # Prepare response data
+        prediction_data = []
 
-            # Create predictions dataframe
-            pred_data = []
-            for i, (date, price) in enumerate(zip(data_with_indicators.index, data_with_indicators['Close'])):
-                if i < len(predictions):
-                    pred_data.append({
-                        'date': date.isoformat() if hasattr(date, 'isoformat') else str(date),
-                        'price': float(price),
-                        'prediction': int(predictions[i]),
-                        'confidence': float(probabilities[i].max()) if probabilities is not None and len(probabilities) > i else 0.5
-                    })
+        # Align indices and create prediction records
+        common_index = features.index.intersection(df_with_indicators.index)
+        df_aligned = df_with_indicators.loc[common_index]
 
-            return jsonify({
-                'success': True,
-                'predictions': pred_data,
-                'total_predictions': len(pred_data),
-                'model_name': model_name,
-                'timestamp': datetime.now().isoformat()
-            })
+        for i, idx in enumerate(common_index[-min(len(predictions), 1000):]):  # Limit to last 1000 points
+            pred_idx = len(common_index) - min(len(predictions), 1000) + i
 
-        except Exception as e:
-            print(f"Error generating predictions for {model_name}: {e}")
-            return jsonify({
-                'success': False,
-                'error': f'Failed to generate predictions: {str(e)}'
-            }), 500
+            record = {
+                'date': idx.isoformat() if hasattr(idx, 'isoformat') else str(idx),
+                'price': float(df_aligned.loc[idx, 'Close']),
+                'prediction': int(predictions[pred_idx]) if len(predictions) > pred_idx else 0
+            }
+
+            # Add confidence if available
+            if probabilities is not None and len(probabilities) > pred_idx:
+                if len(probabilities.shape) > 1 and probabilities.shape[1] > 1:
+                    record['confidence'] = float(np.max(probabilities[pred_idx]))
+                else:
+                    record['confidence'] = float(probabilities[pred_idx])
+
+            prediction_data.append(record)
+
+        # Calculate statistics
+        total_predictions = len(prediction_data)
+        up_predictions = sum(1 for p in prediction_data if p['prediction'] == 1)
+        down_predictions = total_predictions - up_predictions
+
+        return jsonify({
+            'success': True,
+            'model_name': model_name,
+            'total_predictions': total_predictions,
+            'up_predictions': up_predictions,
+            'down_predictions': down_predictions,
+            'predictions': prediction_data,
+            'timestamp': datetime.now().isoformat()
+        })
 
     except Exception as e:
-        print(f"Error in get_model_predictions: {e}")
+        print(f"Error generating predictions for {model_name}: {str(e)}")
+        import traceback
         traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': f'Error generating predictions: {str(e)}'
         }), 500
+
+# Initialize model trainer
+model_trainer = None
+
+def initialize_model_trainer():
+    """Initialize the model trainer with existing models."""
+    global model_trainer
+    try:
+        from models.xgboost_models import QuantTradingModels
+        model_trainer = QuantTradingModels()
+        print(f"Loaded {len(model_trainer.models)} existing trained models from database")
+
+        # Verify models are properly loaded
+        for model_name, model_info in model_trainer.models.items():
+            if model_info and 'ensemble' in model_info:
+                print(f"✅ Model {model_name} loaded successfully")
+            else:
+                print(f"⚠️ Model {model_name} may not be properly loaded")
+
+        return True
+    except Exception as e:
+        print(f"Error initializing model trainer: {e}")
+        return False
 
 @app.route('/api/database/dataset/<dataset_name>', methods=['DELETE'])
 def delete_dataset(dataset_name):

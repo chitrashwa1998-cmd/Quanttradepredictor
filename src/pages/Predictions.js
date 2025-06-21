@@ -34,8 +34,21 @@ const Predictions = () => {
 
       setLoading(true);
       try {
-        const response = await axios.get(`${API_BASE_URL}/predictions/${selectedModel}?period=${period}`);
+        const timestamp = new Date().getTime();
+        const response = await axios.get(`${API_BASE_URL}/predictions/${selectedModel}?period=${period}&t=${timestamp}`);
         const data = response.data;
+        console.log(`Predictions for ${selectedModel}:`, data); // Debug log
+        
+        // Log some prediction statistics for debugging
+        if (data.predictions && data.predictions.length > 0) {
+          const upCount = data.predictions.filter(p => p.prediction === 1).length;
+          const downCount = data.predictions.filter(p => p.prediction === 0).length;
+          console.log(`${selectedModel} - Up: ${upCount}, Down: ${downCount}, Total: ${data.predictions.length}`);
+          
+          // Log first few predictions to see differences
+          console.log(`${selectedModel} first 5 predictions:`, data.predictions.slice(0, 5));
+        }
+        
         setPredictions(data);
       } catch (error) {
         console.error('Error fetching predictions:', error);
