@@ -1214,6 +1214,9 @@ def get_model_predictions(model_name):
                 'timestamp': datetime.now().isoformat()
             })
 
+        # Initialize df_with_indicators with the loaded data
+        df_with_indicators = df.copy()
+        
         # Check if technical indicators are already calculated
         required_indicators = ['sma_5', 'ema_5', 'rsi', 'macd_histogram']
         missing_indicators = [ind for ind in required_indicators if ind not in df_with_indicators.columns]
