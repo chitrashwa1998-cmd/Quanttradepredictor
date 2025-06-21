@@ -832,8 +832,9 @@ def get_models_status():
                         accuracy = metrics['accuracy']
                     elif 'rmse' in metrics:
                         # For regression models, use 1/rmse as a proxy for accuracy
-                        accuracy = 1 / (1 + metrics['rmse'])
-                
+                        accuracy```python
+ = 1 / (1 + metrics['rmse'])
+
                 formatted_models[model_name] = {
                     'name': model_name.replace('_', ' ').title(),
                     'accuracy': accuracy,
@@ -931,11 +932,11 @@ def get_model_predictions(model_name):
         try:
             predictions, probabilities = model_trainer.predict(model_name, features)
             print(f"Generated {len(predictions)} predictions for {model_name}")
-            
+
             # Debug: Check prediction distribution
             unique_preds = np.unique(predictions, return_counts=True)
             print(f"{model_name} prediction distribution: {dict(zip(unique_preds[0], unique_preds[1]))}")
-            
+
         except Exception as e:
             print(f"Error generating predictions for {model_name}: {e}")
             return jsonify({
@@ -1200,36 +1201,36 @@ def upload_data():
     try:
         print(f"Upload request received. Files: {list(request.files.keys())}")
         print(f"Form data: {list(request.form.keys())}")
-        
+
         if 'file' not in request.files:
             print("No 'file' key in request.files")
             return jsonify({
                 'success': False,
                 'error': 'No file provided'
             }), 400
-        
+
         file = request.files['file']
         print(f"File received: {file.filename}, content type: {file.content_type}")
-        
+
         if file.filename == '':
             print("Empty filename")
             return jsonify({
                 'success': False,
                 'error': 'No file selected'
             }), 400
-        
+
         if not file.filename.lower().endswith('.csv'):
             print(f"Invalid file extension for: {file.filename}")
             return jsonify({
                 'success': False,
                 'error': 'Only CSV files are supported'
             }), 400
-        
+
         # Read the CSV file
         try:
             import pandas as pd
             from datetime import datetime
-            
+
             # Read CSV data
             print(f"Reading CSV file: {file.filename}")
             try:
@@ -1243,22 +1244,22 @@ def upload_data():
                     'success': False,
                     'error': f'Failed to read CSV file: {str(csv_error)}'
                 }), 400
-            
+
             # Basic validation - handle case-insensitive column names
             required_columns = ['Open', 'High', 'Low', 'Close']
             df_columns_lower = [col.lower() for col in df.columns]
             required_columns_lower = [col.lower() for col in required_columns]
-            
+
             # Check for missing columns (case-insensitive)
             missing_columns = [col for col in required_columns_lower if col not in df_columns_lower]
-            
+
             if missing_columns:
                 print(f"Missing required columns: {missing_columns}")
                 return jsonify({
                     'success': False,
                     'error': f'Missing required columns: {", ".join(missing_columns)}'
                 }), 400
-            
+
             # Standardize column names to proper case
             column_mapping = {}
             for col in df.columns:
@@ -1275,12 +1276,12 @@ def upload_data():
                     column_mapping[col] = 'Volume'
                 elif col_lower in ['date', 'datetime', 'timestamp']:
                     column_mapping[col] = 'Date'
-            
+
             if column_mapping:
                 df = df.rename(columns=column_mapping)
                 print(f"Renamed columns: {column_mapping}")
                 print(f"New columns: {list(df.columns)}")
-            
+
             # Convert date column if exists
             if 'Date' in df.columns:
                 try:
@@ -1301,34 +1302,34 @@ def upload_data():
                 except:
                     df['Datetime'] = pd.to_datetime(df['Datetime'], dayfirst=True, errors='coerce')
                 df = df.set_index('Datetime')
-            
+
             # Ensure numeric columns
             for col in ['Open', 'High', 'Low', 'Close']:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
-            
+
             if 'Volume' in df.columns:
                 df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce')
-            
+
             # Remove rows with NaN values
             df = df.dropna()
-            
+
             if len(df) < 100:
                 return jsonify({
                     'success': False,
                     'error': 'Insufficient data. Need at least 100 valid rows'
                 }), 400
-            
+
             # Generate dataset name with timestamp
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             dataset_name = f"uploaded_{timestamp}"
-            
+
             # Save to database
             success = db.save_ohlc_data(df, dataset_name, preserve_full_data=True)
-            
+
             if success:
                 # Also create/update main_dataset
                 db.save_ohlc_data(df, "main_dataset", preserve_full_data=True)
-                
+
                 return jsonify({
                     'success': True,
                     'message': f'Successfully uploaded {len(df)} rows of data',
@@ -1341,14 +1342,14 @@ def upload_data():
                     'success': False,
                     'error': 'Failed to save data to database'
                 }), 500
-                
+
         except Exception as e:
             print(f"Error processing uploaded file: {e}")
             return jsonify({
                 'success': False,
                 'error': f'Error processing file: {str(e)}'
             }), 400
-            
+
     except Exception as e:
         print(f"Error in upload_data: {e}")
         return jsonify({
