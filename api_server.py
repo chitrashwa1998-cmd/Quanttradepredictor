@@ -561,13 +561,51 @@ def train_models():
         request_data = request.get_json() if request.is_json else {}
         selected_models = request_data.get('models', [])
 
-        # Load data
-        data = db.load_ohlc_data()
+        # Load data - try different dataset names
+        data = db.load_ohlc_data("main_dataset")
+        
+        # If main_dataset doesn't exist, try to create it from latest upload
+        if data is None or len(data) == 0:
+            print("Main dataset not found, trying to create from latest upload...")
+            success = db.create_main_dataset_from_latest()
+            if success:
+                data = db.load_ohlc_data("main_dataset")
+        
+        # If still no data, try to find any available dataset
+        if data is None or len(data) == 0:
+            try:
+                db_info = db.get_database_info()
+                if db_info and 'datasets' in db_info and db_info['datasets']:
+                    # Get the latest uploaded dataset
+                    datasets = db_info['datasets']
+                    if datasets:
+                        latest_dataset = max(datasets.keys(), key=lambda x: datasets[x].get('last_updated', ''))
+                        print(f"Loading latest dataset: {latest_dataset}")
+                        data = db.load_ohlc_data(latest_dataset)
+            except Exception as e:
+                print(f"Error finding datasets: {e}")
+        
         if data is None or len(data) < 1000:
-            return jsonify({
-                'success': False,
-                'error': 'Insufficient data for training. Need at least 1000 rows.'
-            }), 400
+            # Try to get actual row count for better error message
+            try:
+                db_info = db.get_database_info()
+                total_rows = db_info.get('total_rows', 0) if db_info else 0
+                datasets_info = db_info.get('datasets', {}) if db_info else {}
+                
+                return jsonify({
+                    'success': False,
+                    'error': f'Insufficient data for training. Need at least 1000 rows, but found {len(data) if data is not None else 0} rows. Database shows {total_rows} total rows across {len(datasets_info)} datasets. Please upload more data first.',
+                    'debug_info': {
+                        'loaded_rows': len(data) if data is not None else 0,
+                        'total_db_rows': total_rows,
+                        'available_datasets': list(datasets_info.keys()) if datasets_info else []
+                    }
+                }), 400
+            except:
+                return jsonify({
+                    'success': False,
+                    'error': f'Insufficient data for training. Need at least 1000 rows, but found {len(data) if data is not None else 0} rows.'
+                }), 400
 
         print(f"Training models on {len(data)} rows of data")
 

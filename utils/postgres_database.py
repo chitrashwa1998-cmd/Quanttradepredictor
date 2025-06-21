@@ -1,4 +1,3 @@
-
 """
 PostgreSQL database implementation for TribexAlpha trading app
 Uses psycopg (version 3) for database operations
@@ -22,7 +21,7 @@ class PostgresTradingDatabase:
         self.database_url = os.getenv('DATABASE_URL')
         if not self.database_url:
             raise ValueError("DATABASE_URL environment variable not set")
-        
+
         self._create_tables()
 
     def _get_connection(self):
@@ -45,7 +44,7 @@ class PostgresTradingDatabase:
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
                     """)
-                    
+
                     # Model results table
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS model_results (
@@ -56,7 +55,7 @@ class PostgresTradingDatabase:
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
                     """)
-                    
+
                     # Trained models table
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS trained_models (
@@ -68,7 +67,7 @@ class PostgresTradingDatabase:
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
                     """)
-                    
+
                     # Predictions table
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS predictions (
@@ -79,15 +78,15 @@ class PostgresTradingDatabase:
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
                     """)
-                    
+
                     # Create indexes
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_ohlc_dataset_name ON ohlc_datasets(dataset_name);")
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_model_name ON model_results(model_name);")
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_trained_model_name ON trained_models(model_name);")
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_predictions_model ON predictions(model_name);")
-                    
+
                     conn.commit()
-            
+
             print("✅ PostgreSQL tables created successfully")
         except Exception as e:
             print(f"Error creating tables: {str(e)}")
@@ -127,7 +126,7 @@ class PostgresTradingDatabase:
                     # Check if dataset exists
                     cursor.execute("SELECT id FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
                     existing = cursor.fetchone()
-                    
+
                     if existing:
                         cursor.execute("""
                             UPDATE ohlc_datasets 
@@ -139,7 +138,7 @@ class PostgresTradingDatabase:
                             INSERT INTO ohlc_datasets (dataset_name, data_json, metadata_json) 
                             VALUES (%s, %s, %s);
                         """, (dataset_name, data_json, metadata_json))
-                    
+
                     conn.commit()
 
             print(f"✅ Successfully saved {len(data)} rows to PostgreSQL")
@@ -156,7 +155,7 @@ class PostgresTradingDatabase:
                 with conn.cursor(row_factory=dict_row) as cursor:
                     cursor.execute("SELECT data_json FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
                     result = cursor.fetchone()
-                    
+
                     if result:
                         df = pd.read_json(result['data_json'], orient='records')
 
@@ -211,7 +210,7 @@ class PostgresTradingDatabase:
                 with conn.cursor(row_factory=dict_row) as cursor:
                     cursor.execute("SELECT metadata_json FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
                     result = cursor.fetchone()
-                    
+
                     if result and result['metadata_json']:
                         return json.loads(result['metadata_json'])
 
@@ -243,7 +242,7 @@ class PostgresTradingDatabase:
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT id FROM model_results WHERE model_name = %s;", (model_name,))
                     existing = cursor.fetchone()
-                    
+
                     if existing:
                         cursor.execute("""
                             UPDATE model_results 
@@ -255,7 +254,7 @@ class PostgresTradingDatabase:
                             INSERT INTO model_results (model_name, results_json) 
                             VALUES (%s, %s);
                         """, (model_name, results_json))
-                    
+
                     conn.commit()
 
             return True
@@ -271,7 +270,7 @@ class PostgresTradingDatabase:
                 with conn.cursor(row_factory=dict_row) as cursor:
                     cursor.execute("SELECT results_json FROM model_results WHERE model_name = %s;", (model_name,))
                     result = cursor.fetchone()
-                    
+
                     if result:
                         return json.loads(result['results_json'])
 
@@ -298,7 +297,7 @@ class PostgresTradingDatabase:
                         with conn.cursor() as cursor:
                             cursor.execute("SELECT id FROM trained_models WHERE model_name = %s;", (model_name,))
                             existing = cursor.fetchone()
-                            
+
                             if existing:
                                 cursor.execute("""
                                     UPDATE trained_models 
@@ -310,7 +309,7 @@ class PostgresTradingDatabase:
                                     INSERT INTO trained_models (model_name, model_data, task_type) 
                                     VALUES (%s, %s, %s);
                                 """, (model_name, model_b64, task_type))
-                            
+
                             conn.commit()
 
                     success_count += 1
@@ -384,7 +383,7 @@ class PostgresTradingDatabase:
                         ORDER BY created_at DESC LIMIT 1;
                     """, (model_name,))
                     result = cursor.fetchone()
-                    
+
                     if result:
                         return pd.read_json(result['predictions_json'], orient='records')
 
@@ -402,19 +401,19 @@ class PostgresTradingDatabase:
                     # Count datasets
                     cursor.execute("SELECT COUNT(*) as count FROM ohlc_datasets;")
                     dataset_count = cursor.fetchone()['count']
-                    
+
                     # Count model results
                     cursor.execute("SELECT COUNT(*) as count FROM model_results;")
                     model_count = cursor.fetchone()['count']
-                    
+
                     # Count trained models
                     cursor.execute("SELECT COUNT(*) as count FROM trained_models;")
                     trained_model_count = cursor.fetchone()['count']
-                    
+
                     # Count predictions
                     cursor.execute("SELECT COUNT(*) as count FROM predictions;")
                     prediction_count = cursor.fetchone()['count']
-                    
+
                     # Get dataset info
                     cursor.execute("SELECT dataset_name, metadata_json FROM ohlc_datasets;")
                     datasets_query = cursor.fetchall()
@@ -472,3 +471,4 @@ class PostgresTradingDatabase:
         except Exception as e:
             print(f"Error clearing database: {str(e)}")
             return False
+```
