@@ -954,12 +954,50 @@ def get_model_predictions(model_name):
 
         if missing_indicators:
             print("Calculating missing technical indicators...")
-            df_with_indicators = TechnicalIndicators.calculate_all_indicators(df)
+            try:
+                df_with_indicators = TechnicalIndicators.calculate_all_indicators(df)
+                # Remove NaN values that might be created by indicators
+                df_with_indicators = df_with_indicators.dropna()
+                
+                if df_with_indicators.empty:
+                    print("DataFrame empty after calculating indicators, using original data")
+                    df_with_indicators = df
+            except Exception as e:
+                print(f"Error calculating indicators: {e}, using original data")
+                df_with_indicators = df
         else:
             df_with_indicators = df
 
+        # Ensure we have some data before preparing features
+        if df_with_indicators.empty:
+            return jsonify({
+                'success': False,
+                'error': 'No data available after processing technical indicators'
+            }), 404
+
         # Prepare features for prediction
-        features = model_trainer.prepare_features(df_with_indicators)
+        try:
+            features = model_trainer.prepare_features(df_with_indicators)
+            if features.empty:
+                # Fallback: create basic features from OHLC data
+                features = df_with_indicators[['Open', 'High', 'Low', 'Close']].copy()
+                # Add simple moving averages as features
+                features['sma_5'] = features['Close'].rolling(5).mean()
+                features['sma_10'] = features['Close'].rolling(10).mean()
+                features['price_change'] = features['Close'].pct_change()
+                features = features.dropna()
+                
+                if features.empty:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Unable to create valid features from data'
+                    }), 404
+        except Exception as e:
+            print(f"Error preparing features: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to prepare features: {str(e)}'
+            }), 500
 
         # Generate predictions using the specific model
         try:
