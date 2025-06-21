@@ -1112,11 +1112,20 @@ def get_model_predictions(model_name):
         # Ensure proper datetime index for IST conversion
         if not isinstance(df.index, pd.DatetimeIndex):
             try:
-                df.index = pd.to_datetime(df.index)
+                # Check if index has timestamp column or is named index
+                if 'timestamp' in df.columns:
+                    df.index = pd.to_datetime(df['timestamp'])
+                    df = df.drop('timestamp', axis=1)
+                elif 'date' in df.columns:
+                    df.index = pd.to_datetime(df['date'])
+                    df = df.drop('date', axis=1)
+                else:
+                    # Try to convert existing index
+                    df.index = pd.to_datetime(df.index)
             except:
                 # Create proper 5-minute intervals starting from a reasonable date
-                start_date = pd.Timestamp.now() - pd.Timedelta(days=len(df)//288)  # 288 = 5-min intervals per day
-                df.index = pd.date_range(start=start_date, periods=len(df), freq='5T')
+                start_date = pd.Timestamp.now() - pd.Timedelta(days=30)
+                df.index = pd.date_range(start=start_date, periods=len(df), freq='5min')
 
         # Convert to IST if timezone-aware
         import pytz
@@ -1154,10 +1163,13 @@ def get_model_predictions(model_name):
             predictions_data = []
             num_predictions = min(50, len(df))  # Last 50 data points
             
-            for i in range(-num_predictions, 0):
+            # Use tail to get last N records safely
+            recent_data = df.tail(num_predictions)
+            
+            for i in range(len(recent_data)):
                 try:
-                    current_price = df['Close'].iloc[i]
-                    prev_price = df['Close'].iloc[i-1] if i > -len(df) else current_price
+                    current_price = recent_data['Close'].iloc[i]
+                    prev_price = recent_data['Close'].iloc[i-1] if i > 0 else current_price
                     
                     # Generate prediction based on actual price movement
                     actual_direction = 1 if current_price > prev_price else 0
