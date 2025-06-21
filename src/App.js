@@ -7,7 +7,7 @@ import DataUpload from './pages/DataUpload';
 import ModelTraining from './pages/ModelTraining';
 import Predictions from './pages/Predictions';
 import Backtesting from './pages/Backtesting';
-import RealtimeData from './pages/RealtimeData';
+
 import DatabaseManager from './pages/DatabaseManager';
 
 function App() {
@@ -23,7 +23,7 @@ function App() {
               <Route path="/model-training" element={<ModelTraining />} />
               <Route path="/predictions" element={<Predictions />} />
               <Route path="/backtesting" element={<Backtesting />} />
-              <Route path="/realtime-data" element={<RealtimeData />} />
+              
               <Route path="/database" element={<DatabaseManager />} />
             </Routes>
           </main>

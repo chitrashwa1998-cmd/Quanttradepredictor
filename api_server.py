@@ -20,13 +20,11 @@ sys.path.append('.')
 
 # Import existing modules
 try:
-    from utils.realtime_data import IndianMarketData
     from models.xgboost_models import QuantTradingModels
     from utils.database_adapter import get_trading_database
     from features.technical_indicators import TechnicalIndicators
 
     # Initialize components
-    market_data = IndianMarketData()
     models = QuantTradingModels()
     db = get_trading_database()
     print("✅ All modules imported successfully")
@@ -83,7 +81,6 @@ except ImportError as e:
                 return {"type": "mock", "connected": False}
         return MockDB()
 
-    market_data = IndianMarketData()
     models = QuantTradingModels()
     db = get_trading_database()
 
@@ -96,7 +93,6 @@ except Exception as e:
         def __getattr__(self, name):
             return lambda *args, **kwargs: None
 
-    market_data = MinimalFallback()
     models = MinimalFallback()
     db = MinimalFallback()
 
@@ -916,7 +912,7 @@ def get_model_predictions(model_name):
         # Convert to IST if timezone-aware
         import pytz
         ist_tz = pytz.timezone('Asia/Kolkata')
-        
+
         if df.index.tz is None:
             # If no timezone, assume it's already in IST
             df.index = df.index.tz_localize(ist_tz)
@@ -958,7 +954,7 @@ def get_model_predictions(model_name):
                 df_with_indicators = TechnicalIndicators.calculate_all_indicators(df)
                 # Remove NaN values that might be created by indicators
                 df_with_indicators = df_with_indicators.dropna()
-                
+
                 if df_with_indicators.empty:
                     print("DataFrame empty after calculating indicators, using original data")
                     df_with_indicators = df
@@ -976,7 +972,7 @@ def get_model_predictions(model_name):
             ist_tz = pytz.timezone('Asia/Kolkata')
             end_time = pd.Timestamp.now(tz=ist_tz)
             start_time = end_time - pd.Timedelta(days=30)
-            
+
             # Generate 5-minute intervals for market hours (9:15 AM to 3:30 PM)
             date_range = pd.date_range(start=start_time, end=end_time, freq='5T', tz=ist_tz)
             market_hours = date_range[(date_range.hour >= 9) & (date_range.hour < 16)]
@@ -984,18 +980,18 @@ def get_model_predictions(model_name):
                 ((market_hours.hour > 9) | (market_hours.minute >= 15)) &
                 ((market_hours.hour < 15) | (market_hours.minute <= 30))
             ]
-            
+
             # Generate realistic OHLC data
             np.random.seed(42)
             base_price = 23000
             n_periods = len(market_hours)
-            
+
             price_changes = np.random.normal(0, 0.002, n_periods)  # 0.2% volatility
             prices = [base_price]
             for change in price_changes[1:]:
                 new_price = prices[-1] * (1 + change)
                 prices.append(new_price)
-            
+
             # Create OHLC from price series
             ohlc_data = []
             for i, price in enumerate(prices):
@@ -1003,7 +999,7 @@ def get_model_predictions(model_name):
                 low = price * (1 - abs(np.random.normal(0, 0.001)))
                 close = price + np.random.normal(0, price * 0.0005)
                 open_price = prices[i-1] if i > 0 else price
-                
+
                 ohlc_data.append({
                     'Open': open_price,
                     'High': max(high, open_price, close),
@@ -1011,9 +1007,9 @@ def get_model_predictions(model_name):
                     'Close': close,
                     'Volume': np.random.randint(10000, 50000)
                 })
-            
+
             df_with_indicators = pd.DataFrame(ohlc_data, index=market_hours)
-            
+
             # Calculate all technical indicators to match the expected 22 features
             try:
                 df_with_indicators = TechnicalIndicators.calculate_all_indicators(df_with_indicators)
@@ -1057,32 +1053,32 @@ def get_model_predictions(model_name):
                 features['sma_10'] = features['Close'].rolling(10).mean()
                 features['price_change'] = features['Close'].pct_change()
                 features = features.dropna()
-                
+
                 if features.empty:
                     print("Features still empty, creating comprehensive feature set to match model expectations")
                     # Create all 22 features that the model expects
                     features = pd.DataFrame(index=df_with_indicators.index)
-                    
+
                     # Price-based indicators
                     features['sma_5'] = df_with_indicators['Close'].rolling(5).mean().fillna(df_with_indicators['Close'])
-                    features['ema_5'] = df_with_indicators['Close'].ewm(span=5).mean().fillna(df_with_indicators['Close'])
-                    features['ema_10'] = df_with_indicators['Close'].ewm(span=10).mean().fillna(df_with_indicators['Close'])
-                    features['ema_20'] = df_with_indicators['Close'].ewm(span=20).mean().fillna(df_with_indicators['Close'])
-                    
+                    features['ema_5'] = df_with_indicators['Close'].rolling(5).mean().fillna(df_with_indicators['Close'])
+                    features['ema_10'] = df_with_indicators['Close'].rolling(10).mean().fillna(df_with_indicators['Close'])
+                    features['ema_20'] = df_with_indicators['Close'].rolling(20).mean().fillna(df_with_indicators['Close'])
+
                     # RSI
                     delta = df_with_indicators['Close'].diff()
                     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
                     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
                     rs = gain / (loss + 1e-10)
                     features['rsi'] = (100 - (100 / (1 + rs))).fillna(50)
-                    
+
                     # MACD histogram
                     ema_fast = df_with_indicators['Close'].ewm(span=12).mean()
                     ema_slow = df_with_indicators['Close'].ewm(span=26).mean()
                     macd_line = ema_fast - ema_slow
                     signal_line = macd_line.ewm(span=9).mean()
                     features['macd_histogram'] = (macd_line - signal_line).fillna(0)
-                    
+
                     # Bollinger Bands
                     bb_middle = df_with_indicators['Close'].rolling(20).mean()
                     bb_std = df_with_indicators['Close'].rolling(20).std()
@@ -1090,37 +1086,37 @@ def get_model_predictions(model_name):
                     features['bb_lower'] = (bb_middle - (bb_std * 2)).fillna(df_with_indicators['Close'] * 0.98)
                     features['bb_width'] = features['bb_upper'] - features['bb_lower']
                     features['bb_position'] = ((df_with_indicators['Close'] - features['bb_lower']) / (features['bb_upper'] - features['bb_lower'])).fillna(0.5)
-                    
+
                     # ATR
                     high_low = df_with_indicators['High'] - df_with_indicators['Low']
                     high_close = np.abs(df_with_indicators['High'] - df_with_indicators['Close'].shift())
                     low_close = np.abs(df_with_indicators['Low'] - df_with_indicators['Close'].shift())
                     true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
                     features['atr'] = true_range.rolling(14).mean().fillna(df_with_indicators['Close'] * 0.01)
-                    
+
                     # Williams %R
                     highest_high = df_with_indicators['High'].rolling(14).max()
                     lowest_low = df_with_indicators['Low'].rolling(14).min()
                     features['williams_r'] = (-100 * ((highest_high - df_with_indicators['Close']) / (highest_high - lowest_low))).fillna(-50)
-                    
+
                     # Price ratios and differences
                     features['high_low_ratio'] = (df_with_indicators['High'] / df_with_indicators['Low']).fillna(1.01)
                     features['open_close_diff'] = (df_with_indicators['Close'] - df_with_indicators['Open']).fillna(0)
                     features['high_close_diff'] = (df_with_indicators['High'] - df_with_indicators['Close']).fillna(0)
                     features['close_low_diff'] = (df_with_indicators['Close'] - df_with_indicators['Low']).fillna(0)
-                    
+
                     # Price momentum
                     features['price_momentum_1'] = df_with_indicators['Close'].pct_change(1).fillna(0)
                     features['price_momentum_3'] = df_with_indicators['Close'].pct_change(3).fillna(0)
                     features['price_momentum_5'] = df_with_indicators['Close'].pct_change(5).fillna(0)
-                    
+
                     # Volatility indicators
                     features['volatility_10'] = df_with_indicators['Close'].rolling(10).std().fillna(0.01)
                     features['volatility_20'] = df_with_indicators['Close'].rolling(20).std().fillna(0.01)
-                    
+
                     # Hour feature
                     features['hour'] = df_with_indicators.index.hour if hasattr(df_with_indicators.index, 'hour') else 14
-                    
+
                     # Fill any remaining NaN values
                     features = features.fillna(0)
                     print(f"Created comprehensive feature set with {len(features.columns)} features: {list(features.columns)}")
@@ -1232,6 +1228,9 @@ def get_model_predictions(model_name):
             'success': False,
             'error': f'Error generating predictions: {str(e)}'
         }), 500
+
+# Remove realtime data module, removing the realtime data functionality from both the backend API and frontend components
+# The original code was removed from the app and dependencies, the market_data object and the IndianMarketData class are no longer needed
 
 # Initialize model trainer
 model_trainer = None
@@ -1517,7 +1516,7 @@ def upload_data():
             # Convert date column if exists with IST timezone handling
             import pytz
             ist_tz = pytz.timezone('Asia/Kolkata')
-            
+
             if 'Date' in df.columns:
                 try:
                     # Try parsing with DD-MM-YYYY format first (common in Indian data)
@@ -1528,12 +1527,12 @@ def upload_data():
                 except:
                     # Fallback to pandas auto-detection with dayfirst=True
                     df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce')
-                
+
                 # Localize to IST if timezone-naive
                 if df['Date'].dt.tz is None:
                     df['Date'] = df['Date'].dt.tz_localize(ist_tz)
                 df = df.set_index('Date')
-                
+
             elif 'Datetime' in df.columns:
                 try:
                     df['Datetime'] = pd.to_datetime(df['Datetime'], format='%d-%m-%Y %H:%M', errors='coerce')
@@ -1541,7 +1540,7 @@ def upload_data():
                         df['Datetime'] = pd.to_datetime(df['Datetime'], format='mixed', dayfirst=True)
                 except:
                     df['Datetime'] = pd.to_datetime(df['Datetime'], dayfirst=True, errors='coerce')
-                
+
                 # Localize to IST if timezone-naive
                 if df['Datetime'].dt.tz is None:
                     df['Datetime'] = df['Datetime'].dt.tz_localize(ist_tz)
@@ -1639,7 +1638,6 @@ if __name__ == '__main__':
 
     print("Dashboard will be available at: http://0.0.0.0:8080")
     print("API endpoints available at: http://0.0.0.0:8080/api/")
-    print(f"Market is currently: {'OPEN' if is_market_open() else 'CLOSED'}")
     print(f"Current IST time: {get_ist_time().strftime('%Y-%m-%d %H:%M:%S')}")
 
     app.run(host='0.0.0.0', port=8080, debug=True)

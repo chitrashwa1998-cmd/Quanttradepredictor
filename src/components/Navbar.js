@@ -11,7 +11,7 @@ const Navbar = () => {
     { path: '/model-training', label: '🔬 MODEL TRAINING' },
     { path: '/predictions', label: '🎯 PREDICTIONS' },
     { path: '/backtesting', label: '📈 BACKTESTING' },
-    { path: '/realtime-data', label: '📊 REALTIME DATA' },
+    
     { path: '/database', label: '💾 DATABASE' }
   ];
 
