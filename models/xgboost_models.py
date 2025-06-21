@@ -88,10 +88,10 @@ class QuantTradingModels:
         """Prepare features for model training."""
         if df.empty:
             raise ValueError("Input DataFrame is empty")
-        
+
         # Remove any rows with NaN values
         df_clean = df.dropna()
-        
+
         if df_clean.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
 
@@ -105,21 +105,21 @@ class QuantTradingModels:
             missing_features = [col for col in self.feature_names if col not in df_clean.columns]
             if missing_features:
                 raise ValueError(f"Missing required features: {missing_features}. Available features: {list(df_clean.columns)}")
-            
+
             # Use the same feature order as training
             feature_cols = self.feature_names
         else:
             # First time feature preparation
             self.feature_names = feature_cols
-        
+
         if not feature_cols:
             raise ValueError("No feature columns found. Make sure technical indicators are calculated.")
-            
+
         result_df = df_clean[feature_cols]
-        
+
         if result_df.empty:
             raise ValueError("Feature DataFrame is empty after column selection")
-            
+
         return result_df
 
     def create_targets(self, df: pd.DataFrame) -> Dict[str, pd.Series]:
@@ -130,7 +130,7 @@ class QuantTradingModels:
         # Look at next 1-2 candles for quick scalping moves
         future_return_1 = df['Close'].shift(-1) / df['Close'] - 1
         future_return_2 = df['Close'].shift(-2) / df['Close'] - 1
-        
+
         # Use smaller threshold for scalping (0.02% minimum move)
         scalping_threshold = 0.0002
         direction_signal = ((future_return_1 > scalping_threshold) | 
@@ -141,7 +141,7 @@ class QuantTradingModels:
         # Use ATR-based magnitude for better scalping signals
         high_low_pct = (df['High'] - df['Low']) / df['Close']
         atr_5 = high_low_pct.rolling(5).mean()
-        
+
         # High magnitude when ATR is above 75th percentile
         magnitude_threshold = atr_5.quantile(0.75)
         targets['magnitude'] = (atr_5 > magnitude_threshold).astype(int).fillna(0)
@@ -151,10 +151,10 @@ class QuantTradingModels:
         for i in range(1, 4):  # Look ahead 1-3 periods for scalping
             future_return = df['Close'].shift(-i) / df['Close'] - 1
             future_returns_scalp.append(future_return)
-        
+
         future_returns_df = pd.concat(future_returns_scalp, axis=1)
         max_return_scalp = future_returns_df.max(axis=1)
-        
+
         # Lower threshold for scalping profits (0.05% minimum)
         scalping_profit_threshold = 0.0005
         targets['profit_prob'] = (max_return_scalp > scalping_profit_threshold).astype(int)
@@ -163,7 +163,7 @@ class QuantTradingModels:
         returns_1min = df['Close'].pct_change()
         vol_short = returns_1min.rolling(5).std()  # 5-period volatility
         vol_medium = returns_1min.rolling(20).std()  # 20-period baseline
-        
+
         # High volatility when short-term vol is 1.5x medium-term
         vol_ratio = vol_short / (vol_medium + 1e-8)
         targets['volatility'] = (vol_ratio > 1.5).astype(int).fillna(0)
@@ -171,7 +171,7 @@ class QuantTradingModels:
         # 5. Trend strength for scalping - fast EMAs
         ema_fast = df['Close'].ewm(span=5).mean()   # 5-period EMA
         ema_slow = df['Close'].ewm(span=13).mean()  # 13-period EMA
-        
+
         # Trend when EMAs are diverging significantly
         ema_spread_pct = abs(ema_fast - ema_slow) / df['Close']
         trend_threshold = ema_spread_pct.quantile(0.70)  # Top 30% of spreads
@@ -184,35 +184,35 @@ class QuantTradingModels:
         losses = (-price_change.where(price_change < 0, 0)).rolling(7).mean()
         rs = gains / (losses + 1e-10)
         rsi_fast = 100 - (100 / (1 + rs))
-        
+
         # More sensitive reversal zones for scalping
         reversal_oversold = rsi_fast < 25  # More sensitive than 30
         reversal_overbought = rsi_fast > 75  # More sensitive than 70
-        
+
         # Add Bollinger Band squeeze for reversal confirmation
         bb_middle = df['Close'].rolling(10).mean()
         bb_std = df['Close'].rolling(10).std()
         bb_upper = bb_middle + (bb_std * 1.5)  # Tighter bands for scalping
         bb_lower = bb_middle - (bb_std * 1.5)
-        
+
         price_at_bands = (df['Close'] <= bb_lower) | (df['Close'] >= bb_upper)
         targets['reversal'] = ((reversal_oversold | reversal_overbought) & price_at_bands).astype(int)
-        
+
         # 7. Scalping trading signals - multi-factor approach
         # Fast momentum for scalping
         momentum_fast = (df['Close'] - df['Close'].shift(3)) / df['Close'].shift(3)
         momentum_strong = abs(momentum_fast) > 0.001  # 0.1% momentum minimum
-        
+
         # Price above/below fast EMA
         price_direction = df['Close'] > ema_fast
-        
+
         # Volume confirmation (if available)
         if 'Volume' in df.columns:
             vol_avg = df['Volume'].rolling(10).mean()
             volume_surge = df['Volume'] > vol_avg * 1.2  # 20% above average
         else:
             volume_surge = pd.Series(True, index=df.index)  # Default to True if no volume
-        
+
         # Combine signals for scalping entry
         buy_signal = price_direction & momentum_strong & volume_surge & (rsi_fast < 65)
         targets['trading_signal'] = buy_signal.astype(int)
@@ -221,12 +221,12 @@ class QuantTradingModels:
         for target_name, target_series in targets.items():
             # Remove NaN values
             clean_target = target_series.dropna()
-            
+
             # Ensure minimum distribution for scalping (at least 10% of minority class)
             if len(clean_target) > 0:
                 unique_vals, counts = np.unique(clean_target, return_counts=True)
                 total_samples = len(clean_target)
-                
+
                 # If distribution is too skewed, balance it for scalping
                 if len(unique_vals) == 2:
                     minority_pct = min(counts) / total_samples
@@ -234,19 +234,19 @@ class QuantTradingModels:
                         # Randomly flip some majority predictions to balance
                         majority_class = unique_vals[np.argmax(counts)]
                         minority_class = unique_vals[np.argmin(counts)]
-                        
+
                         majority_indices = clean_target[clean_target == majority_class].index
                         flip_count = int(total_samples * 0.15) - min(counts)  # Target 15% minority
-                        
+
                         if flip_count > 0:
                             np.random.seed(42 + hash(target_name) % 100)
                             flip_indices = np.random.choice(majority_indices, 
                                                           size=min(flip_count, len(majority_indices)), 
                                                           replace=False)
                             clean_target.loc[flip_indices] = minority_class
-                
+
                 targets[target_name] = clean_target
-                
+
                 # Print final distribution
                 unique_vals, counts = np.unique(clean_target, return_counts=True)
                 print(f"Scalping target '{target_name}' distribution: {dict(zip(unique_vals, counts))}")
@@ -273,12 +273,12 @@ class QuantTradingModels:
         if task_type == 'classification':
             # Debug: Check target distribution before filtering
             print(f"Target distribution before filtering for {model_name}: {y_clean.value_counts().to_dict()}")
-            
+
             # Remove any invalid target values
             valid_targets = ~np.isinf(y_clean) & (y_clean >= 0) & ~np.isnan(y_clean)
             X_clean = X_clean[valid_targets]
             y_clean = y_clean[valid_targets]
-            
+
             # Debug: Check target distribution after filtering
             print(f"Target distribution after filtering for {model_name}: {y_clean.value_counts().to_dict()}")
 
@@ -287,7 +287,7 @@ class QuantTradingModels:
             if len(unique_targets) < 2:
                 print(f"ERROR: Only {len(unique_targets)} unique target classes found for {model_name}: {unique_targets}")
                 raise ValueError(f"Insufficient target classes for {model_name}. Found classes: {unique_targets}")
-            
+
             # Ensure each class has at least 10 samples for meaningful training
             min_samples_per_class = 10
             if np.min(counts) < min_samples_per_class:
@@ -542,7 +542,7 @@ class QuantTradingModels:
         self._save_models_to_database()
 
         status_text.text("All models trained and saved!")
-        
+
         # Return comprehensive results with success status
         return {
             'success': True,
@@ -566,14 +566,14 @@ class QuantTradingModels:
         # Validate input features
         if X.empty:
             raise ValueError("Input DataFrame is empty")
-            
+
         missing_features = [col for col in self.feature_names if col not in X.columns]
         if missing_features:
             raise ValueError(f"Missing required features: {missing_features}. Expected: {self.feature_names}, Got: {list(X.columns)}")
 
         # Prepare features
         X_features = X[self.feature_names]
-        
+
         if X_features.empty:
             raise ValueError("Feature DataFrame is empty after column selection")
 
@@ -591,36 +591,36 @@ class QuantTradingModels:
 
         # Optimize predictions for 5-minute scalping with balanced distribution
         n_samples = len(X_scaled)
-        
+
         # Scalping-optimized prediction logic based on model type
         if model_name == 'direction':
             # For direction: Create 60-40 distribution favoring slight bullish bias for scalping
             predictions = self._scalping_direction_predictions(X_scaled, n_samples)
-            
+
         elif model_name == 'profit_prob':
             # For profit probability: 30-70 distribution (30% profitable opportunities)
             predictions = self._scalping_profit_predictions(X_scaled, n_samples)
-            
+
         elif model_name == 'reversal':
             # For reversal: 15-85 distribution (15% reversal signals)
             predictions = self._scalping_reversal_predictions(X_scaled, n_samples)
-            
+
         elif model_name == 'magnitude':
             # For magnitude: 45-55 distribution (balanced high/low magnitude)
             predictions = self._scalping_magnitude_predictions(X_scaled, n_samples)
-            
+
         elif model_name == 'volatility':
             # For volatility: 25-75 distribution (25% high volatility periods)
             predictions = self._scalping_volatility_predictions(X_scaled, n_samples)
-            
+
         elif model_name == 'trend_sideways':
             # For trend: 40-60 distribution (40% trending, 60% sideways)
             predictions = self._scalping_trend_predictions(X_scaled, n_samples)
-            
+
         elif model_name == 'trading_signal':
             # For trading signals: 35-65 distribution (35% buy signals)
             predictions = self._scalping_signal_predictions(X_scaled, n_samples)
-            
+
         else:
             # Fallback to original predictions
             if model_info['task_type'] == 'classification':
@@ -632,7 +632,7 @@ class QuantTradingModels:
 
         # Generate scalping-optimized confidence scores
         confidence_scores = self._generate_scalping_confidence(predictions, model_name, n_samples)
-        
+
         # Create probability matrix optimized for scalping
         probabilities = np.zeros((n_samples, 2))
         for i in range(n_samples):
@@ -655,7 +655,7 @@ class QuantTradingModels:
         # Use feature-based logic for more realistic distribution
         feature_sum = np.sum(X_scaled, axis=1)
         feature_mean = np.mean(feature_sum)
-        
+
         predictions = np.zeros(n_samples, dtype=int)
         for i in range(n_samples):
             # Base probability on feature values with scalping bias
@@ -663,7 +663,7 @@ class QuantTradingModels:
                 predictions[i] = 1
             else:
                 predictions[i] = np.random.choice([0, 1], p=[0.4, 0.6])
-        
+
         return predictions
 
     def _scalping_profit_predictions(self, X_scaled, n_samples):
@@ -705,23 +705,22 @@ class QuantTradingModels:
     def _generate_scalping_confidence(self, predictions, model_name, n_samples):
         """Generate realistic confidence scores for scalping (0.55-0.85 range)."""
         np.random.seed(hash(model_name) % 100)
-        
+
         # Scalping confidence ranges by model type
         confidence_ranges = {
             'direction': (0.55, 0.75),      # Lower confidence for direction
             'profit_prob': (0.65, 0.85),    # Higher confidence for profit
-            'reversal': (0.70, 0.90),       # High confidence for reversals
-            'magnitude': (0.60, 0.80),      # Medium confidence for magnitude
+            'reversal': (0.70, 0.90),       # High confidence for reversals            'magnitude': (0.60, 0.80),      # Medium confidence for magnitude
             'volatility': (0.65, 0.85),     # Higher confidence for volatility
             'trend_sideways': (0.55, 0.75), # Lower confidence for trend
             'trading_signal': (0.60, 0.82)  # Medium-high confidence for signals
         }
-        
+
         min_conf, max_conf = confidence_ranges.get(model_name, (0.60, 0.80))
-        
+
         # Generate varied confidence scores
         base_confidence = np.random.uniform(min_conf, max_conf, n_samples)
-        
+
         # Add some pattern-based variation
         for i in range(n_samples):
             # Higher confidence for consistent predictions
@@ -729,12 +728,12 @@ class QuantTradingModels:
                 recent_consistency = np.sum(predictions[max(0, i-3):i] == predictions[i])
                 if recent_consistency >= 2:
                     base_confidence[i] = min(base_confidence[i] * 1.1, 0.95)
-            
+
             # Lower confidence for isolated predictions
             if i > 0 and i < n_samples - 1:
                 if predictions[i] != predictions[i-1] and predictions[i] != predictions[i+1]:
                     base_confidence[i] = max(base_confidence[i] * 0.9, 0.5)
-        
+
         return np.clip(base_confidence, 0.5, 0.95)
 
     def get_feature_importance(self, model_name: str) -> Dict[str, float]:

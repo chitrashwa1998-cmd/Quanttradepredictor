@@ -137,7 +137,7 @@ const Predictions = () => {
     const data = predictions.predictions;
     console.log(`Creating chart for ${selectedModel} with ${data.length} data points`);
 
-    // Enhanced date formatting with validation
+    // Enhanced date formatting with IST timezone handling
     const formatDate = (dateStr) => {
       try {
         // Handle various date formats
@@ -145,26 +145,44 @@ const Predictions = () => {
           return new Date().toISOString();
         }
         
+        let date;
+        
+        // If it's already a valid datetime string (YYYY-MM-DD HH:MM:SS)
+        if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
+          // Parse as IST time and convert to UTC for chart
+          date = new Date(dateStr + ' +05:30'); // Add IST offset
+          return date.toISOString();
+        }
+        
         // If it's already a valid ISO string
         if (typeof dateStr === 'string' && dateStr.includes('T')) {
           return new Date(dateStr).toISOString();
         }
         
-        // If it's a numeric timestamp
+        // If it's a numeric index (old format)
         if (!isNaN(dateStr)) {
-          const timestamp = parseInt(dateStr);
-          // If it looks like a unix timestamp (less than current time in ms)
-          if (timestamp < Date.now()) {
-            return new Date(timestamp * 1000).toISOString();
-          }
+          const index = parseInt(dateStr);
+          // Create sequential 5-minute intervals from market start
+          const baseDate = new Date();
+          baseDate.setHours(9, 15, 0, 0); // 9:15 AM IST market start
+          // Convert to UTC by subtracting IST offset (5.5 hours)
+          baseDate.setHours(baseDate.getHours() - 5);
+          baseDate.setMinutes(baseDate.getMinutes() - 30);
+          
+          date = new Date(baseDate.getTime() + (index * 5 * 60 * 1000)); // Add 5-minute intervals
+          return date.toISOString();
         }
         
-        const date = new Date(dateStr);
+        // Fallback parsing
+        date = new Date(dateStr);
         if (isNaN(date.getTime())) {
-          // Fallback: create sequential dates
+          // Create sequential dates based on position in array
           const now = new Date();
-          return new Date(now.getTime() - (data.length - data.indexOf(data.find(d => d.date === dateStr))) * 5 * 60 * 1000).toISOString();
+          const dataIndex = data.findIndex(d => d.date === dateStr);
+          const minutesBack = (data.length - dataIndex) * 5; // 5-minute intervals
+          return new Date(now.getTime() - (minutesBack * 60 * 1000)).toISOString();
         }
+        
         return date.toISOString();
       } catch (e) {
         console.warn('Date formatting error:', e, 'for date:', dateStr);
@@ -391,10 +409,21 @@ const Predictions = () => {
                       
                       let date;
                       
-                      // If it's a number, treat as timestamp
+                      // If it's a number, treat as index - create proper date
                       if (!isNaN(dateStr)) {
-                        const timestamp = parseInt(dateStr);
-                        date = new Date(timestamp < 1e10 ? timestamp * 1000 : timestamp);
+                        const index = parseInt(dateStr);
+                        // Assume 5-minute intervals for scalping
+                        const baseDate = new Date();
+                        baseDate.setHours(9, 15, 0, 0); // Market start time 9:15 AM
+                        date = new Date(baseDate.getTime() + (index * 5 * 60 * 1000)); // Add 5-minute intervals
+                      } else if (typeof dateStr === 'string') {
+                        // If it's already a formatted date string
+                        if (dateStr.includes('-') && dateStr.includes(':')) {
+                          // Format: YYYY-MM-DD HH:MM:SS
+                          date = new Date(dateStr);
+                        } else {
+                          date = new Date(dateStr);
+                        }
                       } else {
                         date = new Date(dateStr);
                       }
@@ -403,8 +432,8 @@ const Predictions = () => {
                         return `Invalid: ${dateStr}`;
                       }
                       
-                      // Format to IST
-                      return date.toLocaleString('en-IN', {
+                      // Format to IST with proper market time context
+                      const istTime = date.toLocaleString('en-IN', {
                         timeZone: 'Asia/Kolkata',
                         year: 'numeric',
                         month: '2-digit',
@@ -412,7 +441,23 @@ const Predictions = () => {
                         hour: '2-digit',
                         minute: '2-digit',
                         hour12: false
-                      }) + ' IST';
+                      });
+                      
+                      // Add market session indicator
+                      const hour = date.getHours();
+                      const minute = date.getMinutes();
+                      const timeInMinutes = hour * 60 + minute;
+                      const marketStart = 9 * 60 + 15; // 9:15 AM
+                      const marketEnd = 15 * 60 + 30;  // 3:30 PM
+                      
+                      let sessionIndicator = '';
+                      if (timeInMinutes >= marketStart && timeInMinutes <= marketEnd) {
+                        sessionIndicator = ' 🟢';
+                      } else {
+                        sessionIndicator = ' 🔴';
+                      }
+                      
+                      return istTime + ' IST' + sessionIndicator;
                     } catch (e) {
                       console.warn('Date formatting error:', e, 'for date:', dateStr);
                       return `Error: ${dateStr}`;

@@ -903,11 +903,34 @@ def get_model_predictions(model_name):
                 'error': 'No data available for predictions'
             }), 404
 
-        # Filter data based on period
+        # Ensure proper datetime index for IST conversion
+        if not isinstance(df.index, pd.DatetimeIndex):
+            try:
+                df.index = pd.to_datetime(df.index)
+            except:
+                # Create proper 5-minute intervals starting from a reasonable date
+                start_date = pd.Timestamp.now() - pd.Timedelta(days=len(df)//288)  # 288 = 5-min intervals per day
+                df.index = pd.date_range(start=start_date, periods=len(df), freq='5T')
+
+        # Convert to IST if timezone-aware
+        import pytz
+        ist_tz = pytz.timezone('Asia/Kolkata')
+        
+        if df.index.tz is None:
+            # If no timezone, assume it's already in IST
+            df.index = df.index.tz_localize(ist_tz)
+        else:
+            # Convert to IST
+            df.index = df.index.tz_convert(ist_tz)
+
+        # Filter data based on period (for 5-minute scalping)
+        current_time = pd.Timestamp.now(tz=ist_tz)
         if period == '30d':
-            df = df.tail(30 * 24 * 12)  # Assuming 5-min data, 30 days
+            start_time = current_time - pd.Timedelta(days=30)
+            df = df[df.index >= start_time]
         elif period == '90d':
-            df = df.tail(90 * 24 * 12)  # 90 days
+            start_time = current_time - pd.Timedelta(days=90)
+            df = df[df.index >= start_time]
         # For 'all', use all data
 
         # Load the trained model
@@ -953,7 +976,7 @@ def get_model_predictions(model_name):
                 'error': f'Failed to generate predictions for {model_name}: {str(e)}'
             }), 500
 
-        # Prepare response data with proper date formatting
+        # Prepare response data with proper IST date formatting
         prediction_data = []
 
         # Align indices and create prediction records
@@ -968,21 +991,31 @@ def get_model_predictions(model_name):
             idx = common_index[start_idx + i]
             pred_idx = start_idx + i
 
-            # Properly format the date
-            if hasattr(idx, 'isoformat'):
-                date_str = idx.isoformat()
-            elif hasattr(idx, 'strftime'):
-                date_str = idx.strftime('%Y-%m-%d %H:%M:%S')
-            else:
-                # If it's a numeric index, create a proper datetime
-                try:
-                    import pandas as pd
-                    from datetime import datetime, timedelta
-                    base_date = datetime.now() - timedelta(days=num_predictions)
-                    actual_date = base_date + timedelta(minutes=i*5)  # Assuming 5-min intervals
-                    date_str = actual_date.isoformat()
-                except:
-                    date_str = str(idx)
+            # Properly format the IST date
+            try:
+                if hasattr(idx, 'tz_convert'):
+                    # Already timezone-aware, convert to IST
+                    ist_time = idx.tz_convert(ist_tz)
+                    date_str = ist_time.strftime('%Y-%m-%d %H:%M:%S')
+                elif hasattr(idx, 'tz_localize'):
+                    # Timezone-naive, localize to IST
+                    ist_time = idx.tz_localize(ist_tz)
+                    date_str = ist_time.strftime('%Y-%m-%d %H:%M:%S')
+                elif hasattr(idx, 'strftime'):
+                    # Already a datetime, format directly
+                    date_str = idx.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    # Convert to proper datetime
+                    dt = pd.to_datetime(idx)
+                    if dt.tz is None:
+                        dt = dt.tz_localize(ist_tz)
+                    else:
+                        dt = dt.tz_convert(ist_tz)
+                    date_str = dt.strftime('%Y-%m-%d %H:%M:%S')
+            except Exception as date_error:
+                print(f"Date formatting error for {idx}: {date_error}")
+                # Fallback to original index as string
+                date_str = str(idx)
 
             record = {
                 'date': date_str,
@@ -1014,6 +1047,9 @@ def get_model_predictions(model_name):
             'up_predictions': up_predictions,
             'down_predictions': down_predictions,
             'predictions': prediction_data,
+            'data_timeframe': '5-minute intervals',
+            'timezone': 'Asia/Kolkata (IST)',
+            'market_hours': '09:15 - 15:30 IST',
             'timestamp': datetime.now().isoformat()
         })
 
@@ -1307,7 +1343,10 @@ def upload_data():
                 print(f"Renamed columns: {column_mapping}")
                 print(f"New columns: {list(df.columns)}")
 
-            # Convert date column if exists
+            # Convert date column if exists with IST timezone handling
+            import pytz
+            ist_tz = pytz.timezone('Asia/Kolkata')
+            
             if 'Date' in df.columns:
                 try:
                     # Try parsing with DD-MM-YYYY format first (common in Indian data)
@@ -1318,7 +1357,12 @@ def upload_data():
                 except:
                     # Fallback to pandas auto-detection with dayfirst=True
                     df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce')
+                
+                # Localize to IST if timezone-naive
+                if df['Date'].dt.tz is None:
+                    df['Date'] = df['Date'].dt.tz_localize(ist_tz)
                 df = df.set_index('Date')
+                
             elif 'Datetime' in df.columns:
                 try:
                     df['Datetime'] = pd.to_datetime(df['Datetime'], format='%d-%m-%Y %H:%M', errors='coerce')
@@ -1326,6 +1370,10 @@ def upload_data():
                         df['Datetime'] = pd.to_datetime(df['Datetime'], format='mixed', dayfirst=True)
                 except:
                     df['Datetime'] = pd.to_datetime(df['Datetime'], dayfirst=True, errors='coerce')
+                
+                # Localize to IST if timezone-naive
+                if df['Datetime'].dt.tz is None:
+                    df['Datetime'] = df['Datetime'].dt.tz_localize(ist_tz)
                 df = df.set_index('Datetime')
 
             # Ensure numeric columns
