@@ -42,27 +42,22 @@ class DatabaseAdapter:
     def load_ohlc_data(self, dataset_name: str = "main_dataset"):
         """Load OHLC data from database"""
         try:
-            if self.db.connection_type == "postgresql":
-                # First try to load the specified dataset
-                data = self.db.postgres_db.load_ohlc_data(dataset_name)
+            # Since we're using PostgreSQL exclusively, call load_ohlc_data directly
+            data = self.db.load_ohlc_data(dataset_name)
 
-                # If no data found and looking for main_dataset, try to find any available dataset
-                if (data is None or len(data) == 0) and dataset_name == "main_dataset":
-                    # Get list of available datasets
-                    db_info = self.db.postgres_db.get_database_info()
-                    if db_info and 'datasets' in db_info and db_info['datasets']:
-                        # Use the most recent uploaded dataset
-                        available_datasets = db_info['datasets']
-                        latest_dataset = max(available_datasets.keys(), key=lambda x: available_datasets[x].get('last_updated', ''))
+            # If no data found and looking for main_dataset, try to find any available dataset
+            if (data is None or len(data) == 0) and dataset_name == "main_dataset":
+                # Get list of available datasets
+                db_info = self.db.get_database_info()
+                if db_info and 'datasets' in db_info and db_info['datasets']:
+                    # Use the most recent uploaded dataset
+                    available_datasets = db_info['datasets']
+                    if available_datasets:
+                        latest_dataset = available_datasets[0]['name']  # datasets are sorted by updated_at DESC
                         print(f"Main dataset not found, loading latest dataset: {latest_dataset}")
-                        data = self.db.postgres_db.load_ohlc_data(latest_dataset)
+                        data = self.db.load_ohlc_data(latest_dataset)
 
-                return data
-            elif self.db.connection_type == "sqlite":
-                return self.db.sqlite_db.load_ohlc_data(dataset_name)
-            else:
-                print("No database connection available")
-                return None
+            return data
         except Exception as e:
             print(f"Error loading OHLC data: {e}")
             return None
@@ -116,13 +111,8 @@ class DatabaseAdapter:
     def clear_all_data(self) -> bool:
         """Clear all data from database"""
         try:
-            if self.db.connection_type == "postgresql":
-                return self.db.postgres_db.clear_all_data()
-            elif self.db.connection_type == "sqlite":
-                return self.db.sqlite_db.clear_all_data()
-            else:
-                print("No database connection available")
-                return False
+            # Since we're using PostgreSQL exclusively, call clear_all_data directly
+            return self.db.clear_all_data()
         except Exception as e:
             print(f"Error clearing data: {e}")
             return False
@@ -130,28 +120,17 @@ class DatabaseAdapter:
     def create_main_dataset_from_latest(self):
         """Create main_dataset from the latest uploaded dataset"""
         try:
-            if self.db.connection_type == "postgresql":
-                # Get latest uploaded dataset
-                db_info = self.db.postgres_db.get_database_info()
-                if db_info and 'datasets' in db_info and db_info['datasets']:
-                    datasets = db_info['datasets']
-                    latest_dataset = max(datasets.keys(), key=lambda x: datasets[x].get('last_updated', ''))
-
-                    # Copy data to main_dataset
-                    conn = self.db.postgres_db.get_connection()
-                    if conn:
-                        cursor = conn.cursor()
-                        # First delete existing main_dataset
-                        cursor.execute("DELETE FROM ohlc_data WHERE dataset_name = 'main_dataset'")
-                        # Copy latest dataset to main_dataset
-                        cursor.execute("""
-                            INSERT INTO ohlc_data (datetime, open, high, low, close, volume, dataset_name)
-                            SELECT datetime, open, high, low, close, volume, 'main_dataset'
-                            FROM ohlc_data WHERE dataset_name = %s
-                        """, [latest_dataset])
-                        conn.commit()
-                        cursor.close()
-                        conn.close()
+            # Get latest uploaded dataset
+            datasets = self.get_dataset_list()
+            if datasets:
+                latest_dataset = datasets[0]['name']  # datasets are sorted by updated_at DESC
+                
+                # Load the latest dataset
+                data = self.db.load_ohlc_data(latest_dataset)
+                if data is not None:
+                    # Save it as main_dataset
+                    success = self.db.save_ohlc_data(data, "main_dataset")
+                    if success:
                         print(f"Created main_dataset from {latest_dataset}")
                         return True
             return False
