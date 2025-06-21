@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Unified Trading Dashboard"
+runButton = "Full Trading Dashboard"
 
 [[workflows.workflow]]
 name = "React Development Server"
@@ -120,19 +120,6 @@ args = "python api_server.py"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "PORT=3000 DANGEROUSLY_DISABLE_HOST_CHECK=true npm start"
-
-[[workflows.workflow]]
-name = "Unified Trading Dashboard"
-author = 40743738
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run build"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python api_server.py"
 
 [[ports]]
 localPort = 3000

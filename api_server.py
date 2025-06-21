@@ -14,6 +14,7 @@ import pytz
 import numpy as np
 import pandas as pd
 import io
+from flask import Response
 
 # Add current directory to path for imports
 sys.path.append('.')
@@ -823,8 +824,8 @@ def get_data_summary():
             'error': 'Data summary unavailable',
             'details': str(e),
             'data': {
-                'total_rows': ```python
-0,
+```python
+                'total_rows': 0,
                 'date_range': {'start': 'N/A', 'end': 'N/A'},
                 'columns': [],
                 'latest_price': 0,
