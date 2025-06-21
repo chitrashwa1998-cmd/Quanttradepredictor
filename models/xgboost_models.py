@@ -132,8 +132,8 @@ class QuantTradingModels:
 
         # 2. Magnitude regression (continuous price movement magnitude)
         abs_return = np.abs(future_return_1)
-        # Use raw absolute returns as continuous regression target
-        targets['magnitude'] = abs_return
+        # Use raw absolute returns as continuous regression target, cleaned of NaNs
+        targets['magnitude'] = abs_return.fillna(0.001)  # Fill NaN with small positive value
 
         # 3. Multi-period profit probability (next 3 periods) - More realistic
         future_returns_3 = []
@@ -151,8 +151,8 @@ class QuantTradingModels:
         # 4. Volatility regression (continuous volatility measurement)
         returns = df['Close'].pct_change()
         current_vol = returns.rolling(20).std()
-        # Use raw volatility values as continuous regression target
-        targets['volatility'] = current_vol
+        # Use raw volatility values as continuous regression target, cleaned of NaNs
+        targets['volatility'] = current_vol.fillna(0.01)  # Fill NaN with reasonable volatility value
 
         # 5. Trend strength detection (simple EMA-based approach)
         ema_short = df['Close'].ewm(span=8).mean()
