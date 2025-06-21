@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Project"
+runButton = "API Server"
 
 [[workflows.workflow]]
 name = "React Development Server"
@@ -85,6 +85,15 @@ author = "agent"
 task = "shell.exec"
 args = "PORT=3000 DANGEROUSLY_DISABLE_HOST_CHECK=true npx craco start"
 waitForPort = 3000
+
+[[workflows.workflow]]
+name = "API Server"
+author = 40743738
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python api_server.py"
 
 [[ports]]
 localPort = 3000

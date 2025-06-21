@@ -829,8 +829,7 @@ def get_models_status():
                     # For regression models, use 1/rmse as a proxy for accuracy
                     accuracy = 1 / (1 + info['metrics']['rmse'])
 
-            formatted_```python
-models[model_name] = {
+            formatted_models[model_name] = {
                 'name': model_name.replace('_', ' ').title(),
                 'accuracy': accuracy,
                 'task_type': info.get('task_type', 'classification'),
