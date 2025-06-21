@@ -180,9 +180,16 @@ class QuantTradingModels:
         high_low_pct = (df['High'] - df['Low']) / df['Close']
         atr_5 = high_low_pct.rolling(5).mean()
 
-        # High magnitude when ATR is above 75th percentile
-        magnitude_threshold = atr_5.quantile(0.75)
-        targets['magnitude'] = (atr_5 > magnitude_threshold).astype(int).fillna(0)
+        # Use dynamic threshold for better distribution
+        magnitude_threshold = atr_5.quantile(0.60)  # Lower threshold for more balanced distribution
+        magnitude_signal = (atr_5 > magnitude_threshold).astype(int)
+        
+        # Ensure minimum distribution balance
+        if magnitude_signal.sum() < len(magnitude_signal) * 0.2:
+            magnitude_threshold = atr_5.quantile(0.50)
+            magnitude_signal = (atr_5 > magnitude_threshold).astype(int)
+        
+        targets['magnitude'] = magnitude_signal.fillna(0)
 
         # 3. Scalping profit probability - next 2-3 candles (10-15 min window)
         future_returns_scalp = []
@@ -202,9 +209,17 @@ class QuantTradingModels:
         vol_short = returns_1min.rolling(5).std()  # 5-period volatility
         vol_medium = returns_1min.rolling(20).std()  # 20-period baseline
 
-        # High volatility when short-term vol is 1.5x medium-term
+        # Use dynamic volatility threshold for better distribution
         vol_ratio = vol_short / (vol_medium + 1e-8)
-        targets['volatility'] = (vol_ratio > 1.5).astype(int).fillna(0)
+        vol_threshold = vol_ratio.quantile(0.70)  # Top 30% as high volatility
+        volatility_signal = (vol_ratio > vol_threshold).astype(int)
+        
+        # Ensure minimum distribution balance
+        if volatility_signal.sum() < len(volatility_signal) * 0.15:
+            vol_threshold = vol_ratio.quantile(0.60)
+            volatility_signal = (vol_ratio > vol_threshold).astype(int)
+        
+        targets['volatility'] = volatility_signal.fillna(0)
 
         # 5. Trend strength for scalping - fast EMAs
         ema_fast = df['Close'].ewm(span=5).mean()   # 5-period EMA
@@ -385,29 +400,26 @@ class QuantTradingModels:
                 n_jobs=-1
             )
 
-            # CatBoost Classifier - Skip for problematic models
-            if model_name not in ['magnitude', 'volatility']:
-                catboost_model = CatBoostClassifier(
-                    iterations=100,
-                    depth=6,
-                    learning_rate=0.1,
-                    random_seed=random_state,
-                    verbose=False,
-                    allow_writing_files=False
-                )
-                estimators_list = [
-                    ('xgboost', xgb_model),
-                    ('catboost', catboost_model),
-                    ('random_forest', rf_model)
-                ]
-            else:
-                # Use only XGBoost and Random Forest for magnitude and volatility
-                estimators_list = [
-                    ('xgboost', xgb_model),
-                    ('random_forest', rf_model)
-                ]
+            # CatBoost Classifier with better handling for edge cases
+            catboost_model = CatBoostClassifier(
+                iterations=100,
+                depth=6,
+                learning_rate=0.1,
+                random_seed=random_state,
+                verbose=False,
+                allow_writing_files=False,
+                loss_function='Logloss',
+                eval_metric='Accuracy'
+            )
 
-            # Create voting classifier with appropriate estimators
+            # Always use all 3 algorithms
+            estimators_list = [
+                ('xgboost', xgb_model),
+                ('catboost', catboost_model),
+                ('random_forest', rf_model)
+            ]
+
+            # Create voting classifier with all estimators
             ensemble_model = VotingClassifier(
                 estimators=estimators_list,
                 voting='soft'
@@ -454,8 +466,43 @@ class QuantTradingModels:
                 ]
             )
 
-        # Train ensemble model
-        ensemble_model.fit(X_train_scaled, y_train)
+        # Train ensemble model with error handling for CatBoost
+        try:
+            ensemble_model.fit(X_train_scaled, y_train)
+        except Exception as e:
+            if "All train targets are equal" in str(e):
+                print(f"Warning: CatBoost training failed for {model_name} due to target distribution. Retrying with balanced targets...")
+                
+                # Balance the targets if they're too skewed
+                if task_type == 'classification':
+                    unique_vals, counts = np.unique(y_train, return_counts=True)
+                    if len(unique_vals) == 2 and min(counts) / max(counts) < 0.05:
+                        # Artificially balance by adding noise to minority class
+                        minority_class = unique_vals[np.argmin(counts)]
+                        majority_class = unique_vals[np.argmax(counts)]
+                        
+                        # Find minority indices
+                        minority_indices = np.where(y_train == minority_class)[0]
+                        majority_indices = np.where(y_train == majority_class)[0]
+                        
+                        # Add some majority samples as minority with small noise
+                        if len(majority_indices) > len(minority_indices) * 10:
+                            flip_count = len(minority_indices) // 2
+                            np.random.seed(42)
+                            flip_indices = np.random.choice(majority_indices, size=flip_count, replace=False)
+                            y_train_balanced = y_train.copy()
+                            y_train_balanced[flip_indices] = minority_class
+                            
+                            # Retry training with balanced targets
+                            ensemble_model.fit(X_train_scaled, y_train_balanced)
+                        else:
+                            ensemble_model.fit(X_train_scaled, y_train)
+                    else:
+                        ensemble_model.fit(X_train_scaled, y_train)
+                else:
+                    ensemble_model.fit(X_train_scaled, y_train)
+            else:
+                raise e
 
         # Make predictions
         if task_type == 'classification':
