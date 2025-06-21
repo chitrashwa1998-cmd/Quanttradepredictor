@@ -149,41 +149,167 @@ def is_market_open():
 def serve_react_app():
     """Serve the React app"""
     try:
-        # Try to serve the built React app
-        return send_from_directory('build', 'index.html')
-    except:
-        # Fallback if build doesn't exist - serve development version
-        return '''
-        <!DOCTYPE html>
-        <html lang="en">
-          <head>
-            <meta charset="utf-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <meta name="theme-color" content="#000000" />
-            <meta name="description" content="TribexAlpha Trading Dashboard" />
-            <title>TribexAlpha Trading Dashboard</title>
-            <style>
-              body { margin: 0; background: #0f0f23; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-              .container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-              .message { font-size: 18px; color: #00ffff; margin: 1rem; text-align: center; }
-              .instructions { color: #b8bcc8; margin: 2rem; max-width: 600px; line-height: 1.6; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="message">🚀 TribexAlpha Trading Dashboard</div>
-              <div class="instructions">
-                <p>To use the React frontend, please build it first:</p>
-                <ol>
-                  <li>Run <code>npm run build</code> in the Shell</li>
-                  <li>Refresh this page</li>
-                </ol>
-                <p>Or access the API directly at <a href="/api/health" style="color: #00ffff;">/api/health</a></p>
-              </div>
+        # Check if build directory exists
+        if os.path.exists('build') and os.path.exists('build/index.html'):
+            return send_from_directory('build', 'index.html')
+        else:
+            # Build the React app first
+            import subprocess
+            result = subprocess.run(['npm', 'run', 'build'], capture_output=True, text=True)
+            if result.returncode == 0 and os.path.exists('build/index.html'):
+                return send_from_directory('build', 'index.html')
+            else:
+                return serve_development_page()
+    except Exception as e:
+        print(f"Error serving React app: {e}")
+        return serve_development_page()
+
+def serve_development_page():
+    """Serve a development page with working dashboard"""
+    return '''
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>TribexAlpha Trading Dashboard</title>
+        <style>
+          body { margin: 0; background: #0f0f23; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+          .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+          .header { text-align: center; margin-bottom: 3rem; }
+          .title { color: #00ffff; font-size: 2.5rem; margin-bottom: 1rem; }
+          .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; }
+          .card { background: rgba(0, 255, 255, 0.05); border: 1px solid #00ffff; border-radius: 12px; padding: 1.5rem; }
+          .card h3 { color: #00ff41; margin-top: 0; }
+          .status { text-align: center; margin-bottom: 2rem; }
+          .status-good { color: #00ff41; }
+          .status-error { color: #ff6b6b; }
+          .api-test { margin: 1rem 0; }
+          .btn { background: #00ffff; color: #0f0f23; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 class="title">🚀 TribexAlpha Trading Dashboard</h1>
+            <div id="status" class="status">Loading...</div>
+          </div>
+          <div class="grid">
+            <div class="card">
+              <h3>📊 Market Data</h3>
+              <div id="market-data">Loading...</div>
+              <button class="btn" onclick="loadMarketData()">Refresh</button>
             </div>
-          </body>
-        </html>
-        '''
+            <div class="card">
+              <h3>🤖 AI Predictions</h3>
+              <div id="predictions">Loading...</div>
+              <button class="btn" onclick="loadPredictions()">Get Predictions</button>
+            </div>
+            <div class="card">
+              <h3>📈 Technical Indicators</h3>
+              <div id="indicators">Loading...</div>
+              <button class="btn" onclick="loadIndicators()">Refresh</button>
+            </div>
+            <div class="card">
+              <h3>💾 Database Status</h3>
+              <div id="database">Loading...</div>
+              <button class="btn" onclick="loadDatabase()">Check DB</button>
+            </div>
+          </div>
+        </div>
+        <script>
+          async function apiCall(endpoint) {
+            try {
+              const response = await fetch('/api/' + endpoint);
+              const data = await response.json();
+              return data;
+            } catch (error) {
+              return { success: false, error: error.message };
+            }
+          }
+          
+          async function loadMarketData() {
+            const data = await apiCall('nifty-data');
+            const elem = document.getElementById('market-data');
+            if (data.success) {
+              elem.innerHTML = `
+                <p><strong>Price:</strong> ₹${data.data.price.toFixed(2)}</p>
+                <p><strong>Change:</strong> ${data.data.change > 0 ? '+' : ''}${data.data.change.toFixed(2)} (${data.data.changePercent.toFixed(2)}%)</p>
+                <p><strong>Volume:</strong> ${data.data.volume.toLocaleString()}</p>
+              `;
+            } else {
+              elem.innerHTML = '<p style="color: #ff6b6b;">Error: ' + data.error + '</p>';
+            }
+          }
+          
+          async function loadPredictions() {
+            const data = await apiCall('predictions');
+            const elem = document.getElementById('predictions');
+            if (data.success) {
+              elem.innerHTML = `
+                <p><strong>Direction:</strong> ${data.data.direction} (${(data.data.directionConfidence * 100).toFixed(1)}%)</p>
+                <p><strong>Signal:</strong> ${data.data.tradingSignal}</p>
+                <p><strong>Trend:</strong> ${data.data.trend}</p>
+              `;
+            } else {
+              elem.innerHTML = '<p style="color: #ff6b6b;">Error: ' + data.error + '</p>';
+            }
+          }
+          
+          async function loadIndicators() {
+            const data = await apiCall('technical-indicators');
+            const elem = document.getElementById('indicators');
+            if (data.success) {
+              elem.innerHTML = `
+                <p><strong>RSI:</strong> ${data.data.rsi.toFixed(2)}</p>
+                <p><strong>MACD:</strong> ${data.data.macd.toFixed(2)}</p>
+                <p><strong>ATR:</strong> ${data.data.atr.toFixed(2)}</p>
+              `;
+            } else {
+              elem.innerHTML = '<p style="color: #ff6b6b;">Error: ' + data.error + '</p>';
+            }
+          }
+          
+          async function loadDatabase() {
+            const data = await apiCall('database-info');
+            const elem = document.getElementById('database');
+            if (data.success) {
+              elem.innerHTML = `
+                <p><strong>Status:</strong> ${data.data.status}</p>
+                <p><strong>Datasets:</strong> ${data.data.total_datasets}</p>
+                <p><strong>Models:</strong> ${data.data.total_models}</p>
+              `;
+            } else {
+              elem.innerHTML = '<p style="color: #ff6b6b;">Error: ' + data.error + '</p>';
+            }
+          }
+          
+          async function checkStatus() {
+            const health = await apiCall('health');
+            const statusElem = document.getElementById('status');
+            if (health.success) {
+              statusElem.innerHTML = '<span class="status-good">✅ API Server Running</span>';
+            } else {
+              statusElem.innerHTML = '<span class="status-error">❌ API Server Error</span>';
+            }
+          }
+          
+          // Load initial data
+          checkStatus();
+          loadMarketData();
+          loadPredictions();
+          loadIndicators();
+          loadDatabase();
+          
+          // Auto-refresh every 30 seconds
+          setInterval(() => {
+            loadMarketData();
+            loadPredictions();
+          }, 30000);
+        </script>
+      </body>
+    </html>
+    '''
 
 @app.route('/static/<path:filename>')
 def serve_static_files(filename):
