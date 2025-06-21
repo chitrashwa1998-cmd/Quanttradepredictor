@@ -828,7 +828,8 @@ def get_models_status():
             })
 
         # Format model info for frontend
-        formatted_models = {}
+        formatted_```python
+models = {}
         for model_name, model_data in models.models.items():
             if model_data and isinstance(model_data, dict):
                 # Get accuracy from metrics if available
@@ -944,29 +945,61 @@ def get_model_predictions(model_name):
                 'error': f'Model {model_name} not found. Available models: {list(model_trainer.models.keys())}'
             }), 404
 
-        # Calculate technical indicators if not present
+        # Check if technical indicators are already calculated
         required_indicators = ['sma_5', 'ema_5', 'rsi', 'macd_histogram']
-        missing_indicators = [ind for ind in required_indicators if ind not in df.columns]
+        missing_indicators = [ind for ind in required_indicators if ind not in df_with_indicators.columns]
 
         if missing_indicators:
             print("Calculating missing technical indicators...")
             try:
-                df_with_indicators = TechnicalIndicators.calculate_all_indicators(df)
-                # Remove NaN values that might be created by indicators
-                df_with_indicators = df_with_indicators.dropna()
+                df_with_indicators = TechnicalIndicators.calculate_all_indicators(df_with_indicators)
 
-                if df_with_indicators.empty:
-                    print("DataFrame empty after calculating indicators, using original data")
-                    df_with_indicators = df
+                # Instead of dropping all NaN rows, only drop rows where ALL indicator values are NaN
+                # This preserves more of the original data
+                indicator_cols = [col for col in df_with_indicators.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+
+                # Fill NaN values in indicators with reasonable defaults
+                for col in indicator_cols:
+                    if col in df_with_indicators.columns:
+                        if 'rsi' in col.lower():
+                            df_with_indicators[col] = df_with_indicators[col].fillna(50.0)
+                        elif 'macd' in col.lower():
+                            df_with_indicators[col] = df_with_indicators[col].fillna(0.0)
+                        elif 'bb_' in col.lower():
+                            if 'position' in col:
+                                df_with_indicators[col] = df_with_indicators[col].fillna(0.5)
+                            else:
+                                df_with_indicators[col] = df_with_indicators[col].fillna(df_with_indicators['Close'])
+                        elif 'williams' in col.lower():
+                            df_with_indicators[col] = df_with_indicators[col].fillna(-50.0)
+                        elif 'atr' in col.lower():
+                            df_with_indicators[col] = df_with_indicators[col].fillna(df_with_indicators['Close'] * 0.01)
+                        elif 'sma' in col.lower() or 'ema' in col.lower():
+                            df_with_indicators[col] = df_with_indicators[col].fillna(df_with_indicators['Close'])
+                        elif 'volatility' in col.lower():
+                            df_with_indicators[col] = df_with_indicators[col].fillna(0.01)
+                        elif 'momentum' in col.lower() or 'change' in col.lower():
+                            df_with_indicators[col] = df_with_indicators[col].fillna(0.0)
+                        else:
+                            df_with_indicators[col] = df_with_indicators[col].fillna(0.0)
+
+                print(f"Successfully calculated indicators. Data shape: {df_with_indicators.shape}")
+
             except Exception as e:
-                print(f"Error calculating indicators: {e}, using original data")
-                df_with_indicators = df
+                print(f"Error calculating indicators: {e}, using original data with basic indicators")
+                df_with_indicators = df.copy()
+                # Add basic indicators manually
+                df_with_indicators['sma_5'] = df_with_indicators['Close'].rolling(5).mean().fillna(df_with_indicators['Close'])
+                df_with_indicators['ema_5'] = df_with_indicators['Close'].ewm(span=5).mean().fillna(df_with_indicators['Close'])
+                df_with_indicators['rsi'] = 50.0
+                df_with_indicators['macd_histogram'] = 0.0
         else:
             df_with_indicators = df
 
-        # Ensure we have some data before preparing features
-        if df_with_indicators.empty:
-            print("DataFrame empty after indicators, using fallback data generation")
+        # Only use fallback if we have absolutely no data
+        if df_with_indicators.empty or len(df_with_indicators) < 10:
+            print(f"Insufficient real data ({len(df_with_indicators)} rows), using fallback data generation")
+
             # Create synthetic 5-minute interval data for the last 30 days
             import pytz
             ist_tz = pytz.timezone('Asia/Kolkata')
@@ -1500,7 +1533,8 @@ def upload_data():
                 elif col_lower == 'high':
                     column_mapping[col] = 'High'
                 elif col_lower == 'low':
-                    column_mapping[col] = 'Low'
+                    ```python
+column_mapping[col] = 'Low'
                 elif col_lower == 'close':
                     column_mapping[col] = 'Close'
                 elif col_lower == 'volume':
