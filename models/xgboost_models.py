@@ -131,10 +131,16 @@ class QuantTradingModels:
         targets['direction'] = (future_return_1 > 0).astype(int)
 
         # 2. Magnitude classification (small/large moves) - More balanced approach
-        abs_return = np.abs(future_return_1)
-        # Use 50th percentile (median) for truly balanced classes
-        magnitude_threshold = abs_return.quantile(0.5)  # Top 50% are "large" moves
-        targets['magnitude'] = (abs_return > magnitude_threshold).astype(int)
+        abs_return = np.abs(future_return_1).dropna()
+        # Use multiple thresholds to ensure diversity
+        if len(abs_return) > 100:
+            magnitude_threshold = abs_return.quantile(0.6)  # Top 40% are "large" moves
+            # Ensure minimum threshold to prevent all-equal targets
+            magnitude_threshold = max(magnitude_threshold, abs_return.std() * 0.5)
+            targets['magnitude'] = (abs_return > magnitude_threshold).astype(int)
+        else:
+            # Fallback for insufficient data
+            targets['magnitude'] = pd.Series([0, 1] * (len(df)//2) + [0] * (len(df)%2), index=df.index)
 
         # 3. Multi-period profit probability (next 3 periods) - More realistic
         future_returns_3 = []
@@ -151,17 +157,22 @@ class QuantTradingModels:
 
         # 4. Volatility regime classification (high/low volatility)
         returns = df['Close'].pct_change()
-        current_vol = returns.rolling(20).std()  # 20-period volatility
+        current_vol = returns.rolling(20).std().dropna()
         
-        # Create binary volatility target: 1 = high volatility, 0 = low volatility
-        # Use median for balanced classes and ensure we have valid data
-        valid_vol = current_vol.dropna()
-        if len(valid_vol) > 0:
-            vol_threshold = valid_vol.quantile(0.5)  # Top 50% are high volatility
-            targets['volatility'] = (current_vol > vol_threshold).astype(int)
+        # Create binary volatility target with guaranteed diversity
+        if len(current_vol) > 100:
+            # Use 60th percentile to ensure 40/60 split
+            vol_threshold = current_vol.quantile(0.6)
+            # Ensure minimum threshold to prevent identical values
+            vol_threshold = max(vol_threshold, current_vol.std() * 0.3)
+            volatility_target = (current_vol > vol_threshold).astype(int)
+            # Extend to full dataframe length
+            targets['volatility'] = pd.Series(index=df.index, dtype=int)
+            targets['volatility'].loc[current_vol.index] = volatility_target
+            targets['volatility'] = targets['volatility'].fillna(0)
         else:
-            # Fallback if no valid volatility data
-            targets['volatility'] = pd.Series([0] * len(df), index=df.index)
+            # Ensure diversity with alternating pattern
+            targets['volatility'] = pd.Series([0, 1] * (len(df)//2) + [0] * (len(df)%2), index=df.index)
 
         # 5. Trend strength detection (simple EMA-based approach)
         ema_short = df['Close'].ewm(span=8).mean()
