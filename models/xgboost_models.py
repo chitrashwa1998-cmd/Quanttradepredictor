@@ -303,16 +303,6 @@ class QuantTradingModels:
                 eval_metric='logloss'
             )
 
-            # CatBoost Classifier
-            catboost_model = CatBoostClassifier(
-                iterations=100,
-                depth=6,
-                learning_rate=0.1,
-                random_seed=random_state,
-                verbose=False,
-                allow_writing_files=False
-            )
-
             # Random Forest Classifier
             rf_model = RandomForestClassifier(
                 n_estimators=100,
@@ -321,13 +311,31 @@ class QuantTradingModels:
                 n_jobs=-1
             )
 
-            # Create voting classifier
-            ensemble_model = VotingClassifier(
-                estimators=[
+            # CatBoost Classifier - Skip for problematic models
+            if model_name not in ['magnitude', 'volatility']:
+                catboost_model = CatBoostClassifier(
+                    iterations=100,
+                    depth=6,
+                    learning_rate=0.1,
+                    random_seed=random_state,
+                    verbose=False,
+                    allow_writing_files=False
+                )
+                estimators_list = [
                     ('xgboost', xgb_model),
                     ('catboost', catboost_model),
                     ('random_forest', rf_model)
-                ],
+                ]
+            else:
+                # Use only XGBoost and Random Forest for magnitude and volatility
+                estimators_list = [
+                    ('xgboost', xgb_model),
+                    ('random_forest', rf_model)
+                ]
+
+            # Create voting classifier with appropriate estimators
+            ensemble_model = VotingClassifier(
+                estimators=estimators_list,
                 voting='soft'
             )
 
