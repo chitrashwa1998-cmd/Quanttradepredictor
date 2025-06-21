@@ -978,60 +978,35 @@ def get_data_summary():
 def get_models_status():
     """Get status of all trained models."""
     try:
-        # Check if models are available and loaded
-        if not hasattr(models, 'models') or not models.models:
-            # Provide default model structure for UI
-            default_models = {
-                'direction': {
-                    'name': 'Direction Prediction',
-                    'accuracy': 0.65,
-                    'task_type': 'classification',
-                    'trained_at': 'Training in progress'
-                },
-                'magnitude': {
-                    'name': 'Magnitude Prediction', 
-                    'accuracy': 0.62,
-                    'task_type': 'regression',
-                    'trained_at': 'Training in progress'
-                },
-                'profit_prob': {
-                    'name': 'Profit Probability',
-                    'accuracy': 0.58,
-                    'task_type': 'classification', 
-                    'trained_at': 'Training in progress'
-                },
-                'volatility': {
-                    'name': 'Volatility Prediction',
-                    'accuracy': 0.60,
-                    'task_type': 'regression',
-                    'trained_at': 'Training in progress'
-                },
-                'trend_sideways': {
-                    'name': 'Trend Analysis',
-                    'accuracy': 0.63,
-                    'task_type': 'classification',
-                    'trained_at': 'Training in progress'
-                },
-                'reversal': {
-                    'name': 'Reversal Detection',
-                    'accuracy': 0.57,
-                    'task_type': 'classification',
-                    'trained_at': 'Training in progress'
-                },
-                'trading_signal': {
-                    'name': 'Trading Signal',
-                    'accuracy': 0.64,
-                    'task_type': 'classification',
-                    'trained_at': 'Training in progress'
-                }
-            }
-            
+        # Check database for actual trained models
+        global db
+        trained_models = {}
+        
+        try:
+            if hasattr(db, 'load_trained_models'):
+                db_models = db.load_trained_models()
+                if db_models:
+                    # Models exist in database
+                    for model_name, model_data in db_models.items():
+                        if model_data and isinstance(model_data, dict):
+                            trained_models[model_name] = {
+                                'name': model_name.replace('_', ' ').title(),
+                                'accuracy': model_data.get('accuracy', 0.5),
+                                'task_type': model_data.get('task_type', 'classification'),
+                                'trained_at': model_data.get('trained_at', 'Unknown')
+                            }
+        except Exception as e:
+            print(f"Error checking database models: {e}")
+        
+        # If no models in database, return empty state
+        if not trained_models:
             return jsonify({
                 'success': True,
                 'data': {
-                    'status': 'available',
-                    'total_models': len(default_models),
-                    'trained_models': default_models
+                    'status': 'no_models',
+                    'total_models': 0,
+                    'trained_models': {},
+                    'message': 'No trained models found. Upload data and train models to get started.'
                 },
                 'timestamp': datetime.now().isoformat()
             })
