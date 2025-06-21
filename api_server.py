@@ -1262,10 +1262,23 @@ def upload_data():
             
             # Convert date column if exists
             if 'Date' in df.columns:
-                df['Date'] = pd.to_datetime(df['Date'])
+                try:
+                    # Try parsing with DD-MM-YYYY format first (common in Indian data)
+                    df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y %H:%M', errors='coerce')
+                    # If that fails, try other common formats
+                    if df['Date'].isna().sum() > len(df) * 0.5:  # If more than 50% failed
+                        df['Date'] = pd.to_datetime(df['Date'], format='mixed', dayfirst=True)
+                except:
+                    # Fallback to pandas auto-detection with dayfirst=True
+                    df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce')
                 df = df.set_index('Date')
             elif 'Datetime' in df.columns:
-                df['Datetime'] = pd.to_datetime(df['Datetime'])
+                try:
+                    df['Datetime'] = pd.to_datetime(df['Datetime'], format='%d-%m-%Y %H:%M', errors='coerce')
+                    if df['Datetime'].isna().sum() > len(df) * 0.5:
+                        df['Datetime'] = pd.to_datetime(df['Datetime'], format='mixed', dayfirst=True)
+                except:
+                    df['Datetime'] = pd.to_datetime(df['Datetime'], dayfirst=True, errors='coerce')
                 df = df.set_index('Datetime')
             
             # Ensure numeric columns
