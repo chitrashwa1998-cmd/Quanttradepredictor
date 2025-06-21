@@ -76,11 +76,13 @@ const Predictions = () => {
 
     const data = predictions.predictions;
 
-    // Format dates for chart
+    // Format dates for chart - convert to IST
     const formatDate = (dateStr) => {
       try {
         const date = new Date(dateStr);
-        return date.toISOString();
+        // Convert to IST (UTC+5:30)
+        const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
+        return istDate.toISOString();
       } catch (e) {
         return dateStr;
       }
@@ -265,13 +267,16 @@ const Predictions = () => {
                       if (isNaN(date.getTime())) {
                         return dateStr;
                       }
-                      return date.toLocaleDateString('en-US', {
+                      // Convert to IST (UTC+5:30)
+                      const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
+                      return istDate.toLocaleDateString('en-IN', {
                         year: 'numeric',
                         month: '2-digit',
                         day: '2-digit',
                         hour: '2-digit',
-                        minute: '2-digit'
-                      });
+                        minute: '2-digit',
+                        timeZone: 'Asia/Kolkata'
+                      }) + ' IST';
                     } catch (e) {
                       return dateStr;
                     }

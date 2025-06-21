@@ -48,8 +48,20 @@ const RealtimeData = () => {
     );
   }
 
+  // Format dates to IST for chart
+  const formatToIST = (dateStr) => {
+    try {
+      const date = new Date(dateStr);
+      // Convert to IST (UTC+5:30)
+      const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
+      return istDate.toISOString();
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   const candlestickData = {
-    x: marketData.chart_data.map(d => d.date),
+    x: marketData.chart_data.map(d => formatToIST(d.date)),
     open: marketData.chart_data.map(d => d.open),
     high: marketData.chart_data.map(d => d.high),
     low: marketData.chart_data.map(d => d.low),
