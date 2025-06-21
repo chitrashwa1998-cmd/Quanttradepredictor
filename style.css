@@ -1,0 +1,94 @@
+
+/* TribexAlpha Streamlit Styling */
+.stApp {
+    background: linear-gradient(135deg, #1e1e2e 0%, #2d3748 100%);
+    color: white;
+}
+
+.metric-container {
+    background: rgba(0, 255, 255, 0.1);
+    border: 2px solid #00ffff;
+    border-radius: 16px;
+    padding: 2rem;
+    margin: 1.5rem 0;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 255, 255, 0.1);
+}
+
+.trading-header {
+    background: linear-gradient(135deg, #00ffff 0%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    padding: 3rem 0;
+    margin-bottom: 2rem;
+}
+
+.feature-card {
+    background: rgba(0, 255, 255, 0.05);
+    border: 1px solid #00ffff;
+    border-radius: 16px;
+    padding: 2rem;
+    margin: 1rem 0;
+}
+
+.chart-container {
+    background: rgba(25, 25, 45, 0.9);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 16px;
+    padding: 2rem;
+    margin: 2rem 0;
+}
+
+.corporate-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.team-member {
+    background: rgba(0, 255, 255, 0.1);
+    border: 1px solid #00ffff;
+    border-radius: 16px;
+    padding: 2rem;
+    text-align: center;
+    margin: 1rem 0;
+}
+
+.contact-form input, .contact-form textarea, .contact-form select {
+    background: rgba(25, 25, 45, 0.9);
+    border: 2px solid rgba(0, 255, 255, 0.3);
+    border-radius: 8px;
+    color: white;
+    padding: 1rem;
+    width: 100%;
+    margin: 0.5rem 0;
+}
+
+.glow-animation {
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+    from { box-shadow: 0 0 10px rgba(0, 255, 255, 0.3); }
+    to { box-shadow: 0 0 20px rgba(0, 255, 255, 0.6); }
+}
+
+/* Streamlit specific overrides */
+.stSelectbox > div > div {
+    background-color: rgba(25, 25, 45, 0.9);
+    border: 1px solid #00ffff;
+}
+
+.stButton > button {
+    background: linear-gradient(135deg, #00ffff, #8b5cf6);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 2rem;
+    font-weight: 600;
+}
+
+.stSidebar {
+    background: linear-gradient(180deg, #1e1e2e 0%, #2d3748 100%);
+}

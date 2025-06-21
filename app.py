@@ -14,9 +14,31 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load custom CSS
-with open('style.css') as f:
-    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+# Load custom CSS if available
+try:
+    with open('style.css') as f:
+        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+except FileNotFoundError:
+    # Apply basic styling if style.css is not found
+    st.markdown("""
+    <style>
+    .stApp { background: #1e1e2e; }
+    .metric-container { 
+        background: rgba(0, 255, 255, 0.1); 
+        border: 1px solid #00ffff; 
+        border-radius: 12px; 
+        padding: 1.5rem; 
+        margin: 1rem 0; 
+    }
+    .trading-header {
+        background: linear-gradient(135deg, #00ffff 0%, #8b5cf6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        padding: 2rem 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # Auto-restore system
 from auto_restore import auto_restore_system
