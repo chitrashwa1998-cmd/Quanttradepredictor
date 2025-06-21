@@ -130,20 +130,10 @@ class QuantTradingModels:
         future_return_1 = df['Close'].shift(-1) / df['Close'] - 1
         targets['direction'] = (future_return_1 > 0).astype(int)
 
-        # 2. Magnitude classification (small/large moves) - Simplified robust approach
+        # 2. Magnitude regression (continuous price movement magnitude)
         abs_return = np.abs(future_return_1)
-        # Use simple median-based split with guaranteed diversity
-        median_return = abs_return.median()
-        
-        # Create balanced binary classification: above median = 1, below = 0
-        magnitude_target = (abs_return > median_return).astype(int)
-        
-        # Ensure we have both classes by forcing at least some diversity
-        if magnitude_target.nunique() < 2:
-            # If all values are identical, create alternating pattern
-            magnitude_target = pd.Series([i % 2 for i in range(len(df))], index=df.index)
-        
-        targets['magnitude'] = magnitude_target
+        # Use raw absolute returns as continuous regression target
+        targets['magnitude'] = abs_return
 
         # 3. Multi-period profit probability (next 3 periods) - More realistic
         future_returns_3 = []
@@ -158,22 +148,11 @@ class QuantTradingModels:
         profit_threshold = max_return_3.quantile(0.7)
         targets['profit_prob'] = (max_return_3 > profit_threshold).astype(int)
 
-        # 4. Volatility regime classification (high/low volatility) - Simplified robust approach
+        # 4. Volatility regression (continuous volatility measurement)
         returns = df['Close'].pct_change()
         current_vol = returns.rolling(20).std()
-        
-        # Use simple median-based split with guaranteed diversity
-        median_vol = current_vol.median()
-        
-        # Create balanced binary classification: above median = 1, below = 0
-        volatility_target = (current_vol > median_vol).astype(int)
-        
-        # Ensure we have both classes by forcing at least some diversity
-        if volatility_target.nunique() < 2:
-            # If all values are identical, create alternating pattern
-            volatility_target = pd.Series([i % 2 for i in range(len(df))], index=df.index)
-        
-        targets['volatility'] = volatility_target
+        # Use raw volatility values as continuous regression target
+        targets['volatility'] = current_vol
 
         # 5. Trend strength detection (simple EMA-based approach)
         ema_short = df['Close'].ewm(span=8).mean()
