@@ -471,4 +471,3 @@ class PostgresTradingDatabase:
         except Exception as e:
             print(f"Error clearing database: {str(e)}")
             return False
-```
