@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Full Trading App"
+runButton = "TribexAlpha Full Stack"
 
 [[workflows.workflow]]
 name = "React Development Server"
@@ -87,25 +87,7 @@ args = "PORT=3000 DANGEROUSLY_DISABLE_HOST_CHECK=true npx craco start"
 waitForPort = 3000
 
 [[workflows.workflow]]
-name = "API Server"
-author = 40743738
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python api_server.py"
-
-[[workflows.workflow]]
-name = "Start API Server"
-author = 40743738
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python api_server.py"
-
-[[workflows.workflow]]
-name = "Full Trading App"
+name = "TribexAlpha Full Stack"
 author = 40743738
 mode = "parallel"
 

@@ -832,8 +832,7 @@ def get_models_status():
                         accuracy = metrics['accuracy']
                     elif 'rmse' in metrics:
                         # For regression models, use 1/rmse as a proxy for accuracy
-                        accuracy```python
- = 1 / (1 + metrics['rmse'])
+                        accuracy = 1 / (1 + metrics['rmse'])
 
                 formatted_models[model_name] = {
                     'name': model_name.replace('_', ' ').title(),
