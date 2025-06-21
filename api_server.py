@@ -953,7 +953,7 @@ def get_model_predictions(model_name):
                 'error': f'Failed to generate predictions for {model_name}: {str(e)}'
             }), 500
 
-        # Prepare response data
+        # Prepare response data with proper date formatting
         prediction_data = []
 
         # Align indices and create prediction records
@@ -968,8 +968,24 @@ def get_model_predictions(model_name):
             idx = common_index[start_idx + i]
             pred_idx = start_idx + i
 
+            # Properly format the date
+            if hasattr(idx, 'isoformat'):
+                date_str = idx.isoformat()
+            elif hasattr(idx, 'strftime'):
+                date_str = idx.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                # If it's a numeric index, create a proper datetime
+                try:
+                    import pandas as pd
+                    from datetime import datetime, timedelta
+                    base_date = datetime.now() - timedelta(days=num_predictions)
+                    actual_date = base_date + timedelta(minutes=i*5)  # Assuming 5-min intervals
+                    date_str = actual_date.isoformat()
+                except:
+                    date_str = str(idx)
+
             record = {
-                'date': idx.isoformat() if hasattr(idx, 'isoformat') else str(idx),
+                'date': date_str,
                 'price': float(df_aligned.loc[idx, 'Close']),
                 'prediction': int(predictions[pred_idx]) if pred_idx < len(predictions) else 0
             }

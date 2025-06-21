@@ -53,6 +53,11 @@ const Predictions = () => {
         const data = response.data;
         console.log(`Predictions for ${selectedModel}:`, data); // Debug log
         
+        // Validate response structure
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch predictions');
+        }
+        
         // Log some prediction statistics for debugging
         if (data.predictions && data.predictions.length > 0) {
           const upCount = data.predictions.filter(p => p.prediction === 1).length;
@@ -69,14 +74,28 @@ const Predictions = () => {
           }, {});
           console.log(`${selectedModel} prediction distribution:`, predDistribution);
           
+          // Validate data quality
+          const invalidDates = data.predictions.filter(p => !p.date || p.date === 'undefined').length;
+          const invalidPrices = data.predictions.filter(p => !p.price || isNaN(p.price)).length;
+          const invalidPredictions = data.predictions.filter(p => p.prediction === undefined || p.prediction === null).length;
+          
+          if (invalidDates > 0) console.warn(`${selectedModel}: ${invalidDates} invalid dates found`);
+          if (invalidPrices > 0) console.warn(`${selectedModel}: ${invalidPrices} invalid prices found`);
+          if (invalidPredictions > 0) console.warn(`${selectedModel}: ${invalidPredictions} invalid predictions found`);
+          
           // Add model-specific styling to differentiate charts
           data.modelColor = getModelColor(selectedModel);
           data.modelName = selectedModel;
+        } else {
+          console.warn(`${selectedModel}: No predictions data received`);
         }
         
         setPredictions(data);
       } catch (error) {
         console.error('Error fetching predictions:', error);
+        setPredictions(null);
+        // Show user-friendly error message
+        alert(`Failed to load predictions for ${selectedModel}: ${error.message}`);
       } finally {
         setLoading(false);
       }
@@ -110,73 +129,130 @@ const Predictions = () => {
   }
 
   const createPredictionChart = () => {
-    if (!predictions || !predictions.predictions) return null;
+    if (!predictions || !predictions.predictions || predictions.predictions.length === 0) {
+      console.log('No prediction data available for chart');
+      return null;
+    }
 
     const data = predictions.predictions;
+    console.log(`Creating chart for ${selectedModel} with ${data.length} data points`);
 
-    // Format dates for chart - keep original date structure for proper chart display
+    // Enhanced date formatting with validation
     const formatDate = (dateStr) => {
       try {
+        // Handle various date formats
+        if (!dateStr || dateStr === 'undefined' || dateStr === 'null') {
+          return new Date().toISOString();
+        }
+        
+        // If it's already a valid ISO string
+        if (typeof dateStr === 'string' && dateStr.includes('T')) {
+          return new Date(dateStr).toISOString();
+        }
+        
+        // If it's a numeric timestamp
+        if (!isNaN(dateStr)) {
+          const timestamp = parseInt(dateStr);
+          // If it looks like a unix timestamp (less than current time in ms)
+          if (timestamp < Date.now()) {
+            return new Date(timestamp * 1000).toISOString();
+          }
+        }
+        
         const date = new Date(dateStr);
+        if (isNaN(date.getTime())) {
+          // Fallback: create sequential dates
+          const now = new Date();
+          return new Date(now.getTime() - (data.length - data.indexOf(data.find(d => d.date === dateStr))) * 5 * 60 * 1000).toISOString();
+        }
         return date.toISOString();
       } catch (e) {
-        return dateStr;
+        console.warn('Date formatting error:', e, 'for date:', dateStr);
+        return new Date().toISOString();
       }
     };
 
+    // Validate and clean data
+    const validData = data.filter(d => d && d.price !== undefined && d.prediction !== undefined);
+    
+    if (validData.length === 0) {
+      console.log('No valid data points found');
+      return null;
+    }
+
     // Price line
     const priceTrace = {
-      x: data.map(d => formatDate(d.date)),
-      y: data.map(d => d.price),
+      x: validData.map(d => formatDate(d.date)),
+      y: validData.map(d => parseFloat(d.price) || 0),
       type: 'scatter',
       mode: 'lines',
       name: 'Price',
-      line: { color: '#2E86C1', width: 2 }
+      line: { color: predictions.modelColor || '#2E86C1', width: 2 },
+      hovertemplate: 'Price: $%{y:.2f}<br>Date: %{x}<extra></extra>'
     };
 
     // Prediction markers
-    const upPredictions = data.filter(d => d.prediction === 1);
-    const downPredictions = data.filter(d => d.prediction === 0);
+    const upPredictions = validData.filter(d => d.prediction === 1);
+    const downPredictions = validData.filter(d => d.prediction === 0);
 
     const traces = [priceTrace];
 
     if (upPredictions.length > 0) {
       traces.push({
         x: upPredictions.map(d => formatDate(d.date)),
-        y: upPredictions.map(d => d.price),
+        y: upPredictions.map(d => parseFloat(d.price) || 0),
         type: 'scatter',
         mode: 'markers',
         name: 'Predicted Up',
-        marker: { symbol: 'triangle-up', color: 'green', size: 8 }
+        marker: { symbol: 'triangle-up', color: '#00ff41', size: 8 },
+        hovertemplate: 'UP Signal<br>Price: $%{y:.2f}<br>Confidence: %{customdata:.3f}<extra></extra>',
+        customdata: upPredictions.map(d => d.confidence || 0.5)
       });
     }
 
     if (downPredictions.length > 0) {
       traces.push({
         x: downPredictions.map(d => formatDate(d.date)),
-        y: downPredictions.map(d => d.price),
+        y: downPredictions.map(d => parseFloat(d.price) || 0),
         type: 'scatter',
         mode: 'markers',
         name: 'Predicted Down',
-        marker: { symbol: 'triangle-down', color: 'red', size: 8 }
+        marker: { symbol: 'triangle-down', color: '#ff0080', size: 8 },
+        hovertemplate: 'DOWN Signal<br>Price: $%{y:.2f}<br>Confidence: %{customdata:.3f}<extra></extra>',
+        customdata: downPredictions.map(d => d.confidence || 0.5)
       });
     }
 
     return {
       data: traces,
       layout: {
-        title: `${selectedModel.replace('_', ' ').toUpperCase()} Predictions`,
+        title: {
+          text: `${selectedModel.replace('_', ' ').toUpperCase()} Predictions (${validData.length} points)`,
+          font: { color: '#ffffff', size: 18 }
+        },
         xaxis: { 
           title: 'Date & Time', 
           color: '#ffffff',
-          tickangle: -45
+          tickangle: -45,
+          showgrid: true,
+          gridcolor: 'rgba(255,255,255,0.1)'
         },
-        yaxis: { title: 'Price ($)', color: '#ffffff' },
+        yaxis: { 
+          title: 'Price ($)', 
+          color: '#ffffff',
+          showgrid: true,
+          gridcolor: 'rgba(255,255,255,0.1)'
+        },
         height: 500,
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
         font: { color: '#ffffff' },
-        legend: { bgcolor: 'rgba(0,0,0,0)' }
+        legend: { 
+          bgcolor: 'rgba(0,0,0,0.5)',
+          bordercolor: 'rgba(255,255,255,0.2)',
+          borderwidth: 1
+        },
+        hovermode: 'closest'
       }
     };
   };
@@ -308,11 +384,26 @@ const Predictions = () => {
                 {predictions.predictions.slice(-20).reverse().map((pred, index) => {
                   const formatPredictionDate = (dateStr) => {
                     try {
-                      const date = new Date(dateStr);
-                      if (isNaN(date.getTime())) {
-                        return dateStr;
+                      // Handle various date formats
+                      if (!dateStr || dateStr === 'undefined' || dateStr === 'null') {
+                        return 'Invalid Date';
                       }
-                      // Format directly to IST using proper timezone conversion
+                      
+                      let date;
+                      
+                      // If it's a number, treat as timestamp
+                      if (!isNaN(dateStr)) {
+                        const timestamp = parseInt(dateStr);
+                        date = new Date(timestamp < 1e10 ? timestamp * 1000 : timestamp);
+                      } else {
+                        date = new Date(dateStr);
+                      }
+                      
+                      if (isNaN(date.getTime())) {
+                        return `Invalid: ${dateStr}`;
+                      }
+                      
+                      // Format to IST
                       return date.toLocaleString('en-IN', {
                         timeZone: 'Asia/Kolkata',
                         year: 'numeric',
@@ -323,14 +414,15 @@ const Predictions = () => {
                         hour12: false
                       }) + ' IST';
                     } catch (e) {
-                      return dateStr;
+                      console.warn('Date formatting error:', e, 'for date:', dateStr);
+                      return `Error: ${dateStr}`;
                     }
                   };
 
                   return (
                     <tr key={index}>
                       <td>{formatPredictionDate(pred.date)}</td>
-                      <td>${pred.price.toFixed(2)}</td>
+                      <td>${(pred.price || 0).toFixed(2)}</td>
                       <td style={{color: pred.prediction === 1 ? '#00ff41' : '#ff0080'}}>
                         {pred.prediction === 1 ? '📈 UP' : '📉 DOWN'}
                       </td>
