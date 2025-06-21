@@ -231,8 +231,8 @@ class QuantTradingModels:
                 print(f"ERROR: Only {len(unique_targets)} unique target classes found for {model_name}: {unique_targets}")
                 raise ValueError(f"Insufficient target classes for {model_name}. Found classes: {unique_targets}")
             
-            # Ensure each class has at least 50 samples for meaningful training
-            min_samples_per_class = 50
+            # Ensure each class has at least 10 samples for meaningful training
+            min_samples_per_class = 10
             if np.min(counts) < min_samples_per_class:
                 print(f"ERROR: Insufficient samples per class for {model_name}. Distribution: {dict(zip(unique_targets, counts))}")
                 raise ValueError(f"Insufficient samples per class for {model_name}. Class distribution: {dict(zip(unique_targets, counts))}. Need at least {min_samples_per_class} samples per class.")

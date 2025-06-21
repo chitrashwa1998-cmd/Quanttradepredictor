@@ -596,7 +596,7 @@ def train_models():
             except Exception as e:
                 print(f"Error finding datasets: {e}")
 
-        if data is None or len(data) < 1000:
+        if data is None or len(data) < 100:
             # Try to get actual row count for better error message
             try:
                 db_info = db.get_database_info()
@@ -605,7 +605,7 @@ def train_models():
 
                 return jsonify({
                     'success': False,
-                    'error': f'Insufficient data for training. Need at least 1000 rows, but found {len(data) if data is not None else 0} rows. Database shows {total_rows} total rows across {len(datasets_info)} datasets. Please upload more data first.',
+                    'error': f'Insufficient data for training. Need at least 100 rows, but found {len(data) if data is not None else 0} rows. Database shows {total_rows} total rows across {len(datasets_info)} datasets. Please upload more data first.',
                     'debug_info': {
                         'loaded_rows': len(data) if data is not None else 0,
                         'total_db_rows': total_rows,
@@ -615,7 +615,7 @@ def train_models():
             except:
                 return jsonify({
                     'success': False,
-                    'error': f'Insufficient data for training. Need at least 1000 rows, but found {len(data) if data is not None else 0} rows.'
+                    'error': f'Insufficient data for training. Need at least 100 rows, but found {len(data) if data is not None else 0} rows.'
                 }), 400
 
         print(f"Training models on {len(data)} rows of data")
