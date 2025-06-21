@@ -1533,7 +1533,6 @@ def upload_data():
                     column_mapping[col] = 'High'
                 elif col_lower == 'low':
                     column_mapping[col] = 'Low'
-```python
                 elif col_lower == 'close':
                     column_mapping[col] = 'Close'
                 elif col_lower == 'volume':
