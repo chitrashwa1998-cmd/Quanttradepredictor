@@ -485,7 +485,14 @@ class QuantTradingModels:
         self._save_models_to_database()
 
         status_text.text("All models trained and saved!")
-        return results
+        
+        # Return comprehensive results with success status
+        return {
+            'success': True,
+            'trained_models': results,
+            'total_models': len([r for r in results.values() if r is not None]),
+            'model_count': len(self.models)
+        }
 
     def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """Make predictions using trained ensemble model with enhanced confidence calculation."""
