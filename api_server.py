@@ -143,47 +143,67 @@ def is_market_open():
 
     return is_weekday and is_market_hours
 
+# Static file serving for React build
 @app.route('/')
-def serve_dashboard():
-    """Serve the React dashboard HTML"""
-    return '''
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
-        <meta name="description" content="TribexAlpha Trading Dashboard" />
-        <title>TribexAlpha Trading Dashboard</title>
-        <style>
-          body { margin: 0; background: #0f0f23; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-          .loading { display: flex; justify-content: center; align-items: center; height: 100vh; font-size: 18px; color: #00ffff; }
-        </style>
-      </head>
-      <body>
-        <noscript>You need to enable JavaScript to run this app.</noscript>
-        <div id="root">
-          <div class="loading">Loading TribexAlpha Dashboard...</div>
-        </div>
-        <script>
-          // Fallback if React bundle fails to load
-          setTimeout(function() {
-            if (!window.React) {
-              document.getElementById('root').innerHTML = '<div class="loading">Failed to load React app. Please refresh the page.</div>';
-            }
-          }, 10000);
-        </script>
-      </body>
-    </html>
-    '''
+def serve_react_app():
+    """Serve the React app"""
+    try:
+        # Try to serve the built React app
+        return send_from_directory('build', 'index.html')
+    except:
+        # Fallback if build doesn't exist - serve development version
+        return '''
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <meta name="theme-color" content="#000000" />
+            <meta name="description" content="TribexAlpha Trading Dashboard" />
+            <title>TribexAlpha Trading Dashboard</title>
+            <style>
+              body { margin: 0; background: #0f0f23; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+              .container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+              .message { font-size: 18px; color: #00ffff; margin: 1rem; text-align: center; }
+              .instructions { color: #b8bcc8; margin: 2rem; max-width: 600px; line-height: 1.6; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="message">🚀 TribexAlpha Trading Dashboard</div>
+              <div class="instructions">
+                <p>To use the React frontend, please build it first:</p>
+                <ol>
+                  <li>Run <code>npm run build</code> in the Shell</li>
+                  <li>Refresh this page</li>
+                </ol>
+                <p>Or access the API directly at <a href="/api/health" style="color: #00ffff;">/api/health</a></p>
+              </div>
+            </div>
+          </body>
+        </html>
+        '''
+
+@app.route('/static/<path:filename>')
+def serve_static_files(filename):
+    """Serve static files from React build"""
+    try:
+        return send_from_directory('build/static', filename)
+    except:
+        return jsonify({'error': 'Static file not found'}), 404
 
 @app.route('/<path:path>')
-def serve_static(path):
-    """Serve static files or fallback to index"""
+def serve_react_routes(path):
+    """Handle React router paths"""
+    # Skip API routes
     if path.startswith('api/'):
         return jsonify({'error': 'API endpoint not found'}), 404
-    # For any non-API route, serve the React app
-    return serve_dashboard()
+    
+    # For any other route, serve the React app (SPA routing)
+    try:
+        return send_from_directory('build', 'index.html')
+    except:
+        return serve_react_app()
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
