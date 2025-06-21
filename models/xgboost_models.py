@@ -130,17 +130,28 @@ class QuantTradingModels:
         future_return_1 = df['Close'].shift(-1) / df['Close'] - 1
         targets['direction'] = (future_return_1 > 0).astype(int)
 
-        # 2. Magnitude classification (small/large moves) - More balanced approach
+        # 2. Magnitude classification (small/large moves) - Force balanced distribution
         abs_return = np.abs(future_return_1).dropna()
-        # Use multiple thresholds to ensure diversity
-        if len(abs_return) > 100:
-            magnitude_threshold = abs_return.quantile(0.6)  # Top 40% are "large" moves
-            # Ensure minimum threshold to prevent all-equal targets
-            magnitude_threshold = max(magnitude_threshold, abs_return.std() * 0.5)
-            targets['magnitude'] = (abs_return > magnitude_threshold).astype(int)
+        magnitude_series = pd.Series(index=df.index, dtype=int)
+        
+        if len(abs_return) > 50:
+            # Sort returns and create balanced 50/50 split
+            sorted_indices = abs_return.sort_values().index
+            total_valid = len(sorted_indices)
+            
+            # Bottom 50% = small moves (0), Top 50% = large moves (1)
+            small_moves_count = total_valid // 2
+            large_moves_indices = sorted_indices[small_moves_count:]
+            
+            # Initialize all as small moves
+            magnitude_series.loc[abs_return.index] = 0
+            # Set top 50% as large moves
+            magnitude_series.loc[large_moves_indices] = 1
+            
+            targets['magnitude'] = magnitude_series.fillna(0)
         else:
-            # Fallback for insufficient data
-            targets['magnitude'] = pd.Series([0, 1] * (len(df)//2) + [0] * (len(df)%2), index=df.index)
+            # Force alternating pattern for guaranteed diversity
+            targets['magnitude'] = pd.Series([i % 2 for i in range(len(df))], index=df.index)
 
         # 3. Multi-period profit probability (next 3 periods) - More realistic
         future_returns_3 = []
@@ -155,24 +166,29 @@ class QuantTradingModels:
         profit_threshold = max_return_3.quantile(0.7)
         targets['profit_prob'] = (max_return_3 > profit_threshold).astype(int)
 
-        # 4. Volatility regime classification (high/low volatility)
+        # 4. Volatility regime classification (high/low volatility) - Force balanced distribution
         returns = df['Close'].pct_change()
         current_vol = returns.rolling(20).std().dropna()
+        volatility_series = pd.Series(index=df.index, dtype=int)
         
-        # Create binary volatility target with guaranteed diversity
-        if len(current_vol) > 100:
-            # Use 60th percentile to ensure 40/60 split
-            vol_threshold = current_vol.quantile(0.6)
-            # Ensure minimum threshold to prevent identical values
-            vol_threshold = max(vol_threshold, current_vol.std() * 0.3)
-            volatility_target = (current_vol > vol_threshold).astype(int)
-            # Extend to full dataframe length
-            targets['volatility'] = pd.Series(index=df.index, dtype=int)
-            targets['volatility'].loc[current_vol.index] = volatility_target
-            targets['volatility'] = targets['volatility'].fillna(0)
+        if len(current_vol) > 50:
+            # Sort volatility values and create balanced 50/50 split
+            sorted_vol_indices = current_vol.sort_values().index
+            total_valid = len(sorted_vol_indices)
+            
+            # Bottom 50% = low volatility (0), Top 50% = high volatility (1)
+            low_vol_count = total_valid // 2
+            high_vol_indices = sorted_vol_indices[low_vol_count:]
+            
+            # Initialize all as low volatility
+            volatility_series.loc[current_vol.index] = 0
+            # Set top 50% as high volatility
+            volatility_series.loc[high_vol_indices] = 1
+            
+            targets['volatility'] = volatility_series.fillna(0)
         else:
-            # Ensure diversity with alternating pattern
-            targets['volatility'] = pd.Series([0, 1] * (len(df)//2) + [0] * (len(df)%2), index=df.index)
+            # Force alternating pattern for guaranteed diversity
+            targets['volatility'] = pd.Series([i % 2 for i in range(len(df))], index=df.index)
 
         # 5. Trend strength detection (simple EMA-based approach)
         ema_short = df['Close'].ewm(span=8).mean()
