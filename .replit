@@ -132,7 +132,7 @@ args = "python api_server.py"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=3000 DANGEROUSLY_DISABLE_HOST_CHECK=true npx craco start"
+args = "PORT=3000 DANGEROUSLY_DISABLE_HOST_CHECK=true npm start"
 
 [[ports]]
 localPort = 3000
