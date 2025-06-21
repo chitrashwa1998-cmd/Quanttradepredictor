@@ -76,9 +76,19 @@ const Predictions = () => {
 
     const data = predictions.predictions;
 
+    // Format dates for chart
+    const formatDate = (dateStr) => {
+      try {
+        const date = new Date(dateStr);
+        return date.toISOString();
+      } catch (e) {
+        return dateStr;
+      }
+    };
+
     // Price line
     const priceTrace = {
-      x: data.map(d => d.date),
+      x: data.map(d => formatDate(d.date)),
       y: data.map(d => d.price),
       type: 'scatter',
       mode: 'lines',
@@ -94,7 +104,7 @@ const Predictions = () => {
 
     if (upPredictions.length > 0) {
       traces.push({
-        x: upPredictions.map(d => d.date),
+        x: upPredictions.map(d => formatDate(d.date)),
         y: upPredictions.map(d => d.price),
         type: 'scatter',
         mode: 'markers',
@@ -105,7 +115,7 @@ const Predictions = () => {
 
     if (downPredictions.length > 0) {
       traces.push({
-        x: downPredictions.map(d => d.date),
+        x: downPredictions.map(d => formatDate(d.date)),
         y: downPredictions.map(d => d.price),
         type: 'scatter',
         mode: 'markers',
@@ -248,16 +258,36 @@ const Predictions = () => {
                 </tr>
               </thead>
               <tbody>
-                {predictions.predictions.slice(-20).reverse().map((pred, index) => (
-                  <tr key={index}>
-                    <td>{new Date(pred.date).toLocaleDateString()}</td>
-                    <td>${pred.price.toFixed(2)}</td>
-                    <td style={{color: pred.prediction === 1 ? '#00ff41' : '#ff0080'}}>
-                      {pred.prediction === 1 ? '📈 UP' : '📉 DOWN'}
-                    </td>
-                    <td>{pred.confidence ? pred.confidence.toFixed(3) : 'N/A'}</td>
-                  </tr>
-                ))}
+                {predictions.predictions.slice(-20).reverse().map((pred, index) => {
+                  const formatPredictionDate = (dateStr) => {
+                    try {
+                      const date = new Date(dateStr);
+                      if (isNaN(date.getTime())) {
+                        return dateStr;
+                      }
+                      return date.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+                    } catch (e) {
+                      return dateStr;
+                    }
+                  };
+
+                  return (
+                    <tr key={index}>
+                      <td>{formatPredictionDate(pred.date)}</td>
+                      <td>${pred.price.toFixed(2)}</td>
+                      <td style={{color: pred.prediction === 1 ? '#00ff41' : '#ff0080'}}>
+                        {pred.prediction === 1 ? '📈 UP' : '📉 DOWN'}
+                      </td>
+                      <td>{pred.confidence ? pred.confidence.toFixed(3) : 'N/A'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
