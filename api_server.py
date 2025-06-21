@@ -347,6 +347,11 @@ def get_model_predictions(model_name):
                 # Create a synthetic datetime index
                 df.index = pd.date_range(start='2025-01-01', periods=len(df), freq='5min')
 
+        # Limit data size for performance - use most recent 1000 records for predictions
+        if len(df) > 1000:
+            print(f"Dataset has {len(df)} rows, using most recent 1000 for predictions")
+            df = df.tail(1000).copy()
+        
         # Calculate technical indicators if missing
         df_with_indicators = df.copy()
         required_indicators = ['sma_5', 'ema_5', 'rsi', 'macd_histogram']
@@ -357,7 +362,7 @@ def get_model_predictions(model_name):
             try:
                 df_with_indicators = TechnicalIndicators.calculate_all_indicators(df_with_indicators)
                 
-                # Fill NaN values in indicators
+                # Fill NaN values in indicators efficiently
                 indicator_cols = [col for col in df_with_indicators.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
                 
                 for col in indicator_cols:
@@ -367,7 +372,7 @@ def get_model_predictions(model_name):
                         elif 'macd' in col.lower():
                             df_with_indicators[col] = df_with_indicators[col].fillna(0.0)
                         else:
-                            df_with_indicators[col] = df_with_indicators[col].fillna(method='forward').fillna(method='backward')
+                            df_with_indicators[col] = df_with_indicators[col].ffill().bfill().fillna(0.0)
                             
             except Exception as e:
                 print(f"Error calculating technical indicators: {e}")
@@ -409,10 +414,23 @@ def get_model_predictions(model_name):
         formatted_dates = ist_index.strftime('%Y-%m-%d %H:%M:%S')
         
         for i, (pred, date_str) in enumerate(zip(predictions, formatted_dates)):
+            # Get price from available columns
+            price = 25000.0  # Default price
+            if i < len(features_df):
+                if 'Close' in features_df.columns:
+                    price = float(features_df['Close'].iloc[i])
+                elif 'close' in features_df.columns:
+                    price = float(features_df['close'].iloc[i])
+                elif len(features_df.columns) > 0:
+                    # Use the last numeric column as price fallback
+                    numeric_cols = features_df.select_dtypes(include=[np.number]).columns
+                    if len(numeric_cols) > 0:
+                        price = float(features_df[numeric_cols[-1]].iloc[i])
+            
             record = {
                 'date': date_str,
                 'prediction': int(pred),
-                'price': float(features_df['Close'].iloc[i]) if i < len(features_df) else 25000.0
+                'price': price
             }
             
             # Add confidence scores
