@@ -798,6 +798,90 @@ def get_models_status():
             'error': str(e)
         }), 500
 
+@app.route('/api/upload-data', methods=['POST'])
+def upload_data():
+    """Handle file upload and data processing"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file uploaded'
+            }), 400
+
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+
+        if not file.filename.lower().endswith('.csv'):
+            return jsonify({
+                'success': False,
+                'error': 'Only CSV files are supported'
+            }), 400
+
+        try:
+            # Import data processing modules
+            from utils.data_processing import DataProcessor
+            
+            # Process the uploaded file
+            df, message = DataProcessor.load_and_process_data(file)
+            
+            if df is None:
+                return jsonify({
+                    'success': False,
+                    'error': f'Failed to process file: {message}'
+                }), 400
+
+            # Save to database
+            from utils.database_adapter import DatabaseAdapter
+            trading_db = DatabaseAdapter()
+            
+            dataset_name = f"uploaded_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            success = trading_db.save_ohlc_data(df, dataset_name, preserve_full_data=False)
+            
+            if success:
+                # Get data summary
+                summary = DataProcessor.get_data_summary(df)
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'File processed successfully! {len(df)} rows loaded.',
+                    'data': {
+                        'dataset_name': dataset_name,
+                        'total_rows': len(df),
+                        'date_range': {
+                            'start': df.index.min().isoformat() if hasattr(df.index.min(), 'isoformat') else str(df.index.min()),
+                            'end': df.index.max().isoformat() if hasattr(df.index.max(), 'isoformat') else str(df.index.max())
+                        },
+                        'columns': list(df.columns),
+                        'latest_price': float(df['Close'].iloc[-1]) if 'Close' in df.columns else 0
+                    }
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Data processed but failed to save to database'
+                }), 500
+
+        except Exception as processing_error:
+            print(f"Data processing error: {processing_error}")
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': f'Error processing file: {str(processing_error)}'
+            }), 500
+
+    except Exception as e:
+        print(f"Upload error: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Upload failed: {str(e)}'
+        }), 500
+
 @app.route('/api/database-info', methods=['GET'])
 def get_database_info():
     """Get database information"""
