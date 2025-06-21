@@ -861,7 +861,7 @@ def get_models_status():
         }), 500
 
 @app.route('/api/predictions/<model_name>')
-def get_predictions(model_name):
+def get_model_predictions(model_name):
     """Get predictions for a specific model."""
     try:
         period = request.args.get('period', '30d')
