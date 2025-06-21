@@ -132,8 +132,8 @@ class QuantTradingModels:
 
         # 2. Magnitude classification (small/large moves) - More balanced approach
         abs_return = np.abs(future_return_1)
-        # Use median as threshold for balanced classes
-        magnitude_threshold = abs_return.quantile(0.6)  # Top 40% are "large" moves
+        # Use 50th percentile (median) for truly balanced classes
+        magnitude_threshold = abs_return.quantile(0.5)  # Top 50% are "large" moves
         targets['magnitude'] = (abs_return > magnitude_threshold).astype(int)
 
         # 3. Multi-period profit probability (next 3 periods) - More realistic
@@ -154,8 +154,14 @@ class QuantTradingModels:
         current_vol = returns.rolling(20).std()  # 20-period volatility
         
         # Create binary volatility target: 1 = high volatility, 0 = low volatility
-        vol_threshold = current_vol.quantile(0.65)  # Top 35% are high volatility
-        targets['volatility'] = (current_vol > vol_threshold).astype(int)
+        # Use median for balanced classes and ensure we have valid data
+        valid_vol = current_vol.dropna()
+        if len(valid_vol) > 0:
+            vol_threshold = valid_vol.quantile(0.5)  # Top 50% are high volatility
+            targets['volatility'] = (current_vol > vol_threshold).astype(int)
+        else:
+            # Fallback if no valid volatility data
+            targets['volatility'] = pd.Series([0] * len(df), index=df.index)
 
         # 5. Trend strength detection (simple EMA-based approach)
         ema_short = df['Close'].ewm(span=8).mean()
@@ -188,9 +194,17 @@ class QuantTradingModels:
         buy_signal = price_above_ema & (volume_surge | (rsi < 40))
         targets['trading_signal'] = buy_signal.astype(int)
 
-        # Remove NaN values from all targets
+        # Remove NaN values from all targets and print debugging info
         for target_name, target_series in targets.items():
-            targets[target_name] = target_series.dropna()
+            clean_target = target_series.dropna()
+            targets[target_name] = clean_target
+            
+            # Print target distribution for debugging
+            if len(clean_target) > 0:
+                unique_vals, counts = np.unique(clean_target, return_counts=True)
+                print(f"Target '{target_name}' distribution: {dict(zip(unique_vals, counts))}")
+            else:
+                print(f"Warning: Target '{target_name}' has no valid values after cleaning")
 
         return targets
 
@@ -214,10 +228,15 @@ class QuantTradingModels:
             X_clean = X_clean[valid_targets]
             y_clean = y_clean[valid_targets]
 
-            # Ensure we have at least 2 classes
-            unique_targets = y_clean.unique()
+            # Ensure we have at least 2 classes with minimum samples each
+            unique_targets, counts = np.unique(y_clean, return_counts=True)
             if len(unique_targets) < 2:
                 raise ValueError(f"Insufficient target classes for {model_name}. Found classes: {unique_targets}")
+            
+            # Ensure each class has at least 50 samples for meaningful training
+            min_samples_per_class = 50
+            if np.min(counts) < min_samples_per_class:
+                raise ValueError(f"Insufficient samples per class for {model_name}. Class distribution: {dict(zip(unique_targets, counts))}. Need at least {min_samples_per_class} samples per class.")
         else:
             # For regression tasks (like volatility), remove NaN and infinite values
             valid_targets = np.isfinite(y_clean) & (y_clean > 0)
