@@ -1173,6 +1173,109 @@ def get_database_info():
             }
         }), 200  # Return 200 to prevent frontend errors
 
+@app.route('/api/upload-data', methods=['POST'])
+def upload_data():
+    """Handle file upload and data processing"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+        
+        if not file.filename.lower().endswith('.csv'):
+            return jsonify({
+                'success': False,
+                'error': 'Only CSV files are supported'
+            }), 400
+        
+        # Read the CSV file
+        try:
+            import pandas as pd
+            from datetime import datetime
+            
+            # Read CSV data
+            df = pd.read_csv(file)
+            
+            # Basic validation
+            required_columns = ['Open', 'High', 'Low', 'Close']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            
+            if missing_columns:
+                return jsonify({
+                    'success': False,
+                    'error': f'Missing required columns: {", ".join(missing_columns)}'
+                }), 400
+            
+            # Convert date column if exists
+            if 'Date' in df.columns:
+                df['Date'] = pd.to_datetime(df['Date'])
+                df = df.set_index('Date')
+            elif 'Datetime' in df.columns:
+                df['Datetime'] = pd.to_datetime(df['Datetime'])
+                df = df.set_index('Datetime')
+            
+            # Ensure numeric columns
+            for col in ['Open', 'High', 'Low', 'Close']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            if 'Volume' in df.columns:
+                df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce')
+            
+            # Remove rows with NaN values
+            df = df.dropna()
+            
+            if len(df) < 100:
+                return jsonify({
+                    'success': False,
+                    'error': 'Insufficient data. Need at least 100 valid rows'
+                }), 400
+            
+            # Generate dataset name with timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            dataset_name = f"uploaded_{timestamp}"
+            
+            # Save to database
+            success = db.save_ohlc_data(df, dataset_name, preserve_full_data=True)
+            
+            if success:
+                # Also create/update main_dataset
+                db.save_ohlc_data(df, "main_dataset", preserve_full_data=True)
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Successfully uploaded {len(df)} rows of data',
+                    'dataset_name': dataset_name,
+                    'rows_imported': len(df),
+                    'columns': list(df.columns)
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to save data to database'
+                }), 500
+                
+        except Exception as e:
+            print(f"Error processing uploaded file: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Error processing file: {str(e)}'
+            }), 400
+            
+    except Exception as e:
+        print(f"Error in upload_data: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Upload failed: {str(e)}'
+        }), 500
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({
