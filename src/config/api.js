@@ -1,2 +1,2 @@
-// API server runs on port 8080
-export const API_BASE_URL = 'http://localhost:8080/api';
+// Use proxy for API requests
+export const API_BASE_URL = '/api';
