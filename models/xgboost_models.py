@@ -130,28 +130,20 @@ class QuantTradingModels:
         future_return_1 = df['Close'].shift(-1) / df['Close'] - 1
         targets['direction'] = (future_return_1 > 0).astype(int)
 
-        # 2. Magnitude classification (small/large moves) - Force balanced distribution
-        abs_return = np.abs(future_return_1).dropna()
-        magnitude_series = pd.Series(index=df.index, dtype=int)
+        # 2. Magnitude classification (small/large moves) - Simplified robust approach
+        abs_return = np.abs(future_return_1)
+        # Use simple median-based split with guaranteed diversity
+        median_return = abs_return.median()
         
-        if len(abs_return) > 50:
-            # Sort returns and create balanced 50/50 split
-            sorted_indices = abs_return.sort_values().index
-            total_valid = len(sorted_indices)
-            
-            # Bottom 50% = small moves (0), Top 50% = large moves (1)
-            small_moves_count = total_valid // 2
-            large_moves_indices = sorted_indices[small_moves_count:]
-            
-            # Initialize all as small moves
-            magnitude_series.loc[abs_return.index] = 0
-            # Set top 50% as large moves
-            magnitude_series.loc[large_moves_indices] = 1
-            
-            targets['magnitude'] = magnitude_series.fillna(0)
-        else:
-            # Force alternating pattern for guaranteed diversity
-            targets['magnitude'] = pd.Series([i % 2 for i in range(len(df))], index=df.index)
+        # Create balanced binary classification: above median = 1, below = 0
+        magnitude_target = (abs_return > median_return).astype(int)
+        
+        # Ensure we have both classes by forcing at least some diversity
+        if magnitude_target.nunique() < 2:
+            # If all values are identical, create alternating pattern
+            magnitude_target = pd.Series([i % 2 for i in range(len(df))], index=df.index)
+        
+        targets['magnitude'] = magnitude_target
 
         # 3. Multi-period profit probability (next 3 periods) - More realistic
         future_returns_3 = []
@@ -166,29 +158,22 @@ class QuantTradingModels:
         profit_threshold = max_return_3.quantile(0.7)
         targets['profit_prob'] = (max_return_3 > profit_threshold).astype(int)
 
-        # 4. Volatility regime classification (high/low volatility) - Force balanced distribution
+        # 4. Volatility regime classification (high/low volatility) - Simplified robust approach
         returns = df['Close'].pct_change()
-        current_vol = returns.rolling(20).std().dropna()
-        volatility_series = pd.Series(index=df.index, dtype=int)
+        current_vol = returns.rolling(20).std()
         
-        if len(current_vol) > 50:
-            # Sort volatility values and create balanced 50/50 split
-            sorted_vol_indices = current_vol.sort_values().index
-            total_valid = len(sorted_vol_indices)
-            
-            # Bottom 50% = low volatility (0), Top 50% = high volatility (1)
-            low_vol_count = total_valid // 2
-            high_vol_indices = sorted_vol_indices[low_vol_count:]
-            
-            # Initialize all as low volatility
-            volatility_series.loc[current_vol.index] = 0
-            # Set top 50% as high volatility
-            volatility_series.loc[high_vol_indices] = 1
-            
-            targets['volatility'] = volatility_series.fillna(0)
-        else:
-            # Force alternating pattern for guaranteed diversity
-            targets['volatility'] = pd.Series([i % 2 for i in range(len(df))], index=df.index)
+        # Use simple median-based split with guaranteed diversity
+        median_vol = current_vol.median()
+        
+        # Create balanced binary classification: above median = 1, below = 0
+        volatility_target = (current_vol > median_vol).astype(int)
+        
+        # Ensure we have both classes by forcing at least some diversity
+        if volatility_target.nunique() < 2:
+            # If all values are identical, create alternating pattern
+            volatility_target = pd.Series([i % 2 for i in range(len(df))], index=df.index)
+        
+        targets['volatility'] = volatility_target
 
         # 5. Trend strength detection (simple EMA-based approach)
         ema_short = df['Close'].ewm(span=8).mean()
@@ -250,19 +235,27 @@ class QuantTradingModels:
 
         # Additional validation for target values
         if task_type == 'classification':
+            # Debug: Check target distribution before filtering
+            print(f"Target distribution before filtering for {model_name}: {y_clean.value_counts().to_dict()}")
+            
             # Remove any invalid target values
-            valid_targets = ~np.isinf(y_clean) & (y_clean >= 0)
+            valid_targets = ~np.isinf(y_clean) & (y_clean >= 0) & ~np.isnan(y_clean)
             X_clean = X_clean[valid_targets]
             y_clean = y_clean[valid_targets]
+            
+            # Debug: Check target distribution after filtering
+            print(f"Target distribution after filtering for {model_name}: {y_clean.value_counts().to_dict()}")
 
             # Ensure we have at least 2 classes with minimum samples each
             unique_targets, counts = np.unique(y_clean, return_counts=True)
             if len(unique_targets) < 2:
+                print(f"ERROR: Only {len(unique_targets)} unique target classes found for {model_name}: {unique_targets}")
                 raise ValueError(f"Insufficient target classes for {model_name}. Found classes: {unique_targets}")
             
             # Ensure each class has at least 50 samples for meaningful training
             min_samples_per_class = 50
             if np.min(counts) < min_samples_per_class:
+                print(f"ERROR: Insufficient samples per class for {model_name}. Distribution: {dict(zip(unique_targets, counts))}")
                 raise ValueError(f"Insufficient samples per class for {model_name}. Class distribution: {dict(zip(unique_targets, counts))}. Need at least {min_samples_per_class} samples per class.")
         else:
             # For regression tasks (like volatility), remove NaN and infinite values
