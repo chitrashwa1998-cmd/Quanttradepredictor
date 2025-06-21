@@ -5,20 +5,25 @@ module.exports = {
   },
   webpack: {
     configure: (webpackConfig) => {
-      // Ignore source map warnings for plotly.js
+      // Ignore source map warnings
       webpackConfig.ignoreWarnings = [
+        /Failed to parse source map/,
         {
-          module: /plotly\.js/,
+          module: /node_modules/,
           message: /Failed to parse source map/,
         },
       ];
 
-      // Alternative approach - disable source map loader for plotly.js
+      // Exclude source map loader for plotly.js
       webpackConfig.module.rules.forEach((rule) => {
         if (rule.enforce === 'pre' && rule.use) {
           rule.use.forEach((loader) => {
             if (loader.loader && loader.loader.includes('source-map-loader')) {
-              loader.exclude = [/plotly\.js/];
+              loader.exclude = [
+                /node_modules\/plotly\.js/,
+                /plotly\.js/,
+                /maplibre-gl/
+              ];
             }
           });
         }
