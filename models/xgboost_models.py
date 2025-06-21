@@ -123,11 +123,11 @@ class QuantTradingModels:
                         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
                         rs = gain / loss
                         df_clean['rsi'] = 100 - (100 / (1 + rs))
-                
+
                 # Update feature columns after creating basic features
                 feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
                 feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
-                
+
                 # Use available features that match stored feature names
                 available_features = [col for col in self.feature_names if col in df_clean.columns]
                 if available_features:
@@ -147,7 +147,7 @@ class QuantTradingModels:
                     df_clean['sma_10'] = df_clean['Close'].rolling(10).mean()
                     df_clean['price_change'] = df_clean['Close'].pct_change()
                     feature_cols = ['sma_5', 'sma_10', 'price_change']
-            
+
             self.feature_names = feature_cols
 
         if not feature_cols:
@@ -183,12 +183,12 @@ class QuantTradingModels:
         # Use dynamic threshold for better distribution
         magnitude_threshold = atr_5.quantile(0.60)  # Lower threshold for more balanced distribution
         magnitude_signal = (atr_5 > magnitude_threshold).astype(int)
-        
+
         # Ensure minimum distribution balance
         if magnitude_signal.sum() < len(magnitude_signal) * 0.2:
             magnitude_threshold = atr_5.quantile(0.50)
             magnitude_signal = (atr_5 > magnitude_threshold).astype(int)
-        
+
         targets['magnitude'] = magnitude_signal.fillna(0)
 
         # 3. Scalping profit probability - next 2-3 candles (10-15 min window)
@@ -213,12 +213,12 @@ class QuantTradingModels:
         vol_ratio = vol_short / (vol_medium + 1e-8)
         vol_threshold = vol_ratio.quantile(0.70)  # Top 30% as high volatility
         volatility_signal = (vol_ratio > vol_threshold).astype(int)
-        
+
         # Ensure minimum distribution balance
         if volatility_signal.sum() < len(volatility_signal) * 0.15:
             vol_threshold = vol_ratio.quantile(0.60)
             volatility_signal = (vol_ratio > vol_threshold).astype(int)
-        
+
         targets['volatility'] = volatility_signal.fillna(0)
 
         # 5. Trend strength for scalping - fast EMAs
@@ -472,7 +472,7 @@ class QuantTradingModels:
         except Exception as e:
             if "All train targets are equal" in str(e):
                 print(f"Warning: CatBoost training failed for {model_name} due to target distribution. Retrying with balanced targets...")
-                
+
                 # Balance the targets if they're too skewed
                 if task_type == 'classification':
                     unique_vals, counts = np.unique(y_train, return_counts=True)
@@ -480,11 +480,11 @@ class QuantTradingModels:
                         # Artificially balance by adding noise to minority class
                         minority_class = unique_vals[np.argmin(counts)]
                         majority_class = unique_vals[np.argmax(counts)]
-                        
+
                         # Find minority indices
                         minority_indices = np.where(y_train == minority_class)[0]
                         majority_indices = np.where(y_train == majority_class)[0]
-                        
+
                         # Add some majority samples as minority with small noise
                         if len(majority_indices) > len(minority_indices) * 10:
                             flip_count = len(minority_indices) // 2
@@ -492,7 +492,7 @@ class QuantTradingModels:
                             flip_indices = np.random.choice(majority_indices, size=flip_count, replace=False)
                             y_train_balanced = y_train.copy()
                             y_train_balanced[flip_indices] = minority_class
-                            
+
                             # Retry training with balanced targets
                             ensemble_model.fit(X_train_scaled, y_train_balanced)
                         else:
@@ -709,7 +709,7 @@ class QuantTradingModels:
         else:
             # Fallback to original predictions
             if model_info['task_type'] == 'classification':
-                predictions = model.predict(X_scaled)
+predictions = model.predict(X_scaled)
             else:
                 raw_pred = model.predict(X_scaled)
                 threshold = np.median(raw_pred)
@@ -737,19 +737,19 @@ class QuantTradingModels:
     def _scalping_direction_predictions(self, X_scaled, n_samples):
         """Generate direction predictions optimized for 5-min scalping (52-48 distribution)."""
         np.random.seed(42)
-        
+
         # Use feature-based logic with balanced distribution
         feature_variance = np.var(X_scaled, axis=1)
         feature_mean_vals = np.mean(X_scaled, axis=1)
-        
+
         predictions = np.zeros(n_samples, dtype=int)
-        
+
         # Create pattern-based predictions for better accuracy
         for i in range(n_samples):
             # Combine multiple factors for realistic scalping direction
             momentum_factor = feature_mean_vals[i] > np.median(feature_mean_vals)
             volatility_factor = feature_variance[i] > np.median(feature_variance)
-            
+
             # Create slight bullish bias (52%) but keep it balanced
             if momentum_factor and volatility_factor:
                 predictions[i] = np.random.choice([0, 1], p=[0.45, 0.55])
@@ -759,92 +759,92 @@ class QuantTradingModels:
                 predictions[i] = np.random.choice([0, 1], p=[0.50, 0.50])
             else:
                 predictions[i] = np.random.choice([0, 1], p=[0.52, 0.48])
-        
+
         return predictions
 
     def _scalping_profit_predictions(self, X_scaled, n_samples):
         """Generate profit probability predictions (42-58 distribution for scalping)."""
         np.random.seed(43)
-        
+
         # Feature-based profit probability for scalping
         feature_sum = np.sum(X_scaled, axis=1)
         sorted_indices = np.argsort(feature_sum)
-        
+
         predictions = np.zeros(n_samples, dtype=int)
-        
+
         # Top 42% of feature combinations get profit signal
         profit_threshold = int(n_samples * 0.58)
         predictions[sorted_indices[profit_threshold:]] = 1
-        
+
         # Add some randomness to avoid perfect patterns
         flip_count = int(n_samples * 0.05)  # 5% random flips
         flip_indices = np.random.choice(n_samples, size=flip_count, replace=False)
         predictions[flip_indices] = 1 - predictions[flip_indices]
-        
+
         return predictions
 
     def _scalping_reversal_predictions(self, X_scaled, n_samples):
         """Generate reversal predictions (25-75 distribution for scalping)."""
         np.random.seed(44)
-        
+
         # Feature-based reversal detection
         feature_std = np.std(X_scaled, axis=1)
         high_volatility_threshold = np.percentile(feature_std, 75)
-        
+
         predictions = np.zeros(n_samples, dtype=int)
-        
+
         # High volatility periods more likely to have reversals
         for i in range(n_samples):
             if feature_std[i] > high_volatility_threshold:
                 predictions[i] = np.random.choice([0, 1], p=[0.65, 0.35])  # 35% reversal in high vol
             else:
                 predictions[i] = np.random.choice([0, 1], p=[0.80, 0.20])  # 20% reversal in normal
-        
+
         return predictions
 
     def _scalping_magnitude_predictions(self, X_scaled, n_samples):
         """Generate magnitude predictions (48-52 distribution for scalping)."""
         np.random.seed(45)
-        
+
         # Nearly balanced for magnitude - scalping needs both high and low magnitude moves
         feature_range = np.ptp(X_scaled, axis=1)  # Peak-to-peak range
         median_range = np.median(feature_range)
-        
+
         predictions = np.zeros(n_samples, dtype=int)
-        
+
         for i in range(n_samples):
             if feature_range[i] > median_range:
                 predictions[i] = np.random.choice([0, 1], p=[0.45, 0.55])  # Slightly favor high magnitude
             else:
                 predictions[i] = np.random.choice([0, 1], p=[0.51, 0.49])  # Slightly favor low magnitude
-        
+
         return predictions
 
     def _scalping_volatility_predictions(self, X_scaled, n_samples):
         """Generate volatility predictions (35-65 distribution for scalping)."""
         np.random.seed(46)
-        
+
         # Volatility should be more balanced for scalping opportunities
         feature_cv = np.std(X_scaled, axis=1) / (np.mean(X_scaled, axis=1) + 1e-8)  # Coefficient of variation
         vol_threshold = np.percentile(feature_cv, 65)
-        
+
         predictions = np.zeros(n_samples, dtype=int)
-        
+
         # 35% high volatility periods
         high_vol_indices = np.where(feature_cv > vol_threshold)[0]
         predictions[high_vol_indices] = 1
-        
+
         # Add some randomness
         flip_count = int(n_samples * 0.03)
         flip_indices = np.random.choice(n_samples, size=flip_count, replace=False)
         predictions[flip_indices] = 1 - predictions[flip_indices]
-        
+
         return predictions
 
     def _scalping_trend_predictions(self, X_scaled, n_samples):
         """Generate trend predictions (45-55 distribution for scalping)."""
         np.random.seed(47)
-        
+
         # More balanced trend detection for scalping
         feature_slopes = []
         for i in range(len(X_scaled)):
@@ -855,35 +855,35 @@ class QuantTradingModels:
                 feature_slopes.append(abs(slope))
             else:
                 feature_slopes.append(0)
-        
+
         feature_slopes = np.array(feature_slopes)
         trend_threshold = np.percentile(feature_slopes, 55)
-        
+
         predictions = np.zeros(n_samples, dtype=int)
         predictions[feature_slopes > trend_threshold] = 1  # 45% trending
-        
+
         return predictions
 
     def _scalping_signal_predictions(self, X_scaled, n_samples):
         """Generate trading signal predictions (40-60 distribution for scalping)."""
         np.random.seed(48)
-        
+
         # Balanced trading signals for scalping
         feature_energy = np.sum(X_scaled**2, axis=1)  # Energy of features
         signal_threshold = np.percentile(feature_energy, 60)
-        
+
         predictions = np.zeros(n_samples, dtype=int)
-        
+
         # Top 40% energy levels get buy signals
         predictions[feature_energy > signal_threshold] = 1
-        
+
         # Add pattern-based adjustments
         for i in range(1, n_samples):
             # Avoid consecutive signals (realistic for scalping)
             if predictions[i] == 1 and predictions[i-1] == 1:
                 if np.random.random() < 0.3:  # 30% chance to break consecutive signals
                     predictions[i] = 0
-        
+
         return predictions
 
     def _generate_scalping_confidence(self, predictions, model_name, n_samples):
@@ -913,7 +913,7 @@ class QuantTradingModels:
                 # Check for pattern consistency (important for scalping)
                 recent_pattern = predictions[max(0, i-4):i]
                 pattern_strength = len(set(recent_pattern)) / len(recent_pattern)
-                
+
                 if pattern_strength <= 0.5:  # Strong pattern (low diversity)
                     base_confidence[i] = min(base_confidence[i] * 1.15, 0.88)
                 elif pattern_strength >= 0.75:  # Weak pattern (high diversity)
@@ -943,3 +943,4 @@ class QuantTradingModels:
             return {}
 
         return self.models[model_name]['feature_importance']
+```
