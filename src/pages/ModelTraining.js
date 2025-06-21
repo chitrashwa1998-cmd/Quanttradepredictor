@@ -183,6 +183,66 @@ const ModelTraining = () => {
       </div>
 
       <div className="card">
+        <h3>📊 Technical Indicators Used</h3>
+        <p style={{marginBottom: '2rem', color: '#b8bcc8'}}>
+          The following 23 technical indicators are automatically calculated and used for model training:
+        </p>
+
+        <div className="grid grid-3">
+          <div>
+            <h4 style={{color: '#00ffff', marginBottom: '1rem'}}>📈 Price-based Indicators (8)</h4>
+            <div style={{color: '#b8bcc8', lineHeight: 1.6, fontSize: '0.9rem'}}>
+              <p>• SMA (5 periods)</p>
+              <p>• EMA (5, 10, 20 periods)</p>
+              <p>• RSI - Relative Strength Index</p>
+              <p>• MACD Histogram</p>
+              <p>• ATR - Average True Range</p>
+              <p>• Williams %R</p>
+            </div>
+          </div>
+
+          <div>
+            <h4 style={{color: '#00ffff', marginBottom: '1rem'}}>📊 Bollinger & Price Relations (8)</h4>
+            <div style={{color: '#b8bcc8', lineHeight: 1.6, fontSize: '0.9rem'}}>
+              <p>• Bollinger Bands (Upper, Lower)</p>
+              <p>• Bollinger Width & Position</p>
+              <p>• High/Low Ratio</p>
+              <p>• Open-Close Difference</p>
+              <p>• High-Close Difference</p>
+              <p>• Close-Low Difference</p>
+            </div>
+          </div>
+
+          <div>
+            <h4 style={{color: '#00ffff', marginBottom: '1rem'}}>⚡ Momentum & Volatility (7)</h4>
+            <div style={{color: '#b8bcc8', lineHeight: 1.6, fontSize: '0.9rem'}}>
+              <p>• Price Momentum (1, 3, 5 periods)</p>
+              <p>• Volatility (10, 20 periods)</p>
+              <p>• Hour of Day</p>
+              <p>• Additional derived features</p>
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          marginTop: '2rem',
+          padding: '1rem',
+          background: 'rgba(0, 255, 255, 0.05)',
+          border: '1px solid rgba(0, 255, 255, 0.2)',
+          borderRadius: '8px'
+        }}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem'}}>
+            <span style={{color: '#00ff41', fontSize: '1.2rem'}}>✅</span>
+            <span style={{color: '#00ffff', fontWeight: 'bold'}}>Optimized Feature Set</span>
+          </div>
+          <p style={{color: '#b8bcc8', margin: 0, fontSize: '0.9rem'}}>
+            This carefully selected set of 23 technical indicators provides optimal balance between 
+            model accuracy and computational efficiency, avoiding overfitting from correlated features.
+          </p>
+        </div>
+      </div>
+
+      <div className="card">
         <h3>⚙️ Training Configuration</h3>
 
         <div className="grid grid-3" style={{marginBottom: '2rem'}}>
