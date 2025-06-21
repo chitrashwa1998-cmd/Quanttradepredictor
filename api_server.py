@@ -12,6 +12,7 @@ import traceback
 from datetime import datetime
 import pytz
 import numpy as np
+import io
 
 # Add current directory to path for imports
 sys.path.append('.')
@@ -802,13 +803,18 @@ def get_models_status():
 def upload_data():
     """Handle file upload and data processing"""
     try:
+        print(f"Upload request received. Files in request: {list(request.files.keys())}")
+        print(f"Request content type: {request.content_type}")
+        
         if 'file' not in request.files:
+            print("No 'file' key found in request.files")
             return jsonify({
                 'success': False,
                 'error': 'No file uploaded'
             }), 400
 
         file = request.files['file']
+        print(f"File received: {file.filename}, size: {file.content_length if hasattr(file, 'content_length') else 'unknown'}")
         
         if file.filename == '':
             return jsonify({
@@ -826,8 +832,12 @@ def upload_data():
             # Import data processing modules
             from utils.data_processing import DataProcessor
             
+            # Create a file-like object from the uploaded file
+            file_stream = io.BytesIO(file.read())
+            file_stream.name = file.filename
+            
             # Process the uploaded file
-            df, message = DataProcessor.load_and_process_data(file)
+            df, message = DataProcessor.load_and_process_data(file_stream)
             
             if df is None:
                 return jsonify({
