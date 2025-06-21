@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Full Trading App"
+runButton = "Trading App Fixed"
 
 [[workflows.workflow]]
 name = "React Development Server"
@@ -107,6 +107,19 @@ args = "python api_server.py"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm start"
+
+[[workflows.workflow]]
+name = "Trading App Fixed"
+author = 40743738
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python api_server.py"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=3000 DANGEROUSLY_DISABLE_HOST_CHECK=true npm start"
 
 [[ports]]
 localPort = 3000
