@@ -76,13 +76,11 @@ const Predictions = () => {
 
     const data = predictions.predictions;
 
-    // Format dates for chart - convert to IST
+    // Format dates for chart - keep original date structure for proper chart display
     const formatDate = (dateStr) => {
       try {
         const date = new Date(dateStr);
-        // Convert to IST (UTC+5:30)
-        const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
-        return istDate.toISOString();
+        return date.toISOString();
       } catch (e) {
         return dateStr;
       }
@@ -129,12 +127,11 @@ const Predictions = () => {
     return {
       data: traces,
       layout: {
-        title: `${selectedModel.replace('_', ' ').toUpperCase()} Predictions (IST)`,
+        title: `${selectedModel.replace('_', ' ').toUpperCase()} Predictions`,
         xaxis: { 
-          title: 'Date & Time (IST)', 
+          title: 'Date & Time', 
           color: '#ffffff',
-          tickangle: -45,
-          tickformat: '%Y-%m-%d %H:%M'
+          tickangle: -45
         },
         yaxis: { title: 'Price ($)', color: '#ffffff' },
         height: 500,
@@ -272,15 +269,15 @@ const Predictions = () => {
                       if (isNaN(date.getTime())) {
                         return dateStr;
                       }
-                      // Convert to IST (UTC+5:30)
-                      const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
-                      return istDate.toLocaleDateString('en-IN', {
+                      // Format directly to IST using proper timezone conversion
+                      return date.toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata',
                         year: 'numeric',
                         month: '2-digit',
                         day: '2-digit',
                         hour: '2-digit',
                         minute: '2-digit',
-                        timeZone: 'Asia/Kolkata'
+                        hour12: false
                       }) + ' IST';
                     } catch (e) {
                       return dateStr;
