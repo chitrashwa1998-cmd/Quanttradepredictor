@@ -1013,6 +1013,38 @@ def get_model_predictions(model_name):
                 })
             
             df_with_indicators = pd.DataFrame(ohlc_data, index=market_hours)
+            
+            # Calculate all technical indicators to match the expected 22 features
+            try:
+                df_with_indicators = TechnicalIndicators.calculate_all_indicators(df_with_indicators)
+                df_with_indicators = df_with_indicators.dropna()
+                print(f"Generated fallback data with {len(df_with_indicators)} rows and {len(df_with_indicators.columns)} columns")
+            except Exception as indicator_error:
+                print(f"Error calculating indicators on fallback data: {indicator_error}")
+                # Create minimal required features manually
+                df_with_indicators['sma_5'] = df_with_indicators['Close'].rolling(5).mean()
+                df_with_indicators['ema_5'] = df_with_indicators['Close'].ewm(span=5).mean()
+                df_with_indicators['ema_10'] = df_with_indicators['Close'].ewm(span=10).mean()
+                df_with_indicators['ema_20'] = df_with_indicators['Close'].ewm(span=20).mean()
+                df_with_indicators['rsi'] = 50.0  # Default RSI
+                df_with_indicators['macd_histogram'] = 0.0  # Default MACD
+                df_with_indicators['bb_upper'] = df_with_indicators['Close'] * 1.02
+                df_with_indicators['bb_lower'] = df_with_indicators['Close'] * 0.98
+                df_with_indicators['bb_width'] = df_with_indicators['bb_upper'] - df_with_indicators['bb_lower']
+                df_with_indicators['bb_position'] = 0.5
+                df_with_indicators['atr'] = df_with_indicators['Close'] * 0.01
+                df_with_indicators['williams_r'] = -50.0
+                df_with_indicators['high_low_ratio'] = df_with_indicators['High'] / df_with_indicators['Low']
+                df_with_indicators['open_close_diff'] = df_with_indicators['Close'] - df_with_indicators['Open']
+                df_with_indicators['high_close_diff'] = df_with_indicators['High'] - df_with_indicators['Close']
+                df_with_indicators['close_low_diff'] = df_with_indicators['Close'] - df_with_indicators['Low']
+                df_with_indicators['price_momentum_1'] = df_with_indicators['Close'].pct_change(1).fillna(0)
+                df_with_indicators['price_momentum_3'] = df_with_indicators['Close'].pct_change(3).fillna(0)
+                df_with_indicators['price_momentum_5'] = df_with_indicators['Close'].pct_change(5).fillna(0)
+                df_with_indicators['volatility_10'] = df_with_indicators['Close'].rolling(10).std().fillna(0.01)
+                df_with_indicators['volatility_20'] = df_with_indicators['Close'].rolling(20).std().fillna(0.01)
+                df_with_indicators['hour'] = market_hours.hour
+                df_with_indicators = df_with_indicators.fillna(0)
 
         # Prepare features for prediction
         try:
@@ -1027,13 +1059,71 @@ def get_model_predictions(model_name):
                 features = features.dropna()
                 
                 if features.empty:
-                    print("Features still empty, creating minimal feature set")
-                    # Create minimal features from OHLC data
+                    print("Features still empty, creating comprehensive feature set to match model expectations")
+                    # Create all 22 features that the model expects
                     features = pd.DataFrame(index=df_with_indicators.index)
-                    features['price_change'] = df_with_indicators['Close'].pct_change().fillna(0)
-                    features['volatility'] = features['price_change'].rolling(10).std().fillna(0.01)
-                    features['momentum'] = (df_with_indicators['Close'] - df_with_indicators['Close'].shift(5)).fillna(0)
+                    
+                    # Price-based indicators
+                    features['sma_5'] = df_with_indicators['Close'].rolling(5).mean().fillna(df_with_indicators['Close'])
+                    features['ema_5'] = df_with_indicators['Close'].ewm(span=5).mean().fillna(df_with_indicators['Close'])
+                    features['ema_10'] = df_with_indicators['Close'].ewm(span=10).mean().fillna(df_with_indicators['Close'])
+                    features['ema_20'] = df_with_indicators['Close'].ewm(span=20).mean().fillna(df_with_indicators['Close'])
+                    
+                    # RSI
+                    delta = df_with_indicators['Close'].diff()
+                    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+                    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+                    rs = gain / (loss + 1e-10)
+                    features['rsi'] = (100 - (100 / (1 + rs))).fillna(50)
+                    
+                    # MACD histogram
+                    ema_fast = df_with_indicators['Close'].ewm(span=12).mean()
+                    ema_slow = df_with_indicators['Close'].ewm(span=26).mean()
+                    macd_line = ema_fast - ema_slow
+                    signal_line = macd_line.ewm(span=9).mean()
+                    features['macd_histogram'] = (macd_line - signal_line).fillna(0)
+                    
+                    # Bollinger Bands
+                    bb_middle = df_with_indicators['Close'].rolling(20).mean()
+                    bb_std = df_with_indicators['Close'].rolling(20).std()
+                    features['bb_upper'] = (bb_middle + (bb_std * 2)).fillna(df_with_indicators['Close'] * 1.02)
+                    features['bb_lower'] = (bb_middle - (bb_std * 2)).fillna(df_with_indicators['Close'] * 0.98)
+                    features['bb_width'] = features['bb_upper'] - features['bb_lower']
+                    features['bb_position'] = ((df_with_indicators['Close'] - features['bb_lower']) / (features['bb_upper'] - features['bb_lower'])).fillna(0.5)
+                    
+                    # ATR
+                    high_low = df_with_indicators['High'] - df_with_indicators['Low']
+                    high_close = np.abs(df_with_indicators['High'] - df_with_indicators['Close'].shift())
+                    low_close = np.abs(df_with_indicators['Low'] - df_with_indicators['Close'].shift())
+                    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+                    features['atr'] = true_range.rolling(14).mean().fillna(df_with_indicators['Close'] * 0.01)
+                    
+                    # Williams %R
+                    highest_high = df_with_indicators['High'].rolling(14).max()
+                    lowest_low = df_with_indicators['Low'].rolling(14).min()
+                    features['williams_r'] = (-100 * ((highest_high - df_with_indicators['Close']) / (highest_high - lowest_low))).fillna(-50)
+                    
+                    # Price ratios and differences
+                    features['high_low_ratio'] = (df_with_indicators['High'] / df_with_indicators['Low']).fillna(1.01)
+                    features['open_close_diff'] = (df_with_indicators['Close'] - df_with_indicators['Open']).fillna(0)
+                    features['high_close_diff'] = (df_with_indicators['High'] - df_with_indicators['Close']).fillna(0)
+                    features['close_low_diff'] = (df_with_indicators['Close'] - df_with_indicators['Low']).fillna(0)
+                    
+                    # Price momentum
+                    features['price_momentum_1'] = df_with_indicators['Close'].pct_change(1).fillna(0)
+                    features['price_momentum_3'] = df_with_indicators['Close'].pct_change(3).fillna(0)
+                    features['price_momentum_5'] = df_with_indicators['Close'].pct_change(5).fillna(0)
+                    
+                    # Volatility indicators
+                    features['volatility_10'] = df_with_indicators['Close'].rolling(10).std().fillna(0.01)
+                    features['volatility_20'] = df_with_indicators['Close'].rolling(20).std().fillna(0.01)
+                    
+                    # Hour feature
+                    features['hour'] = df_with_indicators.index.hour if hasattr(df_with_indicators.index, 'hour') else 14
+                    
+                    # Fill any remaining NaN values
                     features = features.fillna(0)
+                    print(f"Created comprehensive feature set with {len(features.columns)} features: {list(features.columns)}")
         except Exception as e:
             print(f"Error preparing features: {e}")
             return jsonify({
