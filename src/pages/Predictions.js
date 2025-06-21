@@ -240,7 +240,12 @@ const Predictions = () => {
 
           <div className="metric-card">
             <div className="metric-label">Model Type</div>
-            <div className="metric-value" style={{fontSize: '1rem'}}>Classification</div>
+            <div className="metric-value" style={{fontSize: '1rem'}}>
+              {availableModels.length > 0 && selectedModel ? 
+                (['magnitude', 'volatility'].includes(selectedModel) ? 'Regression' : 'Classification') : 
+                'Unknown'
+              }
+            </div>
           </div>
         </div>
 
