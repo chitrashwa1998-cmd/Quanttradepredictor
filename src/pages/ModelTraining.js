@@ -5,6 +5,8 @@ import { API_BASE_URL } from '../config/api';
 const ModelTraining = () => {
   const [modelsStatus, setModelsStatus] = useState({});
   const [training, setTraining] = useState(false);
+  const [trainingProgress, setTrainingProgress] = useState({});
+  const [trainingResults, setTrainingResults] = useState({});
   const [selectedModels, setSelectedModels] = useState([
     'direction', 'magnitude', 'profit_prob', 'volatility', 
     'trend_sideways', 'reversal', 'trading_signal'
@@ -30,11 +32,77 @@ const ModelTraining = () => {
     }
 
     setTraining(true);
+    setTrainingProgress({});
+    setTrainingResults({});
+
+    // Initialize progress for selected models
+    const initialProgress = {};
+    const initialResults = {};
+    selectedModels.forEach(model => {
+      initialProgress[model] = { status: 'waiting', progress: 0 };
+      initialResults[model] = null;
+    });
+    setTrainingProgress(initialProgress);
+    setTrainingResults(initialResults);
+
     try {
-      await axios.post(`${API_BASE_URL}/train-models`, { models: selectedModels });
-      alert('✅ Model training completed successfully!');
+      // Simulate progress updates during training
+      const progressInterval = setInterval(() => {
+        setTrainingProgress(prev => {
+          const updated = { ...prev };
+          selectedModels.forEach(model => {
+            if (updated[model].status === 'waiting') {
+              updated[model] = { status: 'training', progress: 10 };
+            } else if (updated[model].status === 'training' && updated[model].progress < 90) {
+              updated[model].progress = Math.min(updated[model].progress + 10, 90);
+            }
+          });
+          return updated;
+        });
+      }, 2000);
+
+      const response = await axios.post(`${API_BASE_URL}/train-models`, { models: selectedModels });
+      
+      clearInterval(progressInterval);
+
+      // Update final results
+      if (response.data.success && response.data.data.results) {
+        const results = response.data.data.results;
+        const finalProgress = {};
+        const finalResults = {};
+
+        selectedModels.forEach(model => {
+          if (results[model] && results[model].status === 'success') {
+            finalProgress[model] = { status: 'completed', progress: 100 };
+            finalResults[model] = {
+              status: 'success',
+              accuracy: results[model].accuracy,
+              task_type: results[model].task_type
+            };
+          } else {
+            finalProgress[model] = { status: 'failed', progress: 0 };
+            finalResults[model] = {
+              status: 'failed',
+              error: results[model]?.error || 'Unknown error'
+            };
+          }
+        });
+
+        setTrainingProgress(finalProgress);
+        setTrainingResults(finalResults);
+      }
+
       fetchModelsStatus();
     } catch (error) {
+      // Clear progress interval on error
+      setTrainingProgress(prev => {
+        const updated = { ...prev };
+        selectedModels.forEach(model => {
+          updated[model] = { status: 'failed', progress: 0 };
+        });
+        return updated;
+      });
+      
       alert('❌ Training failed: ' + (error.response?.data?.error || error.message));
     } finally {
       setTraining(false);
@@ -192,6 +260,123 @@ const ModelTraining = () => {
         {selectedModels.length === 0 && (
           <div className="alert alert-warning" style={{marginTop: '1rem'}}>
             ⚠️ Please select at least one model to train.
+          </div>
+        )}
+
+        {/* Training Progress Section */}
+        {training && Object.keys(trainingProgress).length > 0 && (
+          <div style={{marginTop: '2rem'}}>
+            <h4 style={{color: '#00ffff', marginBottom: '1rem'}}>Training Progress</h4>
+            {Object.entries(trainingProgress).map(([modelName, progress]) => {
+              const modelInfo = modelOptions.find(m => m.id === modelName);
+              return (
+                <div key={modelName} style={{
+                  marginBottom: '1rem',
+                  padding: '1rem',
+                  border: '1px solid rgba(0, 255, 255, 0.3)',
+                  borderRadius: '8px',
+                  background: 'rgba(0, 255, 255, 0.05)'
+                }}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem'}}>
+                    <span style={{color: '#00ffff', fontWeight: 'bold'}}>
+                      {modelInfo?.name || modelName}
+                    </span>
+                    <span style={{
+                      color: progress.status === 'completed' ? '#00ff41' : 
+                             progress.status === 'failed' ? '#ff4444' : 
+                             progress.status === 'training' ? '#ffaa00' : '#888888'
+                    }}>
+                      {progress.status === 'waiting' ? '⏳ Waiting' :
+                       progress.status === 'training' ? '🔄 Training' :
+                       progress.status === 'completed' ? '✅ Completed' :
+                       progress.status === 'failed' ? '❌ Failed' : ''}
+                    </span>
+                  </div>
+                  <div style={{
+                    width: '100%',
+                    height: '8px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: `${progress.progress}%`,
+                      height: '100%',
+                      background: progress.status === 'completed' ? '#00ff41' :
+                                 progress.status === 'failed' ? '#ff4444' :
+                                 progress.status === 'training' ? '#ffaa00' : '#888888',
+                      transition: 'width 0.3s ease'
+                    }}></div>
+                  </div>
+                  <div style={{fontSize: '0.8rem', color: '#b8bcc8', marginTop: '0.25rem'}}>
+                    {progress.progress}%
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Training Summary */}
+        {!training && Object.keys(trainingResults).length > 0 && (
+          <div style={{marginTop: '2rem'}}>
+            <div className="grid grid-3" style={{marginBottom: '2rem'}}>
+              <div className="metric-card">
+                <div className="metric-value" style={{color: '#00ff41'}}>
+                  {Object.values(trainingResults).filter(r => r?.status === 'success').length}
+                </div>
+                <div className="metric-label">Successful</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-value" style={{color: '#ff4444'}}>
+                  {Object.values(trainingResults).filter(r => r?.status === 'failed').length}
+                </div>
+                <div className="metric-label">Failed</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-value" style={{color: '#00ffff'}}>
+                  {Object.keys(trainingResults).length}
+                </div>
+                <div className="metric-label">Total Models</div>
+              </div>
+            </div>
+            <h4 style={{color: '#00ffff', marginBottom: '1rem'}}>Detailed Results</h4>
+            {Object.entries(trainingResults).map(([modelName, result]) => {
+              const modelInfo = modelOptions.find(m => m.id === modelName);
+              return (
+                <div key={modelName} style={{
+                  marginBottom: '1rem',
+                  padding: '1rem',
+                  border: `1px solid ${result?.status === 'success' ? 'rgba(0, 255, 65, 0.3)' : 'rgba(255, 68, 68, 0.3)'}`,
+                  borderRadius: '8px',
+                  background: result?.status === 'success' ? 'rgba(0, 255, 65, 0.05)' : 'rgba(255, 68, 68, 0.05)'
+                }}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <span style={{color: '#00ffff', fontWeight: 'bold'}}>
+                      {modelInfo?.name || modelName}
+                    </span>
+                    <span style={{
+                      color: result?.status === 'success' ? '#00ff41' : '#ff4444'
+                    }}>
+                      {result?.status === 'success' ? '✅ Success' : '❌ Failed'}
+                    </span>
+                  </div>
+                  {result?.status === 'success' && (
+                    <div style={{color: '#b8bcc8', fontSize: '0.9rem', marginTop: '0.5rem'}}>
+                      {result.task_type === 'classification' ? 
+                        `Accuracy: ${(result.accuracy * 100).toFixed(1)}%` :
+                        `RMSE: ${result.accuracy.toFixed(4)}`
+                      }
+                    </div>
+                  )}
+                  {result?.status === 'failed' && (
+                    <div style={{color: '#ff4444', fontSize: '0.9rem', marginTop: '0.5rem'}}>
+                      Error: {result.error}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

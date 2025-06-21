@@ -660,18 +660,30 @@ def train_models():
                     result = models.train_model(model_name, X_aligned, y_aligned, task_type)
 
                     if result:
+                        accuracy_metric = result.get('metrics', {}).get('accuracy', 0) if task_type == 'classification' else result.get('metrics', {}).get('rmse', 0)
                         results[model_name] = {
                             'status': 'success',
-                            'accuracy': result.get('metrics', {}).get('accuracy', 0) if task_type == 'classification' else result.get('metrics', {}).get('rmse', 0),
+                            'accuracy': accuracy_metric,
+                            'task_type': task_type,
+                            'metrics': result.get('metrics', {}),
+                            'data_points': len(X_aligned)
+                        }
+                        print(f"✓ {model_name} trained successfully - Accuracy: {accuracy_metric:.4f}")
+                    else:
+                        results[model_name] = {
+                            'status': 'failed', 
+                            'error': 'Training returned no result',
                             'task_type': task_type
                         }
-                        print(f"✓ {model_name} trained successfully")
-                    else:
-                        results[model_name] = {'status': 'failed', 'error': 'Training returned no result'}
 
             except Exception as e:
-                print(f"Error training {model_name}: {e}")
-                results[model_name] = {'status': 'failed', 'error': str(e)}
+                error_msg = str(e)
+                print(f"Error training {model_name}: {error_msg}")
+                results[model_name] = {
+                    'status': 'failed', 
+                    'error': error_msg,
+                    'task_type': task_type
+                }
 
         # Save trained models to database
         try:
@@ -684,12 +696,18 @@ def train_models():
         except Exception as e:
             print(f"Error saving models to database: {e}")
 
+        # Count successful and failed models
+        successful_models = len([r for r in results.values() if r.get('status') == 'success'])
+        failed_models = len([r for r in results.values() if r.get('status') == 'failed'])
+        
         return jsonify({
             'success': True,
             'data': {
-                'message': f'Training completed for {len(results)} models',
+                'message': f'Training completed: {successful_models} successful, {failed_models} failed',
                 'results': results,
-                'trained_models': len([r for r in results.values() if r.get('status') == 'success'])
+                'trained_models': successful_models,
+                'failed_models': failed_models,
+                'total_models': len(results)
             },
             'timestamp': datetime.now().isoformat()
         })
