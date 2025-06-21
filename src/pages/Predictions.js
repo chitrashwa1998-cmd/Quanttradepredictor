@@ -15,7 +15,8 @@ const Predictions = () => {
       try {
         const response = await fetch(`${API_BASE_URL}/models/status`);
         const data = await response.json();
-        const models = Object.keys(data.models || []);
+        console.log('Models response:', data); // Debug log
+        const models = Object.keys(data.data?.trained_models || {});
         setAvailableModels(models);
         if (models.length > 0 && !selectedModel) {
           setSelectedModel(models[0]);
@@ -55,7 +56,16 @@ const Predictions = () => {
         </div>
 
         <div className="alert alert-warning">
-          ⚠️ No trained models found. Please go to the <strong>Model Training</strong> page first.
+          ⚠️ No trained models found. Please go to the <strong>Model Training</strong> page to train models first.
+        </div>
+
+        <div className="card">
+          <h3>📝 Steps to Get Started:</h3>
+          <ol style={{color: '#b8bcc8', lineHeight: 1.8}}>
+            <li>Upload trading data on the <strong>Data Upload</strong> page</li>
+            <li>Train models on the <strong>Model Training</strong> page</li>
+            <li>Return here to view predictions</li>
+          </ol>
         </div>
       </div>
     );

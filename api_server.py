@@ -892,6 +892,98 @@ def upload_data():
             'error': f'Upload failed: {str(e)}'
         }), 500
 
+@app.route('/api/predictions/<model_name>', methods=['GET'])
+def get_model_predictions(model_name):
+    """Get predictions for a specific model"""
+    try:
+        period = request.args.get('period', '30d')
+        
+        # Load data
+        data = db.load_ohlc_data()
+        if data is None or len(data) < 100:
+            return jsonify({
+                'success': False,
+                'error': 'Insufficient data for predictions'
+            }), 400
+
+        # Filter data based on period
+        if period == '30d':
+            data = data.tail(30)
+        elif period == '90d':
+            data = data.tail(90)
+        # 'all' uses all data
+
+        # Calculate technical indicators
+        try:
+            data_with_indicators = TechnicalIndicators.calculate_all_indicators(data)
+            data_with_indicators = data_with_indicators.dropna()
+        except Exception as e:
+            print(f"Error calculating indicators: {e}")
+            data_with_indicators = data
+
+        if len(data_with_indicators) < 10:
+            return jsonify({
+                'success': False,
+                'error': 'Not enough data after calculating indicators'
+            }), 400
+
+        # Prepare features for prediction
+        try:
+            features = models.prepare_features(data_with_indicators)
+            if len(features) == 0:
+                raise ValueError("No features prepared")
+        except Exception as e:
+            print(f"Error preparing features: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to prepare features: {str(e)}'
+            }), 400
+
+        # Check if the specific model exists
+        if not hasattr(models, 'models') or model_name not in models.models:
+            return jsonify({
+                'success': False,
+                'error': f'Model {model_name} not found. Available models: {list(models.models.keys()) if hasattr(models, "models") else []}'
+            }), 400
+
+        # Get predictions from the model
+        try:
+            predictions, probabilities = models.predict(model_name, features)
+            
+            # Create predictions dataframe
+            pred_data = []
+            for i, (date, price) in enumerate(zip(data_with_indicators.index, data_with_indicators['Close'])):
+                if i < len(predictions):
+                    pred_data.append({
+                        'date': date.isoformat() if hasattr(date, 'isoformat') else str(date),
+                        'price': float(price),
+                        'prediction': int(predictions[i]),
+                        'confidence': float(probabilities[i].max()) if probabilities is not None and len(probabilities) > i else 0.5
+                    })
+
+            return jsonify({
+                'success': True,
+                'predictions': pred_data,
+                'total_predictions': len(pred_data),
+                'model_name': model_name,
+                'timestamp': datetime.now().isoformat()
+            })
+
+        except Exception as e:
+            print(f"Error generating predictions for {model_name}: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to generate predictions: {str(e)}'
+            }), 500
+
+    except Exception as e:
+        print(f"Error in get_model_predictions: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/database-info', methods=['GET'])
 def get_database_info():
     """Get database information"""
