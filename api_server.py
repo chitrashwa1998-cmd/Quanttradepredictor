@@ -834,9 +834,9 @@ def internal_error(error):
 
 if __name__ == '__main__':
     print("Starting TribexAlpha Trading Dashboard API Server...")
-    print("Dashboard will be available at: http://0.0.0.0:5000")
-    print("API endpoints available at: http://0.0.0.0:5000/api/")
+    print("Dashboard will be available at: http://0.0.0.0:8080")
+    print("API endpoints available at: http://0.0.0.0:8080/api/")
     print(f"Market is currently: {'OPEN' if is_market_open() else 'CLOSED'}")
     print(f"Current IST time: {get_ist_time().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=True)
