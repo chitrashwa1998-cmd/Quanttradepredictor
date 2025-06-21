@@ -52,44 +52,44 @@ const Predictions = () => {
         const response = await axios.get(`${API_BASE_URL}/predictions/${selectedModel}?period=${period}&t=${timestamp}`);
         const data = response.data;
         console.log(`Predictions for ${selectedModel}:`, data); // Debug log
-        
+
         // Validate response structure
         if (!data.success) {
           throw new Error(data.error || 'Failed to fetch predictions');
         }
-        
+
         // Log some prediction statistics for debugging
         if (data.predictions && data.predictions.length > 0) {
           const upCount = data.predictions.filter(p => p.prediction === 1).length;
           const downCount = data.predictions.filter(p => p.prediction === 0).length;
           console.log(`${selectedModel} - Up: ${upCount}, Down: ${downCount}, Total: ${data.predictions.length}`);
-          
+
           // Log first few predictions to see differences
           console.log(`${selectedModel} first 5 predictions:`, data.predictions.slice(0, 5));
-          
+
           // Log prediction distribution
           const predDistribution = data.predictions.reduce((acc, pred) => {
             acc[pred.prediction] = (acc[pred.prediction] || 0) + 1;
             return acc;
           }, {});
           console.log(`${selectedModel} prediction distribution:`, predDistribution);
-          
+
           // Validate data quality
           const invalidDates = data.predictions.filter(p => !p.date || p.date === 'undefined').length;
           const invalidPrices = data.predictions.filter(p => !p.price || isNaN(p.price)).length;
           const invalidPredictions = data.predictions.filter(p => p.prediction === undefined || p.prediction === null).length;
-          
+
           if (invalidDates > 0) console.warn(`${selectedModel}: ${invalidDates} invalid dates found`);
           if (invalidPrices > 0) console.warn(`${selectedModel}: ${invalidPrices} invalid prices found`);
           if (invalidPredictions > 0) console.warn(`${selectedModel}: ${invalidPredictions} invalid predictions found`);
-          
+
           // Add model-specific styling to differentiate charts
           data.modelColor = getModelColor(selectedModel);
           data.modelName = selectedModel;
         } else {
           console.warn(`${selectedModel}: No predictions data received`);
         }
-        
+
         setPredictions(data);
       } catch (error) {
         console.error('Error fetching predictions:', error);
@@ -144,21 +144,21 @@ const Predictions = () => {
         if (!dateStr || dateStr === 'undefined' || dateStr === 'null') {
           return new Date().toISOString();
         }
-        
+
         let date;
-        
+
         // If it's already a valid datetime string (YYYY-MM-DD HH:MM:SS)
         if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
           // Parse as IST time and convert to UTC for chart
           date = new Date(dateStr + ' +05:30'); // Add IST offset
           return date.toISOString();
         }
-        
+
         // If it's already a valid ISO string
         if (typeof dateStr === 'string' && dateStr.includes('T')) {
           return new Date(dateStr).toISOString();
         }
-        
+
         // If it's a numeric index (old format)
         if (!isNaN(dateStr)) {
           const index = parseInt(dateStr);
@@ -168,11 +168,11 @@ const Predictions = () => {
           // Convert to UTC by subtracting IST offset (5.5 hours)
           baseDate.setHours(baseDate.getHours() - 5);
           baseDate.setMinutes(baseDate.getMinutes() - 30);
-          
+
           date = new Date(baseDate.getTime() + (index * 5 * 60 * 1000)); // Add 5-minute intervals
           return date.toISOString();
         }
-        
+
         // Fallback parsing
         date = new Date(dateStr);
         if (isNaN(date.getTime())) {
@@ -182,7 +182,7 @@ const Predictions = () => {
           const minutesBack = (data.length - dataIndex) * 5; // 5-minute intervals
           return new Date(now.getTime() - (minutesBack * 60 * 1000)).toISOString();
         }
-        
+
         return date.toISOString();
       } catch (e) {
         console.warn('Date formatting error:', e, 'for date:', dateStr);
@@ -192,7 +192,7 @@ const Predictions = () => {
 
     // Validate and clean data
     const validData = data.filter(d => d && d.price !== undefined && d.prediction !== undefined);
-    
+
     if (validData.length === 0) {
       console.log('No valid data points found');
       return null;
@@ -406,9 +406,9 @@ const Predictions = () => {
                       if (!dateStr || dateStr === 'undefined' || dateStr === 'null') {
                         return 'Invalid Date';
                       }
-                      
+
                       let date;
-                      
+
                       // If it's a number, treat as index - create proper date
                       if (!isNaN(dateStr)) {
                         const index = parseInt(dateStr);
@@ -427,11 +427,11 @@ const Predictions = () => {
                       } else {
                         date = new Date(dateStr);
                       }
-                      
+
                       if (isNaN(date.getTime())) {
                         return `Invalid: ${dateStr}`;
                       }
-                      
+
                       // Format to IST with proper market time context
                       const istTime = date.toLocaleString('en-IN', {
                         timeZone: 'Asia/Kolkata',
@@ -442,21 +442,21 @@ const Predictions = () => {
                         minute: '2-digit',
                         hour12: false
                       });
-                      
+
                       // Add market session indicator
                       const hour = date.getHours();
                       const minute = date.getMinutes();
                       const timeInMinutes = hour * 60 + minute;
                       const marketStart = 9 * 60 + 15; // 9:15 AM
                       const marketEnd = 15 * 60 + 30;  // 3:30 PM
-                      
+
                       let sessionIndicator = '';
                       if (timeInMinutes >= marketStart && timeInMinutes <= marketEnd) {
                         sessionIndicator = ' 🟢';
                       } else {
                         sessionIndicator = ' 🔴';
                       }
-                      
+
                       return istTime + ' IST' + sessionIndicator;
                     } catch (e) {
                       console.warn('Date formatting error:', e, 'for date:', dateStr);

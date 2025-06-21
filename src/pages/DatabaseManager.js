@@ -5,8 +5,7 @@ import { API_BASE_URL } from '../config/api';
 const DatabaseManager = () => {
   const [dbInfo, setDbInfo] = useState(null);
   const [datasets, setDatasets] = useState([]);
-  const [modelResults, setModelResults] = useState([]);
-  const [predictions, setPredictions] = useState([]);
+  // Removed unused state variables to fix ESLint warnings
   const [loading, setLoading] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState({});
   const [selectedDatasets, setSelectedDatasets] = useState([]);
@@ -21,7 +20,7 @@ const DatabaseManager = () => {
       const response = await axios.get(`${API_BASE_URL}/database-info`);
       const dbData = response.data.success ? response.data.data : null;
       setDbInfo(dbData);
-      
+
       // Set datasets from database info
       if (dbData && dbData.datasets) {
         setDatasets(dbData.datasets);
@@ -247,76 +246,17 @@ const DatabaseManager = () => {
       {/* Model Results */}
       <div className="card">
         <h3>🤖 Model Results</h3>
-        {modelResults.length > 0 ? (
-          modelResults.map((model, index) => (
-            <div key={index} className="model-item" style={{ 
-              background: 'rgba(0, 255, 255, 0.05)', 
-              border: '1px solid rgba(0, 255, 255, 0.2)', 
-              borderRadius: '8px', 
-              padding: '1rem', 
-              marginBottom: '1rem' 
-            }}>
-              <h4 style={{ color: '#00ffff', margin: '0 0 1rem 0' }}>🎯 {model.name} Model</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
-                {model.results.accuracy && (
-                  <div className="metric-card">
-                    <div className="metric-value">{model.results.accuracy.toFixed(4)}</div>
-                    <div className="metric-label">Accuracy</div>
-                  </div>
-                )}
-                {model.results.precision && (
-                  <div className="metric-card">
-                    <div className="metric-value">{model.results.precision.toFixed(4)}</div>
-                    <div className="metric-label">Precision</div>
-                  </div>
-                )}
-                {model.results.recall && (
-                  <div className="metric-card">
-                    <div className="metric-value">{model.results.recall.toFixed(4)}</div>
-                    <div className="metric-label">Recall</div>
-                  </div>
-                )}
-                {model.results.f1 && (
-                  <div className="metric-card">
-                    <div className="metric-value">{model.results.f1.toFixed(4)}</div>
-                    <div className="metric-label">F1 Score</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))
-        ) : (
+        
           <p style={{ color: '#b8bcc8' }}>No model results found. Train models first!</p>
-        )}
+        
       </div>
 
       {/* Predictions */}
       <div className="card">
         <h3>🔮 Saved Predictions</h3>
-        {predictions.length > 0 ? (
-          predictions.map((pred, index) => (
-            <div key={index} className="prediction-item" style={{ 
-              background: 'rgba(0, 255, 255, 0.05)', 
-              border: '1px solid rgba(0, 255, 255, 0.2)', 
-              borderRadius: '8px', 
-              padding: '1rem', 
-              marginBottom: '1rem' 
-            }}>
-              <h4 style={{ color: '#00ffff', margin: '0 0 0.5rem 0' }}>📈 {pred.model_name} Predictions</h4>
-              <p style={{ color: '#b8bcc8', margin: '0.25rem 0' }}>
-                <strong>Shape:</strong> {pred.shape}
-              </p>
-              <p style={{ color: '#b8bcc8', margin: '0.25rem 0' }}>
-                <strong>Columns:</strong> {pred.columns}
-              </p>
-              <p style={{ color: '#b8bcc8', margin: '0.25rem 0' }}>
-                <strong>Created:</strong> {formatDate(pred.created_at)}
-              </p>
-            </div>
-          ))
-        ) : (
+       
           <p style={{ color: '#b8bcc8' }}>No predictions found. Generate predictions first!</p>
-        )}
+        
       </div>
 
       {/* Database Maintenance */}
