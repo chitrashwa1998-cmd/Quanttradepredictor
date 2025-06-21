@@ -828,8 +828,7 @@ def get_models_status():
             })
 
         # Format model info for frontend
-        formatted_```python
-models = {}
+        formatted_models = {}
         for model_name, model_data in models.models.items():
             if model_data and isinstance(model_data, dict):
                 # Get accuracy from metrics if available
@@ -1533,8 +1532,8 @@ def upload_data():
                 elif col_lower == 'high':
                     column_mapping[col] = 'High'
                 elif col_lower == 'low':
-                    ```python
-column_mapping[col] = 'Low'
+                    column_mapping[col] = 'Low'
+```python
                 elif col_lower == 'close':
                     column_mapping[col] = 'Close'
                 elif col_lower == 'volume':
