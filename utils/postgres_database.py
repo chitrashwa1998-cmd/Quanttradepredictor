@@ -515,34 +515,59 @@ class PostgresTradingDatabase:
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # Check which tables exist first
-                    cursor.execute("""
-                        SELECT tablename FROM pg_tables 
-                        WHERE schemaname = 'public' 
-                        AND tablename IN ('predictions', 'trained_models', 'model_results', 'ohlc_datasets');
-                    """)
-                    existing_tables = [row[0] for row in cursor.fetchall()]
+                    # First check what data exists
+                    cursor.execute("SELECT COUNT(*) FROM ohlc_datasets;")
+                    datasets_before = cursor.fetchone()[0]
+                    print(f"Datasets before clearing: {datasets_before}")
                     
-                    # Clear tables in reverse dependency order to avoid constraint issues
-                    for table in ['predictions', 'trained_models', 'model_results', 'ohlc_datasets']:
-                        if table in existing_tables:
-                            try:
-                                cursor.execute(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE;")
-                                print(f"✅ Cleared table: {table}")
-                            except Exception as e:
-                                print(f"Warning: Could not clear table {table}: {str(e)}")
-                                # Try DELETE as fallback
-                                try:
-                                    cursor.execute(f"DELETE FROM {table};")
-                                    print(f"✅ Deleted all rows from: {table}")
-                                except Exception as e2:
-                                    print(f"Error: Could not delete from {table}: {str(e2)}")
+                    # Clear tables using DELETE to ensure proper removal
+                    tables_to_clear = ['predictions', 'trained_models', 'model_results', 'ohlc_datasets']
                     
+                    for table in tables_to_clear:
+                        try:
+                            # Check if table exists
+                            cursor.execute("""
+                                SELECT EXISTS (
+                                    SELECT FROM information_schema.tables 
+                                    WHERE table_schema = 'public' AND table_name = %s
+                                );
+                            """, (table,))
+                            
+                            table_exists = cursor.fetchone()[0]
+                            
+                            if table_exists:
+                                # Get count before deletion
+                                cursor.execute(f"SELECT COUNT(*) FROM {table};")
+                                count_before = cursor.fetchone()[0]
+                                
+                                # Delete all rows
+                                cursor.execute(f"DELETE FROM {table};")
+                                deleted_rows = cursor.rowcount
+                                
+                                print(f"✅ Cleared table {table}: {deleted_rows} rows deleted (had {count_before} rows)")
+                            else:
+                                print(f"⚠️ Table {table} does not exist")
+                                
+                        except Exception as e:
+                            print(f"❌ Error clearing table {table}: {str(e)}")
+                            # Continue with other tables
+                            continue
+                    
+                    # Commit all changes
                     conn.commit()
-
-            print("✅ Database completely cleared - all data removed")
-            return True
+                    
+                    # Verify clearing worked
+                    cursor.execute("SELECT COUNT(*) FROM ohlc_datasets;")
+                    datasets_after = cursor.fetchone()[0]
+                    print(f"Datasets after clearing: {datasets_after}")
+                    
+                    if datasets_after == 0:
+                        print("✅ Database completely cleared - all data removed")
+                        return True
+                    else:
+                        print(f"⚠️ Warning: {datasets_after} datasets still remain")
+                        return False
 
         except Exception as e:
-            print(f"Error clearing database: {str(e)}")
+            print(f"❌ Error clearing database: {str(e)}")
             return False

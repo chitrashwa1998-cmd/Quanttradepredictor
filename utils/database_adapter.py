@@ -123,30 +123,56 @@ class DatabaseAdapter:
     def clear_all_data(self) -> bool:
         """Clear all data from database"""
         try:
-            # Since we're using PostgreSQL exclusively, call clear_all_data directly
+            print("🗑️ Starting database clear operation...")
+            
+            # Get counts before clearing
+            db_info_before = self.get_database_info()
+            datasets_before = db_info_before.get('total_datasets', 0)
+            models_before = db_info_before.get('total_trained_models', 0)
+            
+            print(f"Before clearing: {datasets_before} datasets, {models_before} models")
+            
+            # Clear all data using PostgreSQL method
             success = self.db.clear_all_data()
             
-            # If the clear was successful, verify that data was actually removed
             if success:
-                # Check if datasets were actually cleared
-                datasets = self.get_dataset_list()
-                if len(datasets) == 0:
-                    print("✅ All datasets successfully removed")
-                    return True
-                else:
-                    print(f"⚠️ Warning: {len(datasets)} datasets still exist after clear operation")
-                    # Try manual deletion of remaining datasets
+                # Double-check by getting counts after clearing
+                db_info_after = self.get_database_info()
+                datasets_after = db_info_after.get('total_datasets', 0)
+                models_after = db_info_after.get('total_trained_models', 0)
+                
+                print(f"After clearing: {datasets_after} datasets, {models_after} models")
+                
+                # If any data remains, try individual deletion
+                if datasets_after > 0:
+                    print(f"⚠️ {datasets_after} datasets still exist, attempting individual deletion...")
+                    datasets = self.get_dataset_list()
                     for dataset in datasets:
-                        self.delete_dataset(dataset['name'])
+                        delete_success = self.delete_dataset(dataset['name'])
+                        if delete_success:
+                            print(f"✅ Manually deleted dataset: {dataset['name']}")
+                        else:
+                            print(f"❌ Failed to delete dataset: {dataset['name']}")
                     
-                    # Check again
-                    datasets_after = self.get_dataset_list()
-                    return len(datasets_after) == 0
-            
-            return success
+                    # Final verification
+                    final_info = self.get_database_info()
+                    final_datasets = final_info.get('total_datasets', 0)
+                    
+                    if final_datasets == 0:
+                        print("✅ All datasets successfully removed after manual cleanup")
+                        return True
+                    else:
+                        print(f"❌ Failed to remove all datasets: {final_datasets} still remain")
+                        return False
+                else:
+                    print("✅ Database successfully cleared - no data remaining")
+                    return True
+            else:
+                print("❌ Database clear operation failed")
+                return False
             
         except Exception as e:
-            print(f"Error clearing data: {e}")
+            print(f"❌ Error clearing data: {e}")
             return False
 
     def create_main_dataset_from_latest(self):
