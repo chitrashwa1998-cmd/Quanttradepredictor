@@ -193,6 +193,24 @@ class TechnicalIndicators:
         result_df['volatility_20'] = TechnicalIndicators.volatility(df['Close'], 20)
         result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
 
+        # === TREND VS SIDEWAYS MODEL INDICATORS (8 indicators) ===
+        # Trend direction and slope indicators (3 indicators)
+        # EMAs already calculated above: ema_5, ema_10, ema_20
+        
+        # Trend strength indicators (4 indicators)
+        # BB Width already calculated above: bb_width
+        # ATR already calculated above: atr
+        # Volatility 10/20 already calculated above: volatility_10, volatility_20
+        
+        # Momentum indicators (3 indicators) 
+        # Price momentum 3 and 5 periods
+        result_df['price_momentum_trend_3'] = df['Close'].pct_change(3)  # 3-period momentum
+        result_df['price_momentum_trend_5'] = df['Close'].pct_change(5)  # 5-period momentum
+        # MACD histogram already calculated above: macd_histogram
+        
+        # RSI for trend vs sideways detection (1 indicator)
+        # RSI already calculated above: rsi
+
         # === PROFIT PROBABILITY MODEL INDICATORS (8 indicators) ===
         # Combine direction + magnitude + volatility + volume for profit probability
 
