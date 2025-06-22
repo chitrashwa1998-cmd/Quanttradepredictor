@@ -403,6 +403,233 @@ if st.session_state.current_page == "home":
     </div>
     """, unsafe_allow_html=True)
 
+elif st.session_state.current_page == "predictions":
+    # Prediction Engine Page
+    st.title("🎯 Prediction Engine")
+    st.markdown("Real-time Market Analysis & Forecasting")
+    st.markdown("---")
+    
+    # Check if data and models are available
+    if st.session_state.data is None:
+        st.warning("⚠️ No data loaded. Please go to the **Data Upload** page first.")
+    elif not st.session_state.models or not isinstance(st.session_state.models, dict):
+        st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
+    elif st.session_state.model_trainer is None:
+        st.warning("⚠️ Model trainer not initialized. Please go to the **Model Training** page first.")
+    else:
+        # Available models
+        available_models = []
+        for name, info in st.session_state.models.items():
+            if isinstance(info, dict) and info is not None:
+                available_models.append(name)
+            elif info is not None and not isinstance(info, bool):
+                available_models.append(name)
+        
+        if not available_models:
+            st.error("❌ No successfully trained models found.")
+            st.info("Please go to the **Model Training** page to train models first.")
+        else:
+            # Model selection
+            col1, col2, col3 = st.columns([2, 2, 1])
+            
+            with col1:
+                selected_model = st.selectbox(
+                    "🤖 Select AI Model",
+                    available_models,
+                    format_func=lambda x: x.replace('_', ' ').title(),
+                    help="Choose a trained model for predictions"
+                )
+            
+            with col2:
+                date_range = st.selectbox(
+                    "📅 Time Period",
+                    ["Last 30 days", "Last 90 days", "Last 6 months", "Last year", "All data"],
+                    index=1
+                )
+            
+            with col3:
+                task_type = 'classification'
+                if isinstance(st.session_state.models.get(selected_model), dict):
+                    task_type = st.session_state.models[selected_model].get('task_type', 'classification')
+                st.metric("Model Type", task_type.title())
+            
+            # Generate predictions
+            try:
+                from datetime import timedelta
+                
+                df = st.session_state.data.copy()
+                
+                # Ensure proper datetime index
+                if not isinstance(df.index, pd.DatetimeIndex):
+                    try:
+                        df.index = pd.to_datetime(df.index)
+                    except:
+                        df.index = pd.date_range(start='2020-01-01', periods=len(df), freq='D')
+                
+                # Filter data based on selection
+                if date_range == "Last 30 days":
+                    start_date = df.index.max() - timedelta(days=30)
+                elif date_range == "Last 90 days":
+                    start_date = df.index.max() - timedelta(days=90)
+                elif date_range == "Last 6 months":
+                    start_date = df.index.max() - timedelta(days=180)
+                elif date_range == "Last year":
+                    start_date = df.index.max() - timedelta(days=365)
+                else:
+                    start_date = df.index.min()
+                
+                df_filtered = df[df.index >= start_date].copy()
+                
+                # Prepare features
+                if st.session_state.features is None:
+                    from features.technical_indicators import TechnicalIndicators
+                    df_with_indicators = TechnicalIndicators.calculate_all_indicators(df)
+                    st.session_state.features = st.session_state.model_trainer.prepare_features(df_with_indicators)
+                
+                features = st.session_state.features.copy()
+                if not isinstance(features.index, pd.DatetimeIndex):
+                    try:
+                        features.index = pd.to_datetime(features.index)
+                    except:
+                        features.index = pd.date_range(start='2020-01-01', periods=len(features), freq='D')
+                
+                features_filtered = features[features.index >= start_date].copy()
+                
+                if features_filtered.empty:
+                    features_filtered = features.tail(100).copy()
+                
+                # Generate predictions
+                predictions, probabilities = st.session_state.model_trainer.predict(selected_model, features_filtered)
+                
+                # Create prediction dataframe
+                common_index = features_filtered.index[:len(predictions)]
+                df_filtered_aligned = df_filtered.loc[df_filtered.index.isin(common_index)]
+                
+                pred_df = pd.DataFrame({
+                    'Price': df_filtered_aligned['Close'].iloc[:len(predictions)],
+                    'Prediction': predictions,
+                    'Direction': ['Up' if p == 1 else 'Down' for p in predictions]
+                }, index=common_index)
+                
+                if probabilities is not None:
+                    pred_df['Confidence'] = np.max(probabilities, axis=1)
+                
+                # Display results
+                st.subheader(f"📊 {selected_model.replace('_', ' ').title()} Predictions")
+                
+                # Quick stats
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    if selected_model == 'direction':
+                        up_pct = (predictions == 1).mean() * 100
+                        st.metric("Predicted Up", f"{up_pct:.1f}%")
+                    else:
+                        st.metric("Total Predictions", len(predictions))
+                
+                with col2:
+                    if selected_model == 'direction':
+                        down_pct = (predictions == 0).mean() * 100
+                        st.metric("Predicted Down", f"{down_pct:.1f}%")
+                    else:
+                        st.metric("Latest Value", f"{predictions[-1]:.3f}")
+                
+                with col3:
+                    if 'Confidence' in pred_df.columns:
+                        avg_conf = pred_df['Confidence'].mean()
+                        st.metric("Avg Confidence", f"{avg_conf:.3f}")
+                    else:
+                        st.metric("Data Points", len(pred_df))
+                
+                with col4:
+                    if selected_model == 'direction':
+                        current_pred = "Up" if predictions[-1] == 1 else "Down"
+                        st.metric("Latest Signal", current_pred)
+                    else:
+                        st.metric("Model", selected_model.title())
+                
+                # Price chart with predictions
+                fig = go.Figure()
+                
+                # Price line
+                fig.add_trace(go.Scatter(
+                    x=pred_df.index,
+                    y=pred_df['Price'],
+                    mode='lines',
+                    name='Price',
+                    line=dict(color='blue', width=2),
+                    opacity=0.7
+                ))
+                
+                # Prediction markers for direction model
+                if selected_model == 'direction':
+                    up_predictions = pred_df[pred_df['Prediction'] == 1]
+                    down_predictions = pred_df[pred_df['Prediction'] == 0]
+                    
+                    if len(up_predictions) > 0:
+                        fig.add_trace(go.Scatter(
+                            x=up_predictions.index,
+                            y=up_predictions['Price'],
+                            mode='markers',
+                            marker=dict(symbol='triangle-up', color='green', size=8),
+                            name='Predicted Up'
+                        ))
+                    
+                    if len(down_predictions) > 0:
+                        fig.add_trace(go.Scatter(
+                            x=down_predictions.index,
+                            y=down_predictions['Price'],
+                            mode='markers',
+                            marker=dict(symbol='triangle-down', color='red', size=8),
+                            name='Predicted Down'
+                        ))
+                
+                fig.update_layout(
+                    height=500,
+                    title=f"{selected_model.replace('_', ' ').title()} Predictions Overview",
+                    xaxis_title="Date",
+                    yaxis_title="Price ($)",
+                    hovermode='x unified'
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Data table
+                st.subheader("📋 Prediction Data")
+                
+                # Format display dataframe
+                display_df = pred_df.copy()
+                display_df = display_df.reset_index()
+                display_df['Date'] = display_df['index'].dt.strftime('%Y-%m-%d %H:%M')
+                display_df = display_df.drop(columns=['index'])
+                
+                if 'Price' in display_df.columns:
+                    display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
+                
+                if 'Confidence' in display_df.columns:
+                    display_df['Confidence'] = display_df['Confidence'].apply(lambda x: f"{x:.3f}")
+                
+                st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+                
+            except Exception as e:
+                st.error(f"❌ Error generating predictions: {str(e)}")
+                st.info("Please ensure models are properly trained and data is available.")
+
+elif st.session_state.current_page == "data":
+    # Import data upload functionality  
+    exec(open('pages/1_Data_Upload.py').read())
+
+elif st.session_state.current_page == "training":
+    # Import model training functionality
+    exec(open('pages/2_Model_Training.py').read())
+
+elif st.session_state.current_page == "backtesting":
+    # Import backtesting functionality
+    exec(open('pages/4_Backtesting.py').read())
+
+elif st.session_state.current_page == "database":
+    # Import database management functionality
+    exec(open('pages/5_Database_Manager.py').read())
+
 elif st.session_state.current_page == "about":
     st.markdown("""
     <div class="corporate-page">
