@@ -27,56 +27,56 @@ if st.session_state.data is None:
 
 if not st.session_state.models:
     st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
-    
+
     # Add quick training button for convenience
     st.markdown("---")
     st.subheader("Quick Model Training")
     st.info("Train essential models directly from this page for immediate predictions.")
-    
+
     if st.button("🚀 Train Essential Models Now", type="primary"):
         try:
             from models.xgboost_models import QuantTradingModels
             from features.technical_indicators import TechnicalIndicators
             from utils.database_adapter import get_trading_database
             from datetime import datetime
-            
+
             with st.spinner("Training models on full dataset... This may take 5-10 minutes for maximum accuracy."):
                 # Use full dataset for maximum accuracy
                 data = st.session_state.data
                 st.info(f"Training on complete dataset: {len(data)} rows for maximum accuracy")
-                
+
                 # Calculate features
                 features_data = TechnicalIndicators.calculate_all_indicators(data)
                 features_data = features_data.dropna()
-                
+
                 if len(features_data) < 100:
                     st.error("Not enough clean data for training")
                     st.stop()
-                
+
                 # Initialize trainer
                 model_trainer = QuantTradingModels()
                 st.session_state.model_trainer = model_trainer
-                
+
                 # Prepare data
                 X = model_trainer.prepare_features(features_data)
                 targets = model_trainer.create_targets(features_data)
-                
+
                 # Train essential models
                 essential_models = ['direction', 'magnitude', 'trading_signal']
                 results = {}
-                
+
                 for model_name in essential_models:
                     if model_name in targets:
                         y = targets[model_name]
                         task_type = 'classification' if model_name in ['direction', 'trading_signal'] else 'regression'
-                        
+
                         result = model_trainer.train_model(model_name, X, y, task_type)
                         if result:
                             results[model_name] = result
-                
+
                 # Save results
                 st.session_state.models = results
-                
+
                 # Save to database
                 try:
                     db = get_trading_database()
@@ -91,14 +91,14 @@ if not st.session_state.models:
                     db.save_trained_models(model_trainer.models)
                 except:
                     pass
-                
+
                 st.success("Models trained successfully! Refreshing page...")
                 st.rerun()
-                
+
         except Exception as e:
             st.error(f"Training failed: {str(e)}")
             st.info("Please try using the Model Training page instead.")
-    
+
     st.stop()
 
 if st.session_state.model_trainer is None:
@@ -199,11 +199,11 @@ if st.session_state.features is None:
     try:
         # First calculate technical indicators if not present
         from features.technical_indicators import TechnicalIndicators
-        
+
         # Check if technical indicators are already calculated
         required_indicators = ['sma_5', 'ema_5', 'rsi', 'macd_histogram']
         missing_indicators = [ind for ind in required_indicators if ind not in df_filtered.columns]
-        
+
         if missing_indicators:
             st.info("Calculating missing technical indicators...")
             df_with_indicators = TechnicalIndicators.calculate_all_indicators(df_filtered)
@@ -211,12 +211,12 @@ if st.session_state.features is None:
         else:
             df_with_indicators = df_filtered
             df_full_indicators = df
-        
+
         features_filtered = model_trainer.prepare_features(df_with_indicators)
         st.session_state.features = model_trainer.prepare_features(df_full_indicators)
-        
+
         st.success(f"✅ Prepared {len(features_filtered)} feature rows with {features_filtered.shape[1]} features")
-        
+
     except Exception as e:
         st.error(f"❌ Error preparing features: {str(e)}")
         st.info("Please ensure your data has technical indicators calculated. Go to Model Training page first.")
@@ -229,7 +229,7 @@ else:
             features.index = pd.to_datetime(features.index)
         except:
             features.index = pd.date_range(start='2020-01-01', periods=len(features), freq='D')
-    
+
     try:
         features_filtered = features[features.index >= start_date].copy()
         if features_filtered.empty:
@@ -323,7 +323,7 @@ try:
                 else:
                     hover_template_up = '<b>Prediction:</b> Up<br><b>Price:</b> $%{y:.2f}<extra></extra>'
                     customdata_up = None
-                
+
                 fig.add_trace(go.Scatter(
                     x=up_predictions.index,
                     y=up_predictions['Price'],
@@ -342,7 +342,7 @@ try:
                 else:
                     hover_template_down = '<b>Prediction:</b> Down<br><b>Price:</b> $%{y:.2f}<extra></extra>'
                     customdata_down = None
-                
+
                 fig.add_trace(go.Scatter(
                     x=down_predictions.index,
                     y=down_predictions['Price'],
@@ -425,10 +425,14 @@ try:
         tab1, tab2, tab3 = st.tabs(["📊 Magnitude Analysis", "📈 Price Movement", "📋 Data Table"])
 
         # Add magnitude-specific fields
-        pred_df['Magnitude'] = np.abs(predictions)
+        pred_df['Magnitude'] = np.abs(predictions) * 100  # Convert to percentage
+
+        # Create realistic magnitude categories for 5-minute scalping
+        # Typical 5-min moves: 0.05-0.15% (Low), 0.15-0.3% (Medium), 0.3-0.6% (High), 0.6%+ (Extreme)
         pred_df['Magnitude_Category'] = pd.cut(pred_df['Magnitude'], 
-                                             bins=[0, 0.01, 0.02, 0.05, float('inf')],
-                                             labels=['Low', 'Medium', 'High', 'Extreme'])
+                                             bins=[0, 0.15, 0.3, 0.6, float('inf')],
+                                             labels=['Low (0-0.15%)', 'Medium (0.15-0.3%)', 'High (0.3-0.6%)', 'Extreme (0.6%+)'],
+                                             include_lowest=True)
 
         with tab1:
             st.subheader("📊 Price Movement Magnitude Analysis")
@@ -549,13 +553,13 @@ try:
         # Create more balanced risk levels based on data distribution
         # Use quantile-based binning for better distribution
         prob_values = pred_df['Profit_Prob'].dropna()
-        
+
         if len(prob_values) > 0:
             # Create quartile-based risk levels for better balance
             q25 = np.percentile(prob_values, 25)
             q50 = np.percentile(prob_values, 50)
             q75 = np.percentile(prob_values, 75)
-            
+
             pred_df['Risk_Level'] = pd.cut(pred_df['Profit_Prob'], 
                                          bins=[0, q25, q50, q75, 1.0],
                                          labels=['High Risk', 'Medium Risk', 'Low Risk', 'Very Low Risk'],
@@ -571,7 +575,7 @@ try:
         if len(pred_df) > 0:
             prob_median = pred_df['Profit_Prob'].median()
             prob_75th = pred_df['Profit_Prob'].quantile(0.75)
-            
+
             pred_df['Signal'] = np.where(pred_df['Profit_Prob'] >= prob_75th, '🟢 HIGH PROFIT', 
                                        np.where(pred_df['Profit_Prob'] >= prob_median, '🟡 MEDIUM PROFIT', '🔴 LOW PROFIT'))
         else:
@@ -698,16 +702,16 @@ try:
 
         # Add volatility-specific fields
         pred_df['Volatility_Forecast'] = predictions
-        
+
         # Create balanced volatility categories using data distribution
         vol_values = pred_df['Volatility_Forecast'].dropna()
-        
+
         if len(vol_values) > 0:
             # Use quartile-based binning for balanced distribution
             q25 = np.percentile(vol_values, 25)
             q50 = np.percentile(vol_values, 50) 
             q75 = np.percentile(vol_values, 75)
-            
+
             pred_df['Volatility_Category'] = pd.cut(pred_df['Volatility_Forecast'], 
                                                    bins=[0, q25, q50, q75, float('inf')],
                                                    labels=['Low Vol', 'Medium Vol', 'High Vol', 'Extreme Vol'],
@@ -754,9 +758,9 @@ try:
 
             # Volatility distribution pie chart
             vol_counts = pred_df['Volatility_Category'].value_counts()
-            
+
             col1, col2 = st.columns(2)
-            
+
             with col1:
                 fig_pie = go.Figure(data=[go.Pie(
                     labels=vol_counts.index,
@@ -771,7 +775,7 @@ try:
                 )
 
                 st.plotly_chart(fig_pie, use_container_width=True)
-            
+
             with col2:
                 # Statistics
                 col1a, col2a = st.columns(2)
@@ -782,7 +786,7 @@ try:
                     high_vol = (pred_df['Volatility_Category'].isin(['High Vol', 'Extreme Vol'])).mean() * 100
                     st.metric("High Volatility %", f"{high_vol:.1f}%")
                     st.metric("Latest Volatility", f"{pred_df['Volatility_Forecast'].iloc[-1]:.4f}")
-                
+
                 # Volatility range info
                 st.subheader("📊 Volatility Ranges")
                 if len(vol_counts) > 0:
@@ -793,14 +797,14 @@ try:
                         q50 = np.percentile(vol_values, 50)
                         q75 = np.percentile(vol_values, 75)
                         vol_max = vol_values.max()
-                        
+
                         vol_ranges = [
                             f"Low: 0 - {q25:.4f}",
                             f"Medium: {q25:.4f} - {q50:.4f}",
                             f"High: {q50:.4f} - {q75:.4f}",
                             f"Extreme: {q75:.4f} - {vol_max:.4f}"
                         ]
-                        
+
                         for range_info in vol_ranges:
                             st.text(range_info)
 
@@ -846,53 +850,53 @@ try:
 
             # Create enhanced display dataframe for volatility
             display_df = create_display_dataframe(pred_df)
-            
+
             # Format volatility values
             if 'Volatility_Forecast' in display_df.columns:
                 display_df['Volatility_Forecast'] = display_df['Volatility_Forecast'].apply(
                     lambda x: f"{float(x):.4f}" if isinstance(x, (int, float, str)) else x
                 )
-            
+
             # Add volatility interpretation
             if 'Volatility_Category' in display_df.columns:
                 display_df['Vol_Level'] = display_df['Volatility_Category'].apply(
                     lambda x: f"📊 {x}" if pd.notna(x) else "N/A"
                 )
-            
+
             # Show validation stats
             st.subheader("📊 Volatility Analysis Summary")
             col1, col2, col3, col4 = st.columns(4)
-            
+
             with col1:
                 low_vol_count = (pred_df['Volatility_Category'] == 'Low Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
                 st.metric("Low Volatility", low_vol_count)
-            
+
             with col2:
                 medium_vol_count = (pred_df['Volatility_Category'] == 'Medium Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
                 st.metric("Medium Volatility", medium_vol_count)
-            
+
             with col3:
                 high_vol_count = (pred_df['Volatility_Category'] == 'High Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
                 st.metric("High Volatility", high_vol_count)
-            
+
             with col4:
                 extreme_vol_count = (pred_df['Volatility_Category'] == 'Extreme Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
                 st.metric("Extreme Volatility", extreme_vol_count)
-            
+
             # Detailed data table
             columns_to_show = ['Date', 'Price', 'Volatility_Forecast']
             if 'Vol_Level' in display_df.columns:
                 columns_to_show.append('Vol_Level')
             if 'Volatility_Category' in display_df.columns:
                 columns_to_show.append('Volatility_Category')
-            
+
             # Filter columns that exist
             available_columns = [col for col in columns_to_show if col in display_df.columns]
-            
+
             # Add volatility statistics for recent data
             st.subheader("📈 Recent Volatility Data")
             recent_vol_data = pred_df.tail(20)
-            
+
             # Show volatility statistics for recent data
             if len(recent_vol_data) > 0:
                 col1, col2, col3 = st.columns(3)
@@ -905,7 +909,7 @@ try:
                 with col3:
                     latest_vol = recent_vol_data['Volatility_Forecast'].iloc[-1]
                     st.metric("Latest Vol", f"{latest_vol:.4f}")
-            
+
             st.dataframe(
                 display_df[available_columns].tail(50), 
                 use_container_width=True, 
@@ -1017,18 +1021,18 @@ try:
         # Add reversal fields with enhanced analysis
         pred_df['Reversal_Signal'] = np.where(predictions == 1, 'Reversal Expected', 'No Reversal')
         pred_df['Signal_Type'] = predictions
-        
+
         # Calculate additional technical indicators for context
         pred_df['Price_Change_1'] = pred_df['Price'].pct_change(1) * 100
         pred_df['Price_Change_3'] = pred_df['Price'].pct_change(3) * 100
         pred_df['SMA_5'] = pred_df['Price'].rolling(5).mean()
         pred_df['SMA_20'] = pred_df['Price'].rolling(20).mean()
-        
+
         # Calculate price position in recent range
         pred_df['High_10'] = pred_df['Price'].rolling(10).max()
         pred_df['Low_10'] = pred_df['Price'].rolling(10).min()
         pred_df['Price_Position'] = (pred_df['Price'] - pred_df['Low_10']) / (pred_df['High_10'] - pred_df['Low_10'])
-        
+
         # Identify reversal types based on price position
         reversal_data = pred_df[pred_df['Reversal_Signal'] == 'Reversal Expected'].copy()
         if len(reversal_data) > 0:
@@ -1051,7 +1055,7 @@ try:
                 name='Price',
                 line=dict(color='#2E86C1', width=2)
             ))
-            
+
             # Add SMA lines for context
             fig.add_trace(go.Scatter(
                 x=pred_df.index,
@@ -1061,7 +1065,7 @@ try:
                 line=dict(color='orange', width=1, dash='dot'),
                 opacity=0.7
             ))
-            
+
             fig.add_trace(go.Scatter(
                 x=pred_df.index,
                 y=pred_df['SMA_20'],
@@ -1075,7 +1079,7 @@ try:
             if len(reversal_data) > 0:
                 bullish_reversals = reversal_data[reversal_data['Reversal_Type'] == 'Bullish (Bounce)']
                 bearish_reversals = reversal_data[reversal_data['Reversal_Type'] == 'Bearish (Pullback)']
-                
+
                 if len(bullish_reversals) > 0:
                     fig.add_trace(go.Scatter(
                         x=bullish_reversals.index,
@@ -1109,17 +1113,17 @@ try:
             )
 
             st.plotly_chart(fig, use_container_width=True)
-            
+
             # Current market status
             if len(pred_df) > 0:
                 latest_signal = pred_df['Reversal_Signal'].iloc[-1]
                 latest_price_pos = pred_df['Price_Position'].iloc[-1]
                 latest_momentum = pred_df['Price_Change_3'].iloc[-1]
-                
+
                 if latest_signal == 'Reversal Expected':
                     reversal_type = 'Bullish Reversal' if latest_price_pos <= 0.4 else 'Bearish Reversal'
                     signal_color = '#27AE60' if latest_price_pos <= 0.4 else '#E74C3C'
-                    
+
                     st.markdown(f"""
                     <div style="background: linear-gradient(90deg, {signal_color}20, {signal_color}10); 
                          border-left: 4px solid {signal_color}; padding: 1rem; margin: 1rem 0; border-radius: 8px;">
@@ -1136,7 +1140,7 @@ try:
             reversal_counts = pred_df['Reversal_Signal'].value_counts()
 
             col1, col2 = st.columns(2)
-            
+
             with col1:
                 fig = go.Figure(data=[go.Pie(
                     labels=reversal_counts.index,
@@ -1151,11 +1155,11 @@ try:
                 )
 
                 st.plotly_chart(fig, use_container_width=True)
-            
+
             with col2:
                 if len(reversal_data) > 0:
                     reversal_type_counts = reversal_data['Reversal_Type'].value_counts()
-                    
+
                     fig = go.Figure(data=[go.Pie(
                         labels=reversal_type_counts.index,
                         values=reversal_type_counts.values,
@@ -1196,11 +1200,11 @@ try:
 
         with tab3:
             st.subheader("📈 Technical Analysis Context")
-            
+
             # Price position distribution
             if len(pred_df) > 0:
                 fig = go.Figure()
-                
+
                 fig.add_trace(go.Scatter(
                     x=pred_df.index,
                     y=pred_df['Price_Position'],
@@ -1208,7 +1212,7 @@ try:
                     name='Price Position in Range',
                     line=dict(color='blue', width=2)
                 ))
-                
+
                 # Add horizontal lines for key levels
                 fig.add_hline(y=0.7, line_dash="dash", line_color="red", 
                              annotation_text="Overbought Zone (70%)")
@@ -1216,7 +1220,7 @@ try:
                              annotation_text="Oversold Zone (30%)")
                 fig.add_hline(y=0.5, line_dash="dot", line_color="gray", 
                              annotation_text="Midpoint")
-                
+
                 # Mark reversal points
                 if len(reversal_data) > 0:
                     fig.add_trace(go.Scatter(
@@ -1226,7 +1230,7 @@ try:
                         marker=dict(color='red', size=10, symbol='diamond'),
                         name='Reversal Signals'
                     ))
-                
+
                 fig.update_layout(
                     height=400,
                     title="Price Position in 10-Period Range (Reversal Context)",
@@ -1234,17 +1238,17 @@ try:
                     yaxis_title="Position in Range (0-1)",
                     yaxis=dict(range=[0, 1])
                 )
-                
+
                 st.plotly_chart(fig, use_container_width=True)
-            
+
             # Reversal analysis and debugging
             st.subheader("🔍 Reversal Detection Analysis")
-            
+
             # Show reversal statistics
             total_data_points = len(pred_df)
             reversal_count = len(reversal_data)
             reversal_percentage = (reversal_count / total_data_points * 100) if total_data_points > 0 else 0
-            
+
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Total Data Points", total_data_points)
@@ -1252,13 +1256,13 @@ try:
                 st.metric("Reversal Signals", reversal_count)
             with col3:
                 st.metric("Reversal Rate", f"{reversal_percentage:.1f}%")
-            
+
             # Show recent reversal signals if any
             if len(reversal_data) > 0:
                 st.subheader("📋 Recent Reversal Signals")
-                
+
                 recent_reversals = reversal_data.tail(10)
-                
+
                 # Create detailed table
                 analysis_data = []
                 for idx, row in recent_reversals.iterrows():
@@ -1271,15 +1275,15 @@ try:
                         '3-Period Change': f"{row['Price_Change_3']:.2f}%",
                         'Confidence': f"{row.get('Confidence', 0):.3f}" if 'Confidence' in pred_df.columns else 'N/A'
                     })
-                
+
                 if analysis_data:
                     st.dataframe(pd.DataFrame(analysis_data), use_container_width=True, hide_index=True)
             else:
                 st.info("ℹ️ No reversal signals detected in the current time period.")
-                
+
                 # Show debugging information
                 st.subheader("🔧 Reversal Detection Debug Info")
-                
+
                 # Check if we have the necessary data for analysis
                 debug_info = []
                 if 'Price_Position' in pred_df.columns:
@@ -1287,16 +1291,16 @@ try:
                     debug_info.append(f"Price Position Range: {price_pos_stats['min']:.2f} to {price_pos_stats['max']:.2f}")
                     debug_info.append(f"Low Range (<25%): {(pred_df['Price_Position'] <= 0.25).sum()} points")
                     debug_info.append(f"High Range (>75%): {(pred_df['Price_Position'] >= 0.75).sum()} points")
-                
+
                 if 'Price_Change_3' in pred_df.columns:
                     momentum_stats = pred_df['Price_Change_3'].describe()
                     debug_info.append(f"3-Period Change Range: {momentum_stats['min']:.3f} to {momentum_stats['max']:.3f}")
                     debug_info.append(f"Significant Declines (<-0.3%): {(pred_df['Price_Change_3'] < -0.003).sum()} points")
                     debug_info.append(f"Significant Rallies (>0.3%): {(pred_df['Price_Change_3'] > 0.003).sum()} points")
-                
+
                 for info in debug_info:
                     st.text(info)
-                
+
                 st.info("💡 Tip: Reversal signals depend on price reaching extreme positions (top/bottom 25% of recent range) combined with momentum conditions. Consider using a longer time period or different assets if no signals are detected.")
 
         with tab4:
@@ -1304,23 +1308,23 @@ try:
 
             # Enhanced display dataframe
             display_df = create_display_dataframe(pred_df)
-            
+
             # Add formatted columns
             if 'Price_Position' in display_df.columns:
                 display_df['Price_Position'] = display_df['Price_Position'].apply(
                     lambda x: f"{x:.1%}" if pd.notna(x) else "N/A"
                 )
-            
+
             if 'Price_Change_1' in display_df.columns:
                 display_df['1-Period Change'] = display_df['Price_Change_1'].apply(
                     lambda x: f"{x:.2f}%" if pd.notna(x) else "N/A"
                 )
-            
+
             if 'Price_Change_3' in display_df.columns:
                 display_df['3-Period Change'] = display_df['Price_Change_3'].apply(
                     lambda x: f"{x:.2f}%" if pd.notna(x) else "N/A"
                 )
-            
+
             # Select and reorder columns for display
             columns_to_show = ['Date', 'Price', 'Reversal_Signal']
             if 'Price_Position' in display_df.columns:
@@ -1331,10 +1335,10 @@ try:
                 columns_to_show.append('3-Period Change')
             if 'Confidence' in display_df.columns:
                 columns_to_show.append('Confidence')
-            
+
             # Filter to existing columns
             available_columns = [col for col in columns_to_show if col in display_df.columns]
-            
+
             st.dataframe(
                 display_df[available_columns].tail(50), 
                 use_container_width=True, 
@@ -1439,7 +1443,7 @@ try:
             st.subheader("📋 Signal History")
 
             display_df = create_display_dataframe(pred_df)
-            
+
             st.dataframe(
                 display_df.tail(50),
                 use_container_width=True,
