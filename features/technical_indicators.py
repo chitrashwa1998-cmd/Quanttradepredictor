@@ -142,10 +142,17 @@ class TechnicalIndicators:
         return pd.Series(obv_values, index=close.index)
 
     @staticmethod
+    def volatility(data: pd.Series, window: int) -> pd.Series:
+        """Price volatility (standard deviation of returns)"""
+        returns = data.pct_change()
+        return returns.rolling(window=window).std()
+
+    @staticmethod
     def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate 9 direction-focused indicators optimized for scalping"""
+        """Calculate indicators optimized for both direction and magnitude models"""
         result_df = df.copy()
 
+        # === DIRECTION MODEL INDICATORS (9 indicators) ===
         # Short-term trend indicators (3 indicators)
         result_df['ema_5'] = TechnicalIndicators.ema(df['Close'], 5)
         result_df['ema_10'] = TechnicalIndicators.ema(df['Close'], 10)
@@ -178,5 +185,22 @@ class TechnicalIndicators:
         else:
             # Create dummy volume indicator if Volume column is missing
             result_df['volume_ratio'] = 1.0
+
+        # === MAGNITUDE MODEL INDICATORS (8 indicators) ===
+        # Volatility indicators (3 indicators)
+        result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
+        result_df['volatility_10'] = TechnicalIndicators.volatility(df['Close'], 10)
+        result_df['volatility_20'] = TechnicalIndicators.volatility(df['Close'], 20)
+
+        # Bollinger Band width indicator (1 indicator)
+        result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
+
+        # Price relationship indicator (1 indicator)
+        result_df['high_low_ratio'] = df['High'] / df['Low']
+
+        # Additional momentum indicators already included above:
+        # - macd_histogram ✅
+        # - price_momentum_1, price_momentum_3, price_momentum_5 ✅
+        # - williams_r ✅
 
         return result_df
