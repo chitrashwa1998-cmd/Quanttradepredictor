@@ -263,21 +263,61 @@ with col1:
 
 with col2:
     st.subheader("⚠️ Danger Zone")
+    
+    # Show current data count before clearing
+    current_datasets = len(datasets)
+    st.write(f"**Current datasets:** {current_datasets}")
+    
     if st.button("🗑️ Clear All Database", type="secondary"):
         if st.checkbox("⚠️ I confirm I want to delete ALL data from the database"):
-            if trading_db.clear_all_data():
-                st.success("✅ All database data cleared")
-                # Clear all session state
-                st.session_state.data = None
-                st.session_state.models = {}
-                st.session_state.predictions = None
-                st.session_state.features = None
-                st.session_state.model_trainer = None
-                st.session_state.auto_restore_complete = False
-                # Force page refresh
-                st.rerun()
-            else:
-                st.error("Failed to clear database")
+            with st.spinner("Clearing database..."):
+                try:
+                    # First, get current counts
+                    db_info_before = trading_db.get_database_info()
+                    
+                    # Clear the database
+                    success = trading_db.clear_all_data()
+                    
+                    if success:
+                        # Verify the clearing worked
+                        db_info_after = trading_db.get_database_info()
+                        datasets_after = db_info_after.get('total_datasets', 0)
+                        
+                        if datasets_after == 0:
+                            st.success(f"✅ All database data cleared successfully!")
+                            st.success(f"Removed {db_info_before.get('total_datasets', 0)} datasets")
+                            
+                            # Clear all session state
+                            st.session_state.data = None
+                            st.session_state.models = {}
+                            st.session_state.predictions = None
+                            st.session_state.features = None
+                            st.session_state.model_trainer = None
+                            st.session_state.auto_restore_complete = False
+                            
+                            # Force page refresh
+                            st.rerun()
+                        else:
+                            st.warning(f"⚠️ Partial clear: {datasets_after} datasets still remain")
+                            st.info("Attempting individual dataset deletion...")
+                            
+                            # Try to delete remaining datasets individually
+                            remaining_datasets = trading_db.get_dataset_list()
+                            for dataset in remaining_datasets:
+                                success = trading_db.delete_dataset(dataset['name'])
+                                if success:
+                                    st.success(f"✅ Deleted: {dataset['name']}")
+                                else:
+                                    st.error(f"❌ Failed to delete: {dataset['name']}")
+                            
+                            st.rerun()
+                    else:
+                        st.error("❌ Failed to clear database")
+                        st.info("Try deleting datasets individually or contact support")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error clearing database: {str(e)}")
+                    st.info("Try refreshing the page and trying again")
 
 # Data Recovery Section
 st.header("🔄 Data Recovery")

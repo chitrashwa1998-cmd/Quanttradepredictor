@@ -124,7 +124,27 @@ class DatabaseAdapter:
         """Clear all data from database"""
         try:
             # Since we're using PostgreSQL exclusively, call clear_all_data directly
-            return self.db.clear_all_data()
+            success = self.db.clear_all_data()
+            
+            # If the clear was successful, verify that data was actually removed
+            if success:
+                # Check if datasets were actually cleared
+                datasets = self.get_dataset_list()
+                if len(datasets) == 0:
+                    print("✅ All datasets successfully removed")
+                    return True
+                else:
+                    print(f"⚠️ Warning: {len(datasets)} datasets still exist after clear operation")
+                    # Try manual deletion of remaining datasets
+                    for dataset in datasets:
+                        self.delete_dataset(dataset['name'])
+                    
+                    # Check again
+                    datasets_after = self.get_dataset_list()
+                    return len(datasets_after) == 0
+            
+            return success
+            
         except Exception as e:
             print(f"Error clearing data: {e}")
             return False

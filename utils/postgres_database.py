@@ -515,14 +515,32 @@ class PostgresTradingDatabase:
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # Use TRUNCATE for complete data removal and reset sequences
-                    cursor.execute("TRUNCATE TABLE predictions RESTART IDENTITY CASCADE;")
-                    cursor.execute("TRUNCATE TABLE trained_models RESTART IDENTITY CASCADE;")
-                    cursor.execute("TRUNCATE TABLE model_results RESTART IDENTITY CASCADE;")
-                    cursor.execute("TRUNCATE TABLE ohlc_datasets RESTART IDENTITY CASCADE;")
+                    # Check which tables exist first
+                    cursor.execute("""
+                        SELECT tablename FROM pg_tables 
+                        WHERE schemaname = 'public' 
+                        AND tablename IN ('predictions', 'trained_models', 'model_results', 'ohlc_datasets');
+                    """)
+                    existing_tables = [row[0] for row in cursor.fetchall()]
+                    
+                    # Clear tables in reverse dependency order to avoid constraint issues
+                    for table in ['predictions', 'trained_models', 'model_results', 'ohlc_datasets']:
+                        if table in existing_tables:
+                            try:
+                                cursor.execute(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE;")
+                                print(f"✅ Cleared table: {table}")
+                            except Exception as e:
+                                print(f"Warning: Could not clear table {table}: {str(e)}")
+                                # Try DELETE as fallback
+                                try:
+                                    cursor.execute(f"DELETE FROM {table};")
+                                    print(f"✅ Deleted all rows from: {table}")
+                                except Exception as e2:
+                                    print(f"Error: Could not delete from {table}: {str(e2)}")
+                    
                     conn.commit()
 
-            print("✅ Database completely cleared - all tables truncated")
+            print("✅ Database completely cleared - all data removed")
             return True
 
         except Exception as e:
