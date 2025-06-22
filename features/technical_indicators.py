@@ -143,52 +143,40 @@ class TechnicalIndicators:
 
     @staticmethod
     def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate only the specified 18 technical indicators"""
+        """Calculate 9 direction-focused indicators optimized for scalping"""
         result_df = df.copy()
 
-        # Price-based Moving Averages (2 indicators)
+        # Short-term trend indicators (3 indicators)
         result_df['ema_5'] = TechnicalIndicators.ema(df['Close'], 5)
         result_df['ema_10'] = TechnicalIndicators.ema(df['Close'], 10)
+        result_df['ema_20'] = TechnicalIndicators.ema(df['Close'], 20)
 
-        # Momentum Indicators (4 indicators)
+        # Momentum and reversal indicators (2 indicators)
         result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
-        
-        # MACD components - only keep histogram
+        result_df['williams_r'] = TechnicalIndicators.williams_r(df['High'], df['Low'], df['Close'])
+
+        # MACD momentum indicator (1 indicator)
         macd_data = TechnicalIndicators.macd(df['Close'])
         result_df['macd_histogram'] = macd_data['histogram']
 
-        # Price momentum
+        # Price momentum indicators (3 indicators)
         result_df['price_momentum_1'] = df['Close'].pct_change(1)
         result_df['price_momentum_3'] = df['Close'].pct_change(3)
+        result_df['price_momentum_5'] = df['Close'].pct_change(5)
 
-        # Volatility Indicators (1 indicator)
-        result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
-
-        # Bollinger Bands (4 indicators)
+        # Bollinger Band position indicator (1 indicator)
         bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
-        result_df['bb_upper'] = bb_data['upper']
-        result_df['bb_lower'] = bb_data['lower']
-        result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
         result_df['bb_position'] = (df['Close'] - bb_data['lower']) / (bb_data['upper'] - bb_data['lower'])
 
-        # Price Relationships (3 indicators)
-        result_df['high_low_ratio'] = df['High'] / df['Low']
-        result_df['close_low_diff'] = df['Close'] - df['Low']
+        # Session bias indicator (1 indicator)
         result_df['open_close_diff'] = df['Close'] - df['Open']
 
-        # Volume Indicators (1 indicator)
+        # Volume validation indicator (1 indicator)
         if 'Volume' in df.columns:
             volume_sma_temp = TechnicalIndicators.sma(df['Volume'], 10)
             result_df['volume_ratio'] = df['Volume'] / volume_sma_temp
         else:
             # Create dummy volume indicator if Volume column is missing
             result_df['volume_ratio'] = 1.0
-
-        # Time-based Features (1 indicator)
-        result_df['hour'] = result_df.index.hour if hasattr(result_df.index, 'hour') else 0
-
-        # Additional Technical Indicators (2 indicators)
-        result_df['adx'] = TechnicalIndicators.adx(df['High'], df['Low'], df['Close'])
-        result_df['cci'] = TechnicalIndicators.cci(df['High'], df['Low'], df['Close'])
 
         return result_df
