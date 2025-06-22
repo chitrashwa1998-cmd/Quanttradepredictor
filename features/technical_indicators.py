@@ -143,62 +143,52 @@ class TechnicalIndicators:
 
     @staticmethod
     def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate selected technical indicators (removed: SMA 10/20/50, MACD line/signal, BB middle, Stochastic K/D, momentum 10, volume SMA, month, day_of_week)"""
+        """Calculate only the specified 18 technical indicators"""
         result_df = df.copy()
 
-        # Price-based Moving Averages (4 indicators) - removed SMA 10, 20, 50
-        result_df['sma_5'] = TechnicalIndicators.sma(df['Close'], 5)
-
+        # Price-based Moving Averages (2 indicators)
         result_df['ema_5'] = TechnicalIndicators.ema(df['Close'], 5)
         result_df['ema_10'] = TechnicalIndicators.ema(df['Close'], 10)
-        result_df['ema_20'] = TechnicalIndicators.ema(df['Close'], 20)
 
-        # Momentum Indicators (7 indicators) - removed MACD line/signal, momentum 10
+        # Momentum Indicators (4 indicators)
         result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
-
+        
         # MACD components - only keep histogram
         macd_data = TechnicalIndicators.macd(df['Close'])
         result_df['macd_histogram'] = macd_data['histogram']
 
-        # Price momentum - removed momentum 10
+        # Price momentum
         result_df['price_momentum_1'] = df['Close'].pct_change(1)
         result_df['price_momentum_3'] = df['Close'].pct_change(3)
-        result_df['price_momentum_5'] = df['Close'].pct_change(5)
 
-        # Williams %R
-        result_df['williams_r'] = TechnicalIndicators.williams_r(df['High'], df['Low'], df['Close'])
-
-        # Volatility Indicators (4 indicators)
+        # Volatility Indicators (1 indicator)
         result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
-        result_df['volatility_10'] = df['Close'].rolling(10).std()
-        result_df['volatility_20'] = df['Close'].rolling(20).std()
 
-        # Bollinger Bands (4 indicators) - removed middle band
+        # Bollinger Bands (4 indicators)
         bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
         result_df['bb_upper'] = bb_data['upper']
         result_df['bb_lower'] = bb_data['lower']
         result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
         result_df['bb_position'] = (df['Close'] - bb_data['lower']) / (bb_data['upper'] - bb_data['lower'])
 
-        # Stochastic Oscillator - REMOVED both K and D
-
-        # Price Relationships (4 indicators)
+        # Price Relationships (3 indicators)
         result_df['high_low_ratio'] = df['High'] / df['Low']
-        result_df['open_close_diff'] = df['Close'] - df['Open']
-        result_df['high_close_diff'] = df['High'] - df['Close']
         result_df['close_low_diff'] = df['Close'] - df['Low']
+        result_df['open_close_diff'] = df['Close'] - df['Open']
 
-        # Volume Indicators (2 indicators) - removed volume_sma
+        # Volume Indicators (1 indicator)
         if 'Volume' in df.columns:
             volume_sma_temp = TechnicalIndicators.sma(df['Volume'], 10)
             result_df['volume_ratio'] = df['Volume'] / volume_sma_temp
-            result_df['obv'] = TechnicalIndicators.obv(df['Close'], df['Volume'])
         else:
-            # Create dummy volume indicators if Volume column is missing
+            # Create dummy volume indicator if Volume column is missing
             result_df['volume_ratio'] = 1.0
-            result_df['obv'] = 0.0
 
-        # Time-based Features (1 indicator) - removed day_of_week and month
+        # Time-based Features (1 indicator)
         result_df['hour'] = result_df.index.hour if hasattr(result_df.index, 'hour') else 0
+
+        # Additional Technical Indicators (2 indicators)
+        result_df['adx'] = TechnicalIndicators.adx(df['High'], df['Low'], df['Close'])
+        result_df['cci'] = TechnicalIndicators.cci(df['High'], df['Low'], df['Close'])
 
         return result_df
