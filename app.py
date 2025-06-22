@@ -118,6 +118,7 @@ nav_pages = {
     "💾 DATABASE": "database",
     "📋 ABOUT US": "about",
     "📞 CONTACT": "contact"
+    # "📈 REAL-TIME DATA": "realtime"  # Temporarily disabled
 }
 
 # Create navigation in sidebar
