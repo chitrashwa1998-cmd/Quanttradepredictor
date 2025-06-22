@@ -45,7 +45,7 @@ class QuantTradingModels:
                             print(f"Loaded feature names from {model_name}: {len(self.feature_names)} features")
 
                 self.models = loaded_models
-                print(f"Loaded {len(loaded_models)} existing trained models from database")
+                print(f"Loaded {len(loaded_models)} trained models from database")
 
                 # If no feature names found in models, create default feature list
                 if not feature_names_found or not self.feature_names:
@@ -55,7 +55,7 @@ class QuantTradingModels:
             else:
                 self.models = {}
                 self.feature_names = self._get_default_feature_names()
-                print("No existing models found in database")
+                print("No trained models found in database")
 
         except Exception as e:
             self.models = {}
