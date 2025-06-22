@@ -940,3 +940,33 @@ try:
 
         # Show data table
         st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+
+except Exception as e:
+    st.error(f"❌ Error generating predictions: {str(e)}")
+    st.info("This might be due to:")
+    st.write("- Missing or incompatible features")
+    st.write("- Model not properly trained")
+    st.write("- Data format issues")
+    
+    # Show debug info
+    with st.expander("🔍 Debug Information"):
+        st.write(f"Selected model: {selected_model}")
+        st.write(f"Available models: {list(models.keys())}")
+        if st.session_state.features is not None:
+            st.write(f"Features shape: {st.session_state.features.shape}")
+        st.write(f"Error details: {str(e)}")
+        
+    st.info("Please try retraining the model or check your data.")
+
+# Footer
+st.markdown("---")
+st.markdown("### 💡 Tips")
+st.info("""
+- **Direction Model**: Predicts if price will go up or down
+- **Magnitude Model**: Predicts how much price will change  
+- **Profit Probability**: Estimates likelihood of profitable trades
+- **Volatility Model**: Forecasts market volatility levels
+- **Trading Signal**: Generates buy/sell recommendations
+""")
+
+st.markdown("**📊 Model Performance**: Check the Model Training page for accuracy metrics")
