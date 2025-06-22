@@ -291,7 +291,7 @@ with col2:
                     st.success("✅ All database data cleared successfully")
                     
                     # Clear all session state thoroughly
-                    keys_to_clear = ['data', 'features', 'models', 'predictions', 'model_trainer', 'realtime_data']
+                    keys_to_clear = ['data', 'features', 'models', 'predictions', 'model_trainer']
                     for key in keys_to_clear:
                         if key in st.session_state:
                             del st.session_state[key]
@@ -341,8 +341,6 @@ with col1:
                 st.session_state.models = {}
                 st.session_state.predictions = None
                 st.session_state.model_trainer = None
-                if 'realtime_data' in st.session_state:
-                    st.session_state.realtime_data = None
                 
                 st.success("✅ Session data cleared")
                 st.rerun()
