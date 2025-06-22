@@ -247,6 +247,10 @@ if st.session_state.current_page == "home":
         </div>
         """, unsafe_allow_html=True)
 
+    st.success("🎯 **Navigation**: Use the sidebar to navigate between different modules of the trading system.")
+
+    st.info("ℹ️ **Note**: Real-time Data module is temporarily disabled for maintenance.")
+
     st.markdown("---")
 
     # Core Capabilities Section
@@ -553,3 +557,5 @@ elif st.session_state.current_page == "contact":
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+# The real-time data module is disabled by commenting it out from the navigation and displaying an info message on the home page.
