@@ -186,21 +186,11 @@ class TechnicalIndicators:
             # Create dummy volume indicator if Volume column is missing
             result_df['volume_ratio'] = 1.0
 
-        # === MAGNITUDE MODEL INDICATORS (8 indicators) ===
-        # Volatility indicators (3 indicators)
+        # === VOLATILITY MODEL INDICATORS (4 indicators) ===
+        # Core volatility indicators focused on price movement variance
         result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
         result_df['volatility_10'] = TechnicalIndicators.volatility(df['Close'], 10)
         result_df['volatility_20'] = TechnicalIndicators.volatility(df['Close'], 20)
-
-        # Bollinger Band width indicator (1 indicator)
         result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
-
-        # Price relationship indicator (1 indicator)
-        result_df['high_low_ratio'] = df['High'] / df['Low']
-
-        # Additional momentum indicators already included above:
-        # - macd_histogram ✅
-        # - price_momentum_1, price_momentum_3, price_momentum_5 ✅
-        # - williams_r ✅
 
         return result_df
