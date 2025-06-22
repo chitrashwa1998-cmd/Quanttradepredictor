@@ -72,9 +72,8 @@ class DataProcessor:
     def load_and_process_data(uploaded_file) -> Tuple[pd.DataFrame, str]:
         """Load and process uploaded OHLC data."""
         try:
-            # Reset file pointer to beginning if it has seek method
-            if hasattr(uploaded_file, 'seek'):
-                uploaded_file.seek(0)
+            # Reset file pointer to beginning
+            uploaded_file.seek(0)
             
             # Try different encodings and separators
             encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
@@ -86,14 +85,12 @@ class DataProcessor:
             for encoding in encodings:
                 for sep in separators:
                     try:
-                        if hasattr(uploaded_file, 'seek'):
-                            uploaded_file.seek(0)
+                        uploaded_file.seek(0)
                         df = pd.read_csv(uploaded_file, encoding=encoding, sep=sep)
                         if len(df.columns) >= 4:  # At least Date, Open, High, Low, Close
                             successful_config = f"encoding={encoding}, separator='{sep}'"
                             break
-                    except Exception as e:
-                        print(f"Failed to read with encoding={encoding}, sep='{sep}': {e}")
+                    except Exception:
                         continue
                 if df is not None and len(df.columns) >= 4:
                     break

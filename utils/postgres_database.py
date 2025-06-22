@@ -1,3 +1,4 @@
+
 """
 PostgreSQL database implementation for TribexAlpha trading app
 Uses psycopg (version 3) for database operations
@@ -21,7 +22,7 @@ class PostgresTradingDatabase:
         self.database_url = os.getenv('DATABASE_URL')
         if not self.database_url:
             raise ValueError("DATABASE_URL environment variable not set")
-
+        
         self._create_tables()
 
     def _get_connection(self):
@@ -44,7 +45,7 @@ class PostgresTradingDatabase:
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
                     """)
-
+                    
                     # Model results table
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS model_results (
@@ -55,7 +56,7 @@ class PostgresTradingDatabase:
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
                     """)
-
+                    
                     # Trained models table
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS trained_models (
@@ -67,7 +68,7 @@ class PostgresTradingDatabase:
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
                     """)
-
+                    
                     # Predictions table
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS predictions (
@@ -78,15 +79,15 @@ class PostgresTradingDatabase:
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
                     """)
-
+                    
                     # Create indexes
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_ohlc_dataset_name ON ohlc_datasets(dataset_name);")
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_model_name ON model_results(model_name);")
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_trained_model_name ON trained_models(model_name);")
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_predictions_model ON predictions(model_name);")
-
+                    
                     conn.commit()
-
+            
             print("✅ PostgreSQL tables created successfully")
         except Exception as e:
             print(f"Error creating tables: {str(e)}")
@@ -126,7 +127,7 @@ class PostgresTradingDatabase:
                     # Check if dataset exists
                     cursor.execute("SELECT id FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
                     existing = cursor.fetchone()
-
+                    
                     if existing:
                         cursor.execute("""
                             UPDATE ohlc_datasets 
@@ -138,7 +139,7 @@ class PostgresTradingDatabase:
                             INSERT INTO ohlc_datasets (dataset_name, data_json, metadata_json) 
                             VALUES (%s, %s, %s);
                         """, (dataset_name, data_json, metadata_json))
-
+                    
                     conn.commit()
 
             print(f"✅ Successfully saved {len(data)} rows to PostgreSQL")
@@ -155,7 +156,7 @@ class PostgresTradingDatabase:
                 with conn.cursor(row_factory=dict_row) as cursor:
                     cursor.execute("SELECT data_json FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
                     result = cursor.fetchone()
-
+                    
                     if result:
                         df = pd.read_json(result['data_json'], orient='records')
 
@@ -210,7 +211,7 @@ class PostgresTradingDatabase:
                 with conn.cursor(row_factory=dict_row) as cursor:
                     cursor.execute("SELECT metadata_json FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
                     result = cursor.fetchone()
-
+                    
                     if result and result['metadata_json']:
                         return json.loads(result['metadata_json'])
 
@@ -225,28 +226,12 @@ class PostgresTradingDatabase:
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # Check if dataset exists first
-                    cursor.execute("SELECT id FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
-                    existing = cursor.fetchone()
-                    
-                    if not existing:
-                        print(f"Dataset '{dataset_name}' not found")
-                        return False
-                    
-                    # Delete the dataset
                     cursor.execute("DELETE FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
                     conn.commit()
-                    
-                    rows_deleted = cursor.rowcount
-                    if rows_deleted > 0:
-                        print(f"✅ Successfully deleted dataset: {dataset_name}")
-                        return True
-                    else:
-                        print(f"❌ No rows deleted for dataset: {dataset_name}")
-                        return False
+                    return cursor.rowcount > 0
 
         except Exception as e:
-            print(f"❌ Error deleting dataset '{dataset_name}': {str(e)}")
+            print(f"Error deleting dataset: {str(e)}")
             return False
 
     def save_model_results(self, model_name: str, results: Dict[str, Any]) -> bool:
@@ -258,7 +243,7 @@ class PostgresTradingDatabase:
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT id FROM model_results WHERE model_name = %s;", (model_name,))
                     existing = cursor.fetchone()
-
+                    
                     if existing:
                         cursor.execute("""
                             UPDATE model_results 
@@ -270,7 +255,7 @@ class PostgresTradingDatabase:
                             INSERT INTO model_results (model_name, results_json) 
                             VALUES (%s, %s);
                         """, (model_name, results_json))
-
+                    
                     conn.commit()
 
             return True
@@ -286,7 +271,7 @@ class PostgresTradingDatabase:
                 with conn.cursor(row_factory=dict_row) as cursor:
                     cursor.execute("SELECT results_json FROM model_results WHERE model_name = %s;", (model_name,))
                     result = cursor.fetchone()
-
+                    
                     if result:
                         return json.loads(result['results_json'])
 
@@ -313,7 +298,7 @@ class PostgresTradingDatabase:
                         with conn.cursor() as cursor:
                             cursor.execute("SELECT id FROM trained_models WHERE model_name = %s;", (model_name,))
                             existing = cursor.fetchone()
-
+                            
                             if existing:
                                 cursor.execute("""
                                     UPDATE trained_models 
@@ -325,7 +310,7 @@ class PostgresTradingDatabase:
                                     INSERT INTO trained_models (model_name, model_data, task_type) 
                                     VALUES (%s, %s, %s);
                                 """, (model_name, model_b64, task_type))
-
+                            
                             conn.commit()
 
                     success_count += 1
@@ -399,7 +384,7 @@ class PostgresTradingDatabase:
                         ORDER BY created_at DESC LIMIT 1;
                     """, (model_name,))
                     result = cursor.fetchone()
-
+                    
                     if result:
                         return pd.read_json(result['predictions_json'], orient='records')
 
@@ -417,19 +402,19 @@ class PostgresTradingDatabase:
                     # Count datasets
                     cursor.execute("SELECT COUNT(*) as count FROM ohlc_datasets;")
                     dataset_count = cursor.fetchone()['count']
-
+                    
                     # Count model results
                     cursor.execute("SELECT COUNT(*) as count FROM model_results;")
                     model_count = cursor.fetchone()['count']
-
+                    
                     # Count trained models
                     cursor.execute("SELECT COUNT(*) as count FROM trained_models;")
                     trained_model_count = cursor.fetchone()['count']
-
+                    
                     # Count predictions
                     cursor.execute("SELECT COUNT(*) as count FROM predictions;")
                     prediction_count = cursor.fetchone()['count']
-
+                    
                     # Get dataset info
                     cursor.execute("SELECT dataset_name, metadata_json FROM ohlc_datasets;")
                     datasets_query = cursor.fetchall()
@@ -471,103 +456,19 @@ class PostgresTradingDatabase:
             print(f"Error recovering data: {str(e)}")
             return None
 
-    def delete_model_results(self, model_name: str) -> bool:
-        """Delete model results for a specific model."""
-        try:
-            with self._get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("DELETE FROM model_results WHERE model_name = %s;", (model_name,))
-                    conn.commit()
-                    return cursor.rowcount > 0
-
-        except Exception as e:
-            print(f"Error deleting model results: {str(e)}")
-            return False
-
-    def delete_predictions(self, model_name: str) -> bool:
-        """Delete predictions for a specific model."""
-        try:
-            with self._get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("DELETE FROM predictions WHERE model_name = %s;", (model_name,))
-                    conn.commit()
-                    return cursor.rowcount > 0
-
-        except Exception as e:
-            print(f"Error deleting predictions: {str(e)}")
-            return False
-
-    def delete_trained_model(self, model_name: str) -> bool:
-        """Delete a trained model."""
-        try:
-            with self._get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("DELETE FROM trained_models WHERE model_name = %s;", (model_name,))
-                    conn.commit()
-                    return cursor.rowcount > 0
-
-        except Exception as e:
-            print(f"Error deleting trained model: {str(e)}")
-            return False
-
     def clear_all_data(self) -> bool:
         """Clear all data from database."""
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # First check what data exists
-                    cursor.execute("SELECT COUNT(*) FROM ohlc_datasets;")
-                    datasets_before = cursor.fetchone()[0]
-                    print(f"Datasets before clearing: {datasets_before}")
-                    
-                    # Clear tables using DELETE to ensure proper removal
-                    tables_to_clear = ['predictions', 'trained_models', 'model_results', 'ohlc_datasets']
-                    
-                    for table in tables_to_clear:
-                        try:
-                            # Check if table exists
-                            cursor.execute("""
-                                SELECT EXISTS (
-                                    SELECT FROM information_schema.tables 
-                                    WHERE table_schema = 'public' AND table_name = %s
-                                );
-                            """, (table,))
-                            
-                            table_exists = cursor.fetchone()[0]
-                            
-                            if table_exists:
-                                # Get count before deletion
-                                cursor.execute(f"SELECT COUNT(*) FROM {table};")
-                                count_before = cursor.fetchone()[0]
-                                
-                                # Delete all rows
-                                cursor.execute(f"DELETE FROM {table};")
-                                deleted_rows = cursor.rowcount
-                                
-                                print(f"✅ Cleared table {table}: {deleted_rows} rows deleted (had {count_before} rows)")
-                            else:
-                                print(f"⚠️ Table {table} does not exist")
-                                
-                        except Exception as e:
-                            print(f"❌ Error clearing table {table}: {str(e)}")
-                            # Continue with other tables
-                            continue
-                    
-                    # Commit all changes
+                    cursor.execute("DELETE FROM predictions;")
+                    cursor.execute("DELETE FROM trained_models;")
+                    cursor.execute("DELETE FROM model_results;")
+                    cursor.execute("DELETE FROM ohlc_datasets;")
                     conn.commit()
-                    
-                    # Verify clearing worked
-                    cursor.execute("SELECT COUNT(*) FROM ohlc_datasets;")
-                    datasets_after = cursor.fetchone()[0]
-                    print(f"Datasets after clearing: {datasets_after}")
-                    
-                    if datasets_after == 0:
-                        print("✅ Database completely cleared - all data removed")
-                        return True
-                    else:
-                        print(f"⚠️ Warning: {datasets_after} datasets still remain")
-                        return False
+
+            return True
 
         except Exception as e:
-            print(f"❌ Error clearing database: {str(e)}")
+            print(f"Error clearing database: {str(e)}")
             return False
