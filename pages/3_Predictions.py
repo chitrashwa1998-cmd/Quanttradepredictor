@@ -781,3 +781,162 @@ try:
                         
                         for i, range_info in enumerate(vol_ranges):
                             st.text(range_info)
+
+        with tab2:
+            st.subheader("📈 Volatility Trends")
+
+            # Price vs Volatility correlation
+            fig = make_subplots(rows=2, cols=1, 
+                              subplot_titles=('Price Movement', 'Volatility Level'),
+                              vertical_spacing=0.15)
+
+            # Price chart
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Price'],
+                mode='lines',
+                name='Price',
+                line=dict(color='blue', width=2)
+            ), row=1, col=1)
+
+            # Volatility chart with color coding
+            colors = ['green', 'yellow', 'orange', 'red']
+            categories = ['Low Vol', 'Medium Vol', 'High Vol', 'Extreme Vol']
+            
+            for i, category in enumerate(categories):
+                cat_data = pred_df[pred_df['Volatility_Category'] == category]
+                if len(cat_data) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=cat_data.index,
+                        y=cat_data['Volatility_Forecast'],
+                        mode='markers',
+                        name=category,
+                        marker=dict(color=colors[i], size=6),
+                        hovertemplate=f'<b>{category}</b><br>Volatility: %{{y:.4f}}<extra></extra>'
+                    ), row=2, col=1)
+
+            fig.update_layout(height=600, showlegend=True)
+            fig.update_xaxes(title_text="Date", row=2, col=1)
+            fig.update_yaxes(title_text="Price ($)", row=1, col=1)
+            fig.update_yaxes(title_text="Volatility", row=2, col=1)
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        with tab3:
+            st.subheader("📋 Volatility Data")
+            display_df = create_display_dataframe(pred_df)
+            st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+
+    elif selected_model == 'trading_signal':
+        tab1, tab2, tab3 = st.tabs(["🎯 Trading Signals", "📊 Signal Analysis", "📋 Data Table"])
+
+        # Add trading signal specific fields
+        pred_df['Signal'] = np.where(predictions == 1, '🟢 BUY', '🔴 SELL')
+        pred_df['Signal_Strength'] = 'Medium'  # Default strength
+
+        if probabilities is not None:
+            pred_df['Signal_Confidence'] = np.max(probabilities, axis=1)
+            # Determine signal strength based on confidence
+            pred_df['Signal_Strength'] = pd.cut(pred_df['Signal_Confidence'], 
+                                               bins=[0, 0.6, 0.8, 1.0],
+                                               labels=['Weak', 'Medium', 'Strong'])
+
+        with tab1:
+            st.subheader("🎯 Trading Signal Analysis")
+
+            # Trading signals over time
+            fig = go.Figure()
+
+            # Price line
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Price'],
+                mode='lines',
+                name='Price',
+                line=dict(color='blue', width=2)
+            ))
+
+            # Buy signals
+            buy_signals = pred_df[pred_df['Signal'] == '🟢 BUY']
+            if len(buy_signals) > 0:
+                fig.add_trace(go.Scatter(
+                    x=buy_signals.index,
+                    y=buy_signals['Price'],
+                    mode='markers',
+                    marker=dict(symbol='triangle-up', color='green', size=10),
+                    name='BUY Signal',
+                    hovertemplate='<b>BUY Signal</b><br>Price: $%{y:.2f}<extra></extra>'
+                ))
+
+            # Sell signals
+            sell_signals = pred_df[pred_df['Signal'] == '🔴 SELL']
+            if len(sell_signals) > 0:
+                fig.add_trace(go.Scatter(
+                    x=sell_signals.index,
+                    y=sell_signals['Price'],
+                    mode='markers',
+                    marker=dict(symbol='triangle-down', color='red', size=10),
+                    name='SELL Signal',
+                    hovertemplate='<b>SELL Signal</b><br>Price: $%{y:.2f}<extra></extra>'
+                ))
+
+            fig.update_layout(
+                height=500,
+                title="Trading Signals Overview",
+                xaxis_title="Date",
+                yaxis_title="Price ($)"
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Signal statistics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                buy_pct = (predictions == 1).mean() * 100
+                st.metric("Buy Signals", f"{buy_pct:.1f}%")
+            with col2:
+                sell_pct = (predictions == 0).mean() * 100
+                st.metric("Sell Signals", f"{sell_pct:.1f}%")
+            with col3:
+                if 'Signal_Confidence' in pred_df.columns:
+                    avg_conf = pred_df['Signal_Confidence'].mean()
+                    st.metric("Avg Confidence", f"{avg_conf:.3f}")
+                else:
+                    st.metric("Total Signals", len(pred_df))
+            with col4:
+                latest_signal = pred_df['Signal'].iloc[-1]
+                st.metric("Latest Signal", latest_signal)
+
+        with tab2:
+            st.subheader("📊 Signal Distribution")
+
+            # Signal distribution pie chart
+            signal_counts = pred_df['Signal'].value_counts()
+            fig = go.Figure(data=[go.Pie(
+                labels=signal_counts.index,
+                values=signal_counts.values,
+                hole=0.3,
+                marker_colors=['green', 'red']
+            )])
+            fig.update_layout(title="Signal Distribution", height=400)
+            st.plotly_chart(fig, use_container_width=True)
+
+        with tab3:
+            st.subheader("📋 Trading Signal Data")
+            display_df = create_display_dataframe(pred_df)
+            st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+
+    else:
+        # Generic model display
+        st.subheader(f"📊 {selected_model.replace('_', ' ').title()} Predictions")
+
+        # Create display dataframe
+        display_df = create_display_dataframe(pred_df)
+
+        # Show chart
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=display_df.index, y=display_df['Prediction'], mode='lines+markers'))
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Show data table
+        st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
