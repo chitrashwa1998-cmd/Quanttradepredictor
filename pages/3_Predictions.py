@@ -773,4 +773,11 @@ try:
                         vol_max = vol_values.max()
 
                         vol_ranges = [
-                            f"Low:
+                            f"Low: 0 - {q25:.4f}",
+                            f"Medium: {q25:.4f} - {q50:.4f}",
+                            f"High: {q50:.4f} - {q75:.4f}",
+                            f"Extreme: {q75:.4f} - {vol_max:.4f}"
+                        ]
+                        
+                        for i, range_info in enumerate(vol_ranges):
+                            st.text(range_info)
