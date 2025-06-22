@@ -28,39 +28,51 @@ class QuantTradingModels:
 
             if loaded_models and isinstance(loaded_models, dict) and loaded_models:
                 # Extract feature names and ensure task_type is present
+                feature_names_found = False
+                
                 for model_name, model_data in loaded_models.items():
-                    if 'feature_names' in model_data and model_data['feature_names']:
-                        self.feature_names = model_data['feature_names']
-
                     # Ensure task_type is present, infer if missing
                     if 'task_type' not in model_data:
-                        if model_name in ['direction', 'profit_prob', 'trend_sideways', 'reversal', 'trading_signal']:
-                            model_data['task_type'] = 'classification'
-                        elif model_name in ['magnitude', 'volatility']:
-                            model_data['task_type'] = 'regression'
-                        else:
-                            model_data['task_type'] = 'classification'  # Default
-
-                        # Update the loaded model with the inferred task_type
+                        # All models are now classification for balanced scalping
+                        model_data['task_type'] = 'classification'
                         loaded_models[model_name] = model_data
+
+                    # Extract feature names from any available model
+                    if 'feature_names' in model_data and model_data['feature_names']:
+                        if not feature_names_found:
+                            self.feature_names = model_data['feature_names']
+                            feature_names_found = True
+                            print(f"Loaded feature names from {model_name}: {len(self.feature_names)} features")
 
                 self.models = loaded_models
                 print(f"Loaded {len(loaded_models)} existing trained models from database")
 
-                # Extract feature names from first available model
-                for model_name, model_data in loaded_models.items():
-                    if 'feature_names' in model_data and model_data['feature_names']:
-                        self.feature_names = model_data['feature_names']
-                        break
+                # If no feature names found in models, create default feature list
+                if not feature_names_found or not self.feature_names:
+                    print("No feature names found in loaded models, will use default features")
+                    self.feature_names = self._get_default_feature_names()
+                    
             else:
                 self.models = {}
-                self.feature_names = []
+                self.feature_names = self._get_default_feature_names()
                 print("No existing models found in database")
 
         except Exception as e:
             self.models = {}
-            self.feature_names = []
+            self.feature_names = self._get_default_feature_names()
             print(f"Could not load existing models: {str(e)}")
+
+    def _get_default_feature_names(self):
+        """Get default feature names when none are available from loaded models."""
+        return [
+            'sma_5', 'sma_10', 'sma_20', 'ema_5', 'ema_10', 'ema_20',
+            'rsi', 'macd', 'macd_signal', 'macd_histogram',
+            'bb_upper', 'bb_lower', 'bb_width', 'bb_position',
+            'atr', 'adx', 'cci', 'williams_r', 'stoch_k', 'stoch_d',
+            'price_change', 'volume_sma', 'volume_ratio',
+            'high_low_ratio', 'close_sma_ratio', 'volatility_5',
+            'momentum_5', 'momentum_10', 'roc_5', 'roc_10'
+        ]
 
     def _save_models_to_database(self):
         """Save trained models to database for persistence."""
@@ -106,62 +118,105 @@ class QuantTradingModels:
         feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
         feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
 
+        # Initialize feature_names if not set
+        if not hasattr(self, 'feature_names') or not self.feature_names:
+            self.feature_names = self._get_default_feature_names()
+
         # If we have stored feature names from previous training, use them for consistency
-        if hasattr(self, 'feature_names') and self.feature_names:
+        if self.feature_names:
             # Check if current data has the required features
             missing_features = [col for col in self.feature_names if col not in df_clean.columns]
             if missing_features:
-                print(f"Warning: Missing features {missing_features}, will create basic features")
-                # Create basic features if missing
+                print(f"Warning: Missing features {missing_features}, creating basic features...")
+                
+                # Create essential basic features if missing
                 if 'Close' in df_clean.columns:
-                    if 'sma_5' not in df_clean.columns:
-                        df_clean['sma_5'] = df_clean['Close'].rolling(5).mean()
-                    if 'sma_10' not in df_clean.columns:
-                        df_clean['sma_10'] = df_clean['Close'].rolling(10).mean()
-                    if 'price_change' not in df_clean.columns:
+                    # Create missing SMA features
+                    for period in [5, 10, 20]:
+                        col_name = f'sma_{period}'
+                        if col_name not in df_clean.columns and col_name in missing_features:
+                            df_clean[col_name] = df_clean['Close'].rolling(period).mean()
+                    
+                    # Create missing EMA features
+                    for period in [5, 10, 20]:
+                        col_name = f'ema_{period}'
+                        if col_name not in df_clean.columns and col_name in missing_features:
+                            df_clean[col_name] = df_clean['Close'].ewm(span=period).mean()
+                    
+                    # Create price change if missing
+                    if 'price_change' not in df_clean.columns and 'price_change' in missing_features:
                         df_clean['price_change'] = df_clean['Close'].pct_change()
-                    if 'rsi' not in df_clean.columns:
-                        # Simple RSI calculation
+                    
+                    # Create simple RSI if missing
+                    if 'rsi' not in df_clean.columns and 'rsi' in missing_features:
                         delta = df_clean['Close'].diff()
                         gain = delta.where(delta > 0, 0).rolling(14).mean()
                         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-                        rs = gain / loss
+                        rs = gain / (loss + 1e-10)
                         df_clean['rsi'] = 100 - (100 / (1 + rs))
-
-                # Update feature columns after creating basic features
-                feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-                feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
+                    
+                    # Create basic MACD if missing
+                    if 'macd' not in df_clean.columns and 'macd' in missing_features:
+                        ema_12 = df_clean['Close'].ewm(span=12).mean()
+                        ema_26 = df_clean['Close'].ewm(span=26).mean()
+                        df_clean['macd'] = ema_12 - ema_26
+                    
+                    # Create volatility features if missing
+                    if 'volatility_5' not in df_clean.columns and 'volatility_5' in missing_features:
+                        df_clean['volatility_5'] = df_clean['Close'].pct_change().rolling(5).std()
+                    
+                    # Create momentum features if missing
+                    if 'momentum_5' not in df_clean.columns and 'momentum_5' in missing_features:
+                        df_clean['momentum_5'] = df_clean['Close'] / df_clean['Close'].shift(5) - 1
 
                 # Use available features that match stored feature names
                 available_features = [col for col in self.feature_names if col in df_clean.columns]
-                if available_features:
+                if len(available_features) >= 5:  # Need at least 5 features
                     feature_cols = available_features
+                    print(f"Using {len(feature_cols)} available features from stored feature names")
                 else:
-                    # Use any available features
+                    # Fallback to any available features
+                    feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+                    feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
                     self.feature_names = feature_cols
+                    print(f"Using {len(feature_cols)} fallback features")
             else:
                 # Use the same feature order as training
                 feature_cols = self.feature_names
+                print(f"Using {len(feature_cols)} stored feature names")
         else:
             # First time feature preparation
             if not feature_cols:
                 # Create basic features if no features found
                 if 'Close' in df_clean.columns:
+                    print("Creating basic features as none found...")
                     df_clean['sma_5'] = df_clean['Close'].rolling(5).mean()
                     df_clean['sma_10'] = df_clean['Close'].rolling(10).mean()
                     df_clean['price_change'] = df_clean['Close'].pct_change()
                     feature_cols = ['sma_5', 'sma_10', 'price_change']
 
             self.feature_names = feature_cols
+            print(f"Set {len(self.feature_names)} features for first time")
 
         if not feature_cols:
             raise ValueError("No feature columns found. Make sure technical indicators are calculated.")
+
+        # Ensure we have the required columns
+        missing_cols = [col for col in feature_cols if col not in df_clean.columns]
+        if missing_cols:
+            print(f"Warning: Still missing columns {missing_cols}, removing from feature list")
+            feature_cols = [col for col in feature_cols if col in df_clean.columns]
+            self.feature_names = feature_cols
+
+        if not feature_cols:
+            raise ValueError("No valid feature columns available after filtering")
 
         result_df = df_clean[feature_cols].dropna()
 
         if result_df.empty:
             raise ValueError("Feature DataFrame is empty after column selection and cleaning")
 
+        print(f"Prepared features: {result_df.shape[0]} rows × {result_df.shape[1]} features")
         return result_df
 
     def create_targets(self, df: pd.DataFrame) -> Dict[str, pd.Series]:
@@ -594,7 +649,7 @@ class QuantTradingModels:
         except:
             feature_importance = {}
 
-        # Store model
+        # Store model with feature names
         self.models[model_name] = {
             'ensemble': ensemble_model,  # Changed 'model' to 'ensemble' for database compatibility
             'metrics': metrics,
@@ -604,7 +659,8 @@ class QuantTradingModels:
             'probabilities': y_pred_proba,
             'test_indices': X_test.index,
             'ensemble_type': 'voting_classifier' if task_type == 'classification' else 'voting_regressor',
-            'base_models': list(ensemble_model.named_estimators_.keys())
+            'base_models': list(ensemble_model.named_estimators_.keys()),
+            'feature_names': self.feature_names.copy() if self.feature_names else []
         }
 
         return self.models[model_name]
