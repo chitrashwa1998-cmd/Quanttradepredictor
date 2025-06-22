@@ -1,10 +1,10 @@
+
 import pandas as pd
 import numpy as np
-import talib as ta
 from typing import Dict, List, Optional
 
 class TechnicalIndicators:
-    """Technical indicators calculator for trading strategies."""
+    """Technical indicators calculator for trading strategies using pandas/numpy."""
 
     @staticmethod
     def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -25,53 +25,79 @@ class TechnicalIndicators:
 
         try:
             # 1. Simple Moving Averages (3 indicators)
-            result_df['sma_5'] = ta.SMA(result_df['Close'], timeperiod=5)
-            result_df['sma_10'] = ta.SMA(result_df['Close'], timeperiod=10)
-            result_df['sma_20'] = ta.SMA(result_df['Close'], timeperiod=20)
+            result_df['sma_5'] = result_df['Close'].rolling(window=5).mean()
+            result_df['sma_10'] = result_df['Close'].rolling(window=10).mean()
+            result_df['sma_20'] = result_df['Close'].rolling(window=20).mean()
 
             # 2. Exponential Moving Averages (3 indicators)
-            result_df['ema_5'] = ta.EMA(result_df['Close'], timeperiod=5)
-            result_df['ema_10'] = ta.EMA(result_df['Close'], timeperiod=10)
-            result_df['ema_20'] = ta.EMA(result_df['Close'], timeperiod=20)
+            result_df['ema_5'] = result_df['Close'].ewm(span=5).mean()
+            result_df['ema_10'] = result_df['Close'].ewm(span=10).mean()
+            result_df['ema_20'] = result_df['Close'].ewm(span=20).mean()
 
             # 3. RSI (1 indicator)
-            result_df['rsi'] = ta.RSI(result_df['Close'], timeperiod=14)
+            delta = result_df['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            result_df['rsi'] = 100 - (100 / (1 + rs))
 
             # 4. MACD (3 indicators)
-            macd, macd_signal, macd_histogram = ta.MACD(result_df['Close'])
-            result_df['macd'] = macd
-            result_df['macd_signal'] = macd_signal
-            result_df['macd_histogram'] = macd_histogram
+            ema_12 = result_df['Close'].ewm(span=12).mean()
+            ema_26 = result_df['Close'].ewm(span=26).mean()
+            result_df['macd'] = ema_12 - ema_26
+            result_df['macd_signal'] = result_df['macd'].ewm(span=9).mean()
+            result_df['macd_histogram'] = result_df['macd'] - result_df['macd_signal']
 
             # 5. Bollinger Bands (3 indicators)
-            bb_upper, bb_middle, bb_lower = ta.BBANDS(result_df['Close'], timeperiod=20)
-            result_df['bb_upper'] = bb_upper
-            result_df['bb_lower'] = bb_lower
-            result_df['bb_width'] = (bb_upper - bb_lower) / bb_middle
+            bb_middle = result_df['Close'].rolling(window=20).mean()
+            bb_std = result_df['Close'].rolling(window=20).std()
+            result_df['bb_upper'] = bb_middle + (bb_std * 2)
+            result_df['bb_lower'] = bb_middle - (bb_std * 2)
+            result_df['bb_width'] = (result_df['bb_upper'] - result_df['bb_lower']) / bb_middle
 
             # 6. ATR (1 indicator)
-            result_df['atr'] = ta.ATR(result_df['High'], result_df['Low'], result_df['Close'], timeperiod=14)
+            high_low = result_df['High'] - result_df['Low']
+            high_close = np.abs(result_df['High'] - result_df['Close'].shift())
+            low_close = np.abs(result_df['Low'] - result_df['Close'].shift())
+            true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+            result_df['atr'] = true_range.rolling(window=14).mean()
 
             # 7. ADX (1 indicator)
-            result_df['adx'] = ta.ADX(result_df['High'], result_df['Low'], result_df['Close'], timeperiod=14)
+            plus_dm = result_df['High'].diff()
+            minus_dm = result_df['Low'].diff()
+            plus_dm[plus_dm < 0] = 0
+            minus_dm[minus_dm > 0] = 0
+            minus_dm = minus_dm.abs()
+            
+            tr_smooth = true_range.rolling(window=14).mean()
+            plus_di = 100 * (plus_dm.rolling(window=14).mean() / tr_smooth)
+            minus_di = 100 * (minus_dm.rolling(window=14).mean() / tr_smooth)
+            dx = (np.abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
+            result_df['adx'] = dx.rolling(window=14).mean()
 
             # 8. CCI (1 indicator)
-            result_df['cci'] = ta.CCI(result_df['High'], result_df['Low'], result_df['Close'], timeperiod=14)
+            tp = (result_df['High'] + result_df['Low'] + result_df['Close']) / 3
+            tp_sma = tp.rolling(window=14).mean()
+            mad = tp.rolling(window=14).apply(lambda x: np.abs(x - x.mean()).mean())
+            result_df['cci'] = (tp - tp_sma) / (0.015 * mad)
 
             # 9. Williams %R (1 indicator)
-            result_df['williams_r'] = ta.WILLR(result_df['High'], result_df['Low'], result_df['Close'], timeperiod=14)
+            highest_high = result_df['High'].rolling(window=14).max()
+            lowest_low = result_df['Low'].rolling(window=14).min()
+            result_df['williams_r'] = -100 * ((highest_high - result_df['Close']) / (highest_high - lowest_low))
 
             # 10. Stochastic (2 indicators)
-            stoch_k, stoch_d = ta.STOCH(result_df['High'], result_df['Low'], result_df['Close'])
-            result_df['stoch_k'] = stoch_k
-            result_df['stoch_d'] = stoch_d
+            lowest_low_14 = result_df['Low'].rolling(window=14).min()
+            highest_high_14 = result_df['High'].rolling(window=14).max()
+            result_df['stoch_k'] = 100 * ((result_df['Close'] - lowest_low_14) / (highest_high_14 - lowest_low_14))
+            result_df['stoch_d'] = result_df['stoch_k'].rolling(window=3).mean()
 
             # 11. Price Change (1 indicator)
             result_df['price_change'] = result_df['Close'].pct_change()
 
             # 12. Volume indicators (2 indicators)
             if 'Volume' in result_df.columns:
-                result_df['volume_sma'] = ta.SMA(result_df['Volume'], timeperiod=10)
+                result_df['volume_sma'] = result_df['Volume'].rolling(window=10).mean()
                 result_df['volume_ratio'] = result_df['Volume'] / result_df['volume_sma']
             else:
                 result_df['volume_sma'] = 1.0
