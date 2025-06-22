@@ -1,257 +1,125 @@
 import pandas as pd
 import numpy as np
-from typing import Dict, List
+import talib as ta
+from typing import Dict, List, Optional
 
 class TechnicalIndicators:
-    """Calculate various technical indicators for trading analysis."""
-
-    @staticmethod
-    def sma(data: pd.Series, window: int) -> pd.Series:
-        """Simple Moving Average"""
-        return data.rolling(window=window).mean()
-
-    @staticmethod
-    def ema(data: pd.Series, window: int) -> pd.Series:
-        """Exponential Moving Average"""
-        return data.ewm(span=window).mean()
-
-    @staticmethod
-    def rsi(data: pd.Series, window: int = 14) -> pd.Series:
-        """Relative Strength Index"""
-        delta = data.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-        rs = gain / loss
-        return 100 - (100 / (1 + rs))
-
-    @staticmethod
-    def macd(data: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Dict[str, pd.Series]:
-        """MACD Indicator"""
-        ema_fast = TechnicalIndicators.ema(data, fast)
-        ema_slow = TechnicalIndicators.ema(data, slow)
-        macd_line = ema_fast - ema_slow
-        signal_line = TechnicalIndicators.ema(macd_line, signal)
-        histogram = macd_line - signal_line
-
-        return {
-            'macd': macd_line,
-            'signal': signal_line,
-            'histogram': histogram
-        }
-
-    @staticmethod
-    def bollinger_bands(data: pd.Series, window: int = 20, std_dev: float = 2) -> Dict[str, pd.Series]:
-        """Bollinger Bands"""
-        sma = TechnicalIndicators.sma(data, window)
-        std = data.rolling(window=window).std()
-
-        return {
-            'upper': sma + (std * std_dev),
-            'middle': sma,
-            'lower': sma - (std * std_dev)
-        }
-
-    @staticmethod
-    def stochastic(high: pd.Series, low: pd.Series, close: pd.Series, k_window: int = 14, d_window: int = 3) -> Dict[str, pd.Series]:
-        """Stochastic Oscillator"""
-        lowest_low = low.rolling(window=k_window).min()
-        highest_high = high.rolling(window=k_window).max()
-        k_percent = 100 * ((close - lowest_low) / (highest_high - lowest_low))
-        d_percent = k_percent.rolling(window=d_window).mean()
-
-        return {
-            'k': k_percent,
-            'd': d_percent
-        }
-
-    @staticmethod
-    def atr(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
-        """Average True Range"""
-        high_low = high - low
-        high_close = np.abs(high - close.shift())
-        low_close = np.abs(low - close.shift())
-
-        true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-        return true_range.rolling(window=window).mean()
-
-    @staticmethod
-    def williams_r(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
-        """Williams %R"""
-        highest_high = high.rolling(window=window).max()
-        lowest_low = low.rolling(window=window).min()
-        return -100 * ((highest_high - close) / (highest_high - lowest_low))
-
-    @staticmethod
-    def adx(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
-        """Average Directional Index"""
-        # True Range
-        tr1 = high - low
-        tr2 = np.abs(high - close.shift())
-        tr3 = np.abs(low - close.shift())
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-
-        # Directional Movement
-        dm_plus = high - high.shift()
-        dm_minus = low.shift() - low
-
-        dm_plus[dm_plus < 0] = 0
-        dm_minus[dm_minus < 0] = 0
-        dm_plus[(dm_plus - dm_minus) <= 0] = 0
-        dm_minus[(dm_minus - dm_plus) <= 0] = 0
-
-        # Smoothed values
-        tr_smooth = tr.rolling(window=window).mean()
-        dm_plus_smooth = dm_plus.rolling(window=window).mean()
-        dm_minus_smooth = dm_minus.rolling(window=window).mean()
-
-        # Directional Indicators
-        di_plus = (dm_plus_smooth / tr_smooth) * 100
-        di_minus = (dm_minus_smooth / tr_smooth) * 100
-
-        # ADX
-        dx = (np.abs(di_plus - di_minus) / (di_plus + di_minus)) * 100
-        adx = dx.rolling(window=window).mean()
-
-        return adx.fillna(25.0)  # Fill NaN with neutral value
-
-    @staticmethod
-    def cci(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 20) -> pd.Series:
-        """Commodity Channel Index"""
-        typical_price = (high + low + close) / 3
-        sma_tp = typical_price.rolling(window=window).mean()
-        mad = typical_price.rolling(window=window).apply(lambda x: np.abs(x - x.mean()).mean())
-        cci = (typical_price - sma_tp) / (0.015 * mad)
-        return cci.fillna(0.0)  # Fill NaN with neutral value
-
-    @staticmethod
-    def obv(close: pd.Series, volume: pd.Series) -> pd.Series:
-        """On-Balance Volume"""
-        obv_values = []
-        obv_val = 0
-
-        for i in range(len(close)):
-            if i == 0:
-                obv_val = volume.iloc[i]
-            else:
-                if close.iloc[i] > close.iloc[i-1]:
-                    obv_val += volume.iloc[i]
-                elif close.iloc[i] < close.iloc[i-1]:
-                    obv_val -= volume.iloc[i]
-            obv_values.append(obv_val)
-
-        return pd.Series(obv_values, index=close.index)
-
-    @staticmethod
-    def volatility(data: pd.Series, window: int) -> pd.Series:
-        """Price volatility (standard deviation of returns)"""
-        returns = data.pct_change()
-        return returns.rolling(window=window).std()
+    """Technical indicators calculator for trading strategies."""
 
     @staticmethod
     def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate indicators optimized for both direction and magnitude models"""
+        """Calculate all technical indicators optimized for 5-minute scalping."""
+
+        if df.empty:
+            raise ValueError("DataFrame is empty")
+
+        if not all(col in df.columns for col in ['Open', 'High', 'Low', 'Close']):
+            raise ValueError("DataFrame must contain OHLC columns")
+
+        # Work on a copy
         result_df = df.copy()
 
-        # === DIRECTION MODEL INDICATORS (9 indicators) ===
-        # Short-term trend indicators (3 indicators)
-        result_df['ema_5'] = TechnicalIndicators.ema(df['Close'], 5)
-        result_df['ema_10'] = TechnicalIndicators.ema(df['Close'], 10)
-        result_df['ema_20'] = TechnicalIndicators.ema(df['Close'], 20)
+        # Ensure we have enough data for all indicators
+        if len(result_df) < 50:
+            raise ValueError("Need at least 50 data points for technical indicators")
 
-        # Momentum and reversal indicators (2 indicators)
-        result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
-        result_df['williams_r'] = TechnicalIndicators.williams_r(df['High'], df['Low'], df['Close'])
+        try:
+            # 1. Simple Moving Averages (3 indicators)
+            result_df['sma_5'] = ta.SMA(result_df['Close'], timeperiod=5)
+            result_df['sma_10'] = ta.SMA(result_df['Close'], timeperiod=10)
+            result_df['sma_20'] = ta.SMA(result_df['Close'], timeperiod=20)
 
-        # MACD momentum indicator (1 indicator)
-        macd_data = TechnicalIndicators.macd(df['Close'])
-        result_df['macd_histogram'] = macd_data['histogram']
+            # 2. Exponential Moving Averages (3 indicators)
+            result_df['ema_5'] = ta.EMA(result_df['Close'], timeperiod=5)
+            result_df['ema_10'] = ta.EMA(result_df['Close'], timeperiod=10)
+            result_df['ema_20'] = ta.EMA(result_df['Close'], timeperiod=20)
 
-        # Price momentum indicators (3 indicators)
-        result_df['price_momentum_1'] = df['Close'].pct_change(1)
-        result_df['price_momentum_3'] = df['Close'].pct_change(3)
-        result_df['price_momentum_5'] = df['Close'].pct_change(5)
+            # 3. RSI (1 indicator)
+            result_df['rsi'] = ta.RSI(result_df['Close'], timeperiod=14)
 
-        # Bollinger Band position indicator (1 indicator)
-        bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
-        result_df['bb_position'] = (df['Close'] - bb_data['lower']) / (bb_data['upper'] - bb_data['lower'])
+            # 4. MACD (3 indicators)
+            macd, macd_signal, macd_histogram = ta.MACD(result_df['Close'])
+            result_df['macd'] = macd
+            result_df['macd_signal'] = macd_signal
+            result_df['macd_histogram'] = macd_histogram
 
-        # Session bias indicator (1 indicator)
-        result_df['open_close_diff'] = df['Close'] - df['Open']
+            # 5. Bollinger Bands (3 indicators)
+            bb_upper, bb_middle, bb_lower = ta.BBANDS(result_df['Close'], timeperiod=20)
+            result_df['bb_upper'] = bb_upper
+            result_df['bb_lower'] = bb_lower
+            result_df['bb_width'] = (bb_upper - bb_lower) / bb_middle
 
-        # Volume validation indicator (1 indicator)
-        if 'Volume' in df.columns:
-            volume_sma_temp = TechnicalIndicators.sma(df['Volume'], 10)
-            result_df['volume_ratio'] = df['Volume'] / volume_sma_temp
-        else:
-            # Create dummy volume indicator if Volume column is missing
-            result_df['volume_ratio'] = 1.0
+            # 6. ATR (1 indicator)
+            result_df['atr'] = ta.ATR(result_df['High'], result_df['Low'], result_df['Close'], timeperiod=14)
 
-        # === VOLATILITY MODEL INDICATORS (4 indicators) ===
-        # Core volatility indicators focused on price movement variance
-        result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
-        result_df['volatility_10'] = TechnicalIndicators.volatility(df['Close'], 10)
-        result_df['volatility_20'] = TechnicalIndicators.volatility(df['Close'], 20)
-        result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
+            # 7. ADX (1 indicator)
+            result_df['adx'] = ta.ADX(result_df['High'], result_df['Low'], result_df['Close'], timeperiod=14)
 
-        # === TREND VS SIDEWAYS MODEL INDICATORS (8 indicators) ===
-        # Trend direction and slope indicators (3 indicators)
-        # EMAs already calculated above: ema_5, ema_10, ema_20
-        
-        # Trend strength indicators (4 indicators)
-        # BB Width already calculated above: bb_width
-        # ATR already calculated above: atr
-        # Volatility 10/20 already calculated above: volatility_10, volatility_20
-        
-        # Momentum indicators (3 indicators) 
-        # Price momentum 3 and 5 periods
-        result_df['price_momentum_trend_3'] = df['Close'].pct_change(3)  # 3-period momentum
-        result_df['price_momentum_trend_5'] = df['Close'].pct_change(5)  # 5-period momentum
-        # MACD histogram already calculated above: macd_histogram
-        
-        # RSI for trend vs sideways detection (1 indicator)
-        # RSI already calculated above: rsi
+            # 8. CCI (1 indicator)
+            result_df['cci'] = ta.CCI(result_df['High'], result_df['Low'], result_df['Close'], timeperiod=14)
 
-        # === PROFIT PROBABILITY MODEL INDICATORS (8 indicators) ===
-        # Combine direction + magnitude + volatility + volume for profit probability
+            # 9. Williams %R (1 indicator)
+            result_df['williams_r'] = ta.WILLR(result_df['High'], result_df['Low'], result_df['Close'], timeperiod=14)
 
-        # Direction component (2 indicators)
-        result_df['ema_cross_signal'] = np.where(result_df['ema_5'] > result_df['ema_10'], 1, 0)
-        result_df['momentum_direction'] = np.where(result_df['price_momentum_1'] > 0, 1, 0)
+            # 10. Stochastic (2 indicators)
+            stoch_k, stoch_d = ta.STOCH(result_df['High'], result_df['Low'], result_df['Close'])
+            result_df['stoch_k'] = stoch_k
+            result_df['stoch_d'] = stoch_d
 
-        # Magnitude component (2 indicators)  
-        result_df['price_magnitude'] = np.abs(result_df['price_momentum_1']) * 100  # Absolute price change magnitude
-        result_df['high_low_magnitude'] = (df['High'] - df['Low']) / df['Close'] * 100  # Intraday range magnitude
+            # 11. Price Change (1 indicator)
+            result_df['price_change'] = result_df['Close'].pct_change()
 
-        # Volatility component (2 indicators)
-        result_df['volatility_regime'] = np.where(result_df['volatility_10'] > result_df['volatility_20'], 1, 0)
-        result_df['bb_squeeze'] = result_df['bb_width'] / df['Close'] * 100  # Normalized BB width
+            # 12. Volume indicators (2 indicators)
+            if 'Volume' in result_df.columns:
+                result_df['volume_sma'] = ta.SMA(result_df['Volume'], timeperiod=10)
+                result_df['volume_ratio'] = result_df['Volume'] / result_df['volume_sma']
+            else:
+                result_df['volume_sma'] = 1.0
+                result_df['volume_ratio'] = 1.0
 
-        # Volume component (2 indicators)
-        if 'Volume' in df.columns:
-            volume_ma_5 = TechnicalIndicators.sma(df['Volume'], 5)
-            volume_ma_20 = TechnicalIndicators.sma(df['Volume'], 20)
-            result_df['volume_strength'] = df['Volume'] / volume_ma_20  # Volume relative to baseline
-            result_df['volume_trend'] = np.where(volume_ma_5 > volume_ma_20, 1, 0)  # Volume trending up
-        else:
-            result_df['volume_strength'] = 1.0
-            result_df['volume_trend'] = 0.5
+            # 13. Additional price-based indicators (3 indicators)
+            result_df['high_low_ratio'] = (result_df['High'] - result_df['Low']) / result_df['Close']
+            result_df['close_sma_ratio'] = result_df['Close'] / result_df['sma_20']
+            result_df['volatility_5'] = result_df['price_change'].rolling(5).std()
 
-        # === REVERSAL MODEL INDICATORS (6 indicators) ===
-        # Momentum-based reversal signals (2 indicators)
-        # RSI already calculated above: rsi (overbought/oversold signals)
-        # MACD histogram already calculated above: macd_histogram (momentum trend shift)
-        
-        # Volatility + price action reversal signals (2 indicators)  
-        # BB Position already calculated above: bb_position (reversals near band extremes)
-        # ATR already calculated above: atr (volatility spike indicator)
-        
-        # Momentum + timing reversal signals (1 indicator)
-        # Stochastic %K for momentum exhaustion zones
-        stoch_data = TechnicalIndicators.stochastic(df['High'], df['Low'], df['Close'])
-        result_df['stochastic_k'] = stoch_data['k']
-        
-        # Candlestick shape reversal signal (1 indicator)
-        # Close-Low Difference captures hammer-type reversals
-        result_df['close_low_diff'] = (df['Close'] - df['Low']) / (df['High'] - df['Low'])  # Normalized close position
+            # Total: 23 indicators
+            expected_indicators = [
+                'sma_5', 'sma_10', 'sma_20', 'ema_5', 'ema_10', 'ema_20',
+                'rsi', 'macd', 'macd_signal', 'macd_histogram',
+                'bb_upper', 'bb_lower', 'bb_width', 'atr', 'adx', 'cci', 'williams_r',
+                'stoch_k', 'stoch_d', 'price_change', 'volume_sma', 'volume_ratio',
+                'high_low_ratio', 'close_sma_ratio', 'volatility_5'
+            ]
 
-        return result_df
+            # Verify all indicators were created
+            missing_indicators = [ind for ind in expected_indicators if ind not in result_df.columns]
+            if missing_indicators:
+                print(f"Warning: Missing indicators: {missing_indicators}")
+
+            # Fill NaN values using forward fill then backward fill
+            for indicator in expected_indicators:
+                if indicator in result_df.columns:
+                    result_df[indicator] = result_df[indicator].fillna(method='ffill').fillna(method='bfill')
+
+            # For any remaining NaN values, fill with reasonable defaults
+            numeric_columns = result_df.select_dtypes(include=[np.number]).columns
+            result_df[numeric_columns] = result_df[numeric_columns].fillna(0)
+
+            print(f"✅ Calculated 23 technical indicators successfully")
+            return result_df
+
+        except Exception as e:
+            print(f"Error calculating technical indicators: {str(e)}")
+            # Return original dataframe if calculation fails
+            return df.copy()
+
+    @staticmethod
+    def get_feature_names() -> List[str]:
+        """Get list of all feature names."""
+        return [
+            'sma_5', 'sma_10', 'sma_20', 'ema_5', 'ema_10', 'ema_20',
+            'rsi', 'macd', 'macd_signal', 'macd_histogram',
+            'bb_upper', 'bb_lower', 'bb_width', 'atr', 'adx', 'cci', 'williams_r',
+            'stoch_k', 'stoch_d', 'price_change', 'volume_sma', 'volume_ratio',
+            'high_low_ratio', 'close_sma_ratio', 'volatility_5'
+        ]

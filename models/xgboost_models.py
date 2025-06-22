@@ -67,11 +67,9 @@ class QuantTradingModels:
         return [
             'sma_5', 'sma_10', 'sma_20', 'ema_5', 'ema_10', 'ema_20',
             'rsi', 'macd', 'macd_signal', 'macd_histogram',
-            'bb_upper', 'bb_lower', 'bb_width', 'bb_position',
-            'atr', 'adx', 'cci', 'williams_r', 'stoch_k', 'stoch_d',
-            'price_change', 'volume_sma', 'volume_ratio',
-            'high_low_ratio', 'close_sma_ratio', 'volatility_5',
-            'momentum_5', 'momentum_10', 'roc_5', 'roc_10'
+            'bb_upper', 'bb_lower', 'bb_width', 'atr', 'adx', 'cci', 'williams_r',
+            'stoch_k', 'stoch_d', 'price_change', 'volume_sma', 'volume_ratio',
+            'high_low_ratio', 'close_sma_ratio', 'volatility_5'
         ]
 
     def _save_models_to_database(self):
