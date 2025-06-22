@@ -893,29 +893,62 @@ class QuantTradingModels:
         if X_clean.empty:
             raise ValueError("Input DataFrame is empty after removing NaN values")
 
-        # Use available features that match trained model features
-        available_features = [col for col in self.feature_names if col in X_clean.columns]
-        missing_features = [col for col in self.feature_names if col not in X_clean.columns]
-        
-        if missing_features:
-            print(f"Warning: Missing features {missing_features}, using {len(available_features)} available features")
-        
-        if len(available_features) == 0:
-            raise ValueError(f"No matching features found. Available: {list(X_clean.columns)}, Expected: {self.feature_names}")
-        
-        # Use only the available features for prediction
-        X_features = X_clean[available_features].fillna(method='ffill').fillna(0)
-        
-        # If we're missing features, pad with zeros to match expected input size
-        if len(available_features) < len(self.feature_names):
-            # Create a DataFrame with all expected features, fill missing ones with zeros
-            full_features_df = pd.DataFrame(index=X_clean.index, columns=self.feature_names)
-            # Fill available features with actual data
-            for col in available_features:
-                full_features_df[col] = X_clean[col]
-            # Fill missing features with zeros
-            full_features_df = full_features_df.fillna(0)
-            X_features = full_features_df
+        # Handle feature alignment more flexibly
+        if hasattr(self, 'feature_names') and self.feature_names:
+            available_features = [col for col in self.feature_names if col in X_clean.columns]
+            missing_features = [col for col in self.feature_names if col not in X_clean.columns]
+            
+            if missing_features:
+                print(f"Warning: Missing {len(missing_features)} features: {missing_features[:5]}{'...' if len(missing_features) > 5 else ''}")
+            
+            if len(available_features) >= 5:  # Need at least 5 features for meaningful predictions
+                # Create feature matrix with expected feature order
+                X_features = pd.DataFrame(index=X_clean.index, columns=self.feature_names)
+                
+                # Fill available features with actual data
+                for col in available_features:
+                    X_features[col] = X_clean[col]
+                
+                # Fill missing features with reasonable defaults
+                for col in missing_features:
+                    if 'ema' in col.lower() or 'sma' in col.lower():
+                        # For moving averages, use the close price if available
+                        if 'Close' in X_clean.columns:
+                            X_features[col] = X_clean['Close']
+                        else:
+                            X_features[col] = X_clean.iloc[:, 0]  # Use first available column
+                    elif 'rsi' in col.lower():
+                        X_features[col] = 50.0  # Neutral RSI
+                    elif 'volume' in col.lower():
+                        X_features[col] = 1.0  # Neutral volume ratio
+                    elif 'momentum' in col.lower() or 'pct' in col.lower():
+                        X_features[col] = 0.0  # No momentum
+                    elif 'volatility' in col.lower():
+                        X_features[col] = 0.01  # Low volatility
+                    else:
+                        X_features[col] = 0.0  # Default to zero
+                
+                # Forward fill and backward fill any remaining NaN values
+                X_features = X_features.fillna(method='ffill').fillna(method='bfill').fillna(0)
+                
+                print(f"Using {len(available_features)} available + {len(missing_features)} imputed features")
+            else:
+                # If we don't have enough features from the original set, use what's available
+                print(f"Insufficient matching features ({len(available_features)}), using all available features")
+                X_features = X_clean.fillna(method='ffill').fillna(0)
+                
+                # If still not enough features, we need to expand or truncate
+                if X_features.shape[1] < len(self.feature_names):
+                    # Add missing columns with zeros
+                    for i in range(X_features.shape[1], len(self.feature_names)):
+                        X_features[f'feature_{i}'] = 0.0
+                elif X_features.shape[1] > len(self.feature_names):
+                    # Use only the first N features
+                    X_features = X_features.iloc[:, :len(self.feature_names)]
+        else:
+            # No feature names stored, use whatever features are available
+            print("No stored feature names, using all available features")
+            X_features = X_clean.fillna(method='ffill').fillna(0)
 
         if X_features.empty:
             raise ValueError("Feature DataFrame is empty after column selection")

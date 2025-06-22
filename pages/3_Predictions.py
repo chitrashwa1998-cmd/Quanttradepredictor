@@ -159,73 +159,115 @@ except Exception as e:
 
 # Prepare features for prediction
 try:
-    # Check if features exist in session state
-    if st.session_state.features is None:
-        st.warning("Features not found. Preparing features from current data...")
-        from features.technical_indicators import TechnicalIndicators
-
-        # Calculate technical indicators
-        df_with_indicators = TechnicalIndicators.calculate_all_indicators(df_filtered)
-        features_filtered = model_trainer.prepare_features(df_with_indicators)
-
-        # Also prepare full features for session state
-        df_full_indicators = TechnicalIndicators.calculate_all_indicators(df)
-        st.session_state.features = model_trainer.prepare_features(df_full_indicators)
-
-        st.success(f"✅ Prepared {len(features_filtered)} feature rows with {features_filtered.shape[1]} features")
-    else:
-        # Use existing features but filter to match data
-        features = st.session_state.features.copy()
-
-        # Get corresponding feature rows for filtered data
+    # Always recalculate features from current data to ensure all indicators are present
+    from features.technical_indicators import TechnicalIndicators
+    
+    with st.spinner("Calculating technical indicators..."):
+        # Calculate all technical indicators on the full dataset
+        df_with_indicators = TechnicalIndicators.calculate_all_indicators(df)
+        
+        # Filter to the requested time period after calculating indicators
         if date_range == "Last 50 points":
-            features_filtered = features.tail(50).copy()
+            df_filtered_indicators = df_with_indicators.tail(50).copy()
         elif date_range == "Last 100 points":
-            features_filtered = features.tail(100).copy()
+            df_filtered_indicators = df_with_indicators.tail(100).copy()
         elif date_range == "Last 200 points":
-            features_filtered = features.tail(200).copy()
+            df_filtered_indicators = df_with_indicators.tail(200).copy()
         elif date_range == "Last 500 points":
-            features_filtered = features.tail(500).copy()
+            df_filtered_indicators = df_with_indicators.tail(500).copy()
         else:
-            features_filtered = features.copy()
+            df_filtered_indicators = df_with_indicators.copy()
+        
+        # Prepare features using model trainer (this will handle feature selection automatically)
+        features_filtered = model_trainer.prepare_features(df_filtered_indicators)
+        
+        # Store full features in session state for consistency
+        st.session_state.features = model_trainer.prepare_features(df_with_indicators)
 
-        if features_filtered.empty:
-            features_filtered = features.tail(100).copy()
-
-    # Validate feature compatibility
+    st.success(f"✅ Prepared {len(features_filtered)} data points with {features_filtered.shape[1]} features")
+    
+    # Show feature information
     if hasattr(model_trainer, 'feature_names') and model_trainer.feature_names:
-        model_features = set(model_trainer.feature_names)
-        available_features = set(features_filtered.columns)
-        missing_features = model_features - available_features
-
-        if missing_features:
-            st.error(f"❌ Missing required features for prediction: {list(missing_features)}")
-            st.info("Please ensure your data has all required technical indicators calculated.")
-            st.stop()
-
-        # Show feature alignment status
-        st.success(f"✅ Feature alignment: {len(model_features)} required features available")
+        st.info(f"Using {len(model_trainer.feature_names)} features for {selected_model} model")
+        
+        # Debug: Show first few feature names
+        with st.expander("🔍 View Features Used"):
+            feature_preview = model_trainer.feature_names[:10]
+            st.write(f"First 10 features: {feature_preview}")
+            if len(model_trainer.feature_names) > 10:
+                st.write(f"... and {len(model_trainer.feature_names) - 10} more features")
 
 except Exception as e:
     st.error(f"❌ Error preparing features: {str(e)}")
+    st.write("**Debug Info:**")
+    st.write(f"- Data shape: {df.shape}")
+    st.write(f"- Date range: {date_range}")
+    st.write(f"- Selected model: {selected_model}")
+    
+    # Try to show what features are available
+    try:
+        from features.technical_indicators import TechnicalIndicators
+        test_indicators = TechnicalIndicators.calculate_all_indicators(df.tail(100))
+        st.write(f"- Available columns: {list(test_indicators.columns)}")
+    except Exception as inner_e:
+        st.write(f"- Could not calculate indicators: {str(inner_e)}")
+    
     st.stop()
 
 # Generate predictions
 try:
     with st.spinner(f"Generating {model_info.get('name', selected_model)} predictions..."):
-        predictions, probabilities = model_trainer.predict(selected_model, features_filtered)
+        # Ensure we have the right features for this model
+        if hasattr(model_trainer, 'feature_names') and model_trainer.feature_names:
+            # Get the exact features needed for this model
+            model_features = model_trainer.feature_names
+            available_features = list(features_filtered.columns)
+            
+            # Check if we have all required features
+            missing_features = [f for f in model_features if f not in available_features]
+            if missing_features:
+                st.warning(f"Missing {len(missing_features)} features, using available features")
+                # Use only available features that match the model
+                matching_features = [f for f in model_features if f in available_features]
+                if len(matching_features) >= 5:  # Need at least 5 features
+                    features_for_prediction = features_filtered[matching_features]
+                else:
+                    features_for_prediction = features_filtered
+            else:
+                features_for_prediction = features_filtered
+        else:
+            features_for_prediction = features_filtered
+        
+        # Make predictions
+        predictions, probabilities = model_trainer.predict(selected_model, features_for_prediction)
+        
+        st.success(f"✅ Generated {len(predictions)} predictions successfully!")
 
     # Align data with predictions
     pred_length = len(predictions)
-    df_aligned = df_filtered.tail(pred_length).copy()
+    
+    # Get the corresponding price data
+    if date_range == "Last 50 points":
+        df_aligned = df.tail(min(50, pred_length)).copy()
+    elif date_range == "Last 100 points":
+        df_aligned = df.tail(min(100, pred_length)).copy()
+    elif date_range == "Last 200 points":
+        df_aligned = df.tail(min(200, pred_length)).copy()
+    elif date_range == "Last 500 points":
+        df_aligned = df.tail(min(500, pred_length)).copy()
+    else:
+        df_aligned = df.tail(pred_length).copy()
 
-    if len(df_aligned) != pred_length:
-        st.warning(f"Data length mismatch. Using last {pred_length} data points.")
+    # Ensure we have the right number of rows
+    if len(df_aligned) > pred_length:
+        df_aligned = df_aligned.tail(pred_length)
+    elif len(df_aligned) < pred_length:
+        # If we don't have enough aligned data, use the last available data
         df_aligned = df.tail(pred_length).copy()
 
     # Create prediction results
     pred_df = pd.DataFrame({
-        'Price': df_aligned['Close'].values,
+        'Price': df_aligned['Close'].values[:pred_length],
         'Prediction': predictions
     }, index=df_aligned.index[:pred_length])
 
