@@ -1514,7 +1514,6 @@ try:
             risk_colors = {'High Risk': 'red', 'Medium Risk': 'orange', 
                           'Low Risk': 'lightgreen', 'Very Low Risk': 'darkgreen'}
 
-```python
             for risk_level in risk_colors:
                 risk_data = pred_df[pred_df['Risk_Level'] == risk_level]
                 if len(risk_data) > 0:
