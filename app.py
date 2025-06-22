@@ -456,6 +456,7 @@ elif st.session_state.current_page == "predictions":
             # Generate predictions
             try:
                 from datetime import timedelta
+                import plotly.graph_objects as go
                 
                 df = st.session_state.data.copy()
                 
@@ -466,44 +467,49 @@ elif st.session_state.current_page == "predictions":
                     except:
                         df.index = pd.date_range(start='2020-01-01', periods=len(df), freq='D')
                 
-                # Filter data based on selection
+                # Filter data based on selection - use simple row-based filtering
                 if date_range == "Last 30 days":
-                    start_date = df.index.max() - timedelta(days=30)
+                    df_filtered = df.tail(30).copy()
                 elif date_range == "Last 90 days":
-                    start_date = df.index.max() - timedelta(days=90)
+                    df_filtered = df.tail(90).copy()
                 elif date_range == "Last 6 months":
-                    start_date = df.index.max() - timedelta(days=180)
+                    df_filtered = df.tail(180).copy()
                 elif date_range == "Last year":
-                    start_date = df.index.max() - timedelta(days=365)
+                    df_filtered = df.tail(365).copy()
                 else:
-                    start_date = df.index.min()
+                    df_filtered = df.copy()
                 
-                df_filtered = df[df.index >= start_date].copy()
-                
-                # Prepare features
+                # Prepare features using existing data structure
                 if st.session_state.features is None:
-                    from features.technical_indicators import TechnicalIndicators
-                    df_with_indicators = TechnicalIndicators.calculate_all_indicators(df)
-                    st.session_state.features = st.session_state.model_trainer.prepare_features(df_with_indicators)
+                    # Use the existing data to prepare features that match the trained models
+                    st.session_state.features = st.session_state.model_trainer.prepare_features(df)
                 
                 features = st.session_state.features.copy()
-                if not isinstance(features.index, pd.DatetimeIndex):
-                    try:
-                        features.index = pd.to_datetime(features.index)
-                    except:
-                        features.index = pd.date_range(start='2020-01-01', periods=len(features), freq='D')
                 
-                features_filtered = features[features.index >= start_date].copy()
+                # Use corresponding rows based on data filtering
+                if date_range == "Last 30 days":
+                    features_filtered = features.tail(30).copy()
+                elif date_range == "Last 90 days":
+                    features_filtered = features.tail(90).copy()
+                elif date_range == "Last 6 months":
+                    features_filtered = features.tail(180).copy()
+                elif date_range == "Last year":
+                    features_filtered = features.tail(365).copy()
+                else:
+                    features_filtered = features.copy()
                 
                 if features_filtered.empty:
                     features_filtered = features.tail(100).copy()
+                
+                # Use the features as they exist - they should match the trained models
+                st.info(f"Using {len(features_filtered)} data points with {features_filtered.shape[1]} features for predictions")
                 
                 # Generate predictions
                 predictions, probabilities = st.session_state.model_trainer.predict(selected_model, features_filtered)
                 
                 # Create prediction dataframe
                 common_index = features_filtered.index[:len(predictions)]
-                df_filtered_aligned = df_filtered.loc[df_filtered.index.isin(common_index)]
+                df_filtered_aligned = df_filtered.iloc[:len(predictions)]
                 
                 pred_df = pd.DataFrame({
                     'Price': df_filtered_aligned['Close'].iloc[:len(predictions)],
