@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["sh", "-c", "streamlit run app.py --server.port 5000 --server.address 0.0.0.0"]
 
 [workflows]
-runButton = "Streamlit App"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "React Development Server"
@@ -43,28 +43,6 @@ task = "shell.exec"
 args = "npm start"
 
 [[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "React Dashboard"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "React Frontend"
-
-[[workflows.workflow]]
-name = "React Dashboard"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python api_server.py"
-waitForPort = 8080
-
-[[workflows.workflow]]
 name = "Full Trading Dashboard"
 author = 40743738
 mode = "parallel"
@@ -76,15 +54,6 @@ args = "python api_server.py"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm start"
-
-[[workflows.workflow]]
-name = "React Frontend"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "PORT=3000 DANGEROUSLY_DISABLE_HOST_CHECK=true npx craco start"
-waitForPort = 3000
 
 [[workflows.workflow]]
 name = "API Server"
@@ -147,6 +116,24 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "streamlit run app.py --server.port 5000 --server.address 0.0.0.0"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Trading Dashboard"
+
+[[workflows.workflow]]
+name = "Trading Dashboard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run app.py --server.port 5000"
+waitForPort = 5000
 
 [[ports]]
 localPort = 3000
