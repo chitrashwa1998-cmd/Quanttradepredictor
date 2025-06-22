@@ -193,4 +193,29 @@ class TechnicalIndicators:
         result_df['volatility_20'] = TechnicalIndicators.volatility(df['Close'], 20)
         result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
 
+        # === PROFIT PROBABILITY MODEL INDICATORS (8 indicators) ===
+        # Combine direction + magnitude + volatility + volume for profit probability
+
+        # Direction component (2 indicators)
+        result_df['ema_cross_signal'] = np.where(result_df['ema_5'] > result_df['ema_10'], 1, 0)
+        result_df['momentum_direction'] = np.where(result_df['price_momentum_1'] > 0, 1, 0)
+
+        # Magnitude component (2 indicators)  
+        result_df['price_magnitude'] = np.abs(result_df['price_momentum_1']) * 100  # Absolute price change magnitude
+        result_df['high_low_magnitude'] = (df['High'] - df['Low']) / df['Close'] * 100  # Intraday range magnitude
+
+        # Volatility component (2 indicators)
+        result_df['volatility_regime'] = np.where(result_df['volatility_10'] > result_df['volatility_20'], 1, 0)
+        result_df['bb_squeeze'] = result_df['bb_width'] / df['Close'] * 100  # Normalized BB width
+
+        # Volume component (2 indicators)
+        if 'Volume' in df.columns:
+            volume_ma_5 = TechnicalIndicators.sma(df['Volume'], 5)
+            volume_ma_20 = TechnicalIndicators.sma(df['Volume'], 20)
+            result_df['volume_strength'] = df['Volume'] / volume_ma_20  # Volume relative to baseline
+            result_df['volume_trend'] = np.where(volume_ma_5 > volume_ma_20, 1, 0)  # Volume trending up
+        else:
+            result_df['volume_strength'] = 1.0
+            result_df['volume_trend'] = 0.5
+
         return result_df

@@ -235,7 +235,36 @@ class QuantTradingModels:
                            (future_return_2 > scalping_threshold)).astype(int)
         targets['direction'] = direction_signal
 
-        # 2. Magnitude for scalping - regression target (continuous values)
+        # 2. Enhanced Profit Probability - combining direction + magnitude + volatility + volume
+        # Direction signals
+        price_direction = (df['Close'].shift(-1) > df['Close']).astype(int)
+        ema_alignment = ((df['Close'] > df['Close'].ewm(span=5).mean()) & 
+                        (df['Close'].ewm(span=5).mean() > df['Close'].ewm(span=10).mean())).astype(int)
+        
+        # Magnitude signals  
+        future_range = (df['High'].shift(-1) - df['Low'].shift(-1)) / df['Close']
+        current_momentum = np.abs(df['Close'].pct_change())
+        magnitude_score = (future_range > future_range.quantile(0.6)).astype(int)
+        
+        # Volatility signals
+        volatility_regime = df['Close'].pct_change().rolling(10).std()
+        vol_expansion = (volatility_regime > volatility_regime.shift(1)).astype(int)
+        
+        # Volume signals (if available)
+        if 'Volume' in df.columns:
+            volume_surge = (df['Volume'] > df['Volume'].rolling(10).mean() * 1.2).astype(int)
+            volume_confirm = volume_surge
+        else:
+            volume_confirm = pd.Series(1, index=df.index)
+        
+        # Combined profit probability score (0-4 scale, then convert to binary)
+        profit_score = (price_direction + ema_alignment + magnitude_score + 
+                       vol_expansion + volume_confirm)
+        
+        # Convert to binary: score >= 3 indicates high profit probability
+        targets['profit_prob'] = (profit_score >= 3).astype(int)
+
+        # 3. Magnitude for scalping - regression target (continuous values)
         # Use ATR-based magnitude for better scalping signals
         high_low_pct = (df['High'] - df['Low']) / df['Close']
         atr_5 = high_low_pct.rolling(5).mean()
@@ -245,7 +274,7 @@ class QuantTradingModels:
         magnitude_regression = atr_5 * 100  # Convert to percentage points
         targets['magnitude'] = magnitude_regression.fillna(magnitude_regression.median())
 
-        # 3. Scalping profit probability - next 2-3 candles (10-15 min window)
+        # 4. Scalping profit probability - next 2-3 candles (10-15 min window)
         future_returns_scalp = []
         for i in range(1, 4):  # Look ahead 1-3 periods for scalping
             future_return = df['Close'].shift(-i) / df['Close'] - 1
@@ -258,7 +287,7 @@ class QuantTradingModels:
         scalping_profit_threshold = 0.0005
         targets['profit_prob'] = (max_return_scalp > scalping_profit_threshold).astype(int)
 
-        # 4. Scalping volatility - regression target (continuous values)
+        # 5. Scalping volatility - regression target (continuous values)
         returns_1min = df['Close'].pct_change()
         vol_short = returns_1min.rolling(5).std()  # 5-period volatility
         vol_medium = returns_1min.rolling(20).std()  # 20-period baseline
@@ -269,7 +298,7 @@ class QuantTradingModels:
         volatility_regression = np.clip(vol_ratio * 100, 0, 500)  # Cap extreme values
         targets['volatility'] = volatility_regression.fillna(volatility_regression.median())
 
-        # 5. Trend strength for scalping - fast EMAs
+        # 6. Trend strength for scalping - fast EMAs
         ema_fast = df['Close'].ewm(span=5).mean()   # 5-period EMA
         ema_slow = df['Close'].ewm(span=13).mean()  # 13-period EMA
 
@@ -278,7 +307,7 @@ class QuantTradingModels:
         trend_threshold = ema_spread_pct.quantile(0.70)  # Top 30% of spreads
         targets['trend_sideways'] = (ema_spread_pct > trend_threshold).astype(int)
 
-        # 6. Scalping reversal signals - fast RSI + price action
+        # 7. Scalping reversal signals - fast RSI + price action
         # Calculate faster RSI for scalping
         price_change = df['Close'].pct_change()
         gains = price_change.where(price_change > 0, 0).rolling(7).mean()  # Faster RSI
@@ -299,7 +328,7 @@ class QuantTradingModels:
         price_at_bands = (df['Close'] <= bb_lower) | (df['Close'] >= bb_upper)
         targets['reversal'] = ((reversal_oversold | reversal_overbought) & price_at_bands).astype(int)
 
-        # 7. Balanced scalping trading signals - optimized for 5-min scalping
+        # 8. Balanced scalping trading signals - optimized for 5-min scalping
         # Use multiple timeframes for better signal distribution
         
         # Fast momentum (3-period for scalping)
