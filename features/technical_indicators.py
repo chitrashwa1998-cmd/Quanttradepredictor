@@ -82,6 +82,48 @@ class TechnicalIndicators:
         return -100 * ((highest_high - close) / (highest_high - lowest_low))
     
     @staticmethod
+    def adx(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
+        """Average Directional Index"""
+        # True Range
+        tr1 = high - low
+        tr2 = np.abs(high - close.shift())
+        tr3 = np.abs(low - close.shift())
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        
+        # Directional Movement
+        dm_plus = high - high.shift()
+        dm_minus = low.shift() - low
+        
+        dm_plus[dm_plus < 0] = 0
+        dm_minus[dm_minus < 0] = 0
+        dm_plus[(dm_plus - dm_minus) <= 0] = 0
+        dm_minus[(dm_minus - dm_plus) <= 0] = 0
+        
+        # Smoothed values
+        tr_smooth = tr.rolling(window=window).mean()
+        dm_plus_smooth = dm_plus.rolling(window=window).mean()
+        dm_minus_smooth = dm_minus.rolling(window=window).mean()
+        
+        # Directional Indicators
+        di_plus = (dm_plus_smooth / tr_smooth) * 100
+        di_minus = (dm_minus_smooth / tr_smooth) * 100
+        
+        # ADX
+        dx = (np.abs(di_plus - di_minus) / (di_plus + di_minus)) * 100
+        adx = dx.rolling(window=window).mean()
+        
+        return adx.fillna(25.0)  # Fill NaN with neutral value
+    
+    @staticmethod
+    def cci(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 20) -> pd.Series:
+        """Commodity Channel Index"""
+        typical_price = (high + low + close) / 3
+        sma_tp = typical_price.rolling(window=window).mean()
+        mad = typical_price.rolling(window=window).apply(lambda x: np.abs(x - x.mean()).mean())
+        cci = (typical_price - sma_tp) / (0.015 * mad)
+        return cci.fillna(0.0)  # Fill NaN with neutral value
+    
+    @staticmethod
     def obv(close: pd.Series, volume: pd.Series) -> pd.Series:
         """On-Balance Volume"""
         obv_values = []
@@ -106,7 +148,9 @@ class TechnicalIndicators:
         
         # Price-based indicators
         result_df['sma_5'] = TechnicalIndicators.sma(df['Close'], 5)
-        # Removed: sma_10, sma_20, sma_50
+        result_df['sma_10'] = TechnicalIndicators.sma(df['Close'], 10)
+        result_df['sma_20'] = TechnicalIndicators.sma(df['Close'], 20)
+        result_df['sma_50'] = TechnicalIndicators.sma(df['Close'], 50)
         
         result_df['ema_5'] = TechnicalIndicators.ema(df['Close'], 5)
         result_df['ema_10'] = TechnicalIndicators.ema(df['Close'], 10)
@@ -114,8 +158,10 @@ class TechnicalIndicators:
         
         result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
         
-        # MACD (removed macd and macd_signal, keeping only histogram)
+        # MACD - full set
         macd_data = TechnicalIndicators.macd(df['Close'])
+        result_df['macd'] = macd_data['macd']
+        result_df['macd_signal'] = macd_data['signal']
         result_df['macd_histogram'] = macd_data['histogram']
         
         # Bollinger Bands (removed bb_middle)
@@ -125,7 +171,10 @@ class TechnicalIndicators:
         result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
         result_df['bb_position'] = (df['Close'] - bb_data['lower']) / (bb_data['upper'] - bb_data['lower'])
         
-        # Stochastic (removed both stoch_k and stoch_d)
+        # Stochastic
+        stoch_data = TechnicalIndicators.stochastic(df['High'], df['Low'], df['Close'])
+        result_df['stoch_k'] = stoch_data['k']
+        result_df['stoch_d'] = stoch_data['d']
         
         # ATR
         result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
@@ -133,22 +182,49 @@ class TechnicalIndicators:
         # Williams %R
         result_df['williams_r'] = TechnicalIndicators.williams_r(df['High'], df['Low'], df['Close'])
         
+        # ADX and CCI
+        result_df['adx'] = TechnicalIndicators.adx(df['High'], df['Low'], df['Close'])
+        result_df['cci'] = TechnicalIndicators.cci(df['High'], df['Low'], df['Close'])
+        
         # Price ratios and differences
         result_df['high_low_ratio'] = df['High'] / df['Low']
         result_df['open_close_diff'] = df['Close'] - df['Open']
         result_df['high_close_diff'] = df['High'] - df['Close']
         result_df['close_low_diff'] = df['Close'] - df['Low']
         
-        # Price momentum (removed price_momentum_10)
+        # Price change and momentum
+        result_df['price_change'] = df['Close'].pct_change(1)
         result_df['price_momentum_1'] = df['Close'].pct_change(1)
         result_df['price_momentum_3'] = df['Close'].pct_change(3)
         result_df['price_momentum_5'] = df['Close'].pct_change(5)
+        result_df['price_momentum_10'] = df['Close'].pct_change(10)
+        
+        # Momentum indicators
+        result_df['momentum_5'] = df['Close'] / df['Close'].shift(5) - 1
+        result_df['momentum_10'] = df['Close'] / df['Close'].shift(10) - 1
+        
+        # Rate of Change
+        result_df['roc_5'] = ((df['Close'] - df['Close'].shift(5)) / df['Close'].shift(5)) * 100
+        result_df['roc_10'] = ((df['Close'] - df['Close'].shift(10)) / df['Close'].shift(10)) * 100
         
         # Volatility indicators
+        result_df['volatility_5'] = df['Close'].rolling(5).std()
         result_df['volatility_10'] = df['Close'].rolling(10).std()
         result_df['volatility_20'] = df['Close'].rolling(20).std()
         
-        # Volume indicators removed (obv and volume_ratio) to match optimized feature set
+        # Volume indicators
+        if 'Volume' in df.columns:
+            result_df['volume_sma'] = TechnicalIndicators.sma(df['Volume'], 10)
+            result_df['volume_ratio'] = df['Volume'] / result_df['volume_sma']
+            result_df['obv'] = TechnicalIndicators.obv(df['Close'], df['Volume'])
+        else:
+            # Create dummy volume indicators if Volume column is missing
+            result_df['volume_sma'] = 1000000.0
+            result_df['volume_ratio'] = 1.0
+            result_df['obv'] = 0.0
+        
+        # Price ratios
+        result_df['close_sma_ratio'] = df['Close'] / result_df['sma_20']
         
         # Additional features (removed day_of_week and month)
         result_df['hour'] = result_df.index.hour if hasattr(result_df.index, 'hour') else 0
