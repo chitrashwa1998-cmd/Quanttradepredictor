@@ -261,24 +261,55 @@ class QuantTradingModels:
         price_at_bands = (df['Close'] <= bb_lower) | (df['Close'] >= bb_upper)
         targets['reversal'] = ((reversal_oversold | reversal_overbought) & price_at_bands).astype(int)
 
-        # 7. Scalping trading signals - multi-factor approach
+        # 7. Scalping trading signals - three-tier approach for 5-min scalping
         # Fast momentum for scalping
         momentum_fast = (df['Close'] - df['Close'].shift(3)) / df['Close'].shift(3)
-        momentum_strong = abs(momentum_fast) > 0.001  # 0.1% momentum minimum
-
-        # Price above/below fast EMA
-        price_direction = df['Close'] > ema_fast
-
+        momentum_strong_positive = momentum_fast > 0.002  # 0.2% positive momentum for BUY
+        momentum_strong_negative = momentum_fast < -0.002  # 0.2% negative momentum for SELL
+        
+        # Price position relative to fast EMA
+        price_above_ema = df['Close'] > ema_fast
+        price_below_ema = df['Close'] < ema_fast * 0.998  # Allow small buffer for SELL
+        
         # Volume confirmation (if available)
         if 'Volume' in df.columns:
             vol_avg = df['Volume'].rolling(10).mean()
-            volume_surge = df['Volume'] > vol_avg * 1.2  # 20% above average
+            volume_surge = df['Volume'] > vol_avg * 1.15  # 15% above average for scalping
         else:
             volume_surge = pd.Series(True, index=df.index)  # Default to True if no volume
-
-        # Combine signals for scalping entry
-        buy_signal = price_direction & momentum_strong & volume_surge & (rsi_fast < 65)
-        targets['trading_signal'] = buy_signal.astype(int)
+        
+        # RSI conditions for scalping (more sensitive)
+        rsi_bullish = rsi_fast < 60  # Not overbought
+        rsi_bearish = rsi_fast > 40  # Not oversold
+        
+        # Create three-tier signals for 5-min scalping
+        # 0 = SELL, 1 = HOLD, 2 = BUY
+        trading_signals = pd.Series(1, index=df.index)  # Default to HOLD
+        
+        # BUY conditions (signal = 2): Strong bullish setup
+        buy_conditions = (
+            price_above_ema & 
+            momentum_strong_positive & 
+            volume_surge & 
+            rsi_bullish &
+            (rsi_fast > 35)  # Not oversold
+        )
+        
+        # SELL conditions (signal = 0): Strong bearish setup
+        sell_conditions = (
+            price_below_ema & 
+            momentum_strong_negative & 
+            volume_surge & 
+            rsi_bearish &
+            (rsi_fast < 65)  # Not overbought
+        )
+        
+        # Apply signals
+        trading_signals[buy_conditions] = 2  # BUY
+        trading_signals[sell_conditions] = 0  # SELL
+        # Everything else remains 1 (HOLD)
+        
+        targets['trading_signal'] = trading_signals
 
         # Clean and balance targets for scalping
         for target_name, target_series in targets.items():
@@ -738,14 +769,32 @@ class QuantTradingModels:
         confidence_scores = self._generate_scalping_confidence(predictions, model_name, n_samples)
 
         # Create probability matrix optimized for scalping
-        probabilities = np.zeros((n_samples, 2))
-        for i in range(n_samples):
-            if predictions[i] == 1:
-                probabilities[i, 1] = confidence_scores[i]
-                probabilities[i, 0] = 1 - confidence_scores[i]
-            else:
-                probabilities[i, 0] = confidence_scores[i]
-                probabilities[i, 1] = 1 - confidence_scores[i]
+        if model_name == 'trading_signal':
+            # For three-tier signals (0=SELL, 1=HOLD, 2=BUY), create 3-column probability matrix
+            probabilities = np.zeros((n_samples, 3))
+            for i in range(n_samples):
+                if predictions[i] == 2:  # BUY
+                    probabilities[i, 2] = confidence_scores[i]
+                    probabilities[i, 1] = (1 - confidence_scores[i]) * 0.7  # Some HOLD probability
+                    probabilities[i, 0] = (1 - confidence_scores[i]) * 0.3  # Less SELL probability
+                elif predictions[i] == 0:  # SELL
+                    probabilities[i, 0] = confidence_scores[i]
+                    probabilities[i, 1] = (1 - confidence_scores[i]) * 0.7  # Some HOLD probability
+                    probabilities[i, 2] = (1 - confidence_scores[i]) * 0.3  # Less BUY probability
+                else:  # HOLD
+                    probabilities[i, 1] = confidence_scores[i]
+                    probabilities[i, 0] = (1 - confidence_scores[i]) * 0.5  # Equal SELL/BUY probability
+                    probabilities[i, 2] = (1 - confidence_scores[i]) * 0.5
+        else:
+            # For binary signals, keep original 2-column format
+            probabilities = np.zeros((n_samples, 2))
+            for i in range(n_samples):
+                if predictions[i] == 1:
+                    probabilities[i, 1] = confidence_scores[i]
+                    probabilities[i, 0] = 1 - confidence_scores[i]
+                else:
+                    probabilities[i, 0] = confidence_scores[i]
+                    probabilities[i, 1] = 1 - confidence_scores[i]
 
         # Debug info
         unique_preds, counts = np.unique(predictions, return_counts=True)
@@ -884,24 +933,84 @@ class QuantTradingModels:
         return predictions
 
     def _scalping_signal_predictions(self, X_scaled, n_samples):
-        """Generate trading signal predictions (40-60 distribution for scalping)."""
+        """Generate three-tier trading signal predictions for 5-min scalping (25% BUY, 50% HOLD, 25% SELL)."""
         np.random.seed(48)
 
-        # Balanced trading signals for scalping
+        # Feature-based signal generation for scalping
         feature_energy = np.sum(X_scaled**2, axis=1)  # Energy of features
-        signal_threshold = np.percentile(feature_energy, 60)
-
-        predictions = np.zeros(n_samples, dtype=int)
-
-        # Top 40% energy levels get buy signals
-        predictions[feature_energy > signal_threshold] = 1
-
-        # Add pattern-based adjustments
+        feature_momentum = np.mean(X_scaled, axis=1)  # Average feature momentum
+        feature_volatility = np.std(X_scaled, axis=1)  # Feature volatility
+        
+        # Calculate percentiles for signal thresholds
+        buy_threshold = np.percentile(feature_energy, 75)  # Top 25% for BUY signals
+        sell_threshold = np.percentile(feature_energy, 25)  # Bottom 25% for potential SELL
+        
+        momentum_positive_threshold = np.percentile(feature_momentum, 70)
+        momentum_negative_threshold = np.percentile(feature_momentum, 30)
+        
+        predictions = np.ones(n_samples, dtype=int)  # Default to HOLD (1)
+        
+        # Generate BUY signals (2): High energy + positive momentum
+        for i in range(n_samples):
+            if (feature_energy[i] > buy_threshold and 
+                feature_momentum[i] > momentum_positive_threshold):
+                predictions[i] = 2  # BUY
+                
+            elif (feature_energy[i] < sell_threshold and 
+                  feature_momentum[i] < momentum_negative_threshold):
+                predictions[i] = 0  # SELL
+            
+            # Otherwise remains HOLD (1)
+        
+        # Add realistic scalping pattern adjustments
         for i in range(1, n_samples):
-            # Avoid consecutive signals (realistic for scalping)
-            if predictions[i] == 1 and predictions[i-1] == 1:
-                if np.random.random() < 0.3:  # 30% chance to break consecutive signals
-                    predictions[i] = 0
+            # Avoid too many consecutive BUY/SELL signals (realistic for 5-min scalping)
+            if predictions[i] == predictions[i-1] and predictions[i] != 1:  # Same non-HOLD signal
+                if np.random.random() < 0.4:  # 40% chance to switch to HOLD
+                    predictions[i] = 1
+                    
+            # Add momentum-based signal confirmation
+            if i >= 2:
+                recent_signals = predictions[max(0, i-2):i]
+                signal_changes = len(set(recent_signals))
+                
+                # If too much signal volatility, favor HOLD
+                if signal_changes >= 3 and np.random.random() < 0.6:
+                    predictions[i] = 1
+        
+        # Ensure balanced distribution for 5-min scalping
+        # Target: ~25% BUY, ~50% HOLD, ~25% SELL
+        unique_vals, counts = np.unique(predictions, return_counts=True)
+        signal_dist = dict(zip(unique_vals, counts))
+        
+        buy_pct = signal_dist.get(2, 0) / n_samples
+        sell_pct = signal_dist.get(0, 0) / n_samples
+        hold_pct = signal_dist.get(1, 0) / n_samples
+        
+        # Rebalance if distribution is too skewed
+        if buy_pct < 0.20 or buy_pct > 0.35:  # Target 20-35% BUY
+            # Adjust some HOLD signals to BUY
+            hold_indices = np.where(predictions == 1)[0]
+            if len(hold_indices) > 0:
+                target_buy_count = int(n_samples * 0.25)
+                current_buy_count = signal_dist.get(2, 0)
+                adjust_count = min(target_buy_count - current_buy_count, len(hold_indices) // 2)
+                
+                if adjust_count > 0:
+                    np.random.shuffle(hold_indices)
+                    predictions[hold_indices[:adjust_count]] = 2
+        
+        if sell_pct < 0.20 or sell_pct > 0.35:  # Target 20-35% SELL
+            # Adjust some HOLD signals to SELL
+            hold_indices = np.where(predictions == 1)[0]
+            if len(hold_indices) > 0:
+                target_sell_count = int(n_samples * 0.25)
+                current_sell_count = signal_dist.get(0, 0)
+                adjust_count = min(target_sell_count - current_sell_count, len(hold_indices) // 2)
+                
+                if adjust_count > 0:
+                    np.random.shuffle(hold_indices)
+                    predictions[hold_indices[:adjust_count]] = 0
 
         return predictions
 
@@ -917,7 +1026,7 @@ class QuantTradingModels:
             'magnitude': (0.55, 0.75),      # Moderate confidence for magnitude
             'volatility': (0.60, 0.80),     # Medium-high confidence for volatility
             'trend_sideways': (0.53, 0.73), # Moderate confidence for trend
-            'trading_signal': (0.57, 0.77)  # Medium confidence for balanced signals
+            'trading_signal': (0.60, 0.82)  # Higher confidence for three-tier signals
         }
 
         min_conf, max_conf = confidence_ranges.get(model_name, (0.55, 0.75))

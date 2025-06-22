@@ -1360,8 +1360,9 @@ try:
         signal_map = {0: 'Sell', 1: 'Hold', 2: 'Buy'}
         signal_colors = {0: '#E74C3C', 1: '#F39C12', 2: '#27AE60'}
 
+        # Ensure predictions contain all three signal types
         pred_df['Signal'] = predictions
-        pred_df['Signal_Name'] = [signal_map[p] for p in predictions]
+        pred_df['Signal_Name'] = [signal_map.get(p, 'Hold') for p in predictions]
 
         with tab1:
             st.subheader("📊 Trading Signal Overview")
@@ -1438,15 +1439,19 @@ try:
 
             # Signal metrics
             col1, col2, col3 = st.columns(3)
+            total_signals = len(predictions)
             with col1:
-                buy_pct = (signal_counts.get(2, 0) / len(predictions)) * 100
-                st.metric("Buy Signals", f"{buy_pct:.1f}%")
+                buy_count = signal_counts.get(2, 0)
+                buy_pct = (buy_count / total_signals) * 100 if total_signals > 0 else 0
+                st.metric("Buy Signals", f"{buy_pct:.1f}%", f"{buy_count} signals")
             with col2:
-                hold_pct = (signal_counts.get(1, 0) / len(predictions)) * 100
-                st.metric("Hold Signals", f"{hold_pct:.1f}%")
+                hold_count = signal_counts.get(1, 0)
+                hold_pct = (hold_count / total_signals) * 100 if total_signals > 0 else 0
+                st.metric("Hold Signals", f"{hold_pct:.1f}%", f"{hold_count} signals")
             with col3:
-                sell_pct = (signal_counts.get(0, 0) / len(predictions)) * 100
-                st.metric("Sell Signals", f"{sell_pct:.1f}%")
+                sell_count = signal_counts.get(0, 0)
+                sell_pct = (sell_count / total_signals) * 100 if total_signals > 0 else 0
+                st.metric("Sell Signals", f"{sell_pct:.1f}%", f"{sell_count} signals")
 
         with tab3:
             st.subheader("📋 Signal History")
