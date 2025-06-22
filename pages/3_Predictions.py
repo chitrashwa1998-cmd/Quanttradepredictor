@@ -1491,7 +1491,7 @@ try:
         st.subheader(f"📊 {selected_model.replace('_', ' ').title()} Predictions")
 
         # Create display dataframe
-        display_df = create_displaydataframe(pred_df)
+        display_df = create_display_dataframe(pred_df)
 
         # Show chart
         fig = go.Figure()
