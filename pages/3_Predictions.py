@@ -292,14 +292,35 @@ def create_display_dataframe(pred_df):
 
 # Generate predictions
 try:
+    # Ensure features_filtered is properly aligned and has the correct features
+    if features_filtered.empty:
+        st.error("No features available for prediction. Please check your data preparation.")
+        st.stop()
+    
+    # Validate that the model trainer has the required feature names
+    if not hasattr(model_trainer, 'feature_names') or not model_trainer.feature_names:
+        st.error("Model trainer feature names not found. Please retrain models.")
+        st.stop()
+    
+    # Check for missing features
+    missing_features = [col for col in model_trainer.feature_names if col not in features_filtered.columns]
+    if missing_features:
+        st.error(f"Missing required features for prediction: {missing_features}")
+        st.info("Please ensure your data has all required technical indicators calculated.")
+        st.stop()
+    
     predictions, probabilities = model_trainer.predict(selected_model, features_filtered)
 
-    # Create prediction dataframe
+    # Ensure predictions and features have compatible indices
+    common_index = features_filtered.index[:len(predictions)]
+    df_filtered_aligned = df_filtered.loc[df_filtered.index.isin(common_index)]
+    
+    # Create prediction dataframe with proper alignment
     pred_df = pd.DataFrame({
-        'Price': df_filtered['Close'],
+        'Price': df_filtered_aligned['Close'].iloc[:len(predictions)],
         'Prediction': predictions,
         'Direction': ['Up' if p == 1 else 'Down' for p in predictions]
-    }, index=features_filtered.index)
+    }, index=common_index)
 
     if probabilities is not None:
         pred_df['Confidence'] = np.max(probabilities, axis=1)
@@ -1494,15 +1515,73 @@ try:
         st.dataframe(display_df.tail(20), use_container_width=True, hide_index=True)
 
 except Exception as e:
-    st.error(f"Error generating predictions: {str(e)}")
-    st.info("Please try refreshing the page or check your model training.")
-
-    # Show debug information
-    st.subheader("Debug Information")
-    st.write("Available models:", available_models)
-    st.write("Selected model:", selected_model)
-    st.write("Features shape:", features_filtered.shape if features_filtered is not None else "None")
-    st.write("Data shape:", df_filtered.shape)
+    st.error(f"❌ Error generating predictions: {str(e)}")
+    
+    # More detailed error information
+    st.subheader("🔍 Detailed Error Information")
+    
+    # Check model trainer state
+    if st.session_state.model_trainer is None:
+        st.error("Model trainer is not initialized. Please go to Model Training page first.")
+    else:
+        st.info("✅ Model trainer is initialized")
+    
+    # Check available models
+    if not available_models:
+        st.error("No trained models available")
+    else:
+        st.info(f"✅ Available models: {available_models}")
+    
+    # Check features
+    if st.session_state.features is None:
+        st.error("Features not prepared. Please ensure technical indicators are calculated.")
+    elif features_filtered is not None:
+        st.info(f"✅ Features shape: {features_filtered.shape}")
+        st.info(f"Feature columns: {list(features_filtered.columns)}")
+    else:
+        st.error("Features filtered is None")
+    
+    # Check data
+    st.info(f"✅ Data shape: {df_filtered.shape}")
+    
+    # Check model trainer feature names
+    if hasattr(st.session_state.model_trainer, 'feature_names'):
+        st.info(f"✅ Model trainer feature names: {len(st.session_state.model_trainer.feature_names)} features")
+        
+        if st.session_state.features is not None:
+            missing_feats = [f for f in st.session_state.model_trainer.feature_names if f not in st.session_state.features.columns]
+            if missing_feats:
+                st.error(f"❌ Missing features: {missing_feats}")
+            else:
+                st.info("✅ All required features are available")
+    else:
+        st.error("❌ Model trainer has no feature names")
+    
+    # Provide actionable solutions
+    st.subheader("💡 Suggested Solutions")
+    st.info("1. **Go to Model Training page** - Train models with current data")
+    st.info("2. **Check data quality** - Ensure your data has proper OHLC columns")
+    st.info("3. **Recalculate indicators** - Technical indicators may be missing")
+    
+    if st.button("🔧 Try Auto-Fix", type="primary"):
+        try:
+            # Attempt to recalculate features
+            from features.technical_indicators import TechnicalIndicators
+            
+            st.info("Attempting to recalculate technical indicators...")
+            df_with_indicators = TechnicalIndicators.calculate_all_indicators(df_filtered)
+            
+            if st.session_state.model_trainer:
+                features_fixed = st.session_state.model_trainer.prepare_features(df_with_indicators)
+                st.session_state.features = features_fixed
+                st.success("✅ Features recalculated successfully! Please try predictions again.")
+                st.rerun()
+            else:
+                st.error("Model trainer not available for feature preparation")
+                
+        except Exception as fix_error:
+            st.error(f"Auto-fix failed: {str(fix_error)}")
+            st.info("Please manually retrain models from the Model Training page.")
 
 # Model comparison section
 st.markdown("---")
