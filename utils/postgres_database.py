@@ -498,9 +498,6 @@ class PostgresTradingDatabase:
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # Disable foreign key checks temporarily if needed
-                    cursor.execute("SET foreign_key_checks = 0;")
-                    
                     print("Clearing predictions...")
                     cursor.execute("DELETE FROM predictions;")
                     rows_deleted = cursor.rowcount
@@ -522,13 +519,10 @@ class PostgresTradingDatabase:
                     print(f"Deleted {rows_deleted} dataset records")
                     
                     # Reset sequences to start from 1
-                    cursor.execute("ALTER SEQUENCE predictions_id_seq RESTART WITH 1;")
-                    cursor.execute("ALTER SEQUENCE trained_models_id_seq RESTART WITH 1;")
-                    cursor.execute("ALTER SEQUENCE model_results_id_seq RESTART WITH 1;")
-                    cursor.execute("ALTER SEQUENCE ohlc_datasets_id_seq RESTART WITH 1;")
-                    
-                    # Re-enable foreign key checks
-                    cursor.execute("SET foreign_key_checks = 1;")
+                    cursor.execute("ALTER SEQUENCE IF EXISTS predictions_id_seq RESTART WITH 1;")
+                    cursor.execute("ALTER SEQUENCE IF EXISTS trained_models_id_seq RESTART WITH 1;")
+                    cursor.execute("ALTER SEQUENCE IF EXISTS model_results_id_seq RESTART WITH 1;")
+                    cursor.execute("ALTER SEQUENCE IF EXISTS ohlc_datasets_id_seq RESTART WITH 1;")
                     
                     conn.commit()
                     print("✅ Database cleared successfully")
