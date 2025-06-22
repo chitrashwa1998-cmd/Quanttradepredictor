@@ -498,6 +498,9 @@ class PostgresTradingDatabase:
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
+                    # Disable foreign key checks temporarily if needed
+                    cursor.execute("SET foreign_key_checks = 0;")
+                    
                     print("Clearing predictions...")
                     cursor.execute("DELETE FROM predictions;")
                     rows_deleted = cursor.rowcount
@@ -518,10 +521,31 @@ class PostgresTradingDatabase:
                     rows_deleted = cursor.rowcount
                     print(f"Deleted {rows_deleted} dataset records")
                     
+                    # Reset sequences to start from 1
+                    cursor.execute("ALTER SEQUENCE predictions_id_seq RESTART WITH 1;")
+                    cursor.execute("ALTER SEQUENCE trained_models_id_seq RESTART WITH 1;")
+                    cursor.execute("ALTER SEQUENCE model_results_id_seq RESTART WITH 1;")
+                    cursor.execute("ALTER SEQUENCE ohlc_datasets_id_seq RESTART WITH 1;")
+                    
+                    # Re-enable foreign key checks
+                    cursor.execute("SET foreign_key_checks = 1;")
+                    
                     conn.commit()
                     print("✅ Database cleared successfully")
 
-            return True
+            # Verify all data is cleared
+            verification_info = self.get_database_info()
+            total_remaining = (verification_info.get('total_datasets', 0) + 
+                             verification_info.get('total_models', 0) + 
+                             verification_info.get('total_trained_models', 0) + 
+                             verification_info.get('total_predictions', 0))
+            
+            if total_remaining == 0:
+                print("✅ Verification: All data successfully cleared")
+                return True
+            else:
+                print(f"⚠️ Warning: {total_remaining} records still remain")
+                return False
 
         except Exception as e:
             print(f"Error clearing database: {str(e)}")

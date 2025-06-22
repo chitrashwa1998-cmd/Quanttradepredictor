@@ -252,18 +252,54 @@ with col1:
 
 with col2:
     st.subheader("⚠️ Danger Zone")
+    
+    # Initialize confirmation state
+    if 'confirm_clear_all' not in st.session_state:
+        st.session_state.confirm_clear_all = False
+    
     if st.button("🗑️ Clear All Database", type="secondary"):
-        if st.checkbox("⚠️ I confirm I want to delete ALL data from the database"):
-            if trading_db.clear_all_data():
-                st.success("✅ All database data cleared")
-                # Clear all session state
-                for key in ['data', 'features', 'models', 'predictions', 'model_trainer', 'realtime_data']:
-                    if key in st.session_state:
-                        st.session_state[key] = None
-                st.session_state.models = {}
+        st.session_state.confirm_clear_all = True
+    
+    if st.session_state.confirm_clear_all:
+        st.warning("⚠️ This will permanently delete ALL data from the database!")
+        st.write("This includes:")
+        st.write("- All datasets")
+        st.write("- All trained models")
+        st.write("- All model results")
+        st.write("- All predictions")
+        
+        col2a, col2b = st.columns(2)
+        
+        with col2a:
+            if st.button("✅ Yes, Delete Everything", type="primary", key="confirm_clear_yes"):
+                with st.spinner("Clearing database..."):
+                    success = trading_db.clear_all_data()
+                    
+                if success:
+                    st.success("✅ All database data cleared successfully")
+                    
+                    # Clear all session state thoroughly
+                    keys_to_clear = ['data', 'features', 'models', 'predictions', 'model_trainer', 'realtime_data']
+                    for key in keys_to_clear:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    
+                    # Reset models dictionary
+                    st.session_state.models = {}
+                    
+                    # Reset confirmation state
+                    st.session_state.confirm_clear_all = False
+                    
+                    # Force page refresh
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to clear database. Please check console for details.")
+                    st.session_state.confirm_clear_all = False
+        
+        with col2b:
+            if st.button("❌ Cancel", key="confirm_clear_no"):
+                st.session_state.confirm_clear_all = False
                 st.rerun()
-            else:
-                st.error("Failed to clear database")
 
 # Data Recovery Section
 st.header("🔄 Data Recovery")
