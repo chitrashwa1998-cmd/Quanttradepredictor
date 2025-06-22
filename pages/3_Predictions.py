@@ -772,8 +772,7 @@ try:
             ), row=1, col=1)
 
             # Volatility histogram
-            fig```python
-.add_trace(go.Histogram(
+            fig.add_trace(go.Histogram(
                 x=pred_df['Volatility_Forecast'],
                 nbinsx=30,
                 name='Distribution',
@@ -1492,8 +1491,13 @@ try:
         st.subheader(f"📊 {selected_model.replace('_', ' ').title()} Predictions")
 
         # Create display dataframe
-        display_df = create_display_dataframe(pred_df)
+        display_df = create_displaydataframe(pred_df)
 
         # Show chart
         fig = go.Figure()
-        fig.add_
+        fig.add_trace(go.Scatter(x=display_df.index, y=display_df['Prediction'], mode='lines+markers'))
+        st.plotly_chart(fig, use_container_width=True)
+
+except Exception as e:
+    st.error(f"❌ Prediction failed: {str(e)}")
+    st.info("Please check your data and model selection.")
