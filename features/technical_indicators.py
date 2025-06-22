@@ -236,4 +236,22 @@ class TechnicalIndicators:
             result_df['volume_strength'] = 1.0
             result_df['volume_trend'] = 0.5
 
+        # === REVERSAL MODEL INDICATORS (6 indicators) ===
+        # Momentum-based reversal signals (2 indicators)
+        # RSI already calculated above: rsi (overbought/oversold signals)
+        # MACD histogram already calculated above: macd_histogram (momentum trend shift)
+        
+        # Volatility + price action reversal signals (2 indicators)  
+        # BB Position already calculated above: bb_position (reversals near band extremes)
+        # ATR already calculated above: atr (volatility spike indicator)
+        
+        # Momentum + timing reversal signals (1 indicator)
+        # Stochastic %K for momentum exhaustion zones
+        stoch_data = TechnicalIndicators.stochastic(df['High'], df['Low'], df['Close'])
+        result_df['stochastic_k'] = stoch_data['k']
+        
+        # Candlestick shape reversal signal (1 indicator)
+        # Close-Low Difference captures hammer-type reversals
+        result_df['close_low_diff'] = (df['Close'] - df['Low']) / (df['High'] - df['Low'])  # Normalized close position
+
         return result_df
