@@ -277,7 +277,7 @@ with col2:
                 # Force page refresh
                 st.rerun()
             else:
-                st.error("Failed to clear database")ase")
+                st.error("Failed to clear database")
 
 # Data Recovery Section
 st.header("🔄 Data Recovery")
