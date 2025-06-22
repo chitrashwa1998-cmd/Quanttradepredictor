@@ -143,33 +143,27 @@ class TechnicalIndicators:
 
     @staticmethod
     def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate all 36 specified technical indicators"""
+        """Calculate selected technical indicators (removed: SMA 10/20/50, MACD line/signal, BB middle, Stochastic K/D, momentum 10, volume SMA, month, day_of_week)"""
         result_df = df.copy()
 
-        # Price-based Moving Averages (7 indicators)
+        # Price-based Moving Averages (4 indicators) - removed SMA 10, 20, 50
         result_df['sma_5'] = TechnicalIndicators.sma(df['Close'], 5)
-        result_df['sma_10'] = TechnicalIndicators.sma(df['Close'], 10)
-        result_df['sma_20'] = TechnicalIndicators.sma(df['Close'], 20)
-        result_df['sma_50'] = TechnicalIndicators.sma(df['Close'], 50)
 
         result_df['ema_5'] = TechnicalIndicators.ema(df['Close'], 5)
         result_df['ema_10'] = TechnicalIndicators.ema(df['Close'], 10)
         result_df['ema_20'] = TechnicalIndicators.ema(df['Close'], 20)
 
-        # Momentum Indicators (9 indicators)
+        # Momentum Indicators (7 indicators) - removed MACD line/signal, momentum 10
         result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
 
-        # MACD components
+        # MACD components - only keep histogram
         macd_data = TechnicalIndicators.macd(df['Close'])
-        result_df['macd'] = macd_data['macd']
-        result_df['macd_signal'] = macd_data['signal']
         result_df['macd_histogram'] = macd_data['histogram']
 
-        # Price momentum
+        # Price momentum - removed momentum 10
         result_df['price_momentum_1'] = df['Close'].pct_change(1)
         result_df['price_momentum_3'] = df['Close'].pct_change(3)
         result_df['price_momentum_5'] = df['Close'].pct_change(5)
-        result_df['price_momentum_10'] = df['Close'].pct_change(10)
 
         # Williams %R
         result_df['williams_r'] = TechnicalIndicators.williams_r(df['High'], df['Low'], df['Close'])
@@ -179,18 +173,14 @@ class TechnicalIndicators:
         result_df['volatility_10'] = df['Close'].rolling(10).std()
         result_df['volatility_20'] = df['Close'].rolling(20).std()
 
-        # Bollinger Bands (5 indicators)
+        # Bollinger Bands (4 indicators) - removed middle band
         bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
         result_df['bb_upper'] = bb_data['upper']
-        result_df['bb_middle'] = bb_data['middle']
         result_df['bb_lower'] = bb_data['lower']
         result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
         result_df['bb_position'] = (df['Close'] - bb_data['lower']) / (bb_data['upper'] - bb_data['lower'])
 
-        # Stochastic Oscillator (2 indicators)
-        stoch_data = TechnicalIndicators.stochastic(df['High'], df['Low'], df['Close'])
-        result_df['stoch_k'] = stoch_data['k']
-        result_df['stoch_d'] = stoch_data['d']
+        # Stochastic Oscillator - REMOVED both K and D
 
         # Price Relationships (4 indicators)
         result_df['high_low_ratio'] = df['High'] / df['Low']
@@ -198,20 +188,17 @@ class TechnicalIndicators:
         result_df['high_close_diff'] = df['High'] - df['Close']
         result_df['close_low_diff'] = df['Close'] - df['Low']
 
-        # Volume Indicators (3 indicators)
+        # Volume Indicators (2 indicators) - removed volume_sma
         if 'Volume' in df.columns:
-            result_df['volume_sma'] = TechnicalIndicators.sma(df['Volume'], 10)
-            result_df['volume_ratio'] = df['Volume'] / result_df['volume_sma']
+            volume_sma_temp = TechnicalIndicators.sma(df['Volume'], 10)
+            result_df['volume_ratio'] = df['Volume'] / volume_sma_temp
             result_df['obv'] = TechnicalIndicators.obv(df['Close'], df['Volume'])
         else:
             # Create dummy volume indicators if Volume column is missing
-            result_df['volume_sma'] = 1000000.0
             result_df['volume_ratio'] = 1.0
             result_df['obv'] = 0.0
 
-        # Time-based Features (3 indicators)
-        result_df['day_of_week'] = result_df.index.dayofweek if hasattr(result_df.index, 'dayofweek') else 0
-        result_df['month'] = result_df.index.month if hasattr(result_df.index, 'month') else 1
+        # Time-based Features (1 indicator) - removed day_of_week and month
         result_df['hour'] = result_df.index.hour if hasattr(result_df.index, 'hour') else 0
 
         return result_df
