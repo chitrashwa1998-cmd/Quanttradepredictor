@@ -806,15 +806,15 @@ class QuantTradingModels:
         return successful_models
 
     def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-        """Make predictions using trained ensemble model optimized for 5-minute scalping."""
+        """Make predictions using trained ensemble model with improved confidence calculation."""
         if model_name not in self.models:
             raise ValueError(f"Model {model_name} not found. Available models: {list(self.models.keys())}")
 
         model_info = self.models[model_name]
         # Handle both new 'ensemble' and legacy 'model' keys
-        model = model_info.get('ensemble') or model_info.get('model')
+        ensemble_model = model_info.get('ensemble') or model_info.get('model')
         
-        if model is None:
+        if ensemble_model is None:
             raise ValueError(f"No trained model found for {model_name}")
 
         if not hasattr(self, 'feature_names') or not self.feature_names:
@@ -877,95 +877,101 @@ class QuantTradingModels:
             print(f"Error scaling features: {e}")
             X_scaled = X_features.values
 
-        # Get raw predictions from ensemble
-        if hasattr(model, 'predict_proba') and model_info['task_type'] == 'classification':
-            raw_probabilities = model.predict_proba(X_scaled)
-        else:
-            raw_predictions = model.predict(X_scaled)
-
-        # Optimize predictions for 5-minute scalping
         n_samples = len(X_scaled)
 
-        # Different handling for classification vs regression models
-        if model_info['task_type'] == 'regression':
-            # For regression models (magnitude, volatility), use raw predictions
-            predictions = model.predict(X_scaled)
+        # Get individual model predictions and probabilities for improved confidence calculation
+        individual_predictions = {}
+        individual_probabilities = {}
+        
+        if model_info['task_type'] == 'classification':
+            # Get predictions from each individual model in the ensemble
+            for model_name_inner, individual_model in ensemble_model.named_estimators_.items():
+                ind_pred = individual_model.predict(X_scaled)
+                individual_predictions[model_name_inner] = ind_pred
+                
+                if hasattr(individual_model, 'predict_proba'):
+                    ind_proba = individual_model.predict_proba(X_scaled)
+                    individual_probabilities[model_name_inner] = ind_proba
+
+            # Get ensemble prediction
+            ensemble_predictions = ensemble_model.predict(X_scaled)
+            
+            # Calculate improved confidence scores based on model agreement and probability strength
+            confidence_scores = self._calculate_ensemble_confidence(
+                individual_predictions, 
+                individual_probabilities, 
+                ensemble_predictions,
+                model_info['task_type']
+            )
+
+            # Create probability matrix based on ensemble probabilities with improved confidence
+            if hasattr(ensemble_model, 'predict_proba'):
+                ensemble_probabilities = ensemble_model.predict_proba(X_scaled)
+                
+                # Adjust probabilities based on confidence scores
+                adjusted_probabilities = self._adjust_probabilities_with_confidence(
+                    ensemble_probabilities, confidence_scores, model_name
+                )
+                probabilities = adjusted_probabilities
+            else:
+                # Fallback if no predict_proba available
+                if model_name == 'trading_signal':
+                    probabilities = np.zeros((n_samples, 3))
+                    for i in range(n_samples):
+                        if ensemble_predictions[i] == 2:  # BUY
+                            probabilities[i, 2] = confidence_scores[i]
+                            probabilities[i, 1] = (1 - confidence_scores[i]) * 0.7
+                            probabilities[i, 0] = (1 - confidence_scores[i]) * 0.3
+                        elif ensemble_predictions[i] == 0:  # SELL
+                            probabilities[i, 0] = confidence_scores[i]
+                            probabilities[i, 1] = (1 - confidence_scores[i]) * 0.7
+                            probabilities[i, 2] = (1 - confidence_scores[i]) * 0.3
+                        else:  # HOLD
+                            probabilities[i, 1] = confidence_scores[i]
+                            probabilities[i, 0] = (1 - confidence_scores[i]) * 0.5
+                            probabilities[i, 2] = (1 - confidence_scores[i]) * 0.5
+                else:
+                    probabilities = np.zeros((n_samples, 2))
+                    for i in range(n_samples):
+                        if ensemble_predictions[i] == 1:
+                            probabilities[i, 1] = confidence_scores[i]
+                            probabilities[i, 0] = 1 - confidence_scores[i]
+                        else:
+                            probabilities[i, 0] = confidence_scores[i]
+                            probabilities[i, 1] = 1 - confidence_scores[i]
+            
+            predictions = ensemble_predictions
+
+        else:
+            # Regression models
+            individual_predictions = {}
+            for model_name_inner, individual_model in ensemble_model.named_estimators_.items():
+                ind_pred = individual_model.predict(X_scaled)
+                individual_predictions[model_name_inner] = ind_pred
+
+            # Get ensemble prediction
+            predictions = ensemble_model.predict(X_scaled)
             
             # Ensure predictions are in reasonable range
             if model_name == 'magnitude':
                 predictions = np.clip(predictions, 0, 50)  # 0-50 percentage points
             elif model_name == 'volatility':
                 predictions = np.clip(predictions, 0, 500)  # 0-500 volatility ratio
-                
-        else:
-            # Classification models - use scalping-optimized prediction logic
-            if model_name == 'direction':
-                # For direction: Balanced 52-48 distribution with slight bullish bias for scalping
-                predictions = self._scalping_direction_predictions(X_scaled, n_samples)
 
-            elif model_name == 'profit_prob':
-                # For profit probability: 42-58 distribution (42% profitable opportunities)
-                predictions = self._scalping_profit_predictions(X_scaled, n_samples)
-
-            elif model_name == 'reversal':
-                # For reversal: 25-75 distribution (25% reversal signals - more realistic)
-                predictions = self._scalping_reversal_predictions(X_scaled, n_samples)
-
-            elif model_name == 'trend_sideways':
-                # For trend: 45-55 distribution (45% trending, 55% sideways)
-                predictions = self._scalping_trend_predictions(X_scaled, n_samples)
-
-            elif model_name == 'trading_signal':
-                # For trading signals: 40-60 distribution (40% buy signals)
-                predictions = self._scalping_signal_predictions(X_scaled, n_samples)
-
-            else:
-                # Fallback to original predictions for classification
-                predictions = model.predict(X_scaled)
-
-        # Handle probabilities differently for regression vs classification
-        if model_info['task_type'] == 'regression':
-            # For regression models, create confidence intervals
-            confidence_scores = np.abs(predictions - np.median(predictions)) / (np.std(predictions) + 1e-8)
-            confidence_scores = 1 / (1 + confidence_scores)  # Convert to 0-1 range
-            confidence_scores = np.clip(confidence_scores, 0.5, 0.95)  # Reasonable confidence range
+            # Calculate regression confidence based on model agreement
+            confidence_scores = self._calculate_ensemble_confidence(
+                individual_predictions, 
+                None,  # No probabilities for regression
+                predictions,
+                model_info['task_type']
+            )
             
             # For regression, probabilities represent prediction confidence (single column)
             probabilities = confidence_scores.reshape(-1, 1)
-            
-        else:
-            # Generate scalping-optimized confidence scores for classification
-            confidence_scores = self._generate_scalping_confidence(predictions, model_name, n_samples)
-
-            # Create probability matrix optimized for scalping
-            if model_name == 'trading_signal':
-                # For three-tier signals (0=SELL, 1=HOLD, 2=BUY), create 3-column probability matrix
-                probabilities = np.zeros((n_samples, 3))
-                for i in range(n_samples):
-                    if predictions[i] == 2:  # BUY
-                        probabilities[i, 2] = confidence_scores[i]
-                        probabilities[i, 1] = (1 - confidence_scores[i]) * 0.7  # Some HOLD probability
-                        probabilities[i, 0] = (1 - confidence_scores[i]) * 0.3  # Less SELL probability
-                    elif predictions[i] == 0:  # SELL
-                        probabilities[i, 0] = confidence_scores[i]
-                        probabilities[i, 1] = (1 - confidence_scores[i]) * 0.7  # Some HOLD probability
-                        probabilities[i, 2] = (1 - confidence_scores[i]) * 0.3  # Less BUY probability
-                    else:  # HOLD
-                        probabilities[i, 1] = confidence_scores[i]
-                        probabilities[i, 0] = (1 - confidence_scores[i]) * 0.5  # Equal SELL/BUY probability
-                        probabilities[i, 2] = (1 - confidence_scores[i]) * 0.5
-            else:
-                # For binary signals, keep original 2-column format
-                probabilities = np.zeros((n_samples, 2))
-                for i in range(n_samples):
-                    if predictions[i] == 1:
-                        probabilities[i, 1] = confidence_scores[i]
-                        probabilities[i, 0] = 1 - confidence_scores[i]
-                    else:
-                        probabilities[i, 0] = confidence_scores[i]
-                        probabilities[i, 1] = 1 - confidence_scores[i]
 
         # Debug info
+        print(f"{model_info['task_type'].title()} {model_name} - Confidence range: [{confidence_scores.min():.3f}, {confidence_scores.max():.3f}], Mean: {confidence_scores.mean():.3f}")
+        
         if model_info['task_type'] == 'regression':
             print(f"Regression {model_name} - Range: [{predictions.min():.4f}, {predictions.max():.4f}], Mean: {predictions.mean():.4f}")
         else:
@@ -1186,8 +1192,143 @@ class QuantTradingModels:
 
         return predictions
 
+    def _calculate_ensemble_confidence(self, individual_predictions, individual_probabilities, ensemble_predictions, task_type):
+        """Calculate improved confidence scores based on model agreement and probability strength."""
+        n_samples = len(ensemble_predictions)
+        confidence_scores = np.zeros(n_samples)
+        
+        for i in range(n_samples):
+            if task_type == 'classification':
+                # Get predictions from all individual models for this sample
+                model_preds = [individual_predictions[model_name][i] for model_name in individual_predictions.keys()]
+                
+                # Calculate model agreement (how many models agree on the prediction)
+                agreement_count = sum(1 for pred in model_preds if pred == ensemble_predictions[i])
+                total_models = len(model_preds)
+                agreement_ratio = agreement_count / total_models
+                
+                # Calculate average probability strength from individual models
+                if individual_probabilities:
+                    prob_strengths = []
+                    for model_name, probs in individual_probabilities.items():
+                        if len(probs[i]) > 1:
+                            # For multi-class, take the max probability
+                            max_prob = np.max(probs[i])
+                            prob_strengths.append(max_prob)
+                        else:
+                            # For binary, take the probability of the predicted class
+                            pred_class = individual_predictions[model_name][i]
+                            if pred_class == 1 and len(probs[i]) >= 2:
+                                prob_strengths.append(probs[i][1])
+                            elif pred_class == 0 and len(probs[i]) >= 1:
+                                prob_strengths.append(probs[i][0])
+                            else:
+                                prob_strengths.append(0.5)  # Default if unclear
+                    
+                    avg_prob_strength = np.mean(prob_strengths) if prob_strengths else 0.5
+                else:
+                    avg_prob_strength = 0.5  # Default when no probabilities available
+                
+                # Combined confidence score: 60% agreement + 40% probability strength
+                agreement_weight = 0.60
+                probability_weight = 0.40
+                
+                base_confidence = (agreement_weight * agreement_ratio) + (probability_weight * avg_prob_strength)
+                
+                # Boost confidence when all models unanimously agree
+                if agreement_ratio == 1.0:  # All models agree
+                    base_confidence = max(base_confidence, 0.75)  # Minimum 0.75 for unanimous agreement
+                    # Additional boost for strong unanimous agreement
+                    if avg_prob_strength > 0.8:
+                        base_confidence = min(base_confidence * 1.15, 0.95)
+                
+                # Apply confidence ranges based on agreement level
+                if agreement_ratio >= 0.67:  # Majority agreement (2/3 or 3/3 models)
+                    confidence_scores[i] = np.clip(base_confidence, 0.60, 0.95)
+                else:  # Models disagree significantly
+                    confidence_scores[i] = np.clip(base_confidence, 0.45, 0.70)
+                    
+            else:
+                # Regression confidence based on prediction variance across models
+                model_preds = np.array([individual_predictions[model_name][i] for model_name in individual_predictions.keys()])
+                
+                # Calculate prediction variance (lower variance = higher confidence)
+                pred_variance = np.var(model_preds)
+                pred_std = np.std(model_preds)
+                pred_mean = np.mean(model_preds)
+                
+                # Normalize variance for confidence calculation
+                if pred_mean != 0:
+                    coefficient_of_variation = pred_std / abs(pred_mean)
+                else:
+                    coefficient_of_variation = pred_std
+                
+                # Convert variance to confidence (lower variance = higher confidence)
+                # Scale coefficient of variation to 0-1 range and invert
+                normalized_cv = min(coefficient_of_variation / 0.5, 1.0)  # Normalize with max expected CV of 0.5
+                variance_confidence = 1.0 - normalized_cv
+                
+                # Calculate prediction consistency (how close individual predictions are to ensemble)
+                ensemble_pred = ensemble_predictions[i]
+                prediction_errors = np.abs(model_preds - ensemble_pred)
+                max_error = np.max(prediction_errors) if len(prediction_errors) > 0 else 0
+                avg_error = np.mean(prediction_errors) if len(prediction_errors) > 0 else 0
+                
+                # Convert errors to consistency score
+                if max_error > 0:
+                    consistency_score = 1.0 - min(avg_error / max_error, 1.0)
+                else:
+                    consistency_score = 1.0
+                
+                # Combined confidence: 70% variance + 30% consistency
+                base_confidence = (0.70 * variance_confidence) + (0.30 * consistency_score)
+                
+                # Apply regression-specific confidence ranges
+                confidence_scores[i] = np.clip(base_confidence, 0.50, 0.90)
+        
+        return confidence_scores
+
+    def _adjust_probabilities_with_confidence(self, ensemble_probabilities, confidence_scores, model_name):
+        """Adjust ensemble probabilities based on calculated confidence scores."""
+        n_samples, n_classes = ensemble_probabilities.shape
+        adjusted_probabilities = ensemble_probabilities.copy()
+        
+        for i in range(n_samples):
+            confidence = confidence_scores[i]
+            
+            # Get the predicted class (highest probability)
+            predicted_class = np.argmax(ensemble_probabilities[i])
+            
+            # Adjust probabilities based on confidence
+            if confidence >= 0.75:  # High confidence
+                # Sharpen the probability distribution (make the prediction more confident)
+                adjusted_probabilities[i] = ensemble_probabilities[i] ** 1.5
+            elif confidence >= 0.60:  # Medium confidence
+                # Keep probabilities roughly the same
+                adjusted_probabilities[i] = ensemble_probabilities[i] ** 1.1
+            else:  # Low confidence
+                # Flatten the probability distribution (make it more uncertain)
+                adjusted_probabilities[i] = ensemble_probabilities[i] ** 0.7
+                
+            # Ensure the predicted class gets at least the confidence score as probability
+            max_prob = np.max(adjusted_probabilities[i])
+            if max_prob < confidence:
+                # Scale up the predicted class probability to match confidence
+                scale_factor = confidence / max_prob
+                adjusted_probabilities[i, predicted_class] *= scale_factor
+            
+            # Renormalize to ensure probabilities sum to 1
+            prob_sum = np.sum(adjusted_probabilities[i])
+            if prob_sum > 0:
+                adjusted_probabilities[i] /= prob_sum
+            else:
+                # Fallback for edge cases
+                adjusted_probabilities[i] = ensemble_probabilities[i]
+        
+        return adjusted_probabilities
+
     def _generate_scalping_confidence(self, predictions, model_name, n_samples):
-        """Generate realistic confidence scores for balanced scalping predictions."""
+        """Generate realistic confidence scores for balanced scalping predictions (legacy method)."""
         np.random.seed(hash(model_name) % 100)
 
         # Balanced confidence ranges for scalping models
