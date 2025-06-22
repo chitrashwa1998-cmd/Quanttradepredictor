@@ -409,13 +409,64 @@ elif st.session_state.current_page == "predictions":
     st.markdown("Real-time Market Analysis & Forecasting")
     st.markdown("---")
     
-    # Check if data and models are available
+    # Check if data and models are available, try to recover if missing
     if st.session_state.data is None:
-        st.warning("⚠️ No data loaded. Please go to the **Data Upload** page first.")
-    elif not st.session_state.models or not isinstance(st.session_state.models, dict):
-        st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
-    elif st.session_state.model_trainer is None:
-        st.warning("⚠️ Model trainer not initialized. Please go to the **Model Training** page first.")
+        st.info("Loading data from database...")
+        try:
+            from utils.database_adapter import get_trading_database
+            db = get_trading_database()
+            recovered_data = db.load_ohlc_data("main_dataset")
+            if recovered_data is not None:
+                st.session_state.data = recovered_data
+                st.success(f"Loaded {len(recovered_data)} rows from database")
+            else:
+                st.warning("⚠️ No data found. Please go to the **Data Upload** page first.")
+                st.stop()
+        except Exception as e:
+            st.error(f"Error loading data: {str(e)}")
+            st.stop()
+    
+    if st.session_state.model_trainer is None:
+        st.info("Initializing model trainer...")
+        try:
+            from models.xgboost_models import QuantTradingModels
+            from utils.database_adapter import get_trading_database
+            
+            st.session_state.model_trainer = QuantTradingModels()
+            db = get_trading_database()
+            trained_models = db.load_trained_models()
+            if trained_models:
+                st.session_state.model_trainer.models = trained_models
+                st.success("Model trainer initialized successfully")
+            else:
+                st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
+                st.stop()
+        except Exception as e:
+            st.error(f"Error initializing models: {str(e)}")
+            st.stop()
+    
+    if not st.session_state.models or not isinstance(st.session_state.models, dict):
+        st.info("Loading model metadata...")
+        try:
+            from utils.database_adapter import get_trading_database
+            db = get_trading_database()
+            model_names = ['direction', 'magnitude', 'profit_prob', 'volatility', 'trend_sideways', 'reversal', 'trading_signal']
+            recovered_models = {}
+            
+            for model_name in model_names:
+                model_data = db.load_model_results(model_name)
+                if model_data is not None:
+                    recovered_models[model_name] = model_data
+            
+            if recovered_models:
+                st.session_state.models = recovered_models
+                st.success(f"Loaded {len(recovered_models)} model configurations")
+            else:
+                st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
+                st.stop()
+        except Exception as e:
+            st.error(f"Error loading model metadata: {str(e)}")
+            st.stop()
     else:
         # Available models
         available_models = []
@@ -503,6 +554,16 @@ elif st.session_state.current_page == "predictions":
                 
                 # Use the features as they exist - they should match the trained models
                 st.info(f"Using {len(features_filtered)} data points with {features_filtered.shape[1]} features for predictions")
+                
+                # Show feature alignment status
+                if hasattr(st.session_state.model_trainer, 'feature_names') and st.session_state.model_trainer.feature_names:
+                    expected_count = len(st.session_state.model_trainer.feature_names)
+                    actual_count = features_filtered.shape[1]
+                    if expected_count == actual_count:
+                        st.success(f"Feature alignment confirmed: {actual_count} features match trained model requirements")
+                    else:
+                        st.warning(f"Feature count mismatch: Expected {expected_count}, got {actual_count}")
+                        st.info("Using available features for prediction...")
                 
                 # Generate predictions
                 predictions, probabilities = st.session_state.model_trainer.predict(selected_model, features_filtered)
