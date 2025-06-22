@@ -219,25 +219,35 @@ if st.session_state.models:
     
     for model_name, model_info in st.session_state.models.items():
         if model_info is not None:
-            metrics = model_info['metrics']
+            # Handle both newly trained models (with metrics) and loaded models (without metrics)
+            metrics = model_info.get('metrics', {})
+            task_type = model_info.get('task_type', 'classification')
             
-            if model_info['task_type'] == 'classification':
-                accuracy = metrics['accuracy']
+            if metrics:  # Model has training metrics (newly trained)
+                if task_type == 'classification':
+                    accuracy = metrics.get('accuracy', 0.0)
+                    performance_data.append({
+                        'Model': model_name.replace('_', ' ').title(),
+                        'Task Type': 'Classification',
+                        'Accuracy': f"{accuracy:.3f}",
+                        'Status': '✅ Trained'
+                    })
+                else:
+                    rmse = metrics.get('rmse', 0.0)
+                    mae = metrics.get('mae', 0.0)
+                    performance_data.append({
+                        'Model': model_name.replace('_', ' ').title(),
+                        'Task Type': 'Regression',
+                        'RMSE': f"{rmse:.4f}",
+                        'MAE': f"{mae:.4f}",
+                        'Status': '✅ Trained'
+                    })
+            else:  # Model loaded from database (no metrics available)
                 performance_data.append({
                     'Model': model_name.replace('_', ' ').title(),
-                    'Task Type': 'Classification',
-                    'Accuracy': f"{accuracy:.3f}",
-                    'Status': '✅ Trained'
-                })
-            else:
-                rmse = metrics['rmse']
-                mae = metrics['mae']
-                performance_data.append({
-                    'Model': model_name.replace('_', ' ').title(),
-                    'Task Type': 'Regression',
-                    'RMSE': f"{rmse:.4f}",
-                    'MAE': f"{mae:.4f}",
-                    'Status': '✅ Trained'
+                    'Task Type': task_type.title(),
+                    'Accuracy': 'N/A (Loaded)',
+                    'Status': '✅ Loaded'
                 })
         else:
             performance_data.append({
@@ -284,13 +294,15 @@ if st.session_state.models:
             # Show detailed importance table
             with st.expander("View All Feature Importance"):
                 st.dataframe(importance_df, use_container_width=True)
+        else:
+            st.info("Feature importance not available for loaded models. Retrain the model to see feature importance.")
     
     # Model comparison
     st.subheader("Model Performance Comparison")
     
-    # Create comparison chart for classification models
+    # Create comparison chart for classification models (only for models with metrics)
     classification_models = {name: info for name, info in st.session_state.models.items() 
-                           if info and info['task_type'] == 'classification'}
+                           if info and info.get('task_type') == 'classification' and info.get('metrics')}
     
     if classification_models:
         model_names = []
@@ -308,10 +320,12 @@ if st.session_state.models:
         )
         fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Model performance comparison not available for loaded models. Retrain models to see performance metrics.")
     
-    # Regression models comparison
+    # Regression models comparison (only for models with metrics)
     regression_models = {name: info for name, info in st.session_state.models.items() 
-                        if info and info['task_type'] == 'regression'}
+                        if info and info.get('task_type') == 'regression' and info.get('metrics')}
     
     if regression_models:
         model_names = []
@@ -340,51 +354,55 @@ if st.session_state.models:
     
     if selected_model:
         model_info = st.session_state.models[selected_model]
-        metrics = model_info['metrics']
+        metrics = model_info.get('metrics', {})
+        task_type = model_info.get('task_type', 'classification')
         
         st.write(f"**Model**: {selected_model.replace('_', ' ').title()}")
-        st.write(f"**Task Type**: {model_info['task_type'].title()}")
+        st.write(f"**Task Type**: {task_type.title()}")
         
-        if model_info['task_type'] == 'classification':
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.metric("Accuracy", f"{metrics['accuracy']:.3f}")
-            
-            # Classification report
-            if 'classification_report' in metrics:
-                st.subheader("Classification Report")
+        if metrics:  # Model has training metrics
+            if task_type == 'classification':
+                col1, col2 = st.columns(2)
                 
-                # Convert classification report to DataFrame
-                report = metrics['classification_report']
+                with col1:
+                    st.metric("Accuracy", f"{metrics.get('accuracy', 0.0):.3f}")
                 
-                # Extract metrics for each class
-                classes = [k for k in report.keys() if k.isdigit()]
-                
-                if classes:
-                    report_data = []
-                    for class_id in classes:
-                        class_metrics = report[class_id]
-                        report_data.append({
-                            'Class': class_id,
-                            'Precision': f"{class_metrics['precision']:.3f}",
-                            'Recall': f"{class_metrics['recall']:.3f}",
-                            'F1-Score': f"{class_metrics['f1-score']:.3f}",
-                            'Support': class_metrics['support']
-                        })
+                # Classification report
+                if 'classification_report' in metrics:
+                    st.subheader("Classification Report")
                     
-                    report_df = pd.DataFrame(report_data)
-                    st.dataframe(report_df, use_container_width=True)
-        
-        else:  # Regression
-            col1, col2, col3 = st.columns(3)
+                    # Convert classification report to DataFrame
+                    report = metrics['classification_report']
+                    
+                    # Extract metrics for each class
+                    classes = [k for k in report.keys() if k.isdigit()]
+                    
+                    if classes:
+                        report_data = []
+                        for class_id in classes:
+                            class_metrics = report[class_id]
+                            report_data.append({
+                                'Class': class_id,
+                                'Precision': f"{class_metrics['precision']:.3f}",
+                                'Recall': f"{class_metrics['recall']:.3f}",
+                                'F1-Score': f"{class_metrics['f1-score']:.3f}",
+                                'Support': class_metrics['support']
+                            })
+                        
+                        report_df = pd.DataFrame(report_data)
+                        st.dataframe(report_df, use_container_width=True)
             
-            with col1:
-                st.metric("RMSE", f"{metrics['rmse']:.4f}")
-            with col2:
-                st.metric("MAE", f"{metrics['mae']:.4f}")
-            with col3:
-                st.metric("MSE", f"{metrics['mse']:.4f}")
+            else:  # Regression
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("RMSE", f"{metrics.get('rmse', 0.0):.4f}")
+                with col2:
+                    st.metric("MAE", f"{metrics.get('mae', 0.0):.4f}")
+                with col3:
+                    st.metric("MSE", f"{metrics.get('mse', 0.0):.4f}")
+        else:
+            st.info("Detailed metrics not available for loaded models. Retrain the model to see detailed performance metrics.")
 
 else:
     st.info("👆 Configure your training parameters and click 'Train All Selected Models' to start training.")
