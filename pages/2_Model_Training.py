@@ -176,8 +176,11 @@ if st.session_state.features is not None:
                 # Train models with configurable split
                 results = st.session_state.model_trainer.train_all_models(features_data, train_split)
                 
-                # Store results
-                st.session_state.models = results
+                # Store results - ensure it's a dictionary of model results
+                if isinstance(results, dict):
+                    st.session_state.models = results
+                else:
+                    st.session_state.models = {}
                 
                 # Auto-save model results to database
                 try:

@@ -180,13 +180,16 @@ class QuantTradingModels:
         high_low_pct = (df['High'] - df['Low']) / df['Close']
         atr_5 = high_low_pct.rolling(5).mean()
 
-        # Use dynamic threshold for better distribution
-        magnitude_threshold = atr_5.quantile(0.60)  # Lower threshold for more balanced distribution
+        # Use more balanced threshold for classification
+        magnitude_threshold = atr_5.quantile(0.55)  # More balanced distribution
         magnitude_signal = (atr_5 > magnitude_threshold).astype(int)
 
-        # Ensure minimum distribution balance
-        if magnitude_signal.sum() < len(magnitude_signal) * 0.2:
-            magnitude_threshold = atr_5.quantile(0.50)
+        # Ensure better distribution balance for classification
+        if magnitude_signal.sum() < len(magnitude_signal) * 0.25:
+            magnitude_threshold = atr_5.quantile(0.45)
+            magnitude_signal = (atr_5 > magnitude_threshold).astype(int)
+        elif magnitude_signal.sum() > len(magnitude_signal) * 0.75:
+            magnitude_threshold = atr_5.quantile(0.65)
             magnitude_signal = (atr_5 > magnitude_threshold).astype(int)
 
         targets['magnitude'] = magnitude_signal.fillna(0)
@@ -209,14 +212,17 @@ class QuantTradingModels:
         vol_short = returns_1min.rolling(5).std()  # 5-period volatility
         vol_medium = returns_1min.rolling(20).std()  # 20-period baseline
 
-        # Use dynamic volatility threshold for better distribution
+        # Use more balanced volatility threshold for classification
         vol_ratio = vol_short / (vol_medium + 1e-8)
-        vol_threshold = vol_ratio.quantile(0.70)  # Top 30% as high volatility
+        vol_threshold = vol_ratio.quantile(0.60)  # More balanced for classification
         volatility_signal = (vol_ratio > vol_threshold).astype(int)
 
-        # Ensure minimum distribution balance
-        if volatility_signal.sum() < len(volatility_signal) * 0.15:
-            vol_threshold = vol_ratio.quantile(0.60)
+        # Ensure better distribution balance for classification
+        if volatility_signal.sum() < len(volatility_signal) * 0.25:
+            vol_threshold = vol_ratio.quantile(0.50)
+            volatility_signal = (vol_ratio > vol_threshold).astype(int)
+        elif volatility_signal.sum() > len(volatility_signal) * 0.75:
+            vol_threshold = vol_ratio.quantile(0.70)
             volatility_signal = (vol_ratio > vol_threshold).astype(int)
 
         targets['volatility'] = volatility_signal.fillna(0)
@@ -583,9 +589,9 @@ class QuantTradingModels:
 
         models_config = [
             ('direction', 'classification'),
-            ('magnitude', 'regression'),
+            ('magnitude', 'classification'),  # Changed to classification for better training
             ('profit_prob', 'classification'),
-            ('volatility', 'regression'),
+            ('volatility', 'classification'),  # Changed to classification for better training
             ('trend_sideways', 'classification'),
             ('reversal', 'classification'),
             ('trading_signal', 'classification')
@@ -611,11 +617,23 @@ class QuantTradingModels:
                     X_aligned = X.loc[common_index]
                     y_aligned = target_series.loc[common_index]
 
+                    # Check target distribution before training
+                    unique_vals, counts = np.unique(y_aligned.dropna(), return_counts=True)
+                    if len(unique_vals) < 2 or np.min(counts) < 50:
+                        st.warning(f"⚠️ Insufficient target distribution for {model_name}, skipping...")
+                        results[model_name] = None
+                        continue
+
                     result = self.train_model(model_name, X_aligned, y_aligned, task_type, train_split)
-                    results[model_name] = result
-                    st.success(f"✅ {model_name} model trained successfully")
+                    if result is not None:
+                        results[model_name] = result
+                        st.success(f"✅ {model_name} model trained successfully")
+                    else:
+                        results[model_name] = None
+                        st.warning(f"⚠️ Failed to train {model_name} model")
                 else:
                     st.warning(f"⚠️ Target {model_name} not found")
+                    results[model_name] = None
             except Exception as e:
                 st.error(f"❌ Error training {model_name}: {str(e)}")
                 results[model_name] = None
@@ -628,13 +646,10 @@ class QuantTradingModels:
 
         status_text.text("All models trained and saved!")
 
-        # Return comprehensive results with success status
-        return {
-            'success': True,
-            'trained_models': results,
-            'total_models': len([r for r in results.values() if r is not None]),
-            'model_count': len(self.models)
-        }
+        # Return only successfully trained models
+        successful_models = {k: v for k, v in results.items() if v is not None}
+        
+        return successful_models
 
     def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """Make predictions using trained ensemble model optimized for 5-minute scalping."""

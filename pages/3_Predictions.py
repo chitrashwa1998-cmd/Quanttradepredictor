@@ -25,7 +25,8 @@ if st.session_state.data is None:
     st.warning("⚠️ No data loaded. Please go to the **Data Upload** page first.")
     st.stop()
 
-if not st.session_state.models:
+# Ensure models is a proper dictionary
+if not st.session_state.models or not isinstance(st.session_state.models, dict):
     st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
     
     # Add quick training button for convenience
@@ -109,8 +110,17 @@ df = st.session_state.data
 models = st.session_state.models
 model_trainer = st.session_state.model_trainer
 
-# Available models
-available_models = [name for name, info in models.items() if info is not None]
+# Available models - ensure models is properly structured
+if isinstance(models, dict):
+    available_models = []
+    for name, info in models.items():
+        # Check if info is a valid model info dictionary
+        if isinstance(info, dict) and info is not None:
+            available_models.append(name)
+        elif info is not None and not isinstance(info, bool):
+            available_models.append(name)
+else:
+    available_models = []
 
 if not available_models:
     st.error("❌ No successfully trained models found.")
@@ -141,16 +151,19 @@ with col2:
     )
 
 with col3:
-    # Handle missing task_type with fallback
-    task_type = models[selected_model].get('task_type', 'unknown')
+    # Handle missing task_type with proper validation
+    task_type = 'unknown'
+    
+    if isinstance(models.get(selected_model), dict):
+        task_type = models[selected_model].get('task_type', 'unknown')
+    
     if not task_type or task_type == 'unknown':
         # Try to infer task type from model name
-        if selected_model in ['direction', 'profit_prob', 'trend_sideways', 'reversal', 'trading_signal']:
-            task_type = 'classification'
-        elif selected_model in ['magnitude', 'volatility']:
-            task_type = 'regression'
+        if selected_model in ['direction', 'profit_prob', 'trend_sideways', 'reversal', 'trading_signal', 'magnitude', 'volatility']:
+            task_type = 'classification'  # All models are now classification
         else:
-            task_type = 'unknown'
+            task_type = 'classification'  # Default
+    
     st.metric("Model Type", task_type.title())
 
 # Ensure Date is not both index and column
