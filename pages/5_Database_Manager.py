@@ -267,12 +267,17 @@ with col2:
         if st.checkbox("⚠️ I confirm I want to delete ALL data from the database"):
             if trading_db.clear_all_data():
                 st.success("✅ All database data cleared")
+                # Clear all session state
                 st.session_state.data = None
                 st.session_state.models = {}
                 st.session_state.predictions = None
+                st.session_state.features = None
+                st.session_state.model_trainer = None
+                st.session_state.auto_restore_complete = False
+                # Force page refresh
                 st.rerun()
             else:
-                st.error("Failed to clear database")
+                st.error("Failed to clear database")ase")
 
 # Data Recovery Section
 st.header("🔄 Data Recovery")

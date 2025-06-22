@@ -66,14 +66,14 @@ def auto_restore_system():
         if not hasattr(st.session_state, 'model_trainer') or st.session_state.model_trainer is None:
             st.session_state.model_trainer = QuantTradingModels()
 
-        # 4. Restore trained models
+        # 4. Restore trained models only if database has data
         if not hasattr(st.session_state, 'models') or not st.session_state.models:
             st.session_state.models = {}
 
             # Load trained model objects
             try:
                 trained_models = db.load_trained_models()
-                if trained_models and st.session_state.model_trainer:
+                if trained_models and isinstance(trained_models, dict) and len(trained_models) > 0 and st.session_state.model_trainer:
                     st.session_state.model_trainer.models = trained_models
 
                     # Load model results for display
@@ -82,15 +82,23 @@ def auto_restore_system():
 
                     for model_name in model_names:
                         model_results = db.load_model_results(model_name)
-                        if model_results and 'metrics' in model_results:
+                        if model_results and isinstance(model_results, dict) and 'metrics' in model_results:
                             st.session_state.models[model_name] = model_results['metrics']
                             restored_count += 1
 
                     if restored_count > 0:
                         restoration_status.append(f"Models: {restored_count} trained models")
+                else:
+                    # No models in database, ensure clean state
+                    st.session_state.models = {}
+                    if st.session_state.model_trainer:
+                        st.session_state.model_trainer.models = {}
 
             except Exception as e:
                 print(f"Model restoration error: {str(e)}")
+                st.session_state.models = {}
+                if st.session_state.model_trainer:
+                    st.session_state.model_trainer.models = {}
 
         # Mark restoration as complete
         st.session_state.auto_restore_complete = True

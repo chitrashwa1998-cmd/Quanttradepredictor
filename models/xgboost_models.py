@@ -26,7 +26,7 @@ class QuantTradingModels:
             db = DatabaseAdapter()
             loaded_models = db.load_trained_models()
 
-            if loaded_models:
+            if loaded_models and isinstance(loaded_models, dict) and loaded_models:
                 # Extract feature names and ensure task_type is present
                 for model_name, model_data in loaded_models.items():
                     if 'feature_names' in model_data and model_data['feature_names']:
@@ -53,9 +53,13 @@ class QuantTradingModels:
                         self.feature_names = model_data['feature_names']
                         break
             else:
+                self.models = {}
+                self.feature_names = []
                 print("No existing models found in database")
 
         except Exception as e:
+            self.models = {}
+            self.feature_names = []
             print(f"Could not load existing models: {str(e)}")
 
     def _save_models_to_database(self):

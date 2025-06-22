@@ -515,12 +515,14 @@ class PostgresTradingDatabase:
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("DELETE FROM predictions;")
-                    cursor.execute("DELETE FROM trained_models;")
-                    cursor.execute("DELETE FROM model_results;")
-                    cursor.execute("DELETE FROM ohlc_datasets;")
+                    # Use TRUNCATE for complete data removal and reset sequences
+                    cursor.execute("TRUNCATE TABLE predictions RESTART IDENTITY CASCADE;")
+                    cursor.execute("TRUNCATE TABLE trained_models RESTART IDENTITY CASCADE;")
+                    cursor.execute("TRUNCATE TABLE model_results RESTART IDENTITY CASCADE;")
+                    cursor.execute("TRUNCATE TABLE ohlc_datasets RESTART IDENTITY CASCADE;")
                     conn.commit()
 
+            print("✅ Database completely cleared - all tables truncated")
             return True
 
         except Exception as e:
