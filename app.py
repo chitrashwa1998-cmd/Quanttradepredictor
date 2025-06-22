@@ -530,10 +530,11 @@ elif st.session_state.current_page == "predictions":
                 else:
                     df_filtered = df.copy()
                 
-                # Prepare features using existing data structure
+                # Prepare features using the exact same method used during training
                 if st.session_state.features is None:
-                    # Use the existing data to prepare features that match the trained models
+                    # Use the model trainer's prepare_features method to get consistent features
                     st.session_state.features = st.session_state.model_trainer.prepare_features(df)
+                    st.info(f"Prepared features using model's original method: {st.session_state.features.shape[1]} features")
                 
                 features = st.session_state.features.copy()
                 
@@ -565,8 +566,23 @@ elif st.session_state.current_page == "predictions":
                         st.warning(f"Feature count mismatch: Expected {expected_count}, got {actual_count}")
                         st.info("Using available features for prediction...")
                 
-                # Generate predictions
-                predictions, probabilities = st.session_state.model_trainer.predict(selected_model, features_filtered)
+                # Generate predictions with error handling
+                try:
+                    predictions, probabilities = st.session_state.model_trainer.predict(selected_model, features_filtered)
+                    st.success(f"Generated {len(predictions)} predictions successfully!")
+                except Exception as pred_error:
+                    st.error(f"Prediction error: {str(pred_error)}")
+                    # Try with the full feature set
+                    try:
+                        st.info("Attempting prediction with full feature set...")
+                        predictions, probabilities = st.session_state.model_trainer.predict(selected_model, st.session_state.features.tail(min(100, len(df_filtered))))
+                        st.success(f"Generated {len(predictions)} predictions using full features!")
+                    except Exception as fallback_error:
+                        st.error(f"Fallback prediction also failed: {str(fallback_error)}")
+                        st.info("Debug info:")
+                        st.write(f"Available features: {list(features_filtered.columns)}")
+                        st.write(f"Expected features: {st.session_state.model_trainer.feature_names[:10] if hasattr(st.session_state.model_trainer, 'feature_names') else 'Unknown'}")
+                        st.stop()
                 
                 # Create prediction dataframe
                 common_index = features_filtered.index[:len(predictions)]

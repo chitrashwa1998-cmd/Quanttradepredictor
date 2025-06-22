@@ -893,33 +893,29 @@ class QuantTradingModels:
         if X_clean.empty:
             raise ValueError("Input DataFrame is empty after removing NaN values")
 
+        # Use available features that match trained model features
+        available_features = [col for col in self.feature_names if col in X_clean.columns]
         missing_features = [col for col in self.feature_names if col not in X_clean.columns]
+        
         if missing_features:
-            print(f"Warning: Missing features {missing_features}")
-            # Try to create basic missing features if possible
-            if 'Close' in X_clean.columns:
-                for feature in missing_features:
-                    if feature.startswith('sma_'):
-                        period = int(feature.split('_')[1])
-                        X_clean[feature] = X_clean['Close'].rolling(period).mean()
-                    elif feature.startswith('ema_'):
-                        period = int(feature.split('_')[1])
-                        X_clean[feature] = X_clean['Close'].ewm(span=period).mean()
-                    elif feature == 'price_change':
-                        X_clean[feature] = X_clean['Close'].pct_change()
-                    elif feature == 'volatility_5':
-                        X_clean[feature] = X_clean['Close'].pct_change().rolling(5).std()
-                    else:
-                        # Fill with median value as fallback
-                        X_clean[feature] = 0
-            
-            # Check again for missing features
-            still_missing = [col for col in self.feature_names if col not in X_clean.columns]
-            if still_missing:
-                raise ValueError(f"Cannot create missing features: {still_missing}")
-
-        # Prepare features
-        X_features = X_clean[self.feature_names].fillna(method='ffill').fillna(0)
+            print(f"Warning: Missing features {missing_features}, using {len(available_features)} available features")
+        
+        if len(available_features) == 0:
+            raise ValueError(f"No matching features found. Available: {list(X_clean.columns)}, Expected: {self.feature_names}")
+        
+        # Use only the available features for prediction
+        X_features = X_clean[available_features].fillna(method='ffill').fillna(0)
+        
+        # If we're missing features, pad with zeros to match expected input size
+        if len(available_features) < len(self.feature_names):
+            # Create a DataFrame with all expected features, fill missing ones with zeros
+            full_features_df = pd.DataFrame(index=X_clean.index, columns=self.feature_names)
+            # Fill available features with actual data
+            for col in available_features:
+                full_features_df[col] = X_clean[col]
+            # Fill missing features with zeros
+            full_features_df = full_features_df.fillna(0)
+            X_features = full_features_df
 
         if X_features.empty:
             raise ValueError("Feature DataFrame is empty after column selection")
