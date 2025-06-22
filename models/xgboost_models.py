@@ -522,16 +522,32 @@ class QuantTradingModels:
             # Classification ensemble: XGBoost + CatBoost + Random Forest
 
             # XGBoost Classifier
-            xgb_model = xgb.XGBClassifier(
-                max_depth=6,
-                learning_rate=0.1,
-                n_estimators=100,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                random_state=random_state,
-                n_jobs=-1,
-                eval_metric='logloss'
-            )
+            if model_name == 'trading_signal':
+                # Multiclass configuration for trading signals
+                xgb_model = xgb.XGBClassifier(
+                    max_depth=6,
+                    learning_rate=0.1,
+                    n_estimators=100,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    random_state=random_state,
+                    n_jobs=-1,
+                    objective='multi:softprob',
+                    eval_metric='mlogloss',
+                    num_class=3
+                )
+            else:
+                # Binary classification for other models
+                xgb_model = xgb.XGBClassifier(
+                    max_depth=6,
+                    learning_rate=0.1,
+                    n_estimators=100,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    random_state=random_state,
+                    n_jobs=-1,
+                    eval_metric='logloss'
+                )
 
             # Random Forest Classifier
             rf_model = RandomForestClassifier(
@@ -542,16 +558,30 @@ class QuantTradingModels:
             )
 
             # CatBoost Classifier with better handling for edge cases
-            catboost_model = CatBoostClassifier(
-                iterations=100,
-                depth=6,
-                learning_rate=0.1,
-                random_seed=random_state,
-                verbose=False,
-                allow_writing_files=False,
-                loss_function='Logloss',
-                eval_metric='Accuracy'
-            )
+            if model_name == 'trading_signal':
+                # Multiclass configuration for trading signals (BUY/HOLD/SELL)
+                catboost_model = CatBoostClassifier(
+                    iterations=100,
+                    depth=6,
+                    learning_rate=0.1,
+                    random_seed=random_state,
+                    verbose=False,
+                    allow_writing_files=False,
+                    loss_function='MultiClass',
+                    eval_metric='MultiClass'
+                )
+            else:
+                # Binary classification for other models
+                catboost_model = CatBoostClassifier(
+                    iterations=100,
+                    depth=6,
+                    learning_rate=0.1,
+                    random_seed=random_state,
+                    verbose=False,
+                    allow_writing_files=False,
+                    loss_function='Logloss',
+                    eval_metric='Accuracy'
+                )
 
             # Always use all 3 algorithms
             estimators_list = [
