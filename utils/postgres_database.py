@@ -433,7 +433,9 @@ class PostgresTradingDatabase:
                 'total_models': model_count,
                 'total_trained_models': trained_model_count,
                 'total_predictions': prediction_count,
+                'total_keys': dataset_count + model_count + trained_model_count + prediction_count,
                 'datasets': datasets,
+                'available_keys': self.get_available_keys(),
                 'database_type': 'PostgreSQL'
             }
 
@@ -456,19 +458,107 @@ class PostgresTradingDatabase:
             print(f"Error recovering data: {str(e)}")
             return None
 
+    def get_available_keys(self) -> List[str]:
+        """Get all available keys from database tables for compatibility with key-value interface."""
+        keys = []
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(row_factory=dict_row) as cursor:
+                    # Get OHLC dataset keys
+                    cursor.execute("SELECT dataset_name FROM ohlc_datasets;")
+                    datasets = cursor.fetchall()
+                    for dataset in datasets:
+                        keys.append(f"ohlc_{dataset['dataset_name']}")
+                    
+                    # Get model results keys
+                    cursor.execute("SELECT model_name FROM model_results;")
+                    models = cursor.fetchall()
+                    for model in models:
+                        keys.append(f"model_results_{model['model_name']}")
+                    
+                    # Get trained models keys
+                    cursor.execute("SELECT model_name FROM trained_models;")
+                    trained = cursor.fetchall()
+                    for model in trained:
+                        keys.append(f"trained_models_{model['model_name']}")
+                    
+                    # Get predictions keys
+                    cursor.execute("SELECT DISTINCT model_name FROM predictions;")
+                    preds = cursor.fetchall()
+                    for pred in preds:
+                        keys.append(f"predictions_{pred['model_name']}")
+            
+            return keys
+        except Exception as e:
+            print(f"Error getting available keys: {str(e)}")
+            return []
+
     def clear_all_data(self) -> bool:
         """Clear all data from database."""
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
+                    print("Clearing predictions...")
                     cursor.execute("DELETE FROM predictions;")
+                    rows_deleted = cursor.rowcount
+                    print(f"Deleted {rows_deleted} prediction records")
+                    
+                    print("Clearing trained models...")
                     cursor.execute("DELETE FROM trained_models;")
+                    rows_deleted = cursor.rowcount
+                    print(f"Deleted {rows_deleted} trained model records")
+                    
+                    print("Clearing model results...")
                     cursor.execute("DELETE FROM model_results;")
+                    rows_deleted = cursor.rowcount
+                    print(f"Deleted {rows_deleted} model result records")
+                    
+                    print("Clearing OHLC datasets...")
                     cursor.execute("DELETE FROM ohlc_datasets;")
+                    rows_deleted = cursor.rowcount
+                    print(f"Deleted {rows_deleted} dataset records")
+                    
                     conn.commit()
+                    print("✅ Database cleared successfully")
 
             return True
 
         except Exception as e:
             print(f"Error clearing database: {str(e)}")
+            return False
+
+    def delete_model_results(self, model_name: str) -> bool:
+        """Delete model results for a specific model."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM model_results WHERE model_name = %s;", (model_name,))
+                    conn.commit()
+                    return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error deleting model results: {str(e)}")
+            return False
+
+    def delete_trained_model(self, model_name: str) -> bool:
+        """Delete a trained model."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM trained_models WHERE model_name = %s;", (model_name,))
+                    conn.commit()
+                    return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error deleting trained model: {str(e)}")
+            return False
+
+    def delete_predictions(self, model_name: str) -> bool:
+        """Delete predictions for a specific model."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM predictions WHERE model_name = %s;", (model_name,))
+                    conn.commit()  
+                    return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error deleting predictions: {str(e)}")
             return False

@@ -159,12 +159,7 @@ if model_keys:
                 if st.button(f"Delete {model_name} Results", key=f"delete_model_{model_name}"):
                     try:
                         # For PostgreSQL, we need to implement delete methods
-                        if hasattr(trading_db.db, 'delete_model_results'):
-                            success = trading_db.db.delete_model_results(model_name)
-                        else:
-                            # Fallback for key-value store
-                            del trading_db.db.db[key]
-                            success = True
+                        success = trading_db.db.delete_model_results(model_name)
                         
                         if success:
                             st.success(f"✅ Deleted {model_name} model results")
@@ -197,11 +192,14 @@ if pred_keys:
                 
                 if st.button(f"Delete {model_name} Predictions", key=f"delete_pred_{model_name}"):
                     try:
-                        del trading_db.db[key]
-                        st.success(f"✅ Deleted {model_name} predictions")
-                        st.rerun()
-                    except:
-                        st.error("Failed to delete predictions")
+                        success = trading_db.db.delete_predictions(model_name)
+                        if success:
+                            st.success(f"✅ Deleted {model_name} predictions")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete predictions")
+                    except Exception as e:
+                        st.error(f"Failed to delete predictions: {str(e)}")
 else:
     st.info("No predictions found. Generate predictions first!")
 
@@ -258,9 +256,11 @@ with col2:
         if st.checkbox("⚠️ I confirm I want to delete ALL data from the database"):
             if trading_db.clear_all_data():
                 st.success("✅ All database data cleared")
-                st.session_state.data = None
+                # Clear all session state
+                for key in ['data', 'features', 'models', 'predictions', 'model_trainer', 'realtime_data']:
+                    if key in st.session_state:
+                        st.session_state[key] = None
                 st.session_state.models = {}
-                st.session_state.predictions = None
                 st.rerun()
             else:
                 st.error("Failed to clear database")

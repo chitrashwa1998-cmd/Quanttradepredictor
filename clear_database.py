@@ -14,6 +14,11 @@ def clear_all_data():
         print("=== DATABASE CONTENTS BEFORE CLEARING ===")
         db_info = db.get_database_info()
         
+        print(f"Total datasets: {db_info.get('total_datasets', 0)}")
+        print(f"Total model results: {db_info.get('total_models', 0)}")
+        print(f"Total trained models: {db_info.get('total_trained_models', 0)}")
+        print(f"Total predictions: {db_info.get('total_predictions', 0)}")
+        
         if 'available_keys' in db_info:
             keys = db_info['available_keys']
             print(f"Total keys found: {len(keys)}")
@@ -27,10 +32,8 @@ def clear_all_data():
                     key_type = 'Model Results'
                 elif key.startswith('predictions_'):
                     key_type = 'Predictions'
-                elif key.startswith('trained_models'):
+                elif key.startswith('trained_models_'):
                     key_type = 'Trained Models'
-                elif key == 'dataset_list':
-                    key_type = 'Dataset List'
                 else:
                     key_type = 'Other'
                 
