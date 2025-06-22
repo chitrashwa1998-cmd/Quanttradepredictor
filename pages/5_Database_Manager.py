@@ -7,6 +7,18 @@ from datetime import datetime
 
 st.set_page_config(page_title="Database Manager", page_icon="💾", layout="wide")
 
+# Initialize session state variables
+if 'data' not in st.session_state:
+    st.session_state.data = None
+if 'models' not in st.session_state:
+    st.session_state.models = {}
+if 'predictions' not in st.session_state:
+    st.session_state.predictions = None
+if 'features' not in st.session_state:
+    st.session_state.features = None
+if 'model_trainer' not in st.session_state:
+    st.session_state.model_trainer = None
+
 # Load custom CSS
 with open('style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
