@@ -83,12 +83,13 @@ class QuantTradingModels:
             # Prepare models for saving
             models_to_save = {}
             for model_name, model_data in self.models.items():
-                if 'ensemble' in model_data:
+                if 'ensemble' in model_data and model_data['ensemble'] is not None:
                     models_to_save[model_name] = {
                         'ensemble': model_data['ensemble'],
                         'feature_names': self.feature_names,
                         'task_type': model_data.get('task_type', 'classification')
                     }
+                    print(f"Prepared {model_name} for saving")
 
             if models_to_save:
                 success = db.save_trained_models(models_to_save)
@@ -724,9 +725,9 @@ class QuantTradingModels:
 
         models_config = [
             ('direction', 'classification'),
-            ('magnitude', 'classification'),  # Changed to classification for better training
+            ('magnitude', 'classification'),
             ('profit_prob', 'classification'),
-            ('volatility', 'classification'),  # Changed to classification for better training
+            ('volatility', 'classification'),
             ('trend_sideways', 'classification'),
             ('reversal', 'classification'),
             ('trading_signal', 'classification')
