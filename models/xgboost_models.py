@@ -235,24 +235,15 @@ class QuantTradingModels:
                            (future_return_2 > scalping_threshold)).astype(int)
         targets['direction'] = direction_signal
 
-        # 2. Magnitude for scalping - focus on intraday volatility
+        # 2. Magnitude for scalping - regression target (continuous values)
         # Use ATR-based magnitude for better scalping signals
         high_low_pct = (df['High'] - df['Low']) / df['Close']
         atr_5 = high_low_pct.rolling(5).mean()
 
-        # Use more balanced threshold for classification
-        magnitude_threshold = atr_5.quantile(0.55)  # More balanced distribution
-        magnitude_signal = (atr_5 > magnitude_threshold).astype(int)
-
-        # Ensure better distribution balance for classification
-        if magnitude_signal.sum() < len(magnitude_signal) * 0.25:
-            magnitude_threshold = atr_5.quantile(0.45)
-            magnitude_signal = (atr_5 > magnitude_threshold).astype(int)
-        elif magnitude_signal.sum() > len(magnitude_signal) * 0.75:
-            magnitude_threshold = atr_5.quantile(0.65)
-            magnitude_signal = (atr_5 > magnitude_threshold).astype(int)
-
-        targets['magnitude'] = magnitude_signal.fillna(0)
+        # For regression, use raw ATR values (continuous)
+        # Scale to reasonable range for training stability
+        magnitude_regression = atr_5 * 100  # Convert to percentage points
+        targets['magnitude'] = magnitude_regression.fillna(magnitude_regression.median())
 
         # 3. Scalping profit probability - next 2-3 candles (10-15 min window)
         future_returns_scalp = []
@@ -267,25 +258,16 @@ class QuantTradingModels:
         scalping_profit_threshold = 0.0005
         targets['profit_prob'] = (max_return_scalp > scalping_profit_threshold).astype(int)
 
-        # 4. Scalping volatility - short-term volatility spikes
+        # 4. Scalping volatility - regression target (continuous values)
         returns_1min = df['Close'].pct_change()
         vol_short = returns_1min.rolling(5).std()  # 5-period volatility
         vol_medium = returns_1min.rolling(20).std()  # 20-period baseline
 
-        # Use more balanced volatility threshold for classification
+        # For regression, use continuous volatility ratio
         vol_ratio = vol_short / (vol_medium + 1e-8)
-        vol_threshold = vol_ratio.quantile(0.60)  # More balanced for classification
-        volatility_signal = (vol_ratio > vol_threshold).astype(int)
-
-        # Ensure better distribution balance for classification
-        if volatility_signal.sum() < len(volatility_signal) * 0.25:
-            vol_threshold = vol_ratio.quantile(0.50)
-            volatility_signal = (vol_ratio > vol_threshold).astype(int)
-        elif volatility_signal.sum() > len(volatility_signal) * 0.75:
-            vol_threshold = vol_ratio.quantile(0.70)
-            volatility_signal = (vol_ratio > vol_threshold).astype(int)
-
-        targets['volatility'] = volatility_signal.fillna(0)
+        # Scale to reasonable range and handle outliers
+        volatility_regression = np.clip(vol_ratio * 100, 0, 500)  # Cap extreme values
+        targets['volatility'] = volatility_regression.fillna(volatility_regression.median())
 
         # 5. Trend strength for scalping - fast EMAs
         ema_fast = df['Close'].ewm(span=5).mean()   # 5-period EMA
@@ -488,13 +470,19 @@ class QuantTradingModels:
                 print(f"ERROR: Insufficient samples per class for {model_name}. Distribution: {dict(zip(unique_targets, counts))}")
                 raise ValueError(f"Insufficient samples per class for {model_name}. Class distribution: {dict(zip(unique_targets, counts))}. Need at least {min_samples_per_class} samples per class.")
         else:
-            # For regression tasks (like volatility), remove NaN and infinite values
-            valid_targets = np.isfinite(y_clean) & (y_clean > 0)
+            # For regression tasks (magnitude and volatility), remove NaN and infinite values
+            valid_targets = np.isfinite(y_clean)
             X_clean = X_clean[valid_targets]
             y_clean = y_clean[valid_targets]
 
             if len(y_clean) == 0:
                 raise ValueError(f"No valid target values for {model_name} after cleaning")
+            
+            # Additional validation for regression targets
+            if y_clean.std() == 0:
+                raise ValueError(f"Target {model_name} has zero variance (all values are the same)")
+            
+            print(f"Regression target {model_name} stats: min={y_clean.min():.4f}, max={y_clean.max():.4f}, mean={y_clean.mean():.4f}, std={y_clean.std():.4f}")
 
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training {model_name}. Need at least 100 samples, got {len(X_clean)}")
@@ -755,9 +743,9 @@ class QuantTradingModels:
 
         models_config = [
             ('direction', 'classification'),
-            ('magnitude', 'classification'),
+            ('magnitude', 'regression'),
             ('profit_prob', 'classification'),
-            ('volatility', 'classification'),
+            ('volatility', 'regression'),
             ('trend_sideways', 'classification'),
             ('reversal', 'classification'),
             ('trading_signal', 'classification')
@@ -895,81 +883,94 @@ class QuantTradingModels:
         else:
             raw_predictions = model.predict(X_scaled)
 
-        # Optimize predictions for 5-minute scalping with better balanced distributions
+        # Optimize predictions for 5-minute scalping
         n_samples = len(X_scaled)
 
-        # Balanced scalping-optimized prediction logic based on model type
-        if model_name == 'direction':
-            # For direction: Balanced 52-48 distribution with slight bullish bias for scalping
-            predictions = self._scalping_direction_predictions(X_scaled, n_samples)
-
-        elif model_name == 'profit_prob':
-            # For profit probability: 42-58 distribution (42% profitable opportunities)
-            predictions = self._scalping_profit_predictions(X_scaled, n_samples)
-
-        elif model_name == 'reversal':
-            # For reversal: 25-75 distribution (25% reversal signals - more realistic)
-            predictions = self._scalping_reversal_predictions(X_scaled, n_samples)
-
-        elif model_name == 'magnitude':
-            # For magnitude: 48-52 distribution (nearly balanced high/low magnitude)
-            predictions = self._scalping_magnitude_predictions(X_scaled, n_samples)
-
-        elif model_name == 'volatility':
-            # For volatility: 35-65 distribution (35% high volatility periods)
-            predictions = self._scalping_volatility_predictions(X_scaled, n_samples)
-
-        elif model_name == 'trend_sideways':
-            # For trend: 45-55 distribution (45% trending, 55% sideways)
-            predictions = self._scalping_trend_predictions(X_scaled, n_samples)
-
-        elif model_name == 'trading_signal':
-            # For trading signals: 40-60 distribution (40% buy signals)
-            predictions = self._scalping_signal_predictions(X_scaled, n_samples)
-
+        # Different handling for classification vs regression models
+        if model_info['task_type'] == 'regression':
+            # For regression models (magnitude, volatility), use raw predictions
+            predictions = model.predict(X_scaled)
+            
+            # Ensure predictions are in reasonable range
+            if model_name == 'magnitude':
+                predictions = np.clip(predictions, 0, 50)  # 0-50 percentage points
+            elif model_name == 'volatility':
+                predictions = np.clip(predictions, 0, 500)  # 0-500 volatility ratio
+                
         else:
-            # Fallback to original predictions
-            if model_info['task_type'] == 'classification':
-                predictions = model.predict(X_scaled)
+            # Classification models - use scalping-optimized prediction logic
+            if model_name == 'direction':
+                # For direction: Balanced 52-48 distribution with slight bullish bias for scalping
+                predictions = self._scalping_direction_predictions(X_scaled, n_samples)
+
+            elif model_name == 'profit_prob':
+                # For profit probability: 42-58 distribution (42% profitable opportunities)
+                predictions = self._scalping_profit_predictions(X_scaled, n_samples)
+
+            elif model_name == 'reversal':
+                # For reversal: 25-75 distribution (25% reversal signals - more realistic)
+                predictions = self._scalping_reversal_predictions(X_scaled, n_samples)
+
+            elif model_name == 'trend_sideways':
+                # For trend: 45-55 distribution (45% trending, 55% sideways)
+                predictions = self._scalping_trend_predictions(X_scaled, n_samples)
+
+            elif model_name == 'trading_signal':
+                # For trading signals: 40-60 distribution (40% buy signals)
+                predictions = self._scalping_signal_predictions(X_scaled, n_samples)
+
             else:
-                raw_pred = model.predict(X_scaled)
-                threshold = np.median(raw_pred)
-                predictions = (raw_pred > threshold).astype(int)
+                # Fallback to original predictions for classification
+                predictions = model.predict(X_scaled)
 
-        # Generate scalping-optimized confidence scores
-        confidence_scores = self._generate_scalping_confidence(predictions, model_name, n_samples)
-
-        # Create probability matrix optimized for scalping
-        if model_name == 'trading_signal':
-            # For three-tier signals (0=SELL, 1=HOLD, 2=BUY), create 3-column probability matrix
-            probabilities = np.zeros((n_samples, 3))
-            for i in range(n_samples):
-                if predictions[i] == 2:  # BUY
-                    probabilities[i, 2] = confidence_scores[i]
-                    probabilities[i, 1] = (1 - confidence_scores[i]) * 0.7  # Some HOLD probability
-                    probabilities[i, 0] = (1 - confidence_scores[i]) * 0.3  # Less SELL probability
-                elif predictions[i] == 0:  # SELL
-                    probabilities[i, 0] = confidence_scores[i]
-                    probabilities[i, 1] = (1 - confidence_scores[i]) * 0.7  # Some HOLD probability
-                    probabilities[i, 2] = (1 - confidence_scores[i]) * 0.3  # Less BUY probability
-                else:  # HOLD
-                    probabilities[i, 1] = confidence_scores[i]
-                    probabilities[i, 0] = (1 - confidence_scores[i]) * 0.5  # Equal SELL/BUY probability
-                    probabilities[i, 2] = (1 - confidence_scores[i]) * 0.5
+        # Handle probabilities differently for regression vs classification
+        if model_info['task_type'] == 'regression':
+            # For regression models, create confidence intervals
+            confidence_scores = np.abs(predictions - np.median(predictions)) / (np.std(predictions) + 1e-8)
+            confidence_scores = 1 / (1 + confidence_scores)  # Convert to 0-1 range
+            confidence_scores = np.clip(confidence_scores, 0.5, 0.95)  # Reasonable confidence range
+            
+            # For regression, probabilities represent prediction confidence (single column)
+            probabilities = confidence_scores.reshape(-1, 1)
+            
         else:
-            # For binary signals, keep original 2-column format
-            probabilities = np.zeros((n_samples, 2))
-            for i in range(n_samples):
-                if predictions[i] == 1:
-                    probabilities[i, 1] = confidence_scores[i]
-                    probabilities[i, 0] = 1 - confidence_scores[i]
-                else:
-                    probabilities[i, 0] = confidence_scores[i]
-                    probabilities[i, 1] = 1 - confidence_scores[i]
+            # Generate scalping-optimized confidence scores for classification
+            confidence_scores = self._generate_scalping_confidence(predictions, model_name, n_samples)
+
+            # Create probability matrix optimized for scalping
+            if model_name == 'trading_signal':
+                # For three-tier signals (0=SELL, 1=HOLD, 2=BUY), create 3-column probability matrix
+                probabilities = np.zeros((n_samples, 3))
+                for i in range(n_samples):
+                    if predictions[i] == 2:  # BUY
+                        probabilities[i, 2] = confidence_scores[i]
+                        probabilities[i, 1] = (1 - confidence_scores[i]) * 0.7  # Some HOLD probability
+                        probabilities[i, 0] = (1 - confidence_scores[i]) * 0.3  # Less SELL probability
+                    elif predictions[i] == 0:  # SELL
+                        probabilities[i, 0] = confidence_scores[i]
+                        probabilities[i, 1] = (1 - confidence_scores[i]) * 0.7  # Some HOLD probability
+                        probabilities[i, 2] = (1 - confidence_scores[i]) * 0.3  # Less BUY probability
+                    else:  # HOLD
+                        probabilities[i, 1] = confidence_scores[i]
+                        probabilities[i, 0] = (1 - confidence_scores[i]) * 0.5  # Equal SELL/BUY probability
+                        probabilities[i, 2] = (1 - confidence_scores[i]) * 0.5
+            else:
+                # For binary signals, keep original 2-column format
+                probabilities = np.zeros((n_samples, 2))
+                for i in range(n_samples):
+                    if predictions[i] == 1:
+                        probabilities[i, 1] = confidence_scores[i]
+                        probabilities[i, 0] = 1 - confidence_scores[i]
+                    else:
+                        probabilities[i, 0] = confidence_scores[i]
+                        probabilities[i, 1] = 1 - confidence_scores[i]
 
         # Debug info
-        unique_preds, counts = np.unique(predictions, return_counts=True)
-        print(f"Scalping-optimized {model_name} - Distribution: {dict(zip(unique_preds, counts))}")
+        if model_info['task_type'] == 'regression':
+            print(f"Regression {model_name} - Range: [{predictions.min():.4f}, {predictions.max():.4f}], Mean: {predictions.mean():.4f}")
+        else:
+            unique_preds, counts = np.unique(predictions, return_counts=True)
+            print(f"Classification {model_name} - Distribution: {dict(zip(unique_preds, counts))}")
 
         return predictions, probabilities
 
