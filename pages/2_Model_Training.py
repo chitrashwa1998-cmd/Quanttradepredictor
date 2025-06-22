@@ -246,8 +246,8 @@ if st.session_state.models:
                 performance_data.append({
                     'Model': model_name.replace('_', ' ').title(),
                     'Task Type': task_type.title(),
-                    'Accuracy': 'N/A (Loaded)',
-                    'Status': '✅ Loaded'
+                    'Accuracy': 'Ready to Use',
+                    'Status': '✅ Loaded from DB'
                 })
         else:
             performance_data.append({
@@ -402,7 +402,16 @@ if st.session_state.models:
                 with col3:
                     st.metric("MSE", f"{metrics.get('mse', 0.0):.4f}")
         else:
-            st.info("Detailed metrics not available for loaded models. Retrain the model to see detailed performance metrics.")
+            st.success("✅ Model is ready for predictions!")
+            st.info("💡 This model was loaded from the database and is ready to use. To see detailed training metrics, retrain the model using the 'Retrain all models' option above.")
+            
+            # Show model status instead of metrics
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Status", "Ready to Use")
+            with col2:
+                trained_date = model_info.get('trained_at', 'Unknown')
+                st.metric("Last Trained", trained_date)
 
 else:
     st.info("👆 Configure your training parameters and click 'Train All Selected Models' to start training.")
