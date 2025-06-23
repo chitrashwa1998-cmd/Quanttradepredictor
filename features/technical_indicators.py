@@ -153,4 +153,86 @@ class TechnicalIndicators:
         # Additional features (removed day_of_week and month)
         result_df['hour'] = result_df.index.hour if hasattr(result_df.index, 'hour') else 0
         
+        # ✅ 1. CANDLE SHAPE FEATURES
+        result_df['body_size'] = np.abs(df['Close'] - df['Open'])
+        result_df['upper_wick'] = df['High'] - df[['Open', 'Close']].max(axis=1)
+        result_df['lower_wick'] = df[['Open', 'Close']].min(axis=1) - df['Low']
+        result_df['total_range'] = df['High'] - df['Low']
+        result_df['body_ratio'] = result_df['body_size'] / (result_df['total_range'] + 1e-6)
+        result_df['wick_ratio'] = (result_df['upper_wick'] + result_df['lower_wick']) / (result_df['body_size'] + 1e-6)
+        result_df['is_bullish'] = (df['Close'] > df['Open']).astype(int)
+        result_df['candle_strength'] = (df['Close'] - df['Open']) / (result_df['total_range'] + 1e-6)
+        
+        # ✅ 2. CANDLE PATTERN FLAGS (Binary)
+        result_df['doji'] = (result_df['body_ratio'] < 0.1).astype(int)
+        result_df['marubozu'] = ((result_df['upper_wick'] < 0.1 * result_df['body_size']) & 
+                                (result_df['lower_wick'] < 0.1 * result_df['body_size'])).astype(int)
+        result_df['hammer'] = ((result_df['lower_wick'] > 2 * result_df['body_size']) & 
+                              (result_df['upper_wick'] < result_df['body_size'])).astype(int)
+        result_df['shooting_star'] = ((result_df['upper_wick'] > 2 * result_df['body_size']) & 
+                                     (result_df['lower_wick'] < result_df['body_size'])).astype(int)
+        
+        # Engulfing patterns (need previous candle data)
+        prev_open = df['Open'].shift(1)
+        prev_close = df['Close'].shift(1)
+        result_df['engulfing_bull'] = ((df['Close'] > df['Open']) & 
+                                      (df['Close'] > prev_open) & 
+                                      (df['Open'] < prev_close)).astype(int)
+        result_df['engulfing_bear'] = ((df['Close'] < df['Open']) & 
+                                      (df['Close'] < prev_open) & 
+                                      (df['Open'] > prev_close)).astype(int)
+        
+        # ✅ 3. CANDLE SEQUENCES
+        # Bull/Bear streaks
+        bullish_candles = (df['Close'] > df['Open']).astype(int)
+        bearish_candles = (df['Close'] < df['Open']).astype(int)
+        result_df['bull_streak_3'] = ((bullish_candles.rolling(3).sum() == 3)).astype(int)
+        result_df['bear_streak_2'] = ((bearish_candles.rolling(2).sum() == 2)).astype(int)
+        
+        # Inside/Outside bars
+        prev_high = df['High'].shift(1)
+        prev_low = df['Low'].shift(1)
+        result_df['inside_bar'] = ((df['High'] < prev_high) & (df['Low'] > prev_low)).astype(int)
+        result_df['outside_bar'] = ((df['High'] > prev_high) & (df['Low'] < prev_low)).astype(int)
+        
+        # Reversal bar (current candle opposite to last 2)
+        current_direction = (df['Close'] > df['Open']).astype(int)
+        prev_direction_1 = current_direction.shift(1)
+        prev_direction_2 = current_direction.shift(2)
+        result_df['reversal_bar'] = ((current_direction != prev_direction_1) & 
+                                    (prev_direction_1 == prev_direction_2)).astype(int)
+        
+        # ✅ 4. PRICE BEHAVIOR OVER TIME
+        # Dynamic threshold based on ATR for gaps
+        gap_threshold = result_df['atr'] * 0.5  # Use 50% of ATR as threshold
+        result_df['gap_up'] = (df['Open'] > (prev_close + gap_threshold)).astype(int)
+        result_df['gap_down'] = (df['Open'] < (prev_close - gap_threshold)).astype(int)
+        
+        # Direction change
+        current_body = df['Close'] - df['Open']
+        prev_body = current_body.shift(1)
+        result_df['direction_change'] = (current_body * prev_body < 0).astype(int)
+        
+        # Momentum surge
+        rolling_avg_body_size = result_df['body_size'].rolling(20).mean()
+        result_df['momentum_surge'] = (result_df['body_size'] > 1.5 * rolling_avg_body_size).astype(int)
+        
+        # ✅ 5. TIME-AWARE BEHAVIOR
+        if hasattr(result_df.index, 'minute'):
+            result_df['minute_of_hour'] = result_df.index.minute
+            
+            # Market timing features (assuming Indian market timings 09:15-15:30)
+            market_time = result_df.index.time
+            result_df['is_opening_range'] = ((result_df.index.hour == 9) & 
+                                           (result_df.index.minute >= 15) & 
+                                           (result_df.index.minute <= 30)).astype(int)
+            result_df['is_closing_phase'] = ((result_df.index.hour == 15) & 
+                                           (result_df.index.minute >= 0) & 
+                                           (result_df.index.minute <= 30)).astype(int)
+        else:
+            # Default values if time information is not available
+            result_df['minute_of_hour'] = 0
+            result_df['is_opening_range'] = 0
+            result_df['is_closing_phase'] = 0
+        
         return result_df

@@ -88,10 +88,10 @@ class QuantTradingModels:
         """Prepare features for model training."""
         if df.empty:
             raise ValueError("Input DataFrame is empty")
-        
+
         # Remove any rows with NaN values
         df_clean = df.dropna()
-        
+
         if df_clean.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
 
@@ -99,27 +99,29 @@ class QuantTradingModels:
         feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
         feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
 
-        # If we have stored feature names from previous training, use them for consistency
-        if hasattr(self, 'feature_names') and self.feature_names:
-            # Check if current data has the required features
-            missing_features = [col for col in self.feature_names if col not in df_clean.columns]
-            if missing_features:
-                raise ValueError(f"Missing required features: {missing_features}. Available features: {list(df_clean.columns)}")
-            
-            # Use the same feature order as training
-            feature_cols = self.feature_names
-        else:
-            # First time feature preparation
-            self.feature_names = feature_cols
-        
+        # Ensure all new candle behavior features are included
+        expected_candle_features = [
+            'body_size', 'upper_wick', 'lower_wick', 'total_range', 'body_ratio', 
+            'wick_ratio', 'is_bullish', 'candle_strength', 'doji', 'marubozu', 
+            'hammer', 'shooting_star', 'engulfing_bull', 'engulfing_bear',
+            'bull_streak_3', 'bear_streak_2', 'inside_bar', 'outside_bar', 
+            'reversal_bar', 'gap_up', 'gap_down', 'direction_change', 
+            'momentum_surge', 'minute_of_hour', 'is_opening_range', 'is_closing_phase'
+        ]
+
+        # Add any missing candle features that exist in the dataframe
+        for feature in expected_candle_features:
+            if feature in df_clean.columns and feature not in feature_cols:
+                feature_cols.append(feature)
+
         if not feature_cols:
             raise ValueError("No feature columns found. Make sure technical indicators are calculated.")
-            
+
         result_df = df_clean[feature_cols]
-        
+
         if result_df.empty:
             raise ValueError("Feature DataFrame is empty after column selection")
-            
+
         return result_df
 
     def create_targets(self, df: pd.DataFrame) -> Dict[str, pd.Series]:
@@ -601,7 +603,8 @@ class QuantTradingModels:
         # Ensure X and y have the same index for proper alignment
         common_index = X.index.intersection(y.index)
         X_aligned = X.loc[common_index]
-        y_aligned = y.loc[common_index]
+        y_aligned = y```python
+.loc[common_index]
 
         # Remove NaN values and ensure we have valid targets
         mask = ~(X_aligned.isna().any(axis=1) | y_aligned.isna())
@@ -877,14 +880,14 @@ class QuantTradingModels:
         # Validate input features
         if X.empty:
             raise ValueError("Input DataFrame is empty")
-            
+
         missing_features = [col for col in self.feature_names if col not in X.columns]
         if missing_features:
             raise ValueError(f"Missing required features: {missing_features}. Expected: {self.feature_names}, Got: {list(X.columns)}")
 
         # Prepare features
         X_features = X[self.feature_names]
-        
+
         if X_features.empty:
             raise ValueError("Feature DataFrame is empty after column selection")
 
