@@ -22,16 +22,13 @@ class QuantTradingModels:
     def _load_existing_models(self):
         """Load previously trained models from database if available."""
         try:
-            from utils.database import TradingDatabase
-            db = TradingDatabase()
+            from utils.database_adapter import get_trading_database
+            db = get_trading_database()
             loaded_models = db.load_trained_models()
 
             if loaded_models:
                 # Extract feature names and ensure task_type is present
                 for model_name, model_data in loaded_models.items():
-                    if 'feature_names' in model_data and model_data['feature_names']:
-                        self.feature_names = model_data['feature_names']
-
                     # Ensure task_type is present, infer if missing
                     if 'task_type' not in model_data:
                         if model_name in ['direction', 'profit_prob', 'trend_sideways', 'reversal', 'trading_signal']:
@@ -47,11 +44,17 @@ class QuantTradingModels:
                 self.models = loaded_models
                 print(f"Loaded {len(loaded_models)} existing trained models from database")
 
-                # Extract feature names from first available model
+                # Extract feature names from first available model - PRIORITY ORDER
+                feature_names_found = False
                 for model_name, model_data in loaded_models.items():
                     if 'feature_names' in model_data and model_data['feature_names']:
                         self.feature_names = model_data['feature_names']
+                        feature_names_found = True
+                        print(f"Feature names loaded from {model_name}: {len(self.feature_names)} features")
                         break
+                
+                if not feature_names_found:
+                    print("Warning: No feature names found in loaded models")
             else:
                 print("No existing models found in database")
 
@@ -61,8 +64,8 @@ class QuantTradingModels:
     def _save_models_to_database(self):
         """Save trained models to database for persistence."""
         try:
-            from utils.database import TradingDatabase
-            db = TradingDatabase()
+            from utils.database_adapter import get_trading_database
+            db = get_trading_database()
 
             # Prepare models for saving
             models_to_save = {}
@@ -77,7 +80,8 @@ class QuantTradingModels:
             if models_to_save:
                 success = db.save_trained_models(models_to_save)
                 if success:
-                    print(f"Saved {len(models_to_save)} trained models to database")
+                    print(f"Saved {len(models_to_save)} trained models to database with feature names")
+                    print(f"Feature names saved: {len(self.feature_names)} features")
                 else:
                     print("Failed to save models to database")
 
@@ -121,6 +125,10 @@ class QuantTradingModels:
 
         if result_df.empty:
             raise ValueError("Feature DataFrame is empty after column selection")
+
+        # Store feature names for later use
+        self.feature_names = list(result_df.columns)
+        print(f"Feature names stored: {len(self.feature_names)} features")
 
         return result_df
 
@@ -873,19 +881,47 @@ class QuantTradingModels:
         # Handle both new 'ensemble' and legacy 'model' keys
         model = model_info.get('ensemble') or model_info.get('model')
 
-        if not hasattr(self, 'feature_names') or not self.feature_names:
-            raise ValueError(f"No feature names found for model {model_name}. Model may not be properly trained.")
+        # Try to get feature names from multiple sources
+        feature_names = None
+        
+        # 1. Check instance attribute
+        if hasattr(self, 'feature_names') and self.feature_names:
+            feature_names = self.feature_names
+        
+        # 2. Check model info
+        elif 'feature_names' in model_info and model_info['feature_names']:
+            feature_names = model_info['feature_names']
+            self.feature_names = feature_names  # Update instance
+        
+        # 3. Try to infer from input data (fallback)
+        elif not X.empty:
+            # Use all available features excluding OHLC and target columns
+            available_features = [col for col in X.columns 
+                                if col not in ['Open', 'High', 'Low', 'Close', 'Volume'] 
+                                and not col.startswith(('target_', 'future_'))]
+            if available_features:
+                feature_names = available_features
+                self.feature_names = feature_names
+                print(f"Warning: Inferred {len(feature_names)} feature names from input data")
+        
+        if not feature_names:
+            raise ValueError(f"No feature names found for model {model_name}. Model may not be properly trained. Try retraining the model.")
 
         # Validate input features
         if X.empty:
             raise ValueError("Input DataFrame is empty")
 
-        missing_features = [col for col in self.feature_names if col not in X.columns]
+        missing_features = [col for col in feature_names if col not in X.columns]
         if missing_features:
-            raise ValueError(f"Missing required features: {missing_features}. Expected: {self.feature_names}, Got: {list(X.columns)}")
+            print(f"Warning: Missing features: {missing_features[:5]}{'...' if len(missing_features) > 5 else ''}")
+            # Use only available features
+            available_features = [col for col in feature_names if col in X.columns]
+            if not available_features:
+                raise ValueError(f"No required features found in input data. Expected: {feature_names[:10]}{'...' if len(feature_names) > 10 else ''}")
+            feature_names = available_features
 
         # Prepare features
-        X_features = X[self.feature_names]
+        X_features = X[feature_names]
 
         if X_features.empty:
             raise ValueError("Feature DataFrame is empty after column selection")
