@@ -762,7 +762,7 @@ try:
             col1, col2 = st.columns(2)
 
             with col1:
-                fig_pie = go.Figure(data=[go.Pie(
+                fig_pie = go.Figure(data=[go.Pie(```python
                     labels=vol_counts.index,
                     values=vol_counts.values,
                     hole=0.3,
@@ -914,6 +914,27 @@ try:
                 display_df[available_columns].tail(50), 
                 use_container_width=True, 
                 hide_index=True
+            )
+
+            # Download button for complete dataset
+            st.subheader("📥 Export Complete Predictions")
+            complete_export_df = pred_df.copy()
+            complete_export_df = complete_export_df.reset_index()
+
+            # Format the complete export dataframe
+            if len(complete_export_df.columns) > 0:
+                index_col = complete_export_df.columns[0]
+                complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
+                if index_col != 'Date':
+                    complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
+
+            csv_data = complete_export_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Complete Volatility Predictions CSV",
+                data=csv_data,
+                file_name=f"volatility_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                help=f"Download all {len(complete_export_df)} prediction records"
             )
 
     elif selected_model == 'trend_sideways':
@@ -1345,6 +1366,27 @@ try:
                 hide_index=True
             )
 
+            # Download button for complete dataset
+            st.subheader("📥 Export Complete Predictions")
+            complete_export_df = pred_df.copy()
+            complete_export_df = complete_export_df.reset_index()
+
+            # Format the complete export dataframe
+            if len(complete_export_df.columns) > 0:
+                index_col = complete_export_df.columns[0]
+                complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
+                if index_col != 'Date':
+                    complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
+
+            csv_data = complete_export_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Complete Reversal Predictions CSV",
+                data=csv_data,
+                file_name=f"reversal_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                help=f"Download all {len(complete_export_df)} prediction records"
+            )
+
     elif selected_model == 'trading_signal':
         tab1, tab2, tab3 = st.tabs(["📊 Trading Signals", "📈 Signal Analysis", "📋 Signal History"])
 
@@ -1436,7 +1478,8 @@ try:
                 hold_pct = (signal_counts.get(1, 0) / len(predictions)) * 100
                 st.metric("Hold Signals", f"{hold_pct:.1f}%")
             with col3:
-                sell_pct = (signal_counts.get(0, 0) / len(predictions)) * 100
+                sell_pct = (```python
+signal_counts.get(0, 0) / len(predictions)) * 100
                 st.metric("Sell Signals", f"{sell_pct:.1f}%")
 
         with tab3:
