@@ -125,18 +125,31 @@ if st.session_state.features is None:
 else:
     st.success("✅ Technical indicators ready")
     
-    # Show feature summary
+    # Show feature summary (exclude data leakage features)
     feature_cols = [col for col in st.session_state.features.columns 
                    if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
     
+    # Remove data leakage features to show actual training features
+    leakage_features = [
+        'Prediction', 'predicted_direction', 'predictions',
+        'Signal', 'Signal_Name', 'Confidence',
+        'accuracy', 'precision', 'recall'
+    ]
+    training_feature_cols = [col for col in feature_cols if col not in leakage_features]
+    
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Total Features", len(feature_cols))
+        st.metric("Training Features", len(training_feature_cols))
     with col2:
         st.metric("Data Points", len(st.session_state.features))
     with col3:
         missing_pct = st.session_state.features.isnull().sum().sum() / (len(st.session_state.features) * len(st.session_state.features.columns)) * 100
         st.metric("Missing Data %", f"{missing_pct:.1f}%")
+    
+    # Show information about data leakage removal
+    if len(feature_cols) != len(training_feature_cols):
+        removed_count = len(feature_cols) - len(training_feature_cols)
+        st.info(f"ℹ️ Removed {removed_count} data leakage features from training. Using {len(training_feature_cols)} legitimate market features.")
 
 # Model training section
 st.header("Train Models")
