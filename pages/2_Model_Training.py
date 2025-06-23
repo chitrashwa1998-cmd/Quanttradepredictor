@@ -125,11 +125,14 @@ if st.session_state.features is None:
 else:
     st.success("✅ Technical indicators ready")
     
-    # Show feature summary (exclude data leakage features)
-    feature_cols = [col for col in st.session_state.features.columns 
-                   if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+    # Show feature summary using the exact same logic as model training
+    all_cols = st.session_state.features.columns.tolist()
     
-    # Remove data leakage features to show actual training features
+    # Use the exact same feature selection logic as in prepare_features()
+    feature_cols = [col for col in all_cols if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+    feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
+    
+    # Remove data leakage features (same as in prepare_features())
     leakage_features = [
         'Prediction', 'predicted_direction', 'predictions',
         'Signal', 'Signal_Name', 'Confidence',
