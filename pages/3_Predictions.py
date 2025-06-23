@@ -414,24 +414,31 @@ try:
 
             # Download button for complete dataset
             st.subheader("📥 Export Complete Predictions")
+            
+            # Create a clean export dataframe from the original pred_df
             complete_export_df = pred_df.copy()
             complete_export_df = complete_export_df.reset_index()
 
-            # Format the complete export dataframe
+            # Format the complete export dataframe properly
             if len(complete_export_df.columns) > 0:
                 index_col = complete_export_df.columns[0]
                 complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
                 if index_col != 'Date':
                     complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
 
+            # Ensure all data is included (not just tail(50))
             csv_data = complete_export_df.to_csv(index=False)
+            
             st.download_button(
                 label="📥 Download Complete Direction Predictions CSV",
                 data=csv_data,
                 file_name=f"direction_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
-                help=f"Download all {len(complete_export_df)} prediction records"
+                help=f"Download all {len(complete_export_df)} prediction records ({len(complete_export_df)} rows)"
             )
+            
+            # Show download confirmation
+            st.info(f"📊 Ready to download: {len(complete_export_df)} rows of direction prediction data")
 
         with tab4:
             st.subheader("🔍 Recent Predictions")
@@ -563,24 +570,31 @@ try:
 
             # Download button for complete dataset
             st.subheader("📥 Export Complete Predictions")
+            
+            # Create a clean export dataframe from the original pred_df
             complete_export_df = pred_df.copy()
             complete_export_df = complete_export_df.reset_index()
 
-            # Format the complete export dataframe
+            # Format the complete export dataframe properly
             if len(complete_export_df.columns) > 0:
                 index_col = complete_export_df.columns[0]
                 complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
                 if index_col != 'Date':
                     complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
 
+            # Ensure all data is included
             csv_data = complete_export_df.to_csv(index=False)
+            
             st.download_button(
                 label="📥 Download Complete Magnitude Predictions CSV",
                 data=csv_data,
                 file_name=f"magnitude_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
-                help=f"Download all {len(complete_export_df)} prediction records"
+                help=f"Download all {len(complete_export_df)} prediction records ({len(complete_export_df)} rows)"
             )
+            
+            # Show download confirmation
+            st.info(f"📊 Ready to download: {len(complete_export_df)} rows of magnitude prediction data")
 
     elif selected_model in ['profit_probability', 'profit_prob', 'profit_prob_regression']:
         tab1, tab2, tab3 = st.tabs(["🎯 Profit Probability", "📊 Risk Analysis", "📋 Data Table"])
@@ -755,24 +769,31 @@ try:
 
             # Download button for complete dataset
             st.subheader("📥 Export Complete Predictions")
+            
+            # Create a clean export dataframe from the original pred_df
             complete_export_df = pred_df.copy()
             complete_export_df = complete_export_df.reset_index()
 
-            # Format the complete export dataframe
+            # Format the complete export dataframe properly
             if len(complete_export_df.columns) > 0:
                 index_col = complete_export_df.columns[0]
                 complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
                 if index_col != 'Date':
                     complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
 
+            # Ensure all data is included
             csv_data = complete_export_df.to_csv(index=False)
+            
             st.download_button(
                 label="📥 Download Complete Profit Probability Predictions CSV",
                 data=csv_data,
                 file_name=f"profit_prob_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
-                help=f"Download all {len(complete_export_df)} prediction records"
+                help=f"Download all {len(complete_export_df)} prediction records ({len(complete_export_df)} rows)"
             )
+            
+            # Show download confirmation
+            st.info(f"📊 Ready to download: {len(complete_export_df)} rows of profit probability prediction data")
 
     elif selected_model == 'volatility':
         tab1, tab2, tab3 = st.tabs(["📊 Volatility Forecast", "📈 Volatility Trends", "📋 Data Table"])
@@ -995,24 +1016,31 @@ try:
 
             # Download button for complete dataset
             st.subheader("📥 Export Complete Predictions")
+            
+            # Create a clean export dataframe from the original pred_df
             complete_export_df = pred_df.copy()
             complete_export_df = complete_export_df.reset_index()
 
-            # Format the complete export dataframe
+            # Format the complete export dataframe properly
             if len(complete_export_df.columns) > 0:
                 index_col = complete_export_df.columns[0]
                 complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
                 if index_col != 'Date':
                     complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
 
+            # Ensure all data is included
             csv_data = complete_export_df.to_csv(index=False)
+            
             st.download_button(
                 label="📥 Download Complete Volatility Predictions CSV",
                 data=csv_data,
                 file_name=f"volatility_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
-                help=f"Download all {len(complete_export_df)} prediction records"
+                help=f"Download all {len(complete_export_df)} prediction records ({len(complete_export_df)} rows)"
             )
+            
+            # Show download confirmation
+            st.info(f"📊 Ready to download: {len(complete_export_df)} rows of volatility prediction data")
 
     elif selected_model == 'trend_sideways':
         tab1, tab2, tab3 = st.tabs(["📈 Trend Analysis", "📊 Market State", "📋 Data Table"])
@@ -1115,24 +1143,31 @@ try:
 
             # Download button for complete dataset
             st.subheader("📥 Export Complete Predictions")
+            
+            # Create a clean export dataframe from the original pred_df
             complete_export_df = pred_df.copy()
             complete_export_df = complete_export_df.reset_index()
 
-            # Format the complete export dataframe
+            # Format the complete export dataframe properly
             if len(complete_export_df.columns) > 0:
                 index_col = complete_export_df.columns[0]
                 complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
                 if index_col != 'Date':
                     complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
 
+            # Ensure all data is included
             csv_data = complete_export_df.to_csv(index=False)
+            
             st.download_button(
                 label="📥 Download Complete Trend Classification Predictions CSV",
                 data=csv_data,
                 file_name=f"trend_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
-                help=f"Download all {len(complete_export_df)} prediction records"
+                help=f"Download all {len(complete_export_df)} prediction records ({len(complete_export_df)} rows)"
             )
+            
+            # Show download confirmation
+            st.info(f"📊 Ready to download: {len(complete_export_df)} rows of trend classification prediction data")
 
     elif selected_model == 'reversal':
         tab1, tab2, tab3, tab4 = st.tabs(["🔄 Reversal Signals", "📊 Analysis & Validation", "📈 Technical Context", "📋 Data Table"])
@@ -1466,24 +1501,31 @@ try:
 
             # Download button for complete dataset
             st.subheader("📥 Export Complete Predictions")
+            
+            # Create a clean export dataframe from the original pred_df
             complete_export_df = pred_df.copy()
             complete_export_df = complete_export_df.reset_index()
 
-            # Format the complete export dataframe
+            # Format the complete export dataframe properly
             if len(complete_export_df.columns) > 0:
                 index_col = complete_export_df.columns[0]
                 complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
                 if index_col != 'Date':
                     complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
 
+            # Ensure all data is included
             csv_data = complete_export_df.to_csv(index=False)
+            
             st.download_button(
                 label="📥 Download Complete Reversal Predictions CSV",
                 data=csv_data,
                 file_name=f"reversal_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
-                help=f"Download all {len(complete_export_df)} prediction records"
+                help=f"Download all {len(complete_export_df)} prediction records ({len(complete_export_df)} rows)"
             )
+            
+            # Show download confirmation
+            st.info(f"📊 Ready to download: {len(complete_export_df)} rows of reversal prediction data")
 
     elif selected_model == 'trading_signal':
         tab1, tab2, tab3 = st.tabs(["📊 Trading Signals", "📈 Signal Analysis", "📋 Signal History"])
@@ -1592,24 +1634,31 @@ try:
 
             # Download button for complete dataset
             st.subheader("📥 Export Complete Predictions")
+            
+            # Create a clean export dataframe from the original pred_df
             complete_export_df = pred_df.copy()
             complete_export_df = complete_export_df.reset_index()
 
-            # Format the complete export dataframe
+            # Format the complete export dataframe properly
             if len(complete_export_df.columns) > 0:
                 index_col = complete_export_df.columns[0]
                 complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
                 if index_col != 'Date':
                     complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
 
+            # Ensure all data is included
             csv_data = complete_export_df.to_csv(index=False)
+            
             st.download_button(
                 label="📥 Download Complete Trading Signal Predictions CSV",
                 data=csv_data,
                 file_name=f"trading_signal_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
-                help=f"Download all {len(complete_export_df)} prediction records"
+                help=f"Download all {len(complete_export_df)} prediction records ({len(complete_export_df)} rows)"
             )
+            
+            # Show download confirmation
+            st.info(f"📊 Ready to download: {len(complete_export_df)} rows of trading signal prediction data")
 
     else:
         # Handle any other model types
@@ -1642,24 +1691,31 @@ try:
 
         # Download button for complete dataset
         st.subheader("📥 Export Complete Predictions")
+        
+        # Create a clean export dataframe from the original pred_df
         complete_export_df = pred_df.copy()
         complete_export_df = complete_export_df.reset_index()
 
-        # Format the complete export dataframe
+        # Format the complete export dataframe properly
         if len(complete_export_df.columns) > 0:
             index_col = complete_export_df.columns[0]
             complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
             if index_col != 'Date':
                 complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
 
+        # Ensure all data is included
         csv_data = complete_export_df.to_csv(index=False)
+        
         st.download_button(
             label=f"📥 Download Complete {selected_model.replace('_', ' ').title()} Predictions CSV",
             data=csv_data,
             file_name=f"{selected_model}_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
-            help=f"Download all {len(complete_export_df)} prediction records"
+            help=f"Download all {len(complete_export_df)} prediction records ({len(complete_export_df)} rows)"
         )
+        
+        # Show download confirmation
+        st.info(f"📊 Ready to download: {len(complete_export_df)} rows of {selected_model.replace('_', ' ')} prediction data")
 
 except Exception as e:
     st.error(f"Error generating predictions: {str(e)}")
