@@ -102,6 +102,14 @@ class QuantTradingModels:
         # Select feature columns (exclude OHLC and target columns)
         feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
         feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
+        
+        # Remove data leakage features (post-model outputs and labels)
+        leakage_features = [
+            'Prediction', 'predicted_direction', 'predictions',
+            'Signal', 'Signal_Name', 'Confidence',
+            'accuracy', 'precision', 'recall'
+        ]
+        feature_cols = [col for col in feature_cols if col not in leakage_features]
 
         # Ensure all new candle behavior features are included
         expected_candle_features = [
@@ -113,9 +121,9 @@ class QuantTradingModels:
             'momentum_surge', 'minute_of_hour', 'is_opening_range', 'is_closing_phase'
         ]
 
-        # Add any missing candle features that exist in the dataframe
+        # Add any missing candle features that exist in the dataframe (but exclude leakage features)
         for feature in expected_candle_features:
-            if feature in df_clean.columns and feature not in feature_cols:
+            if feature in df_clean.columns and feature not in feature_cols and feature not in leakage_features:
                 feature_cols.append(feature)
 
         if not feature_cols:
@@ -895,10 +903,16 @@ class QuantTradingModels:
         
         # 3. Try to infer from input data (fallback)
         elif not X.empty:
-            # Use all available features excluding OHLC and target columns
+            # Use all available features excluding OHLC, target columns, and leakage features
+            leakage_features = [
+                'Prediction', 'predicted_direction', 'predictions',
+                'Signal', 'Signal_Name', 'Confidence',
+                'accuracy', 'precision', 'recall'
+            ]
             available_features = [col for col in X.columns 
                                 if col not in ['Open', 'High', 'Low', 'Close', 'Volume'] 
-                                and not col.startswith(('target_', 'future_'))]
+                                and not col.startswith(('target_', 'future_'))
+                                and col not in leakage_features]
             if available_features:
                 feature_names = available_features
                 self.feature_names = feature_names
