@@ -398,6 +398,27 @@ try:
                 hide_index=True
             )
 
+            # Download button for complete dataset
+            st.subheader("📥 Export Complete Predictions")
+            complete_export_df = pred_df.copy()
+            complete_export_df = complete_export_df.reset_index()
+
+            # Format the complete export dataframe
+            if len(complete_export_df.columns) > 0:
+                index_col = complete_export_df.columns[0]
+                complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
+                if index_col != 'Date':
+                    complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
+
+            csv_data = complete_export_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Complete Direction Predictions CSV",
+                data=csv_data,
+                file_name=f"direction_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                help=f"Download all {len(complete_export_df)} prediction records"
+            )
+
         with tab4:
             st.subheader("🔍 Recent Predictions")
 
@@ -525,6 +546,27 @@ try:
                 display_df['Magnitude'] = display_df['Magnitude'].apply(lambda x: f"{float(x):.4f}" if isinstance(x, (int, float, str)) else x)
 
             st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+
+            # Download button for complete dataset
+            st.subheader("📥 Export Complete Predictions")
+            complete_export_df = pred_df.copy()
+            complete_export_df = complete_export_df.reset_index()
+
+            # Format the complete export dataframe
+            if len(complete_export_df.columns) > 0:
+                index_col = complete_export_df.columns[0]
+                complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
+                if index_col != 'Date':
+                    complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
+
+            csv_data = complete_export_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Complete Magnitude Predictions CSV",
+                data=csv_data,
+                file_name=f"magnitude_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                help=f"Download all {len(complete_export_df)} prediction records"
+            )
 
     elif selected_model in ['profit_probability', 'profit_prob', 'profit_prob_regression']:
         tab1, tab2, tab3 = st.tabs(["🎯 Profit Probability", "📊 Risk Analysis", "📋 Data Table"])
@@ -696,6 +738,27 @@ try:
                 display_df['Signal'] = display_df['Signal'].astype(str)
 
             st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+
+            # Download button for complete dataset
+            st.subheader("📥 Export Complete Predictions")
+            complete_export_df = pred_df.copy()
+            complete_export_df = complete_export_df.reset_index()
+
+            # Format the complete export dataframe
+            if len(complete_export_df.columns) > 0:
+                index_col = complete_export_df.columns[0]
+                complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
+                if index_col != 'Date':
+                    complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
+
+            csv_data = complete_export_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Complete Profit Probability Predictions CSV",
+                data=csv_data,
+                file_name=f"profit_prob_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                help=f"Download all {len(complete_export_df)} prediction records"
+            )
 
     elif selected_model == 'volatility':
         tab1, tab2, tab3 = st.tabs(["📊 Volatility Forecast", "📈 Volatility Trends", "📋 Data Table"])
@@ -1035,6 +1098,27 @@ try:
 
             display_df = create_display_dataframe(pred_df)
             st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+
+            # Download button for complete dataset
+            st.subheader("📥 Export Complete Predictions")
+            complete_export_df = pred_df.copy()
+            complete_export_df = complete_export_df.reset_index()
+
+            # Format the complete export dataframe
+            if len(complete_export_df.columns) > 0:
+                index_col = complete_export_df.columns[0]
+                complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
+                if index_col != 'Date':
+                    complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
+
+            csv_data = complete_export_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Complete Trend Classification Predictions CSV",
+                data=csv_data,
+                file_name=f"trend_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                help=f"Download all {len(complete_export_df)} prediction records"
+            )
 
     elif selected_model == 'reversal':
         tab1, tab2, tab3, tab4 = st.tabs(["🔄 Reversal Signals", "📊 Analysis & Validation", "📈 Technical Context", "📋 Data Table"])
@@ -1492,6 +1576,27 @@ try:
                 hide_index=True
             )
 
+            # Download button for complete dataset
+            st.subheader("📥 Export Complete Predictions")
+            complete_export_df = pred_df.copy()
+            complete_export_df = complete_export_df.reset_index()
+
+            # Format the complete export dataframe
+            if len(complete_export_df.columns) > 0:
+                index_col = complete_export_df.columns[0]
+                complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
+                if index_col != 'Date':
+                    complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
+
+            csv_data = complete_export_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Complete Trading Signal Predictions CSV",
+                data=csv_data,
+                file_name=f"trading_signal_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                help=f"Download all {len(complete_export_df)} prediction records"
+            )
+
     else:
         # Handle any other model types
         st.subheader(f"📊 {selected_model.replace('_', ' ').title()} Predictions")
@@ -1520,6 +1625,27 @@ try:
         # Show data table
         st.subheader("Recent Predictions")
         st.dataframe(display_df.tail(20), use_container_width=True, hide_index=True)
+
+        # Download button for complete dataset
+        st.subheader("📥 Export Complete Predictions")
+        complete_export_df = pred_df.copy()
+        complete_export_df = complete_export_df.reset_index()
+
+        # Format the complete export dataframe
+        if len(complete_export_df.columns) > 0:
+            index_col = complete_export_df.columns[0]
+            complete_export_df['Date'] = complete_export_df[index_col].apply(safe_format_date)
+            if index_col != 'Date':
+                complete_export_df = complete_export_df.drop(columns=[index_col], errors='ignore')
+
+        csv_data = complete_export_df.to_csv(index=False)
+        st.download_button(
+            label=f"📥 Download Complete {selected_model.replace('_', ' ').title()} Predictions CSV",
+            data=csv_data,
+            file_name=f"{selected_model}_predictions_complete_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv",
+            help=f"Download all {len(complete_export_df)} prediction records"
+        )
 
 except Exception as e:
     st.error(f"Error generating predictions: {str(e)}")
