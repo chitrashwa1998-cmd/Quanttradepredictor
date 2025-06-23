@@ -101,12 +101,12 @@ class TechnicalIndicators:
     
     @staticmethod
     def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate all technical indicators for the dataset (excluding data leakage features)"""
+        """Calculate all technical indicators for the dataset"""
         result_df = df.copy()
         
         # Price-based indicators
-        result_df['SMA_10'] = TechnicalIndicators.sma(df['Close'], 10)
-        result_df['SMA_20'] = TechnicalIndicators.sma(df['Close'], 20)
+        result_df['sma_5'] = TechnicalIndicators.sma(df['Close'], 5)
+        # Removed: sma_10, sma_20, sma_50
         
         result_df['ema_5'] = TechnicalIndicators.ema(df['Close'], 5)
         result_df['ema_10'] = TechnicalIndicators.ema(df['Close'], 10)
@@ -114,16 +114,18 @@ class TechnicalIndicators:
         
         result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
         
-        # MACD
+        # MACD (removed macd and macd_signal, keeping only histogram)
         macd_data = TechnicalIndicators.macd(df['Close'])
         result_df['macd_histogram'] = macd_data['histogram']
         
-        # Bollinger Bands
+        # Bollinger Bands (removed bb_middle)
         bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
         result_df['bb_upper'] = bb_data['upper']
         result_df['bb_lower'] = bb_data['lower']
         result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
         result_df['bb_position'] = (df['Close'] - bb_data['lower']) / (bb_data['upper'] - bb_data['lower'])
+        
+        # Stochastic (removed both stoch_k and stoch_d)
         
         # ATR
         result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
@@ -137,7 +139,7 @@ class TechnicalIndicators:
         result_df['high_close_diff'] = df['High'] - df['Close']
         result_df['close_low_diff'] = df['Close'] - df['Low']
         
-        # Price momentum
+        # Price momentum (removed price_momentum_10)
         result_df['price_momentum_1'] = df['Close'].pct_change(1)
         result_df['price_momentum_3'] = df['Close'].pct_change(3)
         result_df['price_momentum_5'] = df['Close'].pct_change(5)
@@ -146,14 +148,10 @@ class TechnicalIndicators:
         result_df['volatility_10'] = df['Close'].rolling(10).std()
         result_df['volatility_20'] = df['Close'].rolling(20).std()
         
-        # Additional features
-        result_df['hour'] = result_df.index.hour if hasattr(result_df.index, 'hour') else 0
+        # Volume indicators removed (obv and volume_ratio) to match optimized feature set
         
-        # Technical analysis features
-        result_df['Direction_Change'] = (df['Close'] > df['Open']).astype(int) != (df['Close'].shift(1) > df['Open'].shift(1)).astype(int)
-        result_df['Confirmed_Bull_Reversal'] = ((df['Close'] > df['Open']) & (df['Close'].shift(1) < df['Open'].shift(1)) & (df['Close'] > df['High'].shift(1))).astype(int)
-        result_df['Confirmed_Bear_Reversal'] = ((df['Close'] < df['Open']) & (df['Close'].shift(1) > df['Open'].shift(1)) & (df['Close'] < df['Low'].shift(1))).astype(int)
-        result_df['Price'] = df['Close']
+        # Additional features (removed day_of_week and month)
+        result_df['hour'] = result_df.index.hour if hasattr(result_df.index, 'hour') else 0
         
         # ✅ 1. CANDLE SHAPE FEATURES
         result_df['body_size'] = np.abs(df['Close'] - df['Open'])
