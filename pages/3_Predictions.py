@@ -291,6 +291,20 @@ try:
     if probabilities is not None:
         pred_df['Confidence'] = np.max(probabilities, axis=1)
 
+    # Save predictions to database
+    try:
+        from utils.database_adapter import get_trading_database
+        db = get_trading_database()
+        
+        # Save the prediction dataframe
+        save_success = db.save_predictions(pred_df, selected_model)
+        if save_success:
+            st.success(f"✅ Predictions saved to database for model: {selected_model}")
+        else:
+            st.warning("⚠️ Failed to save predictions to database")
+    except Exception as save_error:
+        st.warning(f"⚠️ Could not save predictions: {str(save_error)}")
+
     # Create tabs for different views
     if selected_model == 'direction':
         tab1, tab2, tab3, tab4 = st.tabs(["📈 Price Chart", "📊 Statistics", "📋 Data Table", "🔍 Analysis"])
