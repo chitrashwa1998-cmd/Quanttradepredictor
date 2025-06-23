@@ -762,7 +762,7 @@ try:
             col1, col2 = st.columns(2)
 
             with col1:
-                fig_pie = go.Figure(data=[go.Pie(```python
+                fig_pie = go.Figure(data=[go.Pie(
                     labels=vol_counts.index,
                     values=vol_counts.values,
                     hole=0.3,
@@ -1478,8 +1478,7 @@ try:
                 hold_pct = (signal_counts.get(1, 0) / len(predictions)) * 100
                 st.metric("Hold Signals", f"{hold_pct:.1f}%")
             with col3:
-                sell_pct = (```python
-signal_counts.get(0, 0) / len(predictions)) * 100
+                sell_pct = (signal_counts.get(0, 0) / len(predictions)) * 100
                 st.metric("Sell Signals", f"{sell_pct:.1f}%")
 
         with tab3:
