@@ -603,8 +603,7 @@ class QuantTradingModels:
         # Ensure X and y have the same index for proper alignment
         common_index = X.index.intersection(y.index)
         X_aligned = X.loc[common_index]
-        y_aligned = y```python
-.loc[common_index]
+        y_aligned = y.loc[common_index]
 
         # Remove NaN values and ensure we have valid targets
         mask = ~(X_aligned.isna().any(axis=1) | y_aligned.isna())
