@@ -1002,6 +1002,10 @@ class QuantTradingModels:
             targets = self.create_targets(df)
             st.info(f"✅ Created {len(targets)} target variables")
 
+        except Exception as e:
+            st.error(f"❌ Error preparing data: {str(e)}")
+            return {}
+
         models_config = [
             ('direction', 'classification'),
             ('magnitude', 'regression'),
@@ -1089,11 +1093,11 @@ class QuantTradingModels:
         
         return results
         
-        except Exception as e:
-            st.error(f"❌ Critical error during model training: {str(e)}")
-            import traceback
-            st.error(f"Traceback: {traceback.format_exc()}")
-            return {}
+        # Clear progress indicators
+        progress_bar.empty()
+        status_text.empty()
+        
+        return results
 
     def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """Make predictions using trained ensemble model with enhanced confidence calculation."""
