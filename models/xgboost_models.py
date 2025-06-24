@@ -1274,6 +1274,14 @@ class QuantTradingModels:
         if not feature_names:
             raise ValueError(f"No feature names found for model {model_name}. Model may not be properly trained. Try retraining the model.")
 
+        # Special validation for direction model with feature selection
+        if model_name == 'direction' and model_name in self.scalers:
+            scaler_info = self.scalers[model_name]
+            if isinstance(scaler_info, dict) and 'selector' in scaler_info:
+                expected_input_features = scaler_info['selector'].n_features_in_
+                if len(feature_names) != expected_input_features:
+                    print(f"Warning: Feature count mismatch for direction model. Expected {expected_input_features}, got {len(feature_names)}. This may indicate the model needs retraining.")
+
         # Validate input features
         if X.empty:
             raise ValueError("Input DataFrame is empty")
@@ -1300,13 +1308,20 @@ class QuantTradingModels:
             # Check if this is direction model with feature selection
             if isinstance(scaler_info, dict) and 'selector' in scaler_info:
                 # Apply feature selection first
-                X_selected = scaler_info['selector'].transform(X_features)
-                # Then apply scaling
-                X_scaled = scaler_info['scaler'].transform(X_selected)
-                print(f"Applied feature selection for {model_name}: {X_features.shape[1]} -> {X_scaled.shape[1]} features")
+                try:
+                    X_selected = scaler_info['selector'].transform(X_features)
+                    # Then apply scaling
+                    X_scaled = scaler_info['scaler'].transform(X_selected)
+                    print(f"Applied feature selection for {model_name}: {X_features.shape[1]} -> {X_scaled.shape[1]} features")
+                except Exception as e:
+                    raise ValueError(f"Error applying feature selection for {model_name}: {str(e)}. Expected {scaler_info.get('selector').k} features after selection, but got {X_features.shape[1]} input features.")
             else:
                 # Regular scaling for other models
-                X_scaled = scaler_info.transform(X_features)
+                try:
+                    X_scaled = scaler_info.transform(X_features)
+                except Exception as e:
+                    expected_features = getattr(scaler_info, 'n_features_in_', 'unknown')
+                    raise ValueError(f"Feature shape mismatch for {model_name}: expected {expected_features} features, got {X_features.shape[1]}. Please retrain the model with current data.")
         else:
             X_scaled = X_features.values
 
