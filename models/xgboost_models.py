@@ -52,7 +52,7 @@ class QuantTradingModels:
                         feature_names_found = True
                         print(f"Feature names loaded from {model_name}: {len(self.feature_names)} features")
                         break
-                
+
                 if not feature_names_found:
                     print("Warning: No feature names found in loaded models")
             else:
@@ -102,7 +102,7 @@ class QuantTradingModels:
         # Select feature columns (exclude OHLC and target columns)
         feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
         feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
-        
+
         # Remove data leakage features (post-model outputs and labels)
         leakage_features = [
             'Prediction', 'predicted_direction', 'predictions',
@@ -605,7 +605,7 @@ class QuantTradingModels:
         print(f"Volatility range: {volatility_short.min():.4f} to {volatility_short.max():.4f}")
 
         # Debug information for profit_prob
-        if 'profit_prob' in targets:
+        if ''profit_prob' in targets:
             profit_prob_stats = targets['profit_prob'].value_counts()
             print(f"Profit Probability Target Distribution: {profit_prob_stats.to_dict()}")
             print(f"Profit threshold used: {profit_threshold:.4f}")
@@ -880,6 +880,74 @@ class QuantTradingModels:
         status_text.text("All models trained and saved!")
         return results
 
+    def train_selected_models(self, df: pd.DataFrame, selected_models: list, train_split: float = 0.8) -> Dict[str, Any]:
+        """Train only selected models."""
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+
+        # Prepare features
+        status_text.text("Preparing features...")
+        X = self.prepare_features(df)
+
+        # Create targets
+        status_text.text("Creating target variables...")
+        targets = self.create_targets(df)
+
+        models_config = [
+            ('direction', 'classification'),
+            ('magnitude', 'regression'),
+            ('profit_prob', 'classification'),
+            ('volatility', 'regression'),
+            ('trend_sideways', 'classification'),
+            ('reversal', 'classification'),
+            ('trading_signal', 'classification')
+        ]
+
+        results = {}
+        total_models = len(selected_models)
+
+        for i, model_name in enumerate(selected_models):
+            status_text.text(f"Training {model_name} model...")
+
+            try:
+                # Find the task type for the current model
+                task_type = None
+                for m, t in models_config:
+                    if m == model_name:
+                        task_type = t
+                        break
+
+                if model_name in targets and task_type is not None:
+                    # Ensure X and target are properly aligned by using common index
+                    target_series = targets[model_name]
+                    common_index = X.index.intersection(target_series.index)
+
+                    if len(common_index) == 0:
+                        st.warning(f"⚠️ No common indices between features and {model_name} target")
+                        results[model_name] = None
+                        continue
+
+                    X_aligned = X.loc[common_index]
+                    y_aligned = target_series.loc[common_index]
+
+                    result = self.train_model(model_name, X_aligned, y_aligned, task_type, train_split)
+                    results[model_name] = result
+                    st.success(f"✅ {model_name} model trained successfully")
+                else:
+                    st.warning(f"⚠️ Target {model_name} not found or task type not defined")
+            except Exception as e:
+                st.error(f"❌ Error training {model_name}: {str(e)}")
+                results[model_name] = None
+
+            progress_bar.progress((i + 1) / total_models)
+
+        status_text.text("Saving trained models to database...")
+        # Automatically save all trained models for persistence
+        self._save_models_to_database()
+
+        status_text.text("Selected models trained and saved!")
+        return results
+
     def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """Make predictions using trained ensemble model with enhanced confidence calculation."""
         if model_name not in self.models:
@@ -891,16 +959,16 @@ class QuantTradingModels:
 
         # Try to get feature names from multiple sources
         feature_names = None
-        
+
         # 1. Check instance attribute
         if hasattr(self, 'feature_names') and self.feature_names:
             feature_names = self.feature_names
-        
+
         # 2. Check model info
         elif 'feature_names' in model_info and model_info['feature_names']:
             feature_names = model_info['feature_names']
             self.feature_names = feature_names  # Update instance
-        
+
         # 3. Try to infer from input data (fallback)
         elif not X.empty:
             # Use all available features excluding OHLC, target columns, and leakage features
@@ -917,7 +985,7 @@ class QuantTradingModels:
                 feature_names = available_features
                 self.feature_names = feature_names
                 print(f"Warning: Inferred {len(feature_names)} feature names from input data")
-        
+
         if not feature_names:
             raise ValueError(f"No feature names found for model {model_name}. Model may not be properly trained. Try retraining the model.")
 

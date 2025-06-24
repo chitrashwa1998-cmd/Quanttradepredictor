@@ -189,8 +189,24 @@ if st.session_state.features is not None:
                 features_data = st.session_state.features
                 st.info(f"Training on complete dataset: {len(features_data)} rows for maximum accuracy...")
                 
-                # Train models with configurable split
-                results = st.session_state.model_trainer.train_all_models(features_data, train_split)
+                # Map UI selections to model names
+                model_mapping = {
+                    "Direction Prediction": "direction",
+                    "Magnitude Prediction": "magnitude", 
+                    "Profit Probability": "profit",
+                    "Volatility Forecasting": "volatility",
+                    "Trend Classification": "trend",
+                    "Reversal Points": "reversal",
+                    "Trading Signals": "trading_signal"
+                }
+                
+                # Get the actual model names to train
+                models_to_train = [model_mapping[model] for model in selected_models if model in model_mapping]
+                
+                st.info(f"Training selected models: {', '.join(models_to_train)}")
+                
+                # Train only selected models
+                results = st.session_state.model_trainer.train_selected_models(features_data, models_to_train, train_split)
                 
                 # Store results
                 st.session_state.models = results
