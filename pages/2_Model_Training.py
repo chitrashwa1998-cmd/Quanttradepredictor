@@ -227,7 +227,177 @@ if st.session_state.features is not None:
 if st.session_state.models:
     st.header("Training Results")
     
-    # Model performance summary
+    # Comprehensive Model Accuracy Table
+    st.subheader("📊 Model Accuracy Summary")
+    
+    # Prepare data for the accuracy table
+    accuracy_data = []
+    classification_models = []
+    regression_models = []
+    
+    for model_name, model_info in st.session_state.models.items():
+        if model_info is not None:
+            metrics = model_info['metrics']
+            model_display_name = model_name.replace('_', ' ').title()
+            
+            if model_info['task_type'] == 'classification':
+                accuracy = metrics['accuracy']
+                
+                # Get individual model accuracies if available
+                xgb_acc = metrics.get('xgboost_accuracy', 'N/A')
+                cat_acc = metrics.get('catboost_accuracy', 'N/A')
+                rf_acc = metrics.get('random_forest_accuracy', 'N/A')
+                
+                # Format individual accuracies
+                xgb_acc_str = f"{xgb_acc:.3f}" if isinstance(xgb_acc, float) else xgb_acc
+                cat_acc_str = f"{cat_acc:.3f}" if isinstance(cat_acc, float) else cat_acc
+                rf_acc_str = f"{rf_acc:.3f}" if isinstance(rf_acc, float) else rf_acc
+                
+                # Get classification report details if available
+                class_report = metrics.get('classification_report', {})
+                weighted_avg = class_report.get('weighted avg', {})
+                precision = weighted_avg.get('precision', 0)
+                recall = weighted_avg.get('recall', 0)
+                f1_score = weighted_avg.get('f1-score', 0)
+                
+                accuracy_data.append({
+                    'Model': model_display_name,
+                    'Type': 'Classification',
+                    'Ensemble Accuracy': f"{accuracy:.3f}",
+                    'XGBoost': xgb_acc_str,
+                    'CatBoost': cat_acc_str,
+                    'Random Forest': rf_acc_str,
+                    'Precision': f"{precision:.3f}" if precision > 0 else 'N/A',
+                    'Recall': f"{recall:.3f}" if recall > 0 else 'N/A',
+                    'F1-Score': f"{f1_score:.3f}" if f1_score > 0 else 'N/A',
+                    'Status': '✅ Trained'
+                })
+                
+                classification_models.append({
+                    'Model': model_display_name,
+                    'Accuracy': accuracy
+                })
+                
+            else:  # Regression
+                rmse = metrics['rmse']
+                mae = metrics['mae']
+                mse = metrics['mse']
+                
+                # Get individual model errors if available
+                xgb_mse = metrics.get('xgboost_mse', 'N/A')
+                cat_mse = metrics.get('catboost_mse', 'N/A')
+                rf_mse = metrics.get('random_forest_mse', 'N/A')
+                
+                xgb_mae = metrics.get('xgboost_mae', 'N/A')
+                cat_mae = metrics.get('catboost_mae', 'N/A')
+                rf_mae = metrics.get('random_forest_mae', 'N/A')
+                
+                # Format individual errors
+                xgb_mse_str = f"{xgb_mse:.4f}" if isinstance(xgb_mse, float) else xgb_mse
+                cat_mse_str = f"{cat_mse:.4f}" if isinstance(cat_mse, float) else cat_mse
+                rf_mse_str = f"{rf_mse:.4f}" if isinstance(rf_mse, float) else rf_mse
+                
+                accuracy_data.append({
+                    'Model': model_display_name,
+                    'Type': 'Regression',
+                    'Ensemble RMSE': f"{rmse:.4f}",
+                    'Ensemble MAE': f"{mae:.4f}",
+                    'XGBoost MSE': xgb_mse_str,
+                    'CatBoost MSE': cat_mse_str,
+                    'RF MSE': rf_mse_str,
+                    'Status': '✅ Trained'
+                })
+                
+                regression_models.append({
+                    'Model': model_display_name,
+                    'RMSE': rmse,
+                    'MAE': mae
+                })
+        else:
+            accuracy_data.append({
+                'Model': model_name.replace('_', ' ').title(),
+                'Type': 'Unknown',
+                'Status': '❌ Failed'
+            })
+    
+    if accuracy_data:
+        # Create and display the comprehensive table
+        accuracy_df = pd.DataFrame(accuracy_data)
+        
+        # Style the dataframe for better visualization
+        def style_accuracy_table(df):
+            def highlight_status(val):
+                if '✅' in str(val):
+                    return 'background-color: #d4edda; color: #155724;'
+                elif '❌' in str(val):
+                    return 'background-color: #f8d7da; color: #721c24;'
+                return ''
+            
+            def highlight_accuracy(val):
+                try:
+                    if isinstance(val, str) and val != 'N/A':
+                        accuracy_val = float(val)
+                        if accuracy_val >= 0.8:
+                            return 'background-color: #d4edda; font-weight: bold;'
+                        elif accuracy_val >= 0.7:
+                            return 'background-color: #fff3cd;'
+                        elif accuracy_val < 0.6:
+                            return 'background-color: #f8d7da;'
+                except:
+                    pass
+                return ''
+            
+            # Apply styling
+            styled_df = df.style.applymap(highlight_status, subset=['Status'])
+            
+            # Highlight accuracy columns for classification models
+            accuracy_columns = ['Ensemble Accuracy', 'XGBoost', 'CatBoost', 'Random Forest']
+            for col in accuracy_columns:
+                if col in df.columns:
+                    styled_df = styled_df.applymap(highlight_accuracy, subset=[col])
+            
+            return styled_df
+        
+        # Display the styled table
+        st.dataframe(
+            style_accuracy_table(accuracy_df),
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Summary metrics
+        st.subheader("📈 Performance Summary")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            total_models = len([m for m in st.session_state.models.values() if m is not None])
+            st.metric("Successfully Trained", total_models)
+        
+        with col2:
+            if classification_models:
+                avg_accuracy = sum(m['Accuracy'] for m in classification_models) / len(classification_models)
+                st.metric("Avg Classification Accuracy", f"{avg_accuracy:.3f}")
+            else:
+                st.metric("Classification Models", "0")
+        
+        with col3:
+            if regression_models:
+                avg_rmse = sum(m['RMSE'] for m in regression_models) / len(regression_models)
+                st.metric("Avg Regression RMSE", f"{avg_rmse:.4f}")
+            else:
+                st.metric("Regression Models", "0")
+        
+        # Top performing models
+        if classification_models:
+            st.subheader("🏆 Best Performing Classification Models")
+            best_models = sorted(classification_models, key=lambda x: x['Accuracy'], reverse=True)[:3]
+            
+            for i, model in enumerate(best_models):
+                rank_emoji = ["🥇", "🥈", "🥉"][i] if i < 3 else f"{i+1}."
+                st.write(f"{rank_emoji} **{model['Model']}**: {model['Accuracy']:.3f} accuracy")
+    
+    # Model performance summary (keeping original for compatibility)
     performance_data = []
     
     for model_name, model_info in st.session_state.models.items():
@@ -258,9 +428,11 @@ if st.session_state.models:
                 'Status': '❌ Failed'
             })
     
+    # Keep original simple table for reference
+    st.subheader("📋 Simple Performance Overview")
     if performance_data:
         performance_df = pd.DataFrame(performance_data)
-        st.dataframe(performance_df, use_container_width=True)
+        st.dataframe(performance_df, use_container_width=True, hide_index=True)
     
     # Feature importance analysis
     st.subheader("Feature Importance Analysis")
