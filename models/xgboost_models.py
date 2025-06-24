@@ -1041,13 +1041,8 @@ class QuantTradingModels:
             raise ValueError(f"Model {model_name} not found. Available models: {list(self.models.keys())}")
 
         model_info = self.models[model_name]
-        if not isinstance(model_info, dict):
-            raise ValueError(f"Invalid model info for {model_name}. Expected dict, got {type(model_info)}")
-            
-        # Handle both new 'ensemble' and legacy 'model' keys with error handling
+        # Handle both new 'ensemble' and legacy 'model' keys
         model = model_info.get('ensemble') or model_info.get('model')
-        if model is None:
-            raise ValueError(f"No trained model found for {model_name}. Model info keys: {list(model_info.keys())}")
 
         # Try to get feature names from multiple sources
         feature_names = None
@@ -1101,25 +1096,16 @@ class QuantTradingModels:
             raise ValueError("Feature DataFrame is empty after column selection")
 
         # Scale features (all ensemble models use scaling)
-        try:
-            if model_name in self.scalers and self.scalers[model_name] is not None:
-                X_scaled = self.scalers[model_name].transform(X_features)
-            else:
-                print(f"Warning: No scaler found for {model_name}, using raw features")
-                X_scaled = X_features.values
-        except Exception as e:
-            print(f"Error during feature scaling for {model_name}: {str(e)}")
+        if model_name in self.scalers:
+            X_scaled = self.scalers[model_name].transform(X_features)
+        else:
             X_scaled = X_features.values
 
-        # Make predictions using ensemble with error handling
-        try:
-            predictions = model.predict(X_scaled)
-        except Exception as e:
-            raise ValueError(f"Error making predictions with {model_name}: {str(e)}")
+        # Make predictions using ensemble
+        predictions = model.predict(X_scaled)
 
         # Enhanced confidence calculation for classification tasks
-        task_type = model_info.get('task_type', 'classification')
-        if task_type == 'classification':
+        if model_info['task_type'] == 'classification':
             # Handle calibrated models vs regular ensemble models
             if hasattr(model, 'calibrated_classifiers_'):
                 # This is a calibrated model - probabilities are already well-calibrated
@@ -1140,20 +1126,7 @@ class QuantTradingModels:
                 individual_predictions = []
                 individual_probabilities = []
 
-                # Check if named_estimators_ exists
-                if hasattr(model, 'named_estimators_') and model.named_estimators_:
-                    estimators = model.named_estimators_
-                elif hasattr(model, 'estimators_') and model.estimators_:
-                    # Fallback for different ensemble types
-                    estimators = {f'estimator_{i}': est for i, est in enumerate(model.estimators_)}
-                else:
-                    # No individual estimators available, use simple confidence
-                    ensemble_proba = model.predict_proba(X_scaled)
-                    confidence_scores = np.max(ensemble_proba, axis=1)
-                    probabilities = ensemble_proba
-                    return predictions, probabilities
-
-                for name, individual_model in estimators.items():
+                for name, individual_model in model.named_estimators_.items():
                     ind_pred = individual_model.predict(X_scaled)
                     individual_predictions.append(ind_pred)
 

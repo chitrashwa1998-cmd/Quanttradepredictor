@@ -251,40 +251,23 @@ if st.session_state.features is not None:
 if st.session_state.models or (st.session_state.model_trainer and st.session_state.model_trainer.models):
     st.header("Training Results")
 
-    # Get all available models (session state + loaded models) with error handling
+    # Get all available models (session state + loaded models)
     all_models = {}
 
     # Add session state models first (these have full metrics)
-    try:
-        if st.session_state.models:
-            all_models.update(st.session_state.models)
-    except (KeyError, AttributeError) as e:
-        print(f"Error accessing session state models: {str(e)}")
-        st.session_state.models = {}
+    if st.session_state.models:
+        all_models.update(st.session_state.models)
 
     # Add loaded models from trainer (but don't overwrite session state models)
-    try:
-        if st.session_state.model_trainer and st.session_state.model_trainer.models:
-            for model_name, model_data in st.session_state.model_trainer.models.items():
-                if model_name not in all_models:
-                    # Convert loaded model to session state format with error handling
-                    try:
-                        task_type = model_data.get('task_type', 'classification') if isinstance(model_data, dict) else 'classification'
-                        all_models[model_name] = {
-                            'metrics': {'accuracy': 'Loaded'} if task_type == 'classification' else {'rmse': 'Loaded'},
-                            'task_type': task_type,
-                            'status': 'loaded'
-                        }
-                    except (KeyError, AttributeError) as e:
-                        print(f"Error processing model {model_name}: {str(e)}")
-                        # Add with minimal info
-                        all_models[model_name] = {
-                            'metrics': {'status': 'Error'},
-                            'task_type': 'unknown',
-                            'status': 'error'
-                        }
-    except (KeyError, AttributeError) as e:
-        print(f"Error accessing model trainer: {str(e)}")
+    if st.session_state.model_trainer and st.session_state.model_trainer.models:
+        for model_name, model_data in st.session_state.model_trainer.models.items():
+            if model_name not in all_models:
+                # Convert loaded model to session state format
+                all_models[model_name] = {
+                    'metrics': {'accuracy': 'Loaded'} if model_data.get('task_type') == 'classification' else {'rmse': 'Loaded'},
+                    'task_type': model_data.get('task_type', 'classification'),
+                    'status': 'loaded'
+                }
 
     # Debug information
     st.write(f"Debug: Found {len(all_models)} total models")
@@ -300,109 +283,101 @@ if st.session_state.models or (st.session_state.model_trainer and st.session_sta
     regression_models = []
 
     for model_name, model_info in all_models.items():
-        try:
-            if model_info is not None and isinstance(model_info, dict):
-                metrics = model_info.get('metrics', {})
-                model_display_name = model_name.replace('_', ' ').title()
-                task_type = model_info.get('task_type', 'classification')
-                status = model_info.get('status', 'trained')
+        if model_info is not None and isinstance(model_info, dict):
+            metrics = model_info.get('metrics', {})
+            model_display_name = model_name.replace('_', ' ').title()
+            task_type = model_info.get('task_type', 'classification')
+            status = model_info.get('status', 'trained')
 
-                if task_type == 'classification':
-                    if status == 'loaded':
-                        accuracy_data.append({
-                            'Model': model_display_name,
-                            'Type': 'Classification',
-                            'Ensemble Accuracy': 'Loaded',
-                            'XGBoost': 'Loaded',
-                            'CatBoost': 'Loaded',
-                            'Random Forest': 'Loaded',
-                            'Status': '📂 Loaded'
-                        })
-                    else:
-                        accuracy = metrics.get('accuracy', 0)
+            if task_type == 'classification':
+                if status == 'loaded':
+                    accuracy_data.append({
+                        'Model': model_display_name,
+                        'Type': 'Classification',
+                        'Ensemble Accuracy': 'Loaded',
+                        'XGBoost': 'Loaded',
+                        'CatBoost': 'Loaded',
+                        'Random Forest': 'Loaded',
+                        'Status': '📂 Loaded'
+                    })
+                else:
+                    accuracy = metrics.get('accuracy', 0)
 
-                        # Get individual model accuracies if available
-                        xgb_acc = metrics.get('xgboost_accuracy', 'N/A')
-                        cat_acc = metrics.get('catboost_accuracy', 'N/A')
-                        rf_acc = metrics.get('random_forest_accuracy', 'N/A')
+                    # Get individual model accuracies if available
+                    xgb_acc = metrics.get('xgboost_accuracy', 'N/A')
+                    cat_acc = metrics.get('catboost_accuracy', 'N/A')
+                    rf_acc = metrics.get('random_forest_accuracy', 'N/A')
 
-                        # Format individual accuracies
-                        xgb_acc_str = f"{xgb_acc:.3f}" if isinstance(xgb_acc, float) else xgb_acc
-                        cat_acc_str = f"{cat_acc:.3f}" if isinstance(cat_acc, float) else cat_acc
-                        rf_acc_str = f"{rf_acc:.3f}" if isinstance(rf_acc, float) else rf_acc
+                    # Format individual accuracies
+                    xgb_acc_str = f"{xgb_acc:.3f}" if isinstance(xgb_acc, float) else xgb_acc
+                    cat_acc_str = f"{cat_acc:.3f}" if isinstance(cat_acc, float) else cat_acc
+                    rf_acc_str = f"{rf_acc:.3f}" if isinstance(rf_acc, float) else rf_acc
 
-                        # Get classification report details if available
-                        class_report = metrics.get('classification_report', {})
-                        weighted_avg = class_report.get('weighted avg', {})
-                        precision = weighted_avg.get('precision', 0)
-                        recall = weighted_avg.get('recall', 0)
-                        f1_score = weighted_avg.get('f1-score', 0)
+                    # Get classification report details if available
+                    class_report = metrics.get('classification_report', {})
+                    weighted_avg = class_report.get('weighted avg', {})
+                    precision = weighted_avg.get('precision', 0)
+                    recall = weighted_avg.get('recall', 0)
+                    f1_score = weighted_avg.get('f1-score', 0)
 
-                        accuracy_data.append({
-                            'Model': model_display_name,
-                            'Type': 'Classification',
-                            'Ensemble Accuracy': f"{accuracy:.3f}",
-                            'XGBoost': xgb_acc_str,
-                            'CatBoost': cat_acc_str,
-                            'Random Forest': rf_acc_str,
-                            'Precision': f"{precision:.3f}" if precision > 0 else 'N/A',
-                            'Recall': f"{recall:.3f}" if recall > 0 else 'N/A',
-                            'F1-Score': f"{f1_score:.3f}" if f1_score > 0 else 'N/A',
-                            'Status': '✅ Trained'
-                        })
+                    accuracy_data.append({
+                        'Model': model_display_name,
+                        'Type': 'Classification',
+                        'Ensemble Accuracy': f"{accuracy:.3f}",
+                        'XGBoost': xgb_acc_str,
+                        'CatBoost': cat_acc_str,
+                        'Random Forest': rf_acc_str,
+                        'Precision': f"{precision:.3f}" if precision > 0 else 'N/A',
+                        'Recall': f"{recall:.3f}" if recall > 0 else 'N/A',
+                        'F1-Score': f"{f1_score:.3f}" if f1_score > 0 else 'N/A',
+                        'Status': '✅ Trained'
+                    })
 
-                        classification_models.append({
-                            'Model': model_display_name,
-                            'Accuracy': accuracy
-                        })
+                    classification_models.append({
+                        'Model': model_display_name,
+                        'Accuracy': accuracy
+                    })
 
-                else:  # Regression
-                    if status == 'loaded':
-                        accuracy_data.append({
-                            'Model': model_display_name,
-                            'Type': 'Regression',
-                            'Ensemble RMSE': 'Loaded',
-                            'Ensemble MAE': 'Loaded',
-                            'Status': '📂 Loaded'
-                        })
-                    else:
-                        rmse = metrics.get('rmse', 0)
-                        mae = metrics.get('mae', 0)
-                        mse = metrics.get('mse', 0)
+            else:  # Regression
+                if status == 'loaded':
+                    accuracy_data.append({
+                        'Model': model_display_name,
+                        'Type': 'Regression',
+                        'Ensemble RMSE': 'Loaded',
+                        'Ensemble MAE': 'Loaded',
+                        'Status': '📂 Loaded'
+                    })
+                else:
+                    rmse = metrics.get('rmse', 0)
+                    mae = metrics.get('mae', 0)
+                    mse = metrics.get('mse', 0)
 
-                        # Get individual model errors if available
-                        xgb_mse = metrics.get('xgboost_mse', 'N/A')
-                        cat_mse = metrics.get('catboost_mse', 'N/A')
-                        rf_mse = metrics.get('random_forest_mse', 'N/A')
+                    # Get individual model errors if available
+                    xgb_mse = metrics.get('xgboost_mse', 'N/A')
+                    cat_mse = metrics.get('catboost_mse', 'N/A')
+                    rf_mse = metrics.get('random_forest_mse', 'N/A')
 
-                        # Format individual errors
-                        xgb_mse_str = f"{xgb_mse:.4f}" if isinstance(xgb_mse, float) else xgb_mse
-                        cat_mse_str = f"{cat_mse:.4f}" if isinstance(cat_mse, float) else cat_mse
-                        rf_mse_str = f"{rf_mse:.4f}" if isinstance(rf_mse, float) else rf_mse
+                    # Format individual errors
+                    xgb_mse_str = f"{xgb_mse:.4f}" if isinstance(xgb_mse, float) else xgb_mse
+                    cat_mse_str = f"{cat_mse:.4f}" if isinstance(cat_mse, float) else cat_mse
+                    rf_mse_str = f"{rf_mse:.4f}" if isinstance(rf_mse, float) else rf_mse
 
-                        accuracy_data.append({
-                            'Model': model_display_name,
-                            'Type': 'Regression',
-                            'Ensemble RMSE': f"{rmse:.4f}",
-                            'Ensemble MAE': f"{mae:.4f}",
-                            'XGBoost MSE': xgb_mse_str,
-                            'CatBoost MSE': cat_mse_str,
-                            'RF MSE': rf_mse_str,
-                            'Status': '✅ Trained'
-                        })
+                    accuracy_data.append({
+                        'Model': model_display_name,
+                        'Type': 'Regression',
+                        'Ensemble RMSE': f"{rmse:.4f}",
+                        'Ensemble MAE': f"{mae:.4f}",
+                        'XGBoost MSE': xgb_mse_str,
+                        'CatBoost MSE': cat_mse_str,
+                        'RF MSE': rf_mse_str,
+                        'Status': '✅ Trained'
+                    })
 
-                        regression_models.append({
-                            'Model': model_display_name,
-                            'RMSE': rmse,
-                            'MAE': mae
-                        })
-        except (KeyError, AttributeError, TypeError) as e:
-            print(f"Error processing model {model_name}: {str(e)}")
-            accuracy_data.append({
-                'Model': model_name.replace('_', ' ').title(),
-                'Type': 'Unknown',
-                'Status': f'❌ Error: {str(e)[:30]}...'
-            })
+                    regression_models.append({
+                        'Model': model_display_name,
+                        'RMSE': rmse,
+                        'MAE': mae
+                    })
         else:
             accuracy_data.append({
                 'Model': model_name.replace('_', ' ').title(),
