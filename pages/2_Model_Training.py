@@ -217,12 +217,55 @@ if st.session_state.features is not None:
                         if model_result is not None:
                             st.session_state.model_trainer.models[model_name] = model_result
 
+                # Display immediate training results
+                st.success(f"🎉 Training completed for {len([r for r in results.values() if r is not None])} models!")
+                
+                # Show which models were trained successfully
+                successful_models = [name for name, result in results.items() if result is not None]
+                failed_models = [name for name, result in results.items() if result is None]
+                
+                if successful_models:
+                    st.success(f"✅ Successfully trained: {', '.join(successful_models)}")
+                
+                if failed_models:
+                    st.error(f"❌ Failed to train: {', '.join(failed_models)}")
+                
+                # Show training metrics immediately
+                for model_name, result in results.items():
+                    if result is not None:
+                        metrics = result.get('metrics', {})
+                        task_type = result.get('task_type', 'unknown')
+                        
+                        with st.expander(f"📊 {model_name.replace('_', ' ').title()} Results"):
+                            if task_type == 'classification':
+                                accuracy = metrics.get('accuracy', 0)
+                                st.metric("Accuracy", f"{accuracy:.3f}")
+                                
+                                # Show calibration info for direction model
+                                if model_name == 'direction' and 'calibration' in metrics:
+                                    cal_info = metrics['calibration']
+                                    st.info(f"✅ Model calibrated using {cal_info.get('calibration_method', 'Unknown')}")
+                                    if cal_info.get('brier_score'):
+                                        st.metric("Brier Score", f"{cal_info['brier_score']:.4f}")
+                            
+                            elif task_type == 'regression':
+                                rmse = metrics.get('rmse', 0)
+                                mae = metrics.get('mae', 0)
+                                st.metric("RMSE", f"{rmse:.4f}")
+                                st.metric("MAE", f"{mae:.4f}")
+                
+                # Show feature count
+                if hasattr(st.session_state.model_trainer, 'feature_names'):
+                    feature_count = len(st.session_state.model_trainer.feature_names)
+                    st.info(f"📈 Models trained using {feature_count} features")
+
                 # Auto-save model results to database
                 try:
                     from utils.database_adapter import DatabaseAdapter
                     trading_db = DatabaseAdapter()
 
                     # Save model results
+                    saved_count = 0
                     for model_name, model_result in results.items():
                         if model_result is not None:
                             # Save model metrics and info
@@ -231,18 +274,20 @@ if st.session_state.features is not None:
                                 'task_type': model_result['task_type'],
                                 'trained_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                             }
-                            trading_db.save_model_results(model_name, model_data)
+                            if trading_db.save_model_results(model_name, model_data):
+                                saved_count += 1
 
                     # Save the actual trained model objects for persistence
-                    trading_db.save_trained_models(st.session_state.model_trainer.models)
-                    st.success("🎉 Model training completed & saved to database!")
+                    if trading_db.save_trained_models(st.session_state.model_trainer.models):
+                        st.success(f"💾 Saved {saved_count} models to database!")
+                    else:
+                        st.warning("⚠️ Models trained but failed to save to database")
+                        
                 except Exception as e:
-                    st.success("🎉 Model training completed!")
-                    st.warning("⚠️ Models trained but failed to save to database")
+                    st.warning(f"⚠️ Database save error: {str(e)}")
+                    st.info("Models are still available in this session")
 
-                # Force display of results without rerun
-                st.success("✅ Training completed! Check results below:")
-                st.rerun()
+                # Don't force rerun - let user see results immediately
             except Exception as e:
                 st.error(f"❌ Error during model training: {str(e)}")
                 st.info("Please try refreshing the page and training again.")

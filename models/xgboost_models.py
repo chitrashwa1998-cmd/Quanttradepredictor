@@ -991,13 +991,16 @@ class QuantTradingModels:
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        # Prepare features
-        status_text.text("Preparing features...")
-        X = self.prepare_features(df)
+        try:
+            # Prepare features
+            status_text.text("Preparing features...")
+            X = self.prepare_features(df)
+            st.info(f"✅ Prepared {len(X)} feature rows with {X.shape[1]} features")
 
-        # Create targets
-        status_text.text("Creating target variables...")
-        targets = self.create_targets(df)
+            # Create targets
+            status_text.text("Creating target variables...")
+            targets = self.create_targets(df)
+            st.info(f"✅ Created {len(targets)} target variables")
 
         models_config = [
             ('direction', 'classification'),
@@ -1036,23 +1039,61 @@ class QuantTradingModels:
                     X_aligned = X.loc[common_index]
                     y_aligned = target_series.loc[common_index]
 
+                    # Show target distribution
+                    if task_type == 'classification':
+                        target_counts = y_aligned.value_counts()
+                        st.info(f"📊 {model_name} target distribution: {target_counts.to_dict()}")
+                    else:
+                        target_stats = y_aligned.describe()
+                        st.info(f"📊 {model_name} target range: {target_stats['min']:.4f} to {target_stats['max']:.4f}")
+
                     result = self.train_model(model_name, X_aligned, y_aligned, task_type, train_split)
                     results[model_name] = result
-                    st.success(f"✅ {model_name} model trained successfully")
+                    
+                    # Show immediate results
+                    if result and 'metrics' in result:
+                        metrics = result['metrics']
+                        if task_type == 'classification':
+                            accuracy = metrics.get('accuracy', 0)
+                            st.success(f"✅ {model_name} trained - Accuracy: {accuracy:.3f}")
+                        else:
+                            rmse = metrics.get('rmse', 0)
+                            st.success(f"✅ {model_name} trained - RMSE: {rmse:.4f}")
+                    else:
+                        st.success(f"✅ {model_name} model trained successfully")
                 else:
                     st.warning(f"⚠️ Target {model_name} not found or task type not defined")
+                    results[model_name] = None
             except Exception as e:
                 st.error(f"❌ Error training {model_name}: {str(e)}")
+                # Print more detailed error info
+                import traceback
+                error_details = traceback.format_exc()
+                st.error(f"Detailed error: {error_details}")
                 results[model_name] = None
 
             progress_bar.progress((i + 1) / total_models)
 
         status_text.text("Saving trained models to database...")
         # Automatically save all trained models for persistence
-        self._save_models_to_database()
-
-        status_text.text("Selected models trained and saved!")
+        try:
+            self._save_models_to_database()
+            status_text.text("✅ All selected models trained and saved!")
+        except Exception as e:
+            st.warning(f"⚠️ Models trained but database save failed: {str(e)}")
+            status_text.text("✅ Selected models trained!")
+        
+        # Clear progress indicators
+        progress_bar.empty()
+        status_text.empty()
+        
         return results
+        
+        except Exception as e:
+            st.error(f"❌ Critical error during model training: {str(e)}")
+            import traceback
+            st.error(f"Traceback: {traceback.format_exc()}")
+            return {}
 
     def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """Make predictions using trained ensemble model with enhanced confidence calculation."""
