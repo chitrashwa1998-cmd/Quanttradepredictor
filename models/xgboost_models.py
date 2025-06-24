@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split, TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, mean_squared_error, mean_absolute_error
 from sklearn.ensemble import VotingClassifier, VotingRegressor, RandomForestClassifier, RandomForestRegressor
+from sklearn.calibration import CalibratedClassifierCV
 from catboost import CatBoostClassifier, CatBoostRegressor
 from typing import Dict, Tuple, Any
 import streamlit as st
@@ -702,7 +703,7 @@ class QuantTradingModels:
             )
 
             # Create voting classifier
-            ensemble_model = VotingClassifier(
+            base_ensemble = VotingClassifier(
                 estimators=[
                     ('xgboost', xgb_model),
                     ('catboost', catboost_model),
@@ -710,6 +711,17 @@ class QuantTradingModels:
                 ],
                 voting='soft'
             )
+            
+            # Apply calibration for direction model to address overconfidence
+            if model_name == 'direction':
+                print(f"Applying calibration to {model_name} model to reduce overconfidence...")
+                ensemble_model = CalibratedClassifierCV(
+                    base_ensemble, 
+                    method="sigmoid",  # Platt scaling
+                    cv=3  # 3-fold cross-validation for calibration
+                )
+            else:
+                ensemble_model = base_ensemble
 
         else:
             # Regression ensemble: XGBoost + CatBoost + Random Forest
@@ -771,11 +783,51 @@ class QuantTradingModels:
                 'classification_report': classification_report(y_test, y_pred, output_dict=True)
             }
 
+            # Add calibration information for direction model
+            if model_name == 'direction':
+                # Calculate calibration metrics
+                from sklearn.calibration import calibration_curve
+                
+                # Get calibrated probabilities
+                prob_pos = ensemble_model.predict_proba(X_test_scaled)[:, 1]
+                
+                # Calculate calibration curve (reliability diagram)
+                fraction_of_positives, mean_predicted_value = calibration_curve(
+                    y_test, prob_pos, n_bins=10
+                )
+                
+                # Calculate Brier score (lower is better)
+                brier_score = np.mean((prob_pos - y_test) ** 2)
+                
+                metrics['calibration'] = {
+                    'brier_score': brier_score,
+                    'is_calibrated': True,
+                    'calibration_method': 'Platt Scaling (Sigmoid)',
+                    'mean_predicted_probability': np.mean(prob_pos),
+                    'actual_positive_rate': np.mean(y_test)
+                }
+                
+                print(f"Calibration applied to {model_name}:")
+                print(f"  Brier Score: {brier_score:.4f} (lower is better)")
+                print(f"  Mean Predicted Probability: {np.mean(prob_pos):.3f}")
+                print(f"  Actual Positive Rate: {np.mean(y_test):.3f}")
+            
             # Calculate individual model accuracies for comparison
             individual_scores = {}
-            for name, model in ensemble_model.named_estimators_.items():
-                individual_pred = model.predict(X_test_scaled)
-                individual_scores[f'{name}_accuracy'] = accuracy_score(y_test, individual_pred)
+            
+            # For calibrated models, get base estimators differently
+            if hasattr(ensemble_model, 'calibrated_classifiers_'):
+                # This is a calibrated classifier
+                base_classifier = ensemble_model.calibrated_classifiers_[0].base_estimator
+                if hasattr(base_classifier, 'named_estimators_'):
+                    for name, model in base_classifier.named_estimators_.items():
+                        individual_pred = model.predict(X_test_scaled)
+                        individual_scores[f'{name}_accuracy'] = accuracy_score(y_test, individual_pred)
+            elif hasattr(ensemble_model, 'named_estimators_'):
+                # This is a regular ensemble
+                for name, model in ensemble_model.named_estimators_.items():
+                    individual_pred = model.predict(X_test_scaled)
+                    individual_scores[f'{name}_accuracy'] = accuracy_score(y_test, individual_pred)
 
             metrics.update(individual_scores)
 
@@ -799,9 +851,19 @@ class QuantTradingModels:
 
         # Get feature importance (use XGBoost as primary)
         try:
-            xgb_estimator = ensemble_model.named_estimators_['xgboost']
+            # Handle calibrated classifiers
+            if hasattr(ensemble_model, 'calibrated_classifiers_'):
+                base_classifier = ensemble_model.calibrated_classifiers_[0].base_estimator
+                if hasattr(base_classifier, 'named_estimators_'):
+                    xgb_estimator = base_classifier.named_estimators_['xgboost']
+                else:
+                    xgb_estimator = base_classifier
+            else:
+                xgb_estimator = ensemble_model.named_estimators_['xgboost']
+            
             feature_importance = dict(zip(self.feature_names, xgb_estimator.feature_importances_))
-        except:
+        except Exception as e:
+            print(f"Could not extract feature importance: {e}")
             feature_importance = {}
 
         # Store model
@@ -1019,54 +1081,72 @@ class QuantTradingModels:
 
         # Enhanced confidence calculation for classification tasks
         if model_info['task_type'] == 'classification':
-            # Get individual model predictions and probabilities
-            individual_predictions = []
-            individual_probabilities = []
+            # Handle calibrated models vs regular ensemble models
+            if hasattr(model, 'calibrated_classifiers_'):
+                # This is a calibrated model - probabilities are already well-calibrated
+                calibrated_probabilities = model.predict_proba(X_scaled)
+                
+                # For calibrated models, use the calibrated probabilities directly
+                n_samples = len(predictions)
+                confidence_scores = np.max(calibrated_probabilities, axis=1)
+                
+                # Create probability matrix
+                probabilities = calibrated_probabilities
+                
+                print(f"Using calibrated probabilities for {model_name}")
+                print(f"Confidence range: {confidence_scores.min():.3f} - {confidence_scores.max():.3f}")
+                
+            else:
+                # Regular ensemble model - use original confidence calculation
+                individual_predictions = []
+                individual_probabilities = []
 
-            for name, individual_model in model.named_estimators_.items():
-                ind_pred = individual_model.predict(X_scaled)
-                individual_predictions.append(ind_pred)
+                for name, individual_model in model.named_estimators_.items():
+                    ind_pred = individual_model.predict(X_scaled)
+                    individual_predictions.append(ind_pred)
 
-                # Get probabilities if available
-                if hasattr(individual_model, 'predict_proba'):
-                    ind_proba = individual_model.predict_proba(X_scaled)
-                    individual_probabilities.append(ind_proba)
+                    # Get probabilities if available
+                    if hasattr(individual_model, 'predict_proba'):
+                        ind_proba = individual_model.predict_proba(X_scaled)
+                        individual_probabilities.append(ind_proba)
 
-            # Calculate confidence based on model agreement and probability strength
-            n_samples = len(predictions)
-            confidence_scores = np.zeros(n_samples)
+                # Calculate confidence based on model agreement and probability strength
+                n_samples = len(predictions)
+                confidence_scores = np.zeros(n_samples)
 
-            for i in range(n_samples):
-                # Method 1: Model agreement (how many models agree with final prediction)
-                individual_preds_at_i = [pred[i] for pred in individual_predictions]
-                agreement_score = sum(1 for pred in individual_preds_at_i if pred == predictions[i]) / len(individual_preds_at_i)
+                for i in range(n_samples):
+                    # Method 1: Model agreement (how many models agree with final prediction)
+                    individual_preds_at_i = [pred[i] for pred in individual_predictions]
+                    agreement_score = sum(1 for pred in individual_preds_at_i if pred == predictions[i]) / len(individual_preds_at_i)
 
-                # Method 2: Average probability strength (how confident individual models are)
-                if individual_probabilities:
-                    prob_strengths = []
-                    for j, proba_matrix in enumerate(individual_probabilities):
-                        max_prob = np.max(proba_matrix[i])  # Highest probability for this sample
-                        prob_strengths.append(max_prob)
-                    avg_prob_strength = np.mean(prob_strengths)
-                else:
-                    avg_prob_strength = 0.5
+                    # Method 2: Average probability strength (how confident individual models are)
+                    if individual_probabilities:
+                        prob_strengths = []
+                        for j, proba_matrix in enumerate(individual_probabilities):
+                            max_prob = np.max(proba_matrix[i])  # Highest probability for this sample
+                            prob_strengths.append(max_prob)
+                        avg_prob_strength = np.mean(prob_strengths)
+                    else:
+                        avg_prob_strength = 0.5
 
-                # Combined confidence: weighted average of agreement and probability strength
-                confidence_scores[i] = 0.6 * agreement_score + 0.4 * avg_prob_strength
+                    # Combined confidence: weighted average of agreement and probability strength
+                    confidence_scores[i] = 0.6 * agreement_score + 0.4 * avg_prob_strength
 
-                # Ensure minimum confidence for unanimous decisions
-                if agreement_score == 1.0:  # All models agree
-                    confidence_scores[i] = max(confidence_scores[i], 0.75)
+                    # Ensure minimum confidence for unanimous decisions
+                    if agreement_score == 1.0:  # All models agree
+                        confidence_scores[i] = max(confidence_scores[i], 0.75)
 
-            # Create probability matrix with confidence as max probability
-            probabilities = np.zeros((n_samples, 2))
-            for i in range(n_samples):
-                if predictions[i] == 1:  # Predicted Up
-                    probabilities[i, 1] = confidence_scores[i]
-                    probabilities[i, 0] = 1 - confidence_scores[i]
-                else:  # Predicted Down
-                    probabilities[i, 0] = confidence_scores[i]
-                    probabilities[i, 1] = 1 - confidence_scores[i]
+                # Create probability matrix with confidence as max probability
+                probabilities = np.zeros((n_samples, 2))
+                for i in range(n_samples):
+                    if predictions[i] == 1:  # Predicted Up
+                        probabilities[i, 1] = confidence_scores[i]
+                        probabilities[i, 0] = 1 - confidence_scores[i]
+                    else:  # Predicted Down
+                        probabilities[i, 0] = confidence_scores[i]
+                        probabilities[i, 1] = 1 - confidence_scores[i]
+
+            
         else:
             probabilities = None
 
