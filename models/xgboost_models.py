@@ -771,7 +771,7 @@ class QuantTradingModels:
         except Exception as e:
             print(f"Error during ensemble training for {model_name}: {str(e)}")
             # If calibration fails, fall back to base ensemble
-            if model_name == 'direction' and hasattr(ensemble_model, 'base_estimator'):
+            if model_name == 'direction' and hasattr(ensemble_model, 'estimator'):
                 print(f"Calibration failed for {model_name}, falling back to uncalibrated ensemble...")
                 ensemble_model = base_ensemble
                 ensemble_model.fit(X_train_scaled, y_train)
@@ -843,7 +843,7 @@ class QuantTradingModels:
             # For calibrated models, get base estimators differently
             if hasattr(ensemble_model, 'calibrated_classifiers_'):
                 # This is a calibrated classifier
-                base_classifier = ensemble_model.calibrated_classifiers_[0].base_estimator
+                base_classifier = ensemble_model.calibrated_classifiers_[0].estimator
                 if hasattr(base_classifier, 'named_estimators_'):
                     for name, model in base_classifier.named_estimators_.items():
                         individual_pred = model.predict(X_test_scaled)
@@ -878,7 +878,7 @@ class QuantTradingModels:
         try:
             # Handle calibrated classifiers
             if hasattr(ensemble_model, 'calibrated_classifiers_'):
-                base_classifier = ensemble_model.calibrated_classifiers_[0].base_estimator
+                base_classifier = ensemble_model.calibrated_classifiers_[0].estimator
                 if hasattr(base_classifier, 'named_estimators_'):
                     xgb_estimator = base_classifier.named_estimators_['xgboost']
                 else:
@@ -1126,7 +1126,20 @@ class QuantTradingModels:
                 individual_predictions = []
                 individual_probabilities = []
 
-                for name, individual_model in model.named_estimators_.items():
+                # Handle both calibrated and regular ensemble models
+                if hasattr(model, 'calibrated_classifiers_'):
+                    # For calibrated models, get the base estimator
+                    base_estimator = model.calibrated_classifiers_[0].estimator
+                    if hasattr(base_estimator, 'named_estimators_'):
+                        estimators = base_estimator.named_estimators_
+                    else:
+                        # Single estimator case
+                        estimators = {'base': base_estimator}
+                else:
+                    # Regular ensemble
+                    estimators = model.named_estimators_
+
+                for name, individual_model in estimators.items():
                     ind_pred = individual_model.predict(X_scaled)
                     individual_predictions.append(ind_pred)
 
