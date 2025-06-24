@@ -153,6 +153,28 @@ class TechnicalIndicators:
         # Additional features (removed day_of_week and month)
         result_df['hour'] = result_df.index.hour if hasattr(result_df.index, 'hour') else 0
         
+        # Advanced momentum features
+        result_df['momentum_acceleration'] = result_df['price_momentum_1'].diff()
+        result_df['rsi_divergence'] = result_df['rsi'].diff(5)
+        result_df['price_vs_vwap'] = df['Close'] / df['Close'].rolling(20).mean() - 1
+        
+        # Volume-weighted features
+        if 'Volume' in df.columns:
+            result_df['volume_momentum'] = df['Volume'].pct_change(3)
+            result_df['price_volume_correlation'] = df['Close'].rolling(10).corr(df['Volume'])
+        else:
+            result_df['volume_momentum'] = 0
+            result_df['price_volume_correlation'] = 0
+        
+        # Multi-timeframe momentum
+        result_df['momentum_5_15_ratio'] = result_df['price_momentum_5'] / (result_df['price_momentum_1'] + 1e-8)
+        result_df['volatility_regime'] = (result_df['volatility_10'] > result_df['volatility_20']).astype(int)
+        
+        # Price structure features
+        result_df['higher_highs'] = (df['High'] > df['High'].shift(1)).rolling(3).sum()
+        result_df['lower_lows'] = (df['Low'] < df['Low'].shift(1)).rolling(3).sum()
+        result_df['trend_consistency'] = result_df['higher_highs'] - result_df['lower_lows']
+        
         # ✅ 1. CANDLE SHAPE FEATURES
         result_df['body_size'] = np.abs(df['Close'] - df['Open'])
         result_df['upper_wick'] = df['High'] - df[['Open', 'Close']].max(axis=1)

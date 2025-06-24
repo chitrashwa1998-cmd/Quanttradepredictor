@@ -145,9 +145,25 @@ class QuantTradingModels:
         """Create target variables for different prediction tasks."""
         targets = {}
 
-        # 1. Direction prediction (up/down)
+        # 1. Direction prediction (up/down) - Enhanced with noise filtering
         future_return = df['Close'].shift(-1) / df['Close'] - 1
-        targets['direction'] = (future_return > 0).astype(int)
+        
+        # Calculate dynamic threshold based on recent volatility
+        rolling_vol = df['Close'].pct_change().rolling(20).std()
+        noise_threshold = rolling_vol * 0.3  # 30% of recent volatility
+        
+        # Only predict direction for moves above noise threshold
+        significant_up = future_return > noise_threshold
+        significant_down = future_return < -noise_threshold
+        
+        # Create direction target: 1 for up, 0 for down, exclude sideways moves
+        direction_raw = np.where(significant_up, 1, np.where(significant_down, 0, np.nan))
+        direction_series = pd.Series(direction_raw, index=df.index)
+        
+        # Remove NaN values (sideways moves)
+        targets['direction'] = direction_series.dropna().astype(int)
+        
+        print(f"Direction target filtering: {len(targets['direction'])} significant moves out of {len(df)} total ({len(targets['direction'])/len(df)*100:.1f}%)")
 
         # 2. Magnitude of move (percentage change)
         targets['magnitude'] = np.abs(future_return) * 100
@@ -650,20 +666,69 @@ class QuantTradingModels:
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training {model_name}. Need at least 100 samples, got {len(X_clean)}")
 
-        # Use configurable split with time-based ordering (no shuffling for time series data)
-        split_idx = int(len(X_clean) * train_split)
-
-        X_train = X_clean.iloc[:split_idx]
-        X_test = X_clean.iloc[split_idx:]
-        y_train = y_clean.iloc[:split_idx]
-        y_test = y_clean.iloc[split_idx:]
+        # Enhanced train/test split
+        if task_type == 'classification' and model_name == 'direction':
+            # For direction model, use stratified split while maintaining time order
+            from sklearn.model_selection import train_test_split
+            
+            # First do time-based split
+            split_idx = int(len(X_clean) * train_split)
+            X_temp_train = X_clean.iloc[:split_idx]
+            y_temp_train = y_clean.iloc[:split_idx]
+            X_test = X_clean.iloc[split_idx:]
+            y_test = y_clean.iloc[split_idx:]
+            
+            # Then stratify the training set to ensure balanced classes
+            try:
+                X_train, X_val, y_train, y_val = train_test_split(
+                    X_temp_train, y_temp_train, 
+                    test_size=0.1, 
+                    stratify=y_temp_train, 
+                    random_state=random_state
+                )
+                # Combine validation back to training for now
+                X_train = pd.concat([X_train, X_val])
+                y_train = pd.concat([y_train, y_val])
+            except ValueError:
+                # Fallback to original split if stratification fails
+                X_train = X_temp_train
+                y_train = y_temp_train
+        else:
+            # Original time-based split for other models
+            split_idx = int(len(X_clean) * train_split)
+            X_train = X_clean.iloc[:split_idx]
+            X_test = X_clean.iloc[split_idx:]
+            y_train = y_clean.iloc[:split_idx]
+            y_test = y_clean.iloc[split_idx:]
 
         print(f"Training on {len(X_train)} samples ({len(X_train)/len(X_clean)*100:.1f}%), testing on {len(X_test)} samples ({len(X_test)/len(X_clean)*100:.1f}%)")
 
-        # Scale features for all models
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
+        # Enhanced feature preprocessing for direction model
+        if model_name == 'direction':
+            # Feature selection for direction model
+            from sklearn.feature_selection import SelectKBest, mutual_info_classif
+            
+            # Select top 35 features based on mutual information
+            selector = SelectKBest(score_func=mutual_info_classif, k=min(35, X_train.shape[1]))
+            X_train_selected = selector.fit_transform(X_train, y_train)
+            X_test_selected = selector.transform(X_test)
+            
+            # Store selected feature names
+            selected_feature_mask = selector.get_support()
+            selected_features = [self.feature_names[i] for i in range(len(self.feature_names)) if selected_feature_mask[i]]
+            print(f"Selected {len(selected_features)} most informative features for direction model")
+            
+            # Use RobustScaler for better handling of outliers
+            from sklearn.preprocessing import RobustScaler
+            scaler = RobustScaler()
+            X_train_scaled = scaler.fit_transform(X_train_selected)
+            X_test_scaled = scaler.transform(X_test_selected)
+        else:
+            # Standard scaling for other models
+            scaler = StandardScaler()
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_test_scaled = scaler.transform(X_test)
+        
         self.scalers[model_name] = scaler
 
         # Define base model parameters
@@ -672,44 +737,76 @@ class QuantTradingModels:
         if task_type == 'classification':
             # Classification ensemble: XGBoost + CatBoost + Random Forest
 
-            # XGBoost Classifier
+            # XGBoost Classifier - Enhanced parameters
             xgb_model = xgb.XGBClassifier(
-                max_depth=6,
-                learning_rate=0.1,
-                n_estimators=100,
-                subsample=0.8,
-                colsample_bytree=0.8,
+                max_depth=8,
+                learning_rate=0.05,
+                n_estimators=200,
+                subsample=0.85,
+                colsample_bytree=0.85,
+                reg_alpha=0.1,
+                reg_lambda=0.1,
+                min_child_weight=3,
                 random_state=random_state,
                 n_jobs=-1,
                 eval_metric='logloss'
             )
 
-            # CatBoost Classifier
+            # CatBoost Classifier - Enhanced parameters
             catboost_model = CatBoostClassifier(
-                iterations=100,
-                depth=6,
-                learning_rate=0.1,
+                iterations=200,
+                depth=8,
+                learning_rate=0.05,
+                l2_leaf_reg=3,
+                border_count=128,
                 random_seed=random_state,
                 verbose=False,
                 allow_writing_files=False
             )
 
-            # Random Forest Classifier
+            # Random Forest Classifier - Enhanced parameters
             rf_model = RandomForestClassifier(
-                n_estimators=100,
-                max_depth=6,
+                n_estimators=200,
+                max_depth=10,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                max_features='sqrt',
                 random_state=random_state,
                 n_jobs=-1
             )
-
-            # Create voting classifier
-            base_ensemble = VotingClassifier(
-                estimators=[
+            
+            # Add LightGBM for better ensemble diversity
+            try:
+                import lightgbm as lgb
+                lgb_model = lgb.LGBMClassifier(
+                    n_estimators=200,
+                    max_depth=8,
+                    learning_rate=0.05,
+                    num_leaves=31,
+                    feature_fraction=0.85,
+                    bagging_fraction=0.85,
+                    random_state=random_state,
+                    n_jobs=-1,
+                    verbose=-1
+                )
+                estimators = [
+                    ('xgboost', xgb_model),
+                    ('catboost', catboost_model),
+                    ('random_forest', rf_model),
+                    ('lightgbm', lgb_model)
+                ]
+            except ImportError:
+                estimators = [
                     ('xgboost', xgb_model),
                     ('catboost', catboost_model),
                     ('random_forest', rf_model)
-                ],
-                voting='soft'
+                ]
+
+            # Create voting classifier with enhanced estimators
+            base_ensemble = VotingClassifier(
+                estimators=estimators,
+                voting='soft',
+                weights=[0.3, 0.25, 0.25, 0.2] if len(estimators) == 4 else [0.4, 0.3, 0.3]
             )
             
             # Apply calibration for direction model to address overconfidence
