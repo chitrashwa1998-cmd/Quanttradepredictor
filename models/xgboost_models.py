@@ -633,6 +633,9 @@ class QuantTradingModels:
     def train_model(self, model_name: str, X: pd.DataFrame, y: pd.Series, task_type: str = 'classification', train_split: float = 0.8) -> Dict[str, Any]:
         """Train ensemble model using multiple algorithms with voting."""
 
+        # Define random state at the beginning
+        random_state = 42
+
         # Ensure X and y have the same index for proper alignment
         common_index = X.index.intersection(y.index)
         X_aligned = X.loc[common_index]
@@ -732,8 +735,6 @@ class QuantTradingModels:
         self.scalers[model_name] = scaler
 
         # Define base model parameters
-        random_state = 42
-
         if task_type == 'classification':
             # Classification ensemble: XGBoost + CatBoost + Random Forest
 
