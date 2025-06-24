@@ -771,7 +771,7 @@ class QuantTradingModels:
         except Exception as e:
             print(f"Error during ensemble training for {model_name}: {str(e)}")
             # If calibration fails, fall back to base ensemble
-            if model_name == 'direction' and hasattr(ensemble_model, 'estimator'):
+            if model_name == 'direction':
                 print(f"Calibration failed for {model_name}, falling back to uncalibrated ensemble...")
                 ensemble_model = base_ensemble
                 ensemble_model.fit(X_train_scaled, y_train)
@@ -843,8 +843,17 @@ class QuantTradingModels:
             # For calibrated models, get base estimators differently
             if hasattr(ensemble_model, 'calibrated_classifiers_'):
                 # This is a calibrated classifier
-                base_classifier = ensemble_model.calibrated_classifiers_[0].estimator
-                if hasattr(base_classifier, 'named_estimators_'):
+                calibrated_classifier = ensemble_model.calibrated_classifiers_[0]
+                
+                # Try different attribute names for compatibility
+                if hasattr(calibrated_classifier, 'estimator'):
+                    base_classifier = calibrated_classifier.estimator
+                elif hasattr(calibrated_classifier, 'base_estimator'):
+                    base_classifier = calibrated_classifier.base_estimator
+                else:
+                    base_classifier = None
+                
+                if base_classifier and hasattr(base_classifier, 'named_estimators_'):
                     for name, model in base_classifier.named_estimators_.items():
                         individual_pred = model.predict(X_test_scaled)
                         individual_scores[f'{name}_accuracy'] = accuracy_score(y_test, individual_pred)
@@ -878,7 +887,17 @@ class QuantTradingModels:
         try:
             # Handle calibrated classifiers
             if hasattr(ensemble_model, 'calibrated_classifiers_'):
-                base_classifier = ensemble_model.calibrated_classifiers_[0].estimator
+                # For calibrated models, access the base estimator
+                calibrated_classifier = ensemble_model.calibrated_classifiers_[0]
+                
+                # Try different attribute names for compatibility
+                if hasattr(calibrated_classifier, 'estimator'):
+                    base_classifier = calibrated_classifier.estimator
+                elif hasattr(calibrated_classifier, 'base_estimator'):
+                    base_classifier = calibrated_classifier.base_estimator
+                else:
+                    raise AttributeError("Cannot find base estimator in calibrated classifier")
+                
                 if hasattr(base_classifier, 'named_estimators_'):
                     xgb_estimator = base_classifier.named_estimators_['xgboost']
                 else:
@@ -1129,7 +1148,17 @@ class QuantTradingModels:
                 # Handle both calibrated and regular ensemble models
                 if hasattr(model, 'calibrated_classifiers_'):
                     # For calibrated models, get the base estimator
-                    base_estimator = model.calibrated_classifiers_[0].estimator
+                    calibrated_classifier = model.calibrated_classifiers_[0]
+                    
+                    # Try different attribute names for compatibility
+                    if hasattr(calibrated_classifier, 'estimator'):
+                        base_estimator = calibrated_classifier.estimator
+                    elif hasattr(calibrated_classifier, 'base_estimator'):
+                        base_estimator = calibrated_classifier.base_estimator
+                    else:
+                        # Fallback: use the whole model as base estimator
+                        base_estimator = model
+                    
                     if hasattr(base_estimator, 'named_estimators_'):
                         estimators = base_estimator.named_estimators_
                     else:
