@@ -283,7 +283,7 @@ if st.session_state.models or (st.session_state.model_trainer and st.session_sta
     regression_models = []
     
     for model_name, model_info in all_models.items():
-        if model_info is not None:
+        if model_info is not None and isinstance(model_info, dict):
             metrics = model_info.get('metrics', {})
             model_display_name = model_name.replace('_', ' ').title()
             task_type = model_info.get('task_type', 'classification')
@@ -508,38 +508,89 @@ if st.session_state.models or (st.session_state.model_trainer and st.session_sta
     # Feature importance analysis
     st.subheader("Feature Importance Analysis")
     
-    model_for_importance = st.selectbox(
-        "Select model for feature importance",
-        [name for name in st.session_state.models.keys() if st.session_state.models[name] is not None]
-    )
+    # Get available models for feature importance (both session state and loaded models)
+    available_models = []
     
-    if model_for_importance:
-        importance_dict = st.session_state.model_trainer.get_feature_importance(model_for_importance)
+    # Add models from session state
+    if st.session_state.models:
+        for name, model_info in st.session_state.models.items():
+            if model_info is not None:
+                available_models.append(name)
+    
+    # Add models from trainer
+    if st.session_state.model_trainer and st.session_state.model_trainer.models:
+        for name in st.session_state.model_trainer.models.keys():
+            if name not in available_models:
+                available_models.append(name)
+    
+    if available_models:
+        model_for_importance = st.selectbox(
+            "Select model for feature importance",
+            available_models,
+            index=0 if 'direction' not in available_models else available_models.index('direction')
+        )
         
-        if importance_dict:
-            # Convert to DataFrame and sort
-            importance_df = pd.DataFrame(
-                list(importance_dict.items()),
-                columns=['Feature', 'Importance']
-            ).sort_values('Importance', ascending=False)
+        if model_for_importance:
+            importance_dict = st.session_state.model_trainer.get_feature_importance(model_for_importance)
             
-            # Plot top 20 features
-            top_features = importance_df.head(20)
-            
-            fig = px.bar(
-                top_features, 
-                x='Importance', 
-                y='Feature',
-                orientation='h',
-                title=f'Top 20 Feature Importance - {model_for_importance.replace("_", " ").title()}'
-            )
-            fig.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Show detailed importance table
-            with st.expander("View All Feature Importance"):
-                st.dataframe(importance_df, use_container_width=True)
+            if importance_dict:
+                # Convert to DataFrame and sort
+                importance_df = pd.DataFrame(
+                    list(importance_dict.items()),
+                    columns=['Feature', 'Importance']
+                ).sort_values('Importance', ascending=False)
+                
+                # Display top 20 features table first
+                st.subheader(f"🏆 Top 20 Feature Importance - {model_for_importance.replace('_', ' ').title()}")
+                top_20_features = importance_df.head(20)
+                
+                # Format the importance values for better display
+                display_df = top_20_features.copy()
+                display_df['Rank'] = range(1, len(display_df) + 1)
+                display_df['Importance'] = display_df['Importance'].apply(lambda x: f"{x:.6f}")
+                display_df = display_df[['Rank', 'Feature', 'Importance']]
+                
+                st.dataframe(
+                    display_df,
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                # Plot top 20 features
+                fig = px.bar(
+                    top_20_features, 
+                    x='Importance', 
+                    y='Feature',
+                    orientation='h',
+                    title=f'Top 20 Feature Importance - {model_for_importance.replace("_", " ").title()}',
+                    color='Importance',
+                    color_continuous_scale='viridis'
+                )
+                fig.update_layout(
+                    height=600, 
+                    yaxis={'categoryorder': 'total ascending'},
+                    xaxis_title="Importance Score",
+                    yaxis_title="Features"
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Show detailed importance table
+                with st.expander("View All Feature Importance"):
+                    st.dataframe(importance_df, use_container_width=True)
+                    
+                    # Download button for feature importance
+                    csv = importance_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Feature Importance CSV",
+                        data=csv,
+                        file_name=f"feature_importance_{model_for_importance}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv"
+                    )
+            else:
+                st.warning(f"No feature importance data available for {model_for_importance}. Try retraining the model.")
+    else:
+        st.info("No trained models available for feature importance analysis. Train some models first!")
     
     # Model comparison
     st.subheader("Model Performance Comparison")
@@ -596,7 +647,8 @@ if st.session_state.models or (st.session_state.model_trainer and st.session_sta
     
     if selected_model:
         model_info = st.session_state.models[selected_model]
-        metrics = model_info['metrics']
+        if model_info is not None and isinstance(model_info, dict):
+            metrics = model_info.get('metrics', {})
         
         st.write(f"**Model**: {selected_model.replace('_', ' ').title()}")
         st.write(f"**Task Type**: {model_info['task_type'].title()}")
