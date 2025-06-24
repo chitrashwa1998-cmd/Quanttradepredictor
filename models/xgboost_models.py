@@ -726,13 +726,21 @@ class QuantTradingModels:
             scaler = RobustScaler()
             X_train_scaled = scaler.fit_transform(X_train_selected)
             X_test_scaled = scaler.transform(X_test_selected)
+            
+            # Store both scaler and selector for direction model
+            self.scalers[model_name] = {
+                'scaler': scaler,
+                'selector': selector,
+                'selected_features': selected_features
+            }
         else:
             # Standard scaling for other models
             scaler = StandardScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
-        
-        self.scalers[model_name] = scaler
+            
+            # Store only scaler for other models
+            self.scalers[model_name] = scaler
 
         # Define base model parameters
         if task_type == 'classification':
@@ -1285,9 +1293,20 @@ class QuantTradingModels:
         if X_features.empty:
             raise ValueError("Feature DataFrame is empty after column selection")
 
-        # Scale features (all ensemble models use scaling)
+        # Handle feature selection and scaling
         if model_name in self.scalers:
-            X_scaled = self.scalers[model_name].transform(X_features)
+            scaler_info = self.scalers[model_name]
+            
+            # Check if this is direction model with feature selection
+            if isinstance(scaler_info, dict) and 'selector' in scaler_info:
+                # Apply feature selection first
+                X_selected = scaler_info['selector'].transform(X_features)
+                # Then apply scaling
+                X_scaled = scaler_info['scaler'].transform(X_selected)
+                print(f"Applied feature selection for {model_name}: {X_features.shape[1]} -> {X_scaled.shape[1]} features")
+            else:
+                # Regular scaling for other models
+                X_scaled = scaler_info.transform(X_features)
         else:
             X_scaled = X_features.values
 
