@@ -605,7 +605,7 @@ class QuantTradingModels:
         print(f"Volatility range: {volatility_short.min():.4f} to {volatility_short.max():.4f}")
 
         # Debug information for profit_prob
-        if ''profit_prob' in targets:
+        if 'profit_prob' in targets:
             profit_prob_stats = targets['profit_prob'].value_counts()
             print(f"Profit Probability Target Distribution: {profit_prob_stats.to_dict()}")
             print(f"Profit threshold used: {profit_threshold:.4f}")
