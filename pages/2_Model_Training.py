@@ -208,8 +208,14 @@ if st.session_state.features is not None:
                 # Train only selected models
                 results = st.session_state.model_trainer.train_selected_models(features_data, models_to_train, train_split)
                 
-                # Store results
+                # Store results in session state
                 st.session_state.models = results
+                
+                # Ensure model trainer also has the results
+                if st.session_state.model_trainer:
+                    for model_name, model_result in results.items():
+                        if model_result is not None:
+                            st.session_state.model_trainer.models[model_name] = model_result
                 
                 # Auto-save model results to database
                 try:
@@ -234,23 +240,25 @@ if st.session_state.features is not None:
                     st.success("🎉 Model training completed!")
                     st.warning("⚠️ Models trained but failed to save to database")
                 
-                st.rerun()
+                # Force display of results without rerun
+                st.success("✅ Training completed! Check results below:")
+                st.experimental_rerun()
             except Exception as e:
                 st.error(f"❌ Error during model training: {str(e)}")
                 st.info("Please try refreshing the page and training again.")
 
 # Display training results - Always show if any models exist
-if st.session_state.models or st.session_state.model_trainer.models:
+if st.session_state.models or (st.session_state.model_trainer and st.session_state.model_trainer.models):
     st.header("Training Results")
     
     # Get all available models (session state + loaded models)
     all_models = {}
     
-    # Add session state models
+    # Add session state models first (these have full metrics)
     if st.session_state.models:
         all_models.update(st.session_state.models)
     
-    # Add loaded models from trainer
+    # Add loaded models from trainer (but don't overwrite session state models)
     if st.session_state.model_trainer and st.session_state.model_trainer.models:
         for model_name, model_data in st.session_state.model_trainer.models.items():
             if model_name not in all_models:
@@ -260,6 +268,11 @@ if st.session_state.models or st.session_state.model_trainer.models:
                     'task_type': model_data.get('task_type', 'classification'),
                     'status': 'loaded'
                 }
+    
+    # Debug information
+    st.write(f"Debug: Found {len(all_models)} total models")
+    st.write(f"Session state models: {list(st.session_state.models.keys()) if st.session_state.models else 'None'}")
+    st.write(f"Trainer models: {list(st.session_state.model_trainer.models.keys()) if st.session_state.model_trainer and st.session_state.model_trainer.models else 'None'}")
     
     # Comprehensive Model Accuracy Table
     st.subheader("📊 Model Accuracy Summary")
