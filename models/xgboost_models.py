@@ -715,7 +715,6 @@ class QuantTradingModels:
             # Apply calibration for direction model to address overconfidence
             if model_name == 'direction':
                 print(f"Applying calibration to {model_name} model to reduce overconfidence...")
-                # Use cross-validation for calibration (more robust than prefit)
                 ensemble_model = CalibratedClassifierCV(
                     base_ensemble, 
                     method="sigmoid",  # Platt scaling
@@ -765,18 +764,8 @@ class QuantTradingModels:
                 ]
             )
 
-        # Train ensemble model with error handling
-        try:
-            ensemble_model.fit(X_train_scaled, y_train)
-        except Exception as e:
-            print(f"Error during ensemble training for {model_name}: {str(e)}")
-            # If calibration fails, fall back to base ensemble
-            if model_name == 'direction' and hasattr(ensemble_model, 'base_estimator'):
-                print(f"Calibration failed for {model_name}, falling back to uncalibrated ensemble...")
-                ensemble_model = base_ensemble
-                ensemble_model.fit(X_train_scaled, y_train)
-            else:
-                raise e
+        # Train ensemble model
+        ensemble_model.fit(X_train_scaled, y_train)
 
         # Make predictions
         if task_type == 'classification':
@@ -796,46 +785,32 @@ class QuantTradingModels:
 
             # Add calibration information for direction model
             if model_name == 'direction':
-                try:
-                    # Calculate calibration metrics
-                    from sklearn.calibration import calibration_curve
-                    
-                    # Get calibrated probabilities
-                    prob_pos = ensemble_model.predict_proba(X_test_scaled)[:, 1]
-                    
-                    # Calculate calibration curve (reliability diagram)
-                    fraction_of_positives, mean_predicted_value = calibration_curve(
-                        y_test, prob_pos, n_bins=10
-                    )
-                    
-                    # Calculate Brier score (lower is better)
-                    brier_score = np.mean((prob_pos - y_test) ** 2)
-                    
-                    # Check if model was successfully calibrated
-                    is_calibrated = hasattr(ensemble_model, 'calibrated_classifiers_')
-                    
-                    metrics['calibration'] = {
-                        'brier_score': brier_score,
-                        'is_calibrated': is_calibrated,
-                        'calibration_method': 'Platt Scaling (Sigmoid)' if is_calibrated else 'None (Calibration Failed)',
-                        'mean_predicted_probability': np.mean(prob_pos),
-                        'actual_positive_rate': np.mean(y_test)
-                    }
-                    
-                    print(f"Calibration results for {model_name}:")
-                    print(f"  Successfully calibrated: {is_calibrated}")
-                    print(f"  Brier Score: {brier_score:.4f} (lower is better)")
-                    print(f"  Mean Predicted Probability: {np.mean(prob_pos):.3f}")
-                    print(f"  Actual Positive Rate: {np.mean(y_test):.3f}")
-                    
-                except Exception as e:
-                    print(f"Error calculating calibration metrics for {model_name}: {str(e)}")
-                    metrics['calibration'] = {
-                        'brier_score': None,
-                        'is_calibrated': False,
-                        'calibration_method': 'Error during calibration',
-                        'error': str(e)
-                    }
+                # Calculate calibration metrics
+                from sklearn.calibration import calibration_curve
+                
+                # Get calibrated probabilities
+                prob_pos = ensemble_model.predict_proba(X_test_scaled)[:, 1]
+                
+                # Calculate calibration curve (reliability diagram)
+                fraction_of_positives, mean_predicted_value = calibration_curve(
+                    y_test, prob_pos, n_bins=10
+                )
+                
+                # Calculate Brier score (lower is better)
+                brier_score = np.mean((prob_pos - y_test) ** 2)
+                
+                metrics['calibration'] = {
+                    'brier_score': brier_score,
+                    'is_calibrated': True,
+                    'calibration_method': 'Platt Scaling (Sigmoid)',
+                    'mean_predicted_probability': np.mean(prob_pos),
+                    'actual_positive_rate': np.mean(y_test)
+                }
+                
+                print(f"Calibration applied to {model_name}:")
+                print(f"  Brier Score: {brier_score:.4f} (lower is better)")
+                print(f"  Mean Predicted Probability: {np.mean(prob_pos):.3f}")
+                print(f"  Actual Positive Rate: {np.mean(y_test):.3f}")
             
             # Calculate individual model accuracies for comparison
             individual_scores = {}
