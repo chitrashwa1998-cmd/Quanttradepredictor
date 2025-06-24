@@ -776,7 +776,13 @@ class QuantTradingModels:
                 n_jobs=-1
             )
             
-            # Add LightGBM for better ensemble diversity
+            # Add LightGBM for better ensemble diversity (optional)
+            estimators = [
+                ('xgboost', xgb_model),
+                ('catboost', catboost_model),
+                ('random_forest', rf_model)
+            ]
+            
             try:
                 import lightgbm as lgb
                 lgb_model = lgb.LGBMClassifier(
@@ -790,24 +796,22 @@ class QuantTradingModels:
                     n_jobs=-1,
                     verbose=-1
                 )
-                estimators = [
-                    ('xgboost', xgb_model),
-                    ('catboost', catboost_model),
-                    ('random_forest', rf_model),
-                    ('lightgbm', lgb_model)
-                ]
-            except ImportError:
-                estimators = [
-                    ('xgboost', xgb_model),
-                    ('catboost', catboost_model),
-                    ('random_forest', rf_model)
-                ]
+                estimators.append(('lightgbm', lgb_model))
+                print("LightGBM successfully added to ensemble")
+            except (ImportError, OSError) as e:
+                print(f"LightGBM not available, using 3-model ensemble: {str(e)}")
+                # Continue with XGBoost, CatBoost, and Random Forest only
 
-            # Create voting classifier with enhanced estimators
+            # Create voting classifier with dynamic weights based on available models
+            if len(estimators) == 4:
+                weights = [0.3, 0.25, 0.25, 0.2]  # XGB, CatBoost, RF, LightGBM
+            else:
+                weights = [0.4, 0.3, 0.3]  # XGB, CatBoost, RF only
+            
             base_ensemble = VotingClassifier(
                 estimators=estimators,
                 voting='soft',
-                weights=[0.3, 0.25, 0.25, 0.2] if len(estimators) == 4 else [0.4, 0.3, 0.3]
+                weights=weights
             )
             
             # Apply calibration for direction model to address overconfidence
