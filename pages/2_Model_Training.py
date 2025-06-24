@@ -242,7 +242,7 @@ if st.session_state.features is not None:
                 
                 # Force display of results without rerun
                 st.success("✅ Training completed! Check results below:")
-                st.experimental_rerun()
+                st.rerun()
             except Exception as e:
                 st.error(f"❌ Error during model training: {str(e)}")
                 st.info("Please try refreshing the page and training again.")
