@@ -910,6 +910,30 @@ class QuantTradingModels:
             print(f"Could not extract feature importance: {e}")
             feature_importance = {}
 
+        # Get base model names safely for both calibrated and regular ensemble models
+        try:
+            if hasattr(ensemble_model, 'calibrated_classifiers_'):
+                # For calibrated models, get base estimator names
+                calibrated_classifier = ensemble_model.calibrated_classifiers_[0]
+                
+                if hasattr(calibrated_classifier, 'estimator'):
+                    base_estimator = calibrated_classifier.estimator
+                elif hasattr(calibrated_classifier, 'base_estimator'):
+                    base_estimator = calibrated_classifier.base_estimator
+                else:
+                    base_estimator = ensemble_model
+                
+                if hasattr(base_estimator, 'named_estimators_'):
+                    base_model_names = list(base_estimator.named_estimators_.keys())
+                else:
+                    base_model_names = ['calibrated_ensemble']
+            else:
+                # Regular ensemble model
+                base_model_names = list(ensemble_model.named_estimators_.keys())
+        except Exception as e:
+            print(f"Warning: Could not extract base model names: {e}")
+            base_model_names = ['ensemble']
+
         # Store model
         self.models[model_name] = {
             'ensemble': ensemble_model,  # Changed 'model' to 'ensemble' for database compatibility
@@ -920,7 +944,7 @@ class QuantTradingModels:
             'probabilities': y_pred_proba,
             'test_indices': X_test.index,
             'ensemble_type': 'voting_classifier' if task_type == 'classification' else 'voting_regressor',
-            'base_models': list(ensemble_model.named_estimators_.keys())
+            'base_models': base_model_names
         }
 
         return self.models[model_name]
