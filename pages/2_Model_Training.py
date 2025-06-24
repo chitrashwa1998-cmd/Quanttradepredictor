@@ -81,7 +81,7 @@ with col2:
     max_depth = st.selectbox("XGBoost Max Depth", [3, 4, 5, 6, 7, 8], index=3)
 
 with col3:
-    n_estimators = st.selectbox("Number of Estimators", [50, 100, 150, 200], index=1)
+    n_estimators = st.selectbox("Number of Estimators", [50, 100, 150, 200, 250, 300, 350, 400, 450, 500], index=1)
 
 # Model selection
 st.header("Models to Train")
