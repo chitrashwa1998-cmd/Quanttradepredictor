@@ -219,41 +219,41 @@ if st.session_state.features is not None:
 
                 # Display immediate training results
                 st.success(f"🎉 Training completed for {len([r for r in results.values() if r is not None])} models!")
-                
+
                 # Show which models were trained successfully
                 successful_models = [name for name, result in results.items() if result is not None]
                 failed_models = [name for name, result in results.items() if result is None]
-                
+
                 if successful_models:
                     st.success(f"✅ Successfully trained: {', '.join(successful_models)}")
-                
+
                 if failed_models:
                     st.error(f"❌ Failed to train: {', '.join(failed_models)}")
-                
+
                 # Show training metrics immediately
                 for model_name, result in results.items():
                     if result is not None:
                         metrics = result.get('metrics', {})
                         task_type = result.get('task_type', 'unknown')
-                        
+
                         with st.expander(f"📊 {model_name.replace('_', ' ').title()} Results"):
                             if task_type == 'classification':
                                 accuracy = metrics.get('accuracy', 0)
                                 st.metric("Accuracy", f"{accuracy:.3f}")
-                                
+
                                 # Show calibration info for direction model
                                 if model_name == 'direction' and 'calibration' in metrics:
                                     cal_info = metrics['calibration']
                                     st.info(f"✅ Model calibrated using {cal_info.get('calibration_method', 'Unknown')}")
                                     if cal_info.get('brier_score'):
                                         st.metric("Brier Score", f"{cal_info['brier_score']:.4f}")
-                            
+
                             elif task_type == 'regression':
                                 rmse = metrics.get('rmse', 0)
                                 mae = metrics.get('mae', 0)
                                 st.metric("RMSE", f"{rmse:.4f}")
                                 st.metric("MAE", f"{mae:.4f}")
-                
+
                 # Show feature count
                 if hasattr(st.session_state.model_trainer, 'feature_names'):
                     feature_count = len(st.session_state.model_trainer.feature_names)
@@ -282,7 +282,7 @@ if st.session_state.features is not None:
                         st.success(f"💾 Saved {saved_count} models to database!")
                     else:
                         st.warning("⚠️ Models trained but failed to save to database")
-                        
+
                 except Exception as e:
                     st.warning(f"⚠️ Database save error: {str(e)}")
                     st.info("Models are still available in this session")
@@ -307,12 +307,26 @@ if st.session_state.models or (st.session_state.model_trainer and st.session_sta
     if st.session_state.model_trainer and st.session_state.model_trainer.models:
         for model_name, model_data in st.session_state.model_trainer.models.items():
             if model_name not in all_models:
-                # Convert loaded model to session state format
-                all_models[model_name] = {
-                    'metrics': {'accuracy': 'Loaded'} if model_data.get('task_type') == 'classification' else {'rmse': 'Loaded'},
-                    'task_type': model_data.get('task_type', 'classification'),
-                    'status': 'loaded'
-                }
+                # Safely extract task_type and metrics
+                if isinstance(model_data, dict):
+                    task_type = model_data.get('task_type', 'classification')
+                    # Check if metrics exist, otherwise create placeholder
+                    if 'metrics' in model_data:
+                        all_models[model_name] = model_data
+                    else:
+                        # Convert loaded model to session state format
+                        all_models[model_name] = {
+                            'metrics': {'accuracy': 'Loaded'} if task_type == 'classification' else {'rmse': 'Loaded'},
+                            'task_type': task_type,
+                            'status': 'loaded'
+                        }
+                else:
+                    # Handle case where model_data is not a dict (raw model object)
+                    all_models[model_name] = {
+                        'metrics': {'accuracy': 'Loaded'},
+                        'task_type': 'classification',
+                        'status': 'loaded'
+                    }
 
     # Debug information
     st.write(f"Debug: Found {len(all_models)} total models")
@@ -762,7 +776,7 @@ with col2:
         st.success("✅ All models cleared")
         st.rerun()
 
-# Next steps
+## Next steps
 st.markdown("---")
 if st.session_state.models:
     st.info("📋 **Next Steps:** Your models are trained! Go to the **Predictions** page to view model predictions and analysis.")

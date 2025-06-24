@@ -25,7 +25,26 @@ if st.session_state.data is None:
     st.warning("⚠️ No data loaded. Please go to the **Data Upload** page first.")
     st.stop()
 
-if not st.session_state.models:
+# Check for models in both session state and model trainer
+has_models = False
+if st.session_state.models:
+    has_models = True
+elif st.session_state.model_trainer and st.session_state.model_trainer.models:
+    has_models = True
+    # Load models from trainer into session state for compatibility
+    st.session_state.models = {}
+    for model_name, model_data in st.session_state.model_trainer.models.items():
+        if isinstance(model_data, dict):
+            st.session_state.models[model_name] = model_data
+        else:
+            # Create a basic model info structure
+            st.session_state.models[model_name] = {
+                'metrics': {'accuracy': 'Loaded'},
+                'task_type': 'classification',
+                'status': 'loaded'
+            }
+
+if not has_models:
     st.warning("⚠️ No trained models found. Please go to the **Model Training** page first.")
 
     # Add quick training button for convenience
@@ -109,8 +128,16 @@ df = st.session_state.data
 models = st.session_state.models
 model_trainer = st.session_state.model_trainer
 
-# Available models
-available_models = [name for name, info in models.items() if info is not None]
+# Available models - check both session state and trainer
+available_models = []
+if st.session_state.models:
+    available_models.extend([name for name, info in st.session_state.models.items() if info is not None])
+
+# Also check trainer models
+if st.session_state.model_trainer and st.session_state.model_trainer.models:
+    trainer_models = [name for name in st.session_state.model_trainer.models.keys() 
+                     if name not in available_models]
+    available_models.extend(trainer_models)
 
 if not available_models:
     st.error("❌ No successfully trained models found.")
