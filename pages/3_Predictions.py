@@ -493,61 +493,156 @@ try:
     elif selected_model == 'magnitude':
         tab1, tab2, tab3 = st.tabs(["📊 Magnitude Analysis", "📈 Price Movement", "📋 Data Table"])
 
-        # Add magnitude-specific fields
-        pred_df['Magnitude'] = np.abs(predictions) * 100  # Convert to percentage
-
-        # Create realistic magnitude categories for 5-minute scalping
-        # Typical 5-min moves: 0.05-0.15% (Low), 0.15-0.3% (Medium), 0.3-0.6% (High), 0.6%+ (Extreme)
-        pred_df['Magnitude_Category'] = pd.cut(pred_df['Magnitude'], 
-                                             bins=[0, 0.15, 0.3, 0.6, float('inf')],
-                                             labels=['Low (0-0.15%)', 'Medium (0.15-0.3%)', 'High (0.3-0.6%)', 'Extreme (0.6%+)'],
-                                             include_lowest=True)
+        # Add magnitude-specific fields - predictions are already in percentage format
+        pred_df['Magnitude'] = np.abs(predictions)  # Keep original scale
+        
+        # Calculate actual magnitude for comparison
+        actual_returns = df_filtered['Close'].pct_change().shift(-1)  # Next period return
+        pred_df['Actual_Magnitude'] = np.abs(actual_returns) * 100  # Convert to percentage
+        
+        # Create dynamic magnitude categories based on actual data distribution
+        magnitude_values = pred_df['Magnitude'].dropna()
+        
+        if len(magnitude_values) > 0:
+            # Use quantile-based binning for balanced distribution
+            q25 = np.percentile(magnitude_values, 25)
+            q50 = np.percentile(magnitude_values, 50)
+            q75 = np.percentile(magnitude_values, 75)
+            
+            pred_df['Magnitude_Category'] = pd.cut(pred_df['Magnitude'], 
+                                                 bins=[0, q25, q50, q75, float('inf')],
+                                                 labels=[f'Low (0-{q25:.3f})', f'Medium ({q25:.3f}-{q50:.3f})', 
+                                                        f'High ({q50:.3f}-{q75:.3f})', f'Extreme ({q75:.3f}+)'],
+                                                 include_lowest=True)
+        else:
+            # Fallback categories
+            pred_df['Magnitude_Category'] = pd.cut(pred_df['Magnitude'], 
+                                                 bins=[0, 0.5, 1.0, 2.0, float('inf')],
+                                                 labels=['Low (0-0.5)', 'Medium (0.5-1.0)', 'High (1.0-2.0)', 'Extreme (2.0+)'],
+                                                 include_lowest=True)
 
         with tab1:
             st.subheader("📊 Price Movement Magnitude Analysis")
 
-            # Magnitude distribution
-            fig = make_subplots(rows=2, cols=1, 
-                              subplot_titles=('Magnitude Over Time', 'Magnitude Distribution'),
-                              vertical_spacing=0.1)
+            # Magnitude comparison chart
+            fig = make_subplots(rows=2, cols=2, 
+                              subplot_titles=('Predicted vs Actual Magnitude', 'Magnitude Over Time', 
+                                            'Predicted Magnitude Distribution', 'Actual Magnitude Distribution'),
+                              vertical_spacing=0.15, horizontal_spacing=0.1)
 
-            # Magnitude timeline
+            # Predicted vs Actual scatter plot
+            clean_data = pred_df.dropna(subset=['Magnitude', 'Actual_Magnitude'])
+            if len(clean_data) > 0:
+                fig.add_trace(go.Scatter(
+                    x=clean_data['Actual_Magnitude'],
+                    y=clean_data['Magnitude'],
+                    mode='markers',
+                    name='Predicted vs Actual',
+                    marker=dict(color='blue', size=4, opacity=0.6),
+                    hovertemplate='Actual: %{x:.4f}%<br>Predicted: %{y:.4f}<extra></extra>'
+                ), row=1, col=1)
+                
+                # Add perfect prediction line
+                max_val = max(clean_data['Actual_Magnitude'].max(), clean_data['Magnitude'].max())
+                fig.add_trace(go.Scatter(
+                    x=[0, max_val],
+                    y=[0, max_val],
+                    mode='lines',
+                    name='Perfect Prediction',
+                    line=dict(color='red', dash='dash'),
+                    showlegend=False
+                ), row=1, col=1)
+
+            # Magnitude timeline - both predicted and actual
             fig.add_trace(go.Scatter(
                 x=pred_df.index,
                 y=pred_df['Magnitude'],
-                mode='lines+markers',
-                name='Magnitude',
-                line=dict(color='purple', width=2),
-                marker=dict(size=4)
-            ), row=1, col=1)
+                mode='lines',
+                name='Predicted Magnitude',
+                line=dict(color='purple', width=2)
+            ), row=1, col=2)
+            
+            if 'Actual_Magnitude' in pred_df.columns:
+                fig.add_trace(go.Scatter(
+                    x=pred_df.index,
+                    y=pred_df['Actual_Magnitude'],
+                    mode='lines',
+                    name='Actual Magnitude',
+                    line=dict(color='orange', width=1, dash='dot'),
+                    opacity=0.7
+                ), row=1, col=2)
 
-            # Magnitude histogram
+            # Predicted magnitude histogram
             fig.add_trace(go.Histogram(
                 x=pred_df['Magnitude'],
-                nbinsx=30,
-                name='Distribution',
-                marker_color='lightblue'
+                nbinsx=25,
+                name='Predicted Distribution',
+                marker_color='lightblue',
+                showlegend=False
             ), row=2, col=1)
+            
+            # Actual magnitude histogram
+            if 'Actual_Magnitude' in pred_df.columns:
+                fig.add_trace(go.Histogram(
+                    x=pred_df['Actual_Magnitude'].dropna(),
+                    nbinsx=25,
+                    name='Actual Distribution',
+                    marker_color='lightcoral',
+                    showlegend=False
+                ), row=2, col=2)
 
-            fig.update_layout(height=600, showlegend=False)
-            fig.update_xaxes(title_text="Date", row=1, col=1)
-            fig.update_yaxes(title_text="Magnitude", row=1, col=1)
-            fig.update_xaxes(title_text="Magnitude Value", row=2, col=1)
+            fig.update_layout(height=700, showlegend=True)
+            fig.update_xaxes(title_text="Actual Magnitude (%)", row=1, col=1)
+            fig.update_yaxes(title_text="Predicted Magnitude", row=1, col=1)
+            fig.update_xaxes(title_text="Date", row=1, col=2)
+            fig.update_yaxes(title_text="Magnitude", row=1, col=2)
+            fig.update_xaxes(title_text="Predicted Magnitude", row=2, col=1)
             fig.update_yaxes(title_text="Frequency", row=2, col=1)
+            fig.update_xaxes(title_text="Actual Magnitude (%)", row=2, col=2)
+            fig.update_yaxes(title_text="Frequency", row=2, col=2)
 
             st.plotly_chart(fig, use_container_width=True)
 
-            # Statistics
+            # Enhanced statistics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Avg Magnitude", f"{pred_df['Magnitude'].mean():.4f}")
+                st.metric("Avg Predicted", f"{pred_df['Magnitude'].mean():.4f}")
             with col2:
-                st.metric("Max Magnitude", f"{pred_df['Magnitude'].max():.4f}")
+                if 'Actual_Magnitude' in pred_df.columns:
+                    st.metric("Avg Actual", f"{pred_df['Actual_Magnitude'].mean():.4f}%")
+                else:
+                    st.metric("Max Predicted", f"{pred_df['Magnitude'].max():.4f}")
             with col3:
-                high_magnitude = (pred_df['Magnitude_Category'].isin(['High', 'Extreme'])).mean() * 100
-                st.metric("High Magnitude %", f"{high_magnitude:.1f}%")
+                # Calculate correlation if both exist
+                if 'Actual_Magnitude' in pred_df.columns:
+                    correlation = pred_df[['Magnitude', 'Actual_Magnitude']].corr().iloc[0, 1]
+                    st.metric("Correlation", f"{correlation:.3f}")
+                else:
+                    high_magnitude = (pred_df['Magnitude_Category'].str.contains('High|Extreme', na=False)).mean() * 100
+                    st.metric("High Magnitude %", f"{high_magnitude:.1f}%")
             with col4:
-                st.metric("Latest Magnitude", f"{pred_df['Magnitude'].iloc[-1]:.4f}")
+                st.metric("Latest Predicted", f"{pred_df['Magnitude'].iloc[-1]:.4f}")
+            
+            # Show magnitude category distribution
+            st.subheader("📊 Magnitude Category Distribution")
+            if 'Magnitude_Category' in pred_df.columns:
+                category_counts = pred_df['Magnitude_Category'].value_counts()
+                if len(category_counts) > 0:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        for category, count in category_counts.items():
+                            percentage = count / len(pred_df) * 100
+                            st.metric(f"{category}", f"{count} ({percentage:.1f}%)")
+                    
+                    with col2:
+                        # Show actual ranges
+                        st.markdown("**Magnitude Ranges:**")
+                        magnitude_stats = pred_df['Magnitude'].describe()
+                        st.text(f"Min: {magnitude_stats['min']:.4f}")
+                        st.text(f"25th percentile: {magnitude_stats['25%']:.4f}")
+                        st.text(f"Median: {magnitude_stats['50%']:.4f}")
+                        st.text(f"75th percentile: {magnitude_stats['75%']:.4f}")
+                        st.text(f"Max: {magnitude_stats['max']:.4f}")
 
         with tab2:
             st.subheader("📈 Price Chart with Magnitude Indicators")
@@ -590,10 +685,62 @@ try:
             st.subheader("📋 Magnitude Predictions Data")
 
             display_df = create_display_dataframe(pred_df)
+            
+            # Format magnitude values properly
             if 'Magnitude' in display_df.columns:
-                display_df['Magnitude'] = display_df['Magnitude'].apply(lambda x: f"{float(x):.4f}" if isinstance(x, (int, float, str)) else x)
+                display_df['Predicted_Magnitude'] = display_df['Magnitude'].apply(
+                    lambda x: f"{float(x):.4f}" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
+                )
+            
+            if 'Actual_Magnitude' in display_df.columns:
+                display_df['Actual_Magnitude'] = display_df['Actual_Magnitude'].apply(
+                    lambda x: f"{float(x):.4f}%" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
+                )
+            
+            # Calculate prediction error
+            if 'Magnitude' in pred_df.columns and 'Actual_Magnitude' in pred_df.columns:
+                pred_df['Prediction_Error'] = np.abs(pred_df['Magnitude'] - pred_df['Actual_Magnitude'])
+                display_df['Prediction_Error'] = pred_df['Prediction_Error'].apply(
+                    lambda x: f"{float(x):.4f}" if pd.notna(x) else "N/A"
+                )
+            
+            # Select columns to display
+            columns_to_show = ['Date', 'Price']
+            if 'Predicted_Magnitude' in display_df.columns:
+                columns_to_show.append('Predicted_Magnitude')
+            if 'Actual_Magnitude' in display_df.columns:
+                columns_to_show.append('Actual_Magnitude')
+            if 'Prediction_Error' in display_df.columns:
+                columns_to_show.append('Prediction_Error')
+            if 'Magnitude_Category' in display_df.columns:
+                columns_to_show.append('Magnitude_Category')
+            
+            # Filter to available columns
+            available_columns = [col for col in columns_to_show if col in display_df.columns]
+            
+            # Show summary statistics
+            st.subheader("📊 Prediction Accuracy Summary")
+            if 'Prediction_Error' in pred_df.columns:
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    mean_error = pred_df['Prediction_Error'].mean()
+                    st.metric("Mean Abs Error", f"{mean_error:.4f}")
+                with col2:
+                    median_error = pred_df['Prediction_Error'].median()
+                    st.metric("Median Abs Error", f"{median_error:.4f}")
+                with col3:
+                    rmse = np.sqrt(np.mean(pred_df['Prediction_Error']**2))
+                    st.metric("RMSE", f"{rmse:.4f}")
+                with col4:
+                    if 'Actual_Magnitude' in pred_df.columns:
+                        mape = np.mean(np.abs(pred_df['Prediction_Error'] / pred_df['Actual_Magnitude'])) * 100
+                        st.metric("MAPE", f"{mape:.1f}%")
 
-            st.dataframe(display_df.tail(50), use_container_width=True, hide_index=True)
+            st.dataframe(
+                display_df[available_columns].tail(50), 
+                use_container_width=True, 
+                hide_index=True
+            )
 
             # Download button for complete dataset
             st.subheader("📥 Export Complete Predictions")
