@@ -645,9 +645,13 @@ try:
                         st.text(f"Max: {magnitude_stats['max']:.4f}%")
 
         with tab2:
-            st.subheader("📈 Price Chart with Magnitude Indicators")
+            st.subheader("📈 Price Movement with Magnitude Analysis")
 
-            fig = go.Figure()
+            # Create subplot with price and magnitude
+            fig = make_subplots(rows=2, cols=1, 
+                              subplot_titles=('Price with Magnitude Indicators', 'Predicted Magnitude Values'),
+                              vertical_spacing=0.15,
+                              row_heights=[0.7, 0.3])
 
             # Price line
             fig.add_trace(go.Scatter(
@@ -655,31 +659,99 @@ try:
                 y=pred_df['Price'],
                 mode='lines',
                 name='Price',
-                line=dict(color='blue', width=2)
-            ))
+                line=dict(color='blue', width=2),
+                hovertemplate='<b>Price:</b> $%{y:.2f}<br><b>Date:</b> %{x}<extra></extra>'
+            ), row=1, col=1)
 
-            # Color-coded magnitude markers
-            colors = {'Low': 'green', 'Medium': 'yellow', 'High': 'orange', 'Extreme': 'red'}
+            # Enhanced color-coded magnitude markers with better visibility
+            colors = {'Low': '#27AE60', 'Medium': '#F39C12', 'High': '#E67E22', 'Extreme': '#E74C3C'}
+            symbols = {'Low': 'circle', 'Medium': 'square', 'High': 'diamond', 'Extreme': 'triangle-up'}
+            sizes = {'Low': 8, 'Medium': 10, 'High': 12, 'Extreme': 14}
+            
             for category in colors:
-                category_data = pred_df[pred_df['Magnitude_Category'] == category]
-                if len(category_data) > 0:
-                    fig.add_trace(go.Scatter(
-                        x=category_data.index,
-                        y=category_data['Price'],
-                        mode='markers',
-                        marker=dict(color=colors[category], size=8),
-                        name=f'{category} Magnitude',
-                        hovertemplate=f'<b>Magnitude:</b> {category}<br><b>Price:</b> $%{{y:.2f}}<extra></extra>'
-                    ))
+                if category in pred_df['Magnitude_Category'].astype(str).values:
+                    category_data = pred_df[pred_df['Magnitude_Category'].astype(str).str.contains(category.split(' ')[0], na=False)]
+                    if len(category_data) > 0:
+                        fig.add_trace(go.Scatter(
+                            x=category_data.index,
+                            y=category_data['Price'],
+                            mode='markers',
+                            marker=dict(
+                                color=colors[category], 
+                                size=sizes[category],
+                                symbol=symbols[category],
+                                line=dict(width=2, color='white')
+                            ),
+                            name=f'{category} Magnitude',
+                            hovertemplate=f'<b>Magnitude:</b> {category}<br><b>Price:</b> $%{{y:.2f}}<br><b>Predicted:</b> %{{customdata:.4f}}%<extra></extra>',
+                            customdata=category_data['Magnitude']
+                        ), row=1, col=1)
+
+            # Add magnitude values as a separate chart
+            fig.add_trace(go.Scatter(
+                x=pred_df.index,
+                y=pred_df['Magnitude'],
+                mode='lines+markers',
+                name='Predicted Magnitude',
+                line=dict(color='purple', width=2),
+                marker=dict(size=4, color='purple'),
+                hovertemplate='<b>Predicted Magnitude:</b> %{y:.4f}%<br><b>Date:</b> %{x}<extra></extra>'
+            ), row=2, col=1)
+
+            # Add actual magnitude if available
+            if 'Actual_Magnitude' in pred_df.columns:
+                fig.add_trace(go.Scatter(
+                    x=pred_df.index,
+                    y=pred_df['Actual_Magnitude'],
+                    mode='lines+markers',
+                    name='Actual Magnitude',
+                    line=dict(color='orange', width=1, dash='dot'),
+                    marker=dict(size=3, color='orange'),
+                    opacity=0.7,
+                    hovertemplate='<b>Actual Magnitude:</b> %{y:.4f}%<br><b>Date:</b> %{x}<extra></extra>'
+                ), row=2, col=1)
+
+            # Add magnitude threshold lines
+            if len(pred_df['Magnitude'].dropna()) > 0:
+                q25 = np.percentile(pred_df['Magnitude'].dropna(), 25)
+                q50 = np.percentile(pred_df['Magnitude'].dropna(), 50)
+                q75 = np.percentile(pred_df['Magnitude'].dropna(), 75)
+
+                fig.add_hline(y=q25, line_dash="dash", line_color="green", 
+                             annotation_text=f"Low/Medium ({q25:.4f}%)", row=2, col=1)
+                fig.add_hline(y=q50, line_dash="dash", line_color="orange", 
+                             annotation_text=f"Medium/High ({q50:.4f}%)", row=2, col=1)
+                fig.add_hline(y=q75, line_dash="dash", line_color="red", 
+                             annotation_text=f"High/Extreme ({q75:.4f}%)", row=2, col=1)
 
             fig.update_layout(
-                height=500,
-                title="Price Movement with Magnitude Categories",
-                xaxis_title="Date",
-                yaxis_title="Price ($)"
+                height=700, 
+                showlegend=True,
+                title_text="Price Movement Analysis with Magnitude Predictions"
             )
+            fig.update_xaxes(title_text="Date", row=1, col=1)
+            fig.update_yaxes(title_text="Price ($)", row=1, col=1)
+            fig.update_xaxes(title_text="Date", row=2, col=1)
+            fig.update_yaxes(title_text="Magnitude (%)", row=2, col=1)
 
             st.plotly_chart(fig, use_container_width=True)
+
+            # Add magnitude statistics summary
+            st.subheader("📊 Current Magnitude Analysis")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                recent_avg = pred_df['Magnitude'].tail(10).mean()
+                st.metric("Recent Avg (10 periods)", f"{recent_avg:.4f}%")
+            with col2:
+                current_magnitude = pred_df['Magnitude'].iloc[-1]
+                st.metric("Latest Prediction", f"{current_magnitude:.4f}%")
+            with col3:
+                high_magnitude_count = (pred_df['Magnitude'] > pred_df['Magnitude'].quantile(0.75)).sum()
+                st.metric("High Magnitude Periods", high_magnitude_count)
+            with col4:
+                current_category = pred_df['Magnitude_Category'].iloc[-1] if 'Magnitude_Category' in pred_df.columns else 'N/A'
+                st.metric("Current Category", str(current_category))
 
         with tab3:
             st.subheader("📋 Magnitude Predictions Data")
