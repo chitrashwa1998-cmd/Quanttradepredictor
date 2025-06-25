@@ -606,12 +606,12 @@ try:
             # Enhanced statistics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Avg Predicted", f"{pred_df['Magnitude'].mean():.4f}")
+                st.metric("Avg Predicted", f"{pred_df['Magnitude'].mean():.4f}%")
             with col2:
                 if 'Actual_Magnitude' in pred_df.columns:
                     st.metric("Avg Actual", f"{pred_df['Actual_Magnitude'].mean():.4f}%")
                 else:
-                    st.metric("Max Predicted", f"{pred_df['Magnitude'].max():.4f}")
+                    st.metric("Max Predicted", f"{pred_df['Magnitude'].max():.4f}%")
             with col3:
                 # Calculate correlation if both exist
                 if 'Actual_Magnitude' in pred_df.columns:
@@ -621,7 +621,7 @@ try:
                     high_magnitude = (pred_df['Magnitude_Category'].str.contains('High|Extreme', na=False)).mean() * 100
                     st.metric("High Magnitude %", f"{high_magnitude:.1f}%")
             with col4:
-                st.metric("Latest Predicted", f"{pred_df['Magnitude'].iloc[-1]:.4f}")
+                st.metric("Latest Predicted", f"{pred_df['Magnitude'].iloc[-1]:.4f}%")
             
             # Show magnitude category distribution
             st.subheader("📊 Magnitude Category Distribution")
@@ -638,11 +638,11 @@ try:
                         # Show actual ranges
                         st.markdown("**Magnitude Ranges:**")
                         magnitude_stats = pred_df['Magnitude'].describe()
-                        st.text(f"Min: {magnitude_stats['min']:.4f}")
-                        st.text(f"25th percentile: {magnitude_stats['25%']:.4f}")
-                        st.text(f"Median: {magnitude_stats['50%']:.4f}")
-                        st.text(f"75th percentile: {magnitude_stats['75%']:.4f}")
-                        st.text(f"Max: {magnitude_stats['max']:.4f}")
+                        st.text(f"Min: {magnitude_stats['min']:.4f}%")
+                        st.text(f"25th percentile: {magnitude_stats['25%']:.4f}%")
+                        st.text(f"Median: {magnitude_stats['50%']:.4f}%")
+                        st.text(f"75th percentile: {magnitude_stats['75%']:.4f}%")
+                        st.text(f"Max: {magnitude_stats['max']:.4f}%")
 
         with tab2:
             st.subheader("📈 Price Chart with Magnitude Indicators")
@@ -686,10 +686,10 @@ try:
 
             display_df = create_display_dataframe(pred_df)
             
-            # Format magnitude values properly
+            # Format magnitude values properly - both should have % symbol for consistency
             if 'Magnitude' in display_df.columns:
                 display_df['Predicted_Magnitude'] = display_df['Magnitude'].apply(
-                    lambda x: f"{float(x):.4f}" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
+                    lambda x: f"{float(x):.4f}%" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
                 )
             
             if 'Actual_Magnitude' in display_df.columns:
@@ -697,11 +697,15 @@ try:
                     lambda x: f"{float(x):.4f}%" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
                 )
             
-            # Calculate prediction error
+            # Calculate prediction error - handle NaN values properly
             if 'Magnitude' in pred_df.columns and 'Actual_Magnitude' in pred_df.columns:
-                pred_df['Prediction_Error'] = np.abs(pred_df['Magnitude'] - pred_df['Actual_Magnitude'])
+                # Clean the data before calculating error
+                pred_clean = pd.to_numeric(pred_df['Magnitude'], errors='coerce')
+                actual_clean = pd.to_numeric(pred_df['Actual_Magnitude'], errors='coerce')
+                pred_df['Prediction_Error'] = np.abs(pred_clean - actual_clean)
+                
                 display_df['Prediction_Error'] = pred_df['Prediction_Error'].apply(
-                    lambda x: f"{float(x):.4f}" if pd.notna(x) else "N/A"
+                    lambda x: f"{float(x):.4f}%" if pd.notna(x) and x != 0 else ("0.0000%" if pd.notna(x) else "N/A")
                 )
             
             # Select columns to display
