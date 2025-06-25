@@ -493,12 +493,20 @@ try:
     elif selected_model == 'magnitude':
         tab1, tab2, tab3 = st.tabs(["📊 Magnitude Analysis", "📈 Price Movement", "📋 Data Table"])
 
-        # Add magnitude-specific fields - predictions are already in percentage format
-        pred_df['Magnitude'] = np.abs(predictions)  # Keep original scale
+        # Add magnitude-specific fields
+        # Ensure predictions are properly formatted (should be magnitude values)
+        magnitude_predictions = np.abs(predictions)  # Ensure positive values
+        pred_df['Magnitude'] = magnitude_predictions
         
         # Calculate actual magnitude for comparison
         actual_returns = df_filtered['Close'].pct_change().shift(-1)  # Next period return
         pred_df['Actual_Magnitude'] = np.abs(actual_returns) * 100  # Convert to percentage
+        
+        # Debug info
+        st.write("Magnitude Debug:")
+        st.write(f"Predictions range: {predictions.min():.6f} to {predictions.max():.6f}")
+        st.write(f"Magnitude range: {magnitude_predictions.min():.6f} to {magnitude_predictions.max():.6f}")
+        st.write(f"Actual magnitude range: {pred_df['Actual_Magnitude'].min():.6f} to {pred_df['Actual_Magnitude'].max():.6f}")
         
         # Create dynamic magnitude categories based on actual data distribution
         magnitude_values = pred_df['Magnitude'].dropna()
@@ -767,18 +775,27 @@ try:
                 pred_df['Prediction_Error'] = np.nan
                 pred_df.loc[valid_mask, 'Prediction_Error'] = np.abs(pred_clean[valid_mask] - actual_clean[valid_mask])
             
-            # Now create display dataframe
+            # Create display dataframe
             display_df = create_display_dataframe(pred_df)
             
-            # Format magnitude values properly - both should have % symbol for consistency
-            if 'Magnitude' in display_df.columns:
+            # Debug: Check what's in the dataframes
+            st.write("Debug Info:")
+            st.write(f"pred_df columns: {list(pred_df.columns)}")
+            st.write(f"pred_df shape: {pred_df.shape}")
+            if 'Magnitude' in pred_df.columns:
+                st.write(f"Magnitude sample values: {pred_df['Magnitude'].head(3).tolist()}")
+            if 'Actual_Magnitude' in pred_df.columns:
+                st.write(f"Actual_Magnitude sample values: {pred_df['Actual_Magnitude'].head(3).tolist()}")
+            
+            # Create formatted columns for display
+            if 'Magnitude' in pred_df.columns:
                 display_df['Predicted_Magnitude'] = pred_df['Magnitude'].apply(
-                    lambda x: f"{float(x):.4f}%" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
+                    lambda x: f"{float(x):.4f}%" if pd.notna(x) else "N/A"
                 )
             
-            if 'Actual_Magnitude' in display_df.columns:
+            if 'Actual_Magnitude' in pred_df.columns:
                 display_df['Actual_Magnitude'] = pred_df['Actual_Magnitude'].apply(
-                    lambda x: f"{float(x):.4f}%" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
+                    lambda x: f"{float(x):.4f}%" if pd.notna(x) else "N/A"
                 )
                 
             # Format prediction error for display
@@ -803,21 +820,56 @@ try:
             
             # Show summary statistics
             st.subheader("📊 Prediction Accuracy Summary")
-            if 'Prediction_Error' in pred_df.columns:
+            
+            # Validate data first
+            valid_pred = pred_df['Magnitude'].notna().sum()
+            valid_actual = pred_df['Actual_Magnitude'].notna().sum() if 'Actual_Magnitude' in pred_df.columns else 0
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Valid Predictions", valid_pred)
+            with col2:
+                st.metric("Valid Actual", valid_actual)
+            with col3:
+                if valid_pred > 0:
+                    avg_pred = pred_df['Magnitude'].mean()
+                    st.metric("Avg Predicted", f"{avg_pred:.6f}")
+                else:
+                    st.metric("Avg Predicted", "N/A")
+            with col4:
+                if valid_actual > 0:
+                    avg_actual = pred_df['Actual_Magnitude'].mean()
+                    st.metric("Avg Actual", f"{avg_actual:.6f}")
+                else:
+                    st.metric("Avg Actual", "N/A")
+            
+            # Show accuracy metrics only if we have both predicted and actual values
+            if 'Prediction_Error' in pred_df.columns and pred_df['Prediction_Error'].notna().sum() > 0:
+                st.subheader("📊 Error Metrics")
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     mean_error = pred_df['Prediction_Error'].mean()
-                    st.metric("Mean Abs Error", f"{mean_error:.4f}")
+                    st.metric("Mean Abs Error", f"{mean_error:.6f}")
                 with col2:
                     median_error = pred_df['Prediction_Error'].median()
-                    st.metric("Median Abs Error", f"{median_error:.4f}")
+                    st.metric("Median Abs Error", f"{median_error:.6f}")
                 with col3:
-                    rmse = np.sqrt(np.mean(pred_df['Prediction_Error']**2))
-                    st.metric("RMSE", f"{rmse:.4f}")
+                    valid_errors = pred_df['Prediction_Error'].dropna()
+                    if len(valid_errors) > 0:
+                        rmse = np.sqrt(np.mean(valid_errors**2))
+                        st.metric("RMSE", f"{rmse:.6f}")
+                    else:
+                        st.metric("RMSE", "N/A")
                 with col4:
-                    if 'Actual_Magnitude' in pred_df.columns:
-                        mape = np.mean(np.abs(pred_df['Prediction_Error'] / pred_df['Actual_Magnitude'])) * 100
-                        st.metric("MAPE", f"{mape:.1f}%")
+                    if 'Actual_Magnitude' in pred_df.columns and pred_df['Actual_Magnitude'].notna().sum() > 0:
+                        valid_data = pred_df[pred_df['Prediction_Error'].notna() & pred_df['Actual_Magnitude'].notna()]
+                        if len(valid_data) > 0 and (valid_data['Actual_Magnitude'] != 0).any():
+                            mape = np.mean(np.abs(valid_data['Prediction_Error'] / valid_data['Actual_Magnitude'])) * 100
+                            st.metric("MAPE", f"{mape:.1f}%")
+                        else:
+                            st.metric("MAPE", "N/A")
+                    else:
+                        st.metric("MAPE", "N/A")
 
             st.dataframe(
                 display_df[available_columns].tail(50), 
