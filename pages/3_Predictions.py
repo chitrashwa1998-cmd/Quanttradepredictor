@@ -1206,21 +1206,7 @@ try:
         with tab3:
             st.subheader("📋 Volatility Predictions Data")
 
-            # Create enhanced display dataframe for volatility
-            display_df = create_display_dataframe(pred_df)
-
-            # Format volatility values
-            if 'Volatility_Forecast' in display_df.columns:
-                display_df['Predicted_Volatility'] = pred_df['Volatility_Forecast'].apply(
-                    lambda x: f"{float(x):.4f}" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
-                )
-            
-            if 'Actual_Volatility' in display_df.columns:
-                display_df['Actual_Volatility'] = pred_df['Actual_Volatility'].apply(
-                    lambda x: f"{float(x):.4f}" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
-                )
-            
-            # Calculate prediction error for volatility
+            # Calculate prediction error for volatility BEFORE creating display dataframe
             if 'Volatility_Forecast' in pred_df.columns and 'Actual_Volatility' in pred_df.columns:
                 # Clean the data before calculating error
                 pred_clean = pd.to_numeric(pred_df['Volatility_Forecast'], errors='coerce')
@@ -1230,8 +1216,23 @@ try:
                 valid_mask = pd.notna(pred_clean) & pd.notna(actual_clean)
                 pred_df['Volatility_Error'] = np.nan
                 pred_df.loc[valid_mask, 'Volatility_Error'] = np.abs(pred_clean[valid_mask] - actual_clean[valid_mask])
+
+            # Create enhanced display dataframe for volatility
+            display_df = create_display_dataframe(pred_df)
+
+            # Format volatility values using the original pred_df data
+            if 'Volatility_Forecast' in pred_df.columns:
+                display_df['Predicted_Volatility'] = pred_df['Volatility_Forecast'].apply(
+                    lambda x: f"{float(x):.4f}" if pd.notna(x) else "N/A"
+                )
+            
+            if 'Actual_Volatility' in pred_df.columns:
+                display_df['Actual_Volatility'] = pred_df['Actual_Volatility'].apply(
+                    lambda x: f"{float(x):.4f}" if pd.notna(x) else "N/A"
+                )
                 
-                # Format prediction error for display
+            # Format prediction error for display
+            if 'Volatility_Error' in pred_df.columns:
                 display_df['Prediction_Error'] = pred_df['Volatility_Error'].apply(
                     lambda x: f"{float(x):.4f}" if pd.notna(x) else "N/A"
                 )
