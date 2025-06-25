@@ -135,21 +135,21 @@ class QuantTradingModels:
             if len(available_volatility_features) < len(volatility_features):
                 missing_features = [f for f in volatility_features if f not in available_volatility_features]
                 print(f"Warning: Missing volatility features: {missing_features}")
+        else:
+            # For non-volatility models, include candle behavior features
+            expected_candle_features = [
+                'body_size', 'upper_wick', 'lower_wick', 'total_range', 'body_ratio', 
+                'wick_ratio', 'is_bullish', 'candle_strength', 'doji', 'marubozu', 
+                'hammer', 'shooting_star', 'engulfing_bull', 'engulfing_bear',
+                'bull_streak_3', 'bear_streak_2', 'inside_bar', 'outside_bar', 
+                'reversal_bar', 'gap_up', 'gap_down', 'direction_change', 
+                'momentum_surge', 'minute_of_hour', 'is_opening_range', 'is_closing_phase'
+            ]
 
-        # Ensure all new candle behavior features are included
-        expected_candle_features = [
-            'body_size', 'upper_wick', 'lower_wick', 'total_range', 'body_ratio', 
-            'wick_ratio', 'is_bullish', 'candle_strength', 'doji', 'marubozu', 
-            'hammer', 'shooting_star', 'engulfing_bull', 'engulfing_bear',
-            'bull_streak_3', 'bear_streak_2', 'inside_bar', 'outside_bar', 
-            'reversal_bar', 'gap_up', 'gap_down', 'direction_change', 
-            'momentum_surge', 'minute_of_hour', 'is_opening_range', 'is_closing_phase'
-        ]
-
-        # Add any missing candle features that exist in the dataframe (but exclude leakage features)
-        for feature in expected_candle_features:
-            if feature in df_clean.columns and feature not in feature_cols and feature not in leakage_features:
-                feature_cols.append(feature)
+            # Add any missing candle features that exist in the dataframe (but exclude leakage features)
+            for feature in expected_candle_features:
+                if feature in df_clean.columns and feature not in feature_cols and feature not in leakage_features:
+                    feature_cols.append(feature)
 
         if not feature_cols:
             raise ValueError("No feature columns found. Make sure technical indicators are calculated.")
@@ -163,7 +163,7 @@ class QuantTradingModels:
         if model_name == 'volatility':
             # For volatility model, don't overwrite global feature names
             # The volatility-specific features are already filtered above
-            print(f"Volatility model using ONLY {len(result_df.columns)} specified features: {list(result_df.columns)}")
+            print(f"Volatility model prepared with {len(result_df.columns)} specified features: {list(result_df.columns)}")
         else:
             # For other models, store the feature names globally
             self.feature_names = list(result_df.columns)
