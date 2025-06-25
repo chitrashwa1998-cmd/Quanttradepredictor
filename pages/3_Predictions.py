@@ -698,17 +698,17 @@ try:
                 hovertemplate='<b>Predicted Magnitude:</b> %{y:.4f}%<br><b>Date:</b> %{x}<extra></extra>'
             ), row=2, col=1)
 
-            # Add actual magnitude if available
-            if 'Actual_Magnitude' in pred_df.columns:
+            # Add actual volatility if available
+            if 'Actual_Volatility' in pred_df.columns:
                 fig.add_trace(go.Scatter(
                     x=pred_df.index,
-                    y=pred_df['Actual_Magnitude'],
+                    y=pred_df['Actual_Volatility'],
                     mode='lines+markers',
-                    name='Actual Magnitude',
+                    name='Actual Volatility',
                     line=dict(color='orange', width=1, dash='dot'),
                     marker=dict(size=3, color='orange'),
                     opacity=0.7,
-                    hovertemplate='<b>Actual Magnitude:</b> %{y:.4f}%<br><b>Date:</b> %{x}<extra></extra>'
+                    hovertemplate='<b>Actual Volatility:</b> %{y:.4f}<br><b>Date:</b> %{x}<extra></extra>'
                 ), row=2, col=1)
 
             # Add magnitude threshold lines
@@ -1055,6 +1055,11 @@ try:
 
         # Add volatility-specific fields
         pred_df['Volatility_Forecast'] = predictions
+        
+        # Calculate actual volatility for comparison
+        # Use rolling standard deviation of returns as actual volatility
+        returns = df_filtered['Close'].pct_change()
+        pred_df['Actual_Volatility'] = returns.rolling(window=5).std() * np.sqrt(252)  # Annualized volatility
 
         # Create balanced volatility categories using data distribution
         vol_values = pred_df['Volatility_Forecast'].dropna()
@@ -1206,8 +1211,29 @@ try:
 
             # Format volatility values
             if 'Volatility_Forecast' in display_df.columns:
-                display_df['Volatility_Forecast'] = display_df['Volatility_Forecast'].apply(
-                    lambda x: f"{float(x):.4f}" if isinstance(x, (int, float, str)) else x
+                display_df['Predicted_Volatility'] = pred_df['Volatility_Forecast'].apply(
+                    lambda x: f"{float(x):.4f}" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
+                )
+            
+            if 'Actual_Volatility' in display_df.columns:
+                display_df['Actual_Volatility'] = pred_df['Actual_Volatility'].apply(
+                    lambda x: f"{float(x):.4f}" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
+                )
+            
+            # Calculate prediction error for volatility
+            if 'Volatility_Forecast' in pred_df.columns and 'Actual_Volatility' in pred_df.columns:
+                # Clean the data before calculating error
+                pred_clean = pd.to_numeric(pred_df['Volatility_Forecast'], errors='coerce')
+                actual_clean = pd.to_numeric(pred_df['Actual_Volatility'], errors='coerce')
+                
+                # Calculate absolute error only where both values are valid
+                valid_mask = pd.notna(pred_clean) & pd.notna(actual_clean)
+                pred_df['Volatility_Error'] = np.nan
+                pred_df.loc[valid_mask, 'Volatility_Error'] = np.abs(pred_clean[valid_mask] - actual_clean[valid_mask])
+                
+                # Format prediction error for display
+                display_df['Prediction_Error'] = pred_df['Volatility_Error'].apply(
+                    lambda x: f"{float(x):.4f}" if pd.notna(x) else "N/A"
                 )
 
             # Add volatility interpretation
@@ -1218,26 +1244,32 @@ try:
 
             # Show validation stats
             st.subheader("📊 Volatility Analysis Summary")
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                low_vol_count = (pred_df['Volatility_Category'] == 'Low Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
-                st.metric("Low Volatility", low_vol_count)
-
-            with col2:
-                medium_vol_count = (pred_df['Volatility_Category'] == 'Medium Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
-                st.metric("Medium Volatility", medium_vol_count)
-
-            with col3:
-                high_vol_count = (pred_df['Volatility_Category'] == 'High Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
-                st.metric("High Volatility", high_vol_count)
-
-            with col4:
-                extreme_vol_count = (pred_df['Volatility_Category'] == 'Extreme Vol').sum() if 'Volatility_Category' in pred_df.columns else 0
-                st.metric("Extreme Volatility", extreme_vol_count)
+            if 'Volatility_Error' in pred_df.columns:
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    mean_error = pred_df['Volatility_Error'].mean()
+                    st.metric("Mean Abs Error", f"{mean_error:.4f}" if pd.notna(mean_error) else "N/A")
+                with col2:
+                    median_error = pred_df['Volatility_Error'].median()
+                    st.metric("Median Abs Error", f"{median_error:.4f}" if pd.notna(median_error) else "N/A")
+                with col3:
+                    correlation = pred_df[['Volatility_Forecast', 'Actual_Volatility']].corr().iloc[0, 1]
+                    st.metric("Correlation", f"{correlation:.3f}" if pd.notna(correlation) else "N/A")
+                with col4:
+                    if pd.notna(mean_error) and pred_df['Actual_Volatility'].mean() > 0:
+                        mape = (mean_error / pred_df['Actual_Volatility'].mean()) * 100
+                        st.metric("MAPE", f"{mape:.1f}%" if pd.notna(mape) else "N/A")
+                    else:
+                        st.metric("MAPE", "N/A")
 
             # Detailed data table
-            columns_to_show = ['Date', 'Price', 'Volatility_Forecast']
+            columns_to_show = ['Date', 'Price']
+            if 'Predicted_Volatility' in display_df.columns:
+                columns_to_show.append('Predicted_Volatility')
+            if 'Actual_Volatility' in display_df.columns:
+                columns_to_show.append('Actual_Volatility')
+            if 'Prediction_Error' in display_df.columns:
+                columns_to_show.append('Prediction_Error')
             if 'Vol_Level' in display_df.columns:
                 columns_to_show.append('Vol_Level')
             if 'Volatility_Category' in display_df.columns:
