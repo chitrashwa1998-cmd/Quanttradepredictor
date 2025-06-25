@@ -593,6 +593,20 @@ if st.session_state.models or (st.session_state.model_trainer and st.session_sta
             importance_dict = st.session_state.model_trainer.get_feature_importance(model_for_importance)
 
             if importance_dict:
+                # Get model-specific feature names to ensure we show the correct features
+                model_info = st.session_state.model_trainer.models.get(model_for_importance, {})
+                model_specific_features = model_info.get('feature_names', [])
+                
+                # If we have model-specific features, filter the importance dict
+                if model_specific_features:
+                    # Only include features that were actually used for this model
+                    filtered_importance = {feat: importance_dict.get(feat, 0) 
+                                         for feat in model_specific_features 
+                                         if feat in importance_dict}
+                    if filtered_importance:
+                        importance_dict = filtered_importance
+                        st.info(f"Showing feature importance for {len(model_specific_features)} features used in {model_for_importance} model")
+
                 # Convert to DataFrame and sort
                 importance_df = pd.DataFrame(
                     list(importance_dict.items()),

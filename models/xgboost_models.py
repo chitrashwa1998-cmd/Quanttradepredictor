@@ -1503,4 +1503,17 @@ class QuantTradingModels:
         if model_name not in self.models:
             return {}
 
-        return self.models[model_name]['feature_importance']
+        model_info = self.models[model_name]
+        feature_importance = model_info.get('feature_importance', {})
+        
+        # Get model-specific feature names
+        model_specific_features = model_info.get('feature_names', [])
+        
+        # If we have model-specific features, ensure we only return those
+        if model_specific_features and feature_importance:
+            # Filter to only include features that were actually used for this model
+            filtered_importance = {feat: feature_importance.get(feat, 0) 
+                                 for feat in model_specific_features}
+            return filtered_importance
+        
+        return feature_importance
