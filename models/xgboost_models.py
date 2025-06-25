@@ -163,7 +163,7 @@ class QuantTradingModels:
         if model_name == 'volatility':
             # For volatility model, don't overwrite global feature names
             # The volatility-specific features are already filtered above
-            print(f"Volatility model using {len(result_df.columns)} specific features: {list(result_df.columns)}")
+            print(f"Volatility model using ONLY {len(result_df.columns)} specified features: {list(result_df.columns)}")
         else:
             # For other models, store the feature names globally
             self.feature_names = list(result_df.columns)
