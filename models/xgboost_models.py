@@ -1212,7 +1212,7 @@ class QuantTradingModels:
                     # Prepare model-specific features
                     if model_name == 'volatility':
                         X_model_specific = self.prepare_features(df, model_name='volatility')
-                        st.info(f"📊 Volatility model using {X_model_specific.shape[1]} features (excluded bb_position, volatility_20, rsi, sma_5)")
+                        st.info(f"📊 Volatility model using {X_model_specific.shape[1]} specified features: {list(X_model_specific.columns)}")
                     else:
                         X_model_specific = X
                     
