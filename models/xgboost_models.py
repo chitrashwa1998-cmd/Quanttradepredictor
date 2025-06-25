@@ -159,9 +159,15 @@ class QuantTradingModels:
         if result_df.empty:
             raise ValueError("Feature DataFrame is empty after column selection")
 
-        # Store feature names for later use
-        self.feature_names = list(result_df.columns)
-        print(f"Feature names stored: {len(self.feature_names)} features")
+        # Store feature names for later use - but don't overwrite if it's volatility model with specific features
+        if model_name == 'volatility':
+            # For volatility model, don't overwrite global feature names
+            # The volatility-specific features are already filtered above
+            print(f"Volatility model using {len(result_df.columns)} specific features: {list(result_df.columns)}")
+        else:
+            # For other models, store the feature names globally
+            self.feature_names = list(result_df.columns)
+            print(f"Feature names stored: {len(self.feature_names)} features")
 
         return result_df
 
@@ -1068,11 +1074,25 @@ class QuantTradingModels:
             print(f"Warning: Could not extract base model names: {e}")
             base_model_names = ['ensemble']
 
-        # Store model
+        # Store model with model-specific feature names
+        model_feature_names = self.feature_names
+        if model_name == 'volatility':
+            # For volatility model, use the actual features used in training
+            volatility_features = [
+                'volatility_10', 'atr', 'volatility_regime', 'ema_5', 
+                'bb_upper', 'bb_lower', 'bb_width', 'high_low_ratio', 
+                'price_vs_vwap', 'momentum_acceleration', 'rsi', 'bb_position'
+            ]
+            # Only include features that were actually available during training
+            available_features = [col for col in volatility_features if col in X_train.columns]
+            model_feature_names = available_features
+            print(f"Storing {len(model_feature_names)} volatility-specific feature names: {model_feature_names}")
+
         self.models[model_name] = {
             'ensemble': ensemble_model,  # Changed 'model' to 'ensemble' for database compatibility
             'metrics': metrics,
             'feature_importance': feature_importance,
+            'feature_names': model_feature_names,  # Store model-specific feature names
             'task_type': task_type,
             'predictions': y_pred,
             'probabilities': y_pred_proba,
@@ -1299,14 +1319,14 @@ class QuantTradingModels:
         # Try to get feature names from multiple sources
         feature_names = None
 
-        # 1. Check instance attribute
-        if hasattr(self, 'feature_names') and self.feature_names:
-            feature_names = self.feature_names
-
-        # 2. Check model info
-        elif 'feature_names' in model_info and model_info['feature_names']:
+        # 1. Check model-specific feature names first (prioritize model-specific)
+        if 'feature_names' in model_info and model_info['feature_names']:
             feature_names = model_info['feature_names']
-            self.feature_names = feature_names  # Update instance
+            print(f"Using model-specific feature names for {model_name}: {len(feature_names)} features")
+
+        # 2. Check instance attribute as fallback
+        elif hasattr(self, 'feature_names') and self.feature_names:
+            feature_names = self.feature_names
 
         # 3. Try to infer from input data (fallback)
         elif not X.empty:
