@@ -1220,22 +1220,30 @@ try:
             # Create enhanced display dataframe for volatility
             display_df = create_display_dataframe(pred_df)
 
-            # Format volatility values using the original pred_df data
+            # Format volatility values - fix the reference to use actual data values
             if 'Volatility_Forecast' in pred_df.columns:
-                display_df['Predicted_Volatility'] = pred_df['Volatility_Forecast'].apply(
-                    lambda x: f"{float(x):.4f}" if pd.notna(x) else "N/A"
-                )
+                # Get the actual values from pred_df, not display_df
+                vol_forecast_values = pred_df['Volatility_Forecast'].values
+                display_df['Predicted_Volatility'] = [
+                    f"{float(val):.4f}" if pd.notna(val) and val is not None else "N/A" 
+                    for val in vol_forecast_values
+                ]
             
             if 'Actual_Volatility' in pred_df.columns:
-                display_df['Actual_Volatility'] = pred_df['Actual_Volatility'].apply(
-                    lambda x: f"{float(x):.4f}" if pd.notna(x) else "N/A"
-                )
+                # Get the actual values from pred_df, not display_df
+                actual_vol_values = pred_df['Actual_Volatility'].values
+                display_df['Actual_Volatility'] = [
+                    f"{float(val):.4f}" if pd.notna(val) and val is not None else "N/A" 
+                    for val in actual_vol_values
+                ]
                 
             # Format prediction error for display
             if 'Volatility_Error' in pred_df.columns:
-                display_df['Prediction_Error'] = pred_df['Volatility_Error'].apply(
-                    lambda x: f"{float(x):.4f}" if pd.notna(x) else "N/A"
-                )
+                error_values = pred_df['Volatility_Error'].values
+                display_df['Prediction_Error'] = [
+                    f"{float(val):.4f}" if pd.notna(val) and val is not None else "N/A" 
+                    for val in error_values
+                ]
 
             # Add volatility interpretation
             if 'Volatility_Category' in display_df.columns:
