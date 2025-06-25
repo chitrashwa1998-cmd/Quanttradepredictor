@@ -756,20 +756,7 @@ try:
         with tab3:
             st.subheader("📋 Magnitude Predictions Data")
 
-            display_df = create_display_dataframe(pred_df)
-            
-            # Format magnitude values properly - both should have % symbol for consistency
-            if 'Magnitude' in display_df.columns:
-                display_df['Predicted_Magnitude'] = display_df['Magnitude'].apply(
-                    lambda x: f"{float(x):.4f}%" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
-                )
-            
-            if 'Actual_Magnitude' in display_df.columns:
-                display_df['Actual_Magnitude'] = display_df['Actual_Magnitude'].apply(
-                    lambda x: f"{float(x):.4f}%" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
-                )
-            
-            # Calculate prediction error - handle NaN values properly
+            # First calculate prediction error in pred_df before creating display_df
             if 'Magnitude' in pred_df.columns and 'Actual_Magnitude' in pred_df.columns:
                 # Clean the data before calculating error
                 pred_clean = pd.to_numeric(pred_df['Magnitude'], errors='coerce')
@@ -779,8 +766,23 @@ try:
                 valid_mask = pd.notna(pred_clean) & pd.notna(actual_clean)
                 pred_df['Prediction_Error'] = np.nan
                 pred_df.loc[valid_mask, 'Prediction_Error'] = np.abs(pred_clean[valid_mask] - actual_clean[valid_mask])
+            
+            # Now create display dataframe
+            display_df = create_display_dataframe(pred_df)
+            
+            # Format magnitude values properly - both should have % symbol for consistency
+            if 'Magnitude' in display_df.columns:
+                display_df['Predicted_Magnitude'] = pred_df['Magnitude'].apply(
+                    lambda x: f"{float(x):.4f}%" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
+                )
+            
+            if 'Actual_Magnitude' in display_df.columns:
+                display_df['Actual_Magnitude'] = pred_df['Actual_Magnitude'].apply(
+                    lambda x: f"{float(x):.4f}%" if pd.notna(x) and isinstance(x, (int, float, str)) else "N/A"
+                )
                 
-                # Format prediction error for display
+            # Format prediction error for display
+            if 'Prediction_Error' in pred_df.columns:
                 display_df['Prediction_Error'] = pred_df['Prediction_Error'].apply(
                     lambda x: f"{float(x):.4f}%" if pd.notna(x) else "N/A"
                 )
