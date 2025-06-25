@@ -774,10 +774,15 @@ try:
                 # Clean the data before calculating error
                 pred_clean = pd.to_numeric(pred_df['Magnitude'], errors='coerce')
                 actual_clean = pd.to_numeric(pred_df['Actual_Magnitude'], errors='coerce')
-                pred_df['Prediction_Error'] = np.abs(pred_clean - actual_clean)
                 
+                # Calculate absolute error only where both values are valid
+                valid_mask = pd.notna(pred_clean) & pd.notna(actual_clean)
+                pred_df['Prediction_Error'] = np.nan
+                pred_df.loc[valid_mask, 'Prediction_Error'] = np.abs(pred_clean[valid_mask] - actual_clean[valid_mask])
+                
+                # Format prediction error for display
                 display_df['Prediction_Error'] = pred_df['Prediction_Error'].apply(
-                    lambda x: f"{float(x):.4f}%" if pd.notna(x) and x != 0 else ("0.0000%" if pd.notna(x) else "N/A")
+                    lambda x: f"{float(x):.4f}%" if pd.notna(x) else "N/A"
                 )
             
             # Select columns to display
