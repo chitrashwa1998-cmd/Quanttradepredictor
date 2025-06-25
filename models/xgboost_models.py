@@ -112,11 +112,29 @@ class QuantTradingModels:
         ]
         feature_cols = [col for col in feature_cols if col not in leakage_features]
 
-        # Exclude specific features for volatility model
+        # Use only specific features for volatility model
         if model_name == 'volatility':
-            excluded_features = ['bb_position', 'volatility_20', 'rsi', 'sma_5']
-            feature_cols = [col for col in feature_cols if col not in excluded_features]
-            print(f"Excluded {len(excluded_features)} features for volatility model: {excluded_features}")
+            # Only use these specific features for volatility prediction
+            volatility_features = [
+                'volatility_10', 'atr', 'volatility_regime', 'ema_5', 
+                'bb_upper', 'bb_lower', 'bb_width', 'high_low_ratio', 
+                'price_vs_vwap', 'momentum_acceleration', 'rsi', 'bb_position'
+            ]
+            
+            # Filter to only include features that exist in the dataframe
+            available_volatility_features = [col for col in volatility_features if col in df_clean.columns]
+            
+            if len(available_volatility_features) == 0:
+                raise ValueError(f"None of the specified volatility features found in data. Available columns: {list(df_clean.columns)}")
+            
+            # Replace feature_cols with only the specified features
+            feature_cols = available_volatility_features
+            
+            print(f"Using ONLY {len(available_volatility_features)} specified features for volatility model: {available_volatility_features}")
+            
+            if len(available_volatility_features) < len(volatility_features):
+                missing_features = [f for f in volatility_features if f not in available_volatility_features]
+                print(f"Warning: Missing volatility features: {missing_features}")
 
         # Ensure all new candle behavior features are included
         expected_candle_features = [
@@ -1257,11 +1275,26 @@ class QuantTradingModels:
 
         # Apply model-specific feature filtering if needed
         if model_name == 'volatility':
-            excluded_features = ['bb_position', 'volatility_20', 'rsi', 'sma_5']
-            available_excluded = [col for col in excluded_features if col in X.columns]
-            if available_excluded:
-                X = X.drop(columns=available_excluded)
-                print(f"Excluded {len(available_excluded)} features for volatility prediction: {available_excluded}")
+            # Only use specific features for volatility prediction
+            volatility_features = [
+                'volatility_10', 'atr', 'volatility_regime', 'ema_5', 
+                'bb_upper', 'bb_lower', 'bb_width', 'high_low_ratio', 
+                'price_vs_vwap', 'momentum_acceleration', 'rsi', 'bb_position'
+            ]
+            
+            # Filter to only include features that exist in the input data
+            available_volatility_features = [col for col in volatility_features if col in X.columns]
+            
+            if len(available_volatility_features) == 0:
+                raise ValueError(f"None of the specified volatility features found in prediction data. Available columns: {list(X.columns)}")
+            
+            # Keep only the specified features
+            X = X[available_volatility_features]
+            print(f"Using ONLY {len(available_volatility_features)} specified features for volatility prediction: {available_volatility_features}")
+            
+            if len(available_volatility_features) < len(volatility_features):
+                missing_features = [f for f in volatility_features if f not in available_volatility_features]
+                print(f"Warning: Missing volatility features in prediction: {missing_features}")
 
         # Try to get feature names from multiple sources
         feature_names = None
