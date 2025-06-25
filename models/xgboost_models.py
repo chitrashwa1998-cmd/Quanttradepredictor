@@ -1045,9 +1045,23 @@ class QuantTradingModels:
             else:
                 xgb_estimator = ensemble_model.named_estimators_['xgboost']
             
-            feature_importance = dict(zip(self.feature_names, xgb_estimator.feature_importances_))
+            # Use model-specific feature names for importance mapping
+            current_feature_names = model_feature_names
+            
+            # Ensure we have the right number of features
+            if len(current_feature_names) == len(xgb_estimator.feature_importances_):
+                feature_importance = dict(zip(current_feature_names, xgb_estimator.feature_importances_))
+                print(f"Feature importance extracted for {model_name}: {len(feature_importance)} features")
+                
+                # Debug: Show top 5 important features for this model
+                sorted_importance = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)
+                print(f"Top 5 features for {model_name}: {sorted_importance[:5]}")
+            else:
+                print(f"Feature count mismatch for {model_name}: expected {len(current_feature_names)}, got {len(xgb_estimator.feature_importances_)}")
+                feature_importance = {}
+                
         except Exception as e:
-            print(f"Could not extract feature importance: {e}")
+            print(f"Could not extract feature importance for {model_name}: {e}")
             feature_importance = {}
 
         # Get base model names safely for both calibrated and regular ensemble models
@@ -1501,6 +1515,7 @@ class QuantTradingModels:
     def get_feature_importance(self, model_name: str) -> Dict[str, float]:
         """Get feature importance for a specific model."""
         if model_name not in self.models:
+            print(f"Model {model_name} not found in available models: {list(self.models.keys())}")
             return {}
 
         model_info = self.models[model_name]
@@ -1509,11 +1524,29 @@ class QuantTradingModels:
         # Get model-specific feature names
         model_specific_features = model_info.get('feature_names', [])
         
+        print(f"Getting feature importance for {model_name}:")
+        print(f"  Model-specific features: {len(model_specific_features)}")
+        print(f"  Raw feature importance entries: {len(feature_importance)}")
+        
         # If we have model-specific features, ensure we only return those
         if model_specific_features and feature_importance:
             # Filter to only include features that were actually used for this model
             filtered_importance = {feat: feature_importance.get(feat, 0) 
                                  for feat in model_specific_features}
+            
+            # Debug: show which features have zero importance
+            zero_importance = [feat for feat, imp in filtered_importance.items() if imp == 0]
+            if zero_importance:
+                print(f"  Features with zero importance: {zero_importance}")
+                
+            # Debug: show non-zero importance features
+            non_zero_importance = {feat: imp for feat, imp in filtered_importance.items() if imp > 0}
+            print(f"  Features with non-zero importance: {len(non_zero_importance)}")
+            
             return filtered_importance
-        
-        return feature_importance
+        elif feature_importance:
+            print(f"  Using raw feature importance (no model-specific filtering)")
+            return feature_importance
+        else:
+            print(f"  No feature importance data available")
+            return {}
