@@ -89,7 +89,7 @@ class QuantTradingModels:
         except Exception as e:
             print(f"Error saving models to database: {str(e)}")
 
-    def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    def prepare_features(self, df: pd.DataFrame, model_name: str = None) -> pd.DataFrame:
         """Prepare features for model training."""
         if df.empty:
             raise ValueError("Input DataFrame is empty")
@@ -111,6 +111,12 @@ class QuantTradingModels:
             'accuracy', 'precision', 'recall'
         ]
         feature_cols = [col for col in feature_cols if col not in leakage_features]
+
+        # Exclude specific features for volatility model
+        if model_name == 'volatility':
+            excluded_features = ['bb_position', 'volatility_20', 'rsi', 'sma_5']
+            feature_cols = [col for col in feature_cols if col not in excluded_features]
+            print(f"Excluded {len(excluded_features)} features for volatility model: {excluded_features}")
 
         # Ensure all new candle behavior features are included
         expected_candle_features = [
@@ -1126,7 +1132,7 @@ class QuantTradingModels:
         status_text = st.empty()
 
         try:
-            # Prepare features
+            # Prepare features - we'll prepare them separately for each model if needed
             status_text.text("Preparing features...")
             X = self.prepare_features(df)
             st.info(f"✅ Prepared {len(X)} feature rows with {X.shape[1]} features")
@@ -1165,16 +1171,23 @@ class QuantTradingModels:
                         break
 
                 if model_name in targets and task_type is not None:
+                    # Prepare model-specific features
+                    if model_name == 'volatility':
+                        X_model_specific = self.prepare_features(df, model_name='volatility')
+                        st.info(f"📊 Volatility model using {X_model_specific.shape[1]} features (excluded bb_position, volatility_20, rsi, sma_5)")
+                    else:
+                        X_model_specific = X
+                    
                     # Ensure X and target are properly aligned by using common index
                     target_series = targets[model_name]
-                    common_index = X.index.intersection(target_series.index)
+                    common_index = X_model_specific.index.intersection(target_series.index)
 
                     if len(common_index) == 0:
                         st.warning(f"⚠️ No common indices between features and {model_name} target")
                         results[model_name] = None
                         continue
 
-                    X_aligned = X.loc[common_index]
+                    X_aligned = X_model_specific.loc[common_index]
                     y_aligned = target_series.loc[common_index]
 
                     # Show target distribution
@@ -1241,6 +1254,14 @@ class QuantTradingModels:
         model_info = self.models[model_name]
         # Handle both new 'ensemble' and legacy 'model' keys
         model = model_info.get('ensemble') or model_info.get('model')
+
+        # Apply model-specific feature filtering if needed
+        if model_name == 'volatility':
+            excluded_features = ['bb_position', 'volatility_20', 'rsi', 'sma_5']
+            available_excluded = [col for col in excluded_features if col in X.columns]
+            if available_excluded:
+                X = X.drop(columns=available_excluded)
+                print(f"Excluded {len(available_excluded)} features for volatility prediction: {available_excluded}")
 
         # Try to get feature names from multiple sources
         feature_names = None
