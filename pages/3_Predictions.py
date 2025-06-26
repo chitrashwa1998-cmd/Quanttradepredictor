@@ -412,23 +412,51 @@ if hasattr(st.session_state, 'predictions') and st.session_state.predictions is 
         display_df = pred_df.copy()
         display_df = display_df.reset_index()
 
-        # Format datetime column
+        # Format datetime column to match original data format
         date_col_created = False
         if len(display_df.columns) > 0:
             timestamp_col = display_df.columns[0]
             try:
-                display_df['Date'] = pd.to_datetime(display_df[timestamp_col]).dt.strftime('%Y-%m-%d %H:%M:%S')
+                # Get the original data format from session state
+                original_datetime_format = None
+                if hasattr(st.session_state, 'data') and st.session_state.data is not None:
+                    # Try to infer the original format from the first few datetime entries
+                    sample_dates = st.session_state.data.index[:3]
+                    if len(sample_dates) > 0:
+                        # Convert back to string to see original format pattern
+                        first_date = sample_dates[0]
+                        if hasattr(first_date, 'strftime'):
+                            # Check if data has time component
+                            if first_date.hour != 0 or first_date.minute != 0 or first_date.second != 0:
+                                # Has time component - use DD-MM-YYYY HH:MM:SS format (prioritized in data processing)
+                                original_datetime_format = '%d-%m-%Y %H:%M:%S'
+                            else:
+                                # Only date - use DD-MM-YYYY format
+                                original_datetime_format = '%d-%m-%Y'
+                
+                # Use original format if detected, otherwise use default
+                if original_datetime_format:
+                    display_df['Date/Time'] = pd.to_datetime(display_df[timestamp_col]).dt.strftime(original_datetime_format)
+                else:
+                    # Fallback to preserving exact original format by checking time components
+                    datetime_series = pd.to_datetime(display_df[timestamp_col])
+                    has_time = (datetime_series.dt.hour != 0).any() or (datetime_series.dt.minute != 0).any()
+                    if has_time:
+                        display_df['Date/Time'] = datetime_series.dt.strftime('%d-%m-%Y %H:%M:%S')
+                    else:
+                        display_df['Date/Time'] = datetime_series.dt.strftime('%d-%m-%Y')
+                
                 display_df = display_df.drop(columns=[timestamp_col])
                 date_col_created = True
             except Exception as e:
                 # If datetime conversion fails, keep the original column name
-                display_df = display_df.rename(columns={timestamp_col: 'Date'})
+                display_df = display_df.rename(columns={timestamp_col: 'Date/Time'})
                 date_col_created = True
 
         # Round numerical columns
         numeric_columns = display_df.select_dtypes(include=[np.number]).columns
         for col in numeric_columns:
-            if col != 'Date':
+            if col != 'Date/Time':
                 display_df[col] = display_df[col].round(6)
 
         # Calculate prediction error if both columns exist
@@ -440,9 +468,9 @@ if hasattr(st.session_state, 'predictions') and st.session_state.predictions is 
                 display_df.loc[actual_mask, 'Actual_Volatility']
             ).round(6)
 
-        # Reorder columns with Date first if it exists
-        if date_col_created and 'Date' in display_df.columns:
-            cols = ['Date'] + [col for col in display_df.columns if col != 'Date']
+        # Reorder columns with Date/Time first if it exists
+        if date_col_created and 'Date/Time' in display_df.columns:
+            cols = ['Date/Time'] + [col for col in display_df.columns if col != 'Date/Time']
             display_df = display_df[cols]
 
         # Show data with pagination
@@ -452,7 +480,7 @@ if hasattr(st.session_state, 'predictions') and st.session_state.predictions is 
             height=400,
             hide_index=True,
             column_config={
-                "Date": st.column_config.TextColumn("Date", width="medium"),
+                "Date/Time": st.column_config.TextColumn("Date/Time", width="medium"),
                 "Volatility_Forecast": st.column_config.NumberColumn("Predicted Volatility", format="%.6f"),
                 "Actual_Volatility": st.column_config.NumberColumn("Actual Volatility", format="%.6f"),
                 "Prediction_Error": st.column_config.NumberColumn("Prediction Error", format="%.6f"),
@@ -473,8 +501,8 @@ if hasattr(st.session_state, 'predictions') and st.session_state.predictions is 
         with col3:
             # Calculate time span safely
             try:
-                if 'Date' in display_df.columns:
-                    time_span = (pd.to_datetime(display_df['Date']).max() - pd.to_datetime(display_df['Date']).min()).days
+                if 'Date/Time' in display_df.columns:
+                    time_span = (pd.to_datetime(display_df['Date/Time']).max() - pd.to_datetime(display_df['Date/Time']).min()).days
                     st.metric("Time Span (Days)", time_span)
                 else:
                     # Try to use the original index if available
