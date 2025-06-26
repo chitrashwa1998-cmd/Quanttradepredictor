@@ -471,8 +471,20 @@ if hasattr(st.session_state, 'predictions') and st.session_state.predictions is 
             else:
                 st.metric("Forecast Records", len(display_df))
         with col3:
-            time_span = (pd.to_datetime(display_df['Date']).max() - pd.to_datetime(display_df['Date']).min()).days
-            st.metric("Time Span (Days)", time_span)
+            # Calculate time span safely
+            try:
+                if 'Date' in display_df.columns:
+                    time_span = (pd.to_datetime(display_df['Date']).max() - pd.to_datetime(display_df['Date']).min()).days
+                    st.metric("Time Span (Days)", time_span)
+                else:
+                    # Try to use the original index if available
+                    if not pred_df.empty:
+                        time_span = (pred_df.index.max() - pred_df.index.min()).days
+                        st.metric("Time Span (Days)", time_span)
+                    else:
+                        st.metric("Time Span (Days)", "N/A")
+            except Exception as e:
+                st.metric("Time Span (Days)", "N/A")
 
         # Download button
         if len(display_df) > 0:
