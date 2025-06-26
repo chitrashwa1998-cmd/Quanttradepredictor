@@ -9,7 +9,6 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Streamlit App"
 
 [[workflows.workflow]]
 name = "Project"
