@@ -217,4 +217,3 @@ if hasattr(st.session_state, 'trained_models') and st.session_state.trained_mode
             st.success("✅ Models saved to database successfully!")
         except Exception as e:
             st.error(f"❌ Failed to save models: {str(e)}")
-```
