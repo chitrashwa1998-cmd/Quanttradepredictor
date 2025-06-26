@@ -1,16 +1,15 @@
+
 import pandas as pd
 import numpy as np
 import xgboost as xgb
-from catboost import CatBoostRegressor
-from sklearn.ensemble import RandomForestRegressor, VotingRegressor
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, r2_score
-from typing import Dict, Any, Tuple
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.ensemble import VotingRegressor, RandomForestRegressor
+from catboost import CatBoostRegressor
+from typing import Dict, Tuple, Any
 
 class VolatilityModel:
-    """Volatility prediction model for forecasting future volatility using exactly 26 features."""
+    """Volatility prediction model for forecasting future volatility."""
 
     def __init__(self):
         self.model = None
@@ -35,28 +34,27 @@ class VolatilityModel:
         ]
 
     def create_target(self, df: pd.DataFrame) -> pd.Series:
-        """Create volatility target from raw data only."""
-        # Use Close column from raw data - no modifications
-        close_col = 'Close' if 'Close' in df.columns else 'close'
-        
-        if close_col not in df.columns:
-            raise ValueError(f"Required column '{close_col}' not found in data")
-        
+        """Create volatility target (next period volatility)."""
         volatility_window = 10
 
-        # Calculate rolling volatility using percentage returns from raw data
-        returns = df[close_col].pct_change()
+        # Calculate rolling volatility using percentage returns
+        returns = df['Close'].pct_change()
         current_vol = returns.rolling(volatility_window).std()
         future_vol = current_vol.shift(-1)
 
-        # Clean volatility data - forward fill then backward fill only
+        # Clean volatility data
         future_vol = future_vol.fillna(method='ffill').fillna(method='bfill')
         future_vol = future_vol.clip(lower=0.0001)  # Minimum volatility threshold
-        
-        # Filter out infinite values
         future_vol = future_vol[np.isfinite(future_vol)]
 
-        print(f"Volatility target statistics: Count={len(future_vol)}, Mean={future_vol.mean():.6f}")
+        # Debug volatility distribution
+        if len(future_vol) > 0:
+            print(f"Volatility Target Statistics:")
+            print(f"  Count: {len(future_vol)}")
+            print(f"  Mean: {future_vol.mean():.6f}")
+            print(f"  Min: {future_vol.min():.6f}")
+            print(f"  Max: {future_vol.max():.6f}")
+
         return future_vol
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -96,8 +94,9 @@ class VolatilityModel:
         
         if missing_features:
             print(f"Warning: Missing features: {missing_features}")
+            print(f"Available features: {list(result_df.columns)}")
         
-        # Use only the exact features that exist
+        # Use only the exact 26 features that exist
         result_df = result_df[feature_columns].copy()
         
         # Remove rows with any NaN values
@@ -107,6 +106,7 @@ class VolatilityModel:
             raise ValueError("DataFrame is empty after removing NaN values")
         
         print(f"Volatility model using exactly {len(feature_columns)} features (target: 26)")
+        print(f"Features: {feature_columns}")
         
         self.feature_names = feature_columns
         return result_df
@@ -174,8 +174,7 @@ class VolatilityModel:
             n_jobs=-1
         )
 
-        # Create voting regressor
-        ensemble_model = VotingRegressor(
+        self.model = VotingRegressor(
             estimators=[
                 ('xgboost', xgb_model),
                 ('catboost', catboost_model),
@@ -183,40 +182,41 @@ class VolatilityModel:
             ]
         )
 
-        # Train ensemble model
-        ensemble_model.fit(X_train_scaled, y_train)
-        self.model = ensemble_model
+        # Train model
+        self.model.fit(X_train_scaled, y_train)
 
-        # Make predictions
-        y_pred_train = ensemble_model.predict(X_train_scaled)
-        y_pred_test = ensemble_model.predict(X_test_scaled)
+        # Predictions
+        y_pred = self.model.predict(X_test_scaled)
 
-        # Calculate metrics
-        train_rmse = np.sqrt(mean_squared_error(y_train, y_pred_train))
-        test_rmse = np.sqrt(mean_squared_error(y_test, y_pred_test))
-        train_r2 = r2_score(y_train, y_pred_train)
-        test_r2 = r2_score(y_test, y_pred_test)
+        # Metrics
+        mse = mean_squared_error(y_test, y_pred)
+        mae = mean_absolute_error(y_test, y_pred)
+        metrics = {
+            'mse': mse,
+            'mae': mae,
+            'rmse': np.sqrt(mse)
+        }
 
-        print(f"Training RMSE: {train_rmse:.6f}, R²: {train_r2:.4f}")
-        print(f"Testing RMSE: {test_rmse:.6f}, R²: {test_r2:.4f}")
+        # Feature importance
+        feature_importance = {}
+        try:
+            xgb_estimator = self.model.named_estimators_['xgboost']
+            feature_importance = dict(zip(self.feature_names, xgb_estimator.feature_importances_))
+            
+            # Debug: Show feature importance
+            sorted_importance = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)
+            print(f"Top 5 volatility features: {sorted_importance[:5]}")
+        except Exception as e:
+            print(f"Could not extract feature importance: {e}")
 
         return {
-            'model': ensemble_model,
-            'scaler': self.scaler,
+            'model': self.model,
+            'metrics': metrics,
+            'feature_importance': feature_importance,
             'feature_names': self.feature_names,
-            'metrics': {
-                'train_rmse': train_rmse,
-                'test_rmse': test_rmse,
-                'train_r2': train_r2,
-                'test_r2': test_r2,
-                'rmse': test_rmse
-            },
-            'predictions': {
-                'train': y_pred_train,
-                'test': y_pred_test,
-                'y_train': y_train,
-                'y_test': y_test
-            }
+            'task_type': self.task_type,
+            'predictions': y_pred,
+            'test_indices': X_test.index
         }
 
     def predict(self, X: pd.DataFrame) -> Tuple[np.ndarray, None]:
@@ -233,10 +233,8 @@ class VolatilityModel:
             raise ValueError("No volatility features found in input data")
 
         X_features = X[available_features]
-        
         if self.scaler is None:
             raise ValueError("Scaler not fitted. Model training failed.")
-            
         X_scaled = self.scaler.transform(X_features)
         predictions = self.model.predict(X_scaled)
 
