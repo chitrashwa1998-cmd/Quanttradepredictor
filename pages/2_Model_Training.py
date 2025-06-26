@@ -8,13 +8,38 @@ st.set_page_config(page_title="Model Training", page_icon="🧠", layout="wide")
 st.title("🧠 Model Training")
 st.markdown("Train the volatility forecasting model using your processed data.")
 
-# Check if data and features are available
-if st.session_state.data is None:
-    st.error("❌ No data available. Please upload data first.")
+# Check if data is available
+if 'data' not in st.session_state or st.session_state.data is None:
+    st.error("❌ No data available. Please upload data first in the Data Upload page.")
     st.stop()
 
-if st.session_state.features is None:
-    st.error("❌ No features calculated. Please calculate technical indicators first.")
+# Check if features are available - if not, offer to calculate them
+if 'features' not in st.session_state or st.session_state.features is None:
+    st.warning("⚠️ No features calculated yet. Please calculate technical indicators first.")
+    
+    if st.button("🔧 Calculate Technical Indicators Now", type="primary"):
+        with st.spinner("Calculating technical indicators..."):
+            try:
+                from features.technical_indicators import TechnicalIndicators
+                from utils.data_processing import DataProcessor
+                
+                # Calculate technical indicators
+                features_data = TechnicalIndicators.calculate_all_indicators(st.session_state.data)
+                
+                # Clean the data
+                features_clean = DataProcessor.clean_data(features_data)
+                
+                # Store in session state
+                st.session_state.features = features_clean
+                
+                st.success("✅ Technical indicators calculated successfully!")
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"❌ Error calculating indicators: {str(e)}")
+                import traceback
+                with st.expander("Show error details"):
+                    st.code(traceback.format_exc())
     st.stop()
 
 # Training configuration
@@ -42,26 +67,27 @@ train_volatility = st.checkbox("Train Volatility Model", value=True,
 # Feature engineering status
 st.header("Feature Engineering")
 
-if st.session_state.features is None:
-    st.warning("⚠️ Technical indicators not calculated yet")
-    if st.button("Calculate Technical Indicators"):
-        with st.spinner("Calculating technical indicators..."):
-            try:
-                from features.technical_indicators import TechnicalIndicators
-                st.session_state.features = TechnicalIndicators.calculate_all_indicators(st.session_state.data)
-                st.success("✅ Technical indicators calculated successfully!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Error calculating indicators: {str(e)}")
-else:
+if 'features' in st.session_state and st.session_state.features is not None:
     st.success("✅ Technical indicators ready")
 
     # Show feature summary
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Total Features", len(st.session_state.features.columns))
     with col2:
         st.metric("Data Points", len(st.session_state.features))
+    with col3:
+        # Count non-OHLC features
+        ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        feature_cols = [col for col in st.session_state.features.columns if col not in ohlc_cols]
+        st.metric("Engineered Features", len(feature_cols))
+        
+    # Show sample of features
+    with st.expander("View Feature Sample"):
+        st.dataframe(st.session_state.features.head(10), use_container_width=True)
+        
+else:
+    st.info("ℹ️ Features will be automatically calculated when training starts")
 
 # Training section
 st.header("Model Training")
@@ -79,16 +105,31 @@ if st.button("🚀 Train Volatility Model", type="primary", disabled=not train_v
 
             # Prepare data
             with st.spinner("Preparing training data..."):
-                combined_data = st.session_state.features.copy()
+                # If features aren't calculated, calculate them now
+                if 'features' not in st.session_state or st.session_state.features is None:
+                    st.info("Calculating technical indicators...")
+                    from features.technical_indicators import TechnicalIndicators
+                    from utils.data_processing import DataProcessor
+                    
+                    features_data = TechnicalIndicators.calculate_all_indicators(st.session_state.data)
+                    combined_data = DataProcessor.clean_data(features_data)
+                    st.session_state.features = combined_data
+                else:
+                    combined_data = st.session_state.features.copy()
 
                 # Ensure we have the required OHLC columns for target creation
                 if not all(col in combined_data.columns for col in ['Open', 'High', 'Low', 'Close']):
                     # Add OHLC data if missing
                     for col in ['Open', 'High', 'Low', 'Close']:
-                        if col in st.session_state.data.columns:
+                        if col in st.session_state.data.columns and col not in combined_data.columns:
                             combined_data[col] = st.session_state.data[col]
 
-                st.info(f"📊 Training data prepared: {len(combined_data)} rows")
+                # Validate data
+                if len(combined_data) < 100:
+                    st.error("❌ Insufficient data for training. Need at least 100 rows.")
+                    st.stop()
+
+                st.info(f"📊 Training data prepared: {len(combined_data)} rows with {len(combined_data.columns)} features")
 
             # Train the model
             with st.spinner("Training volatility model..."):
