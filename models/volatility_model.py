@@ -51,7 +51,7 @@ class VolatilityModel:
         future_vol = current_vol.shift(-1)
 
         # Clean volatility data - forward fill then backward fill only
-        future_vol = future_vol.fillna(method='ffill').fillna(method='bfill')
+        future_vol = future_vol.ffill().bfill()
         future_vol = future_vol.clip(lower=0.0001)  # Minimum volatility threshold
 
         # Filter out infinite values
