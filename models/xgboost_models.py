@@ -1,17 +1,7 @@
-import pandas as pd
-import numpy as np
-import xgboost as xgb
-from sklearn.model_selection import train_test_split, TimeSeriesSplit
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, classification_report, mean_squared_error, mean_absolute_error
-from sklearn.ensemble import VotingClassifier, VotingRegressor, RandomForestClassifier, RandomForestRegressor
-from sklearn.calibration import CalibratedClassifierCV
-from catboost import CatBoostClassifier, CatBoostRegressor
-from typing import Dict, Tuple, Any
-import streamlit as st
-from datetime import datetime
+from .model_manager import ModelManager
 
-class QuantTradingModels:
+# Backward compatibility - use ModelManager as QuantTradingModels
+class QuantTradingModels(ModelManager):
     """Ensemble models using XGBoost, CatBoost, and Random Forest for quantitative trading predictions."""
 
     def __init__(self):
