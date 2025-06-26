@@ -18,7 +18,7 @@ class VolatilityModel:
         self.feature_names = []
         self.task_type = 'regression'
         self.model_name = 'volatility'
-        
+
         # Exact 26 features for volatility prediction - DO NOT MODIFY
         self.volatility_features = [
             # Technical indicators (5 features)
@@ -38,10 +38,10 @@ class VolatilityModel:
         """Create volatility target from raw data only."""
         # Use Close column from raw data - no modifications
         close_col = 'Close' if 'Close' in df.columns else 'close'
-        
+
         if close_col not in df.columns:
             raise ValueError(f"Required column '{close_col}' not found in data")
-        
+
         volatility_window = 10
 
         # Calculate rolling volatility using percentage returns from raw data
@@ -52,7 +52,7 @@ class VolatilityModel:
         # Clean volatility data - forward fill then backward fill only
         future_vol = future_vol.fillna(method='ffill').fillna(method='bfill')
         future_vol = future_vol.clip(lower=0.0001)  # Minimum volatility threshold
-        
+
         # Filter out infinite values
         future_vol = future_vol[np.isfinite(future_vol)]
 
@@ -68,55 +68,55 @@ class VolatilityModel:
         from features.custom_engineered import compute_custom_volatility_features
         from features.lagged_features import add_volatility_lagged_features
         from features.time_context_features import add_time_context_features
-        
+
         # Start with the input dataframe
         result_df = df.copy()
-        
+
         # 1. Calculate technical indicators
         result_df = TechnicalIndicators.calculate_volatility_indicators(result_df)
-        
+
         # 2. Add custom engineered features
         result_df = compute_custom_volatility_features(result_df)
-        
+
         # 3. Add lagged features
         result_df = add_volatility_lagged_features(result_df)
-        
+
         # 4. Add time context features
         result_df = add_time_context_features(result_df)
-        
+
         # Extract ONLY the exact 26 features specified - exclude any extra features
         feature_columns = []
         missing_features = []
         extra_features = []
-        
+
         for feature in self.volatility_features:
             if feature in result_df.columns:
                 feature_columns.append(feature)
             else:
                 missing_features.append(feature)
-        
+
         # Check for extra features not in our specification
         for col in result_df.columns:
             if col not in self.volatility_features:
                 extra_features.append(col)
-        
+
         if missing_features:
             print(f"Warning: Missing features: {missing_features}")
-        
+
         if extra_features:
             print(f"Warning: Excluding extra features: {extra_features}")
-        
+
         # Use only the exact 26 features that exist
         result_df = result_df[feature_columns].copy()
-        
+
         # Remove rows with any NaN values
         result_df = result_df.dropna()
-        
+
         if result_df.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
-        
+
         print(f"Volatility model using exactly {len(feature_columns)} features (target: 26)")
-        
+
         self.feature_names = feature_columns
         return result_df
 
@@ -242,10 +242,10 @@ class VolatilityModel:
             raise ValueError("No volatility features found in input data")
 
         X_features = X[available_features]
-        
+
         if self.scaler is None:
             raise ValueError("Scaler not fitted. Model training failed.")
-            
+
         X_scaled = self.scaler.transform(X_features)
         predictions = self.model.predict(X_scaled)
 

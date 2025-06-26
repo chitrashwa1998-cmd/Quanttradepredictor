@@ -39,28 +39,37 @@ class TechnicalIndicators:
 
     @staticmethod
     def calculate_all_indicators(df):
-        """
-        Calculate volatility-specific indicators for the dataset
-        Only includes: ATR, Bollinger Band Width, Keltner Channel Width, RSI, Donchian Channel Width
-        """
-        df = df.copy()
+        """Calculate all technical indicators for the dataset"""
+        print("🔧 Calculating comprehensive technical indicators...")
 
-        # Ensure we have the required columns
-        required_columns = ['Open', 'High', 'Low', 'Close']
-        if not all(col in df.columns for col in required_columns):
-            raise ValueError(f"DataFrame must contain columns: {required_columns}")
+        # Validate input data
+        if not TechnicalIndicators.validate_ohlc_data(df):
+            raise ValueError("Invalid OHLC data provided")
 
-        try:
-            # Calculate volatility-specific indicators only
-            df = TechnicalIndicators.calculate_volatility_indicators(df)
+        # Create a copy to avoid modifying original data
+        result_df = df.copy()
 
-            # Remove any duplicate columns
-            df = df.loc[:, ~df.columns.duplicated()]
+        # Calculate basic indicators
+        result_df = TechnicalIndicators.calculate_volatility_indicators(result_df)
 
-            print(f"✅ Calculated {len([col for col in df.columns if col not in required_columns])} volatility-focused indicators: ATR, BB_width, Keltner_width, RSI, Donchian_width")
+        # Add custom engineered features
+        from features.custom_engineered import add_custom_features
+        result_df = add_custom_features(result_df)
 
-            return df
+        # Add lagged features
+        from features.lagged_features import add_lagged_features
+        result_df = add_lagged_features(result_df)
 
-        except Exception as e:
-            print(f"Error calculating indicators: {str(e)}")
-            return df
+        # Add time context features
+        from features.time_context_features import add_time_context_features
+        result_df = add_time_context_features(result_df)
+
+        # Final cleanup
+        result_df = result_df.replace([np.inf, -np.inf], np.nan)
+        result_df = result_df.dropna()
+
+        feature_cols = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+        print(f"✅ Calculated {len(feature_cols)} technical indicators")
+        print(f"Generated features: {feature_cols}")
+
+        return result_df
