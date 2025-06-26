@@ -51,33 +51,46 @@ class VolatilityModel:
         return future_vol
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Prepare features specifically for volatility model."""
+        """Prepare all features for volatility model."""
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
         from features.technical_indicators import TechnicalIndicators
+        from features.custom_engineered import compute_custom_volatility_features
+        from features.lagged_features import add_volatility_lagged_features
+        from features.time_context_features import add_time_context_features
         
-        # Calculate volatility-specific indicators
-        result_df = TechnicalIndicators.calculate_volatility_indicators(df)
+        # Start with the input dataframe
+        result_df = df.copy()
         
-        # Define volatility-specific features
-        volatility_features = ['atr', 'bb_width', 'kc_width', 'rsi', 'dc_width']
+        # 1. Calculate technical indicators
+        result_df = TechnicalIndicators.calculate_volatility_indicators(result_df)
         
-        # Check which features are available
-        available_features = [col for col in volatility_features if col in result_df.columns]
+        # 2. Add custom engineered features
+        result_df = compute_custom_volatility_features(result_df)
         
-        if len(available_features) == 0:
-            raise ValueError(f"No volatility features found. Available columns: {list(result_df.columns)}")
+        # 3. Add lagged features
+        result_df = add_volatility_lagged_features(result_df)
         
-        # Select only volatility features and remove NaN
-        result_df = result_df[available_features].dropna()
+        # 4. Add time context features
+        result_df = add_time_context_features(result_df)
+        
+        # Define all feature columns (excluding OHLC)
+        feature_columns = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'open', 'high', 'low', 'close']]
+        
+        # Remove any NaN values
+        result_df = result_df[feature_columns].dropna()
         
         if result_df.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
         
-        print(f"Volatility model using {len(available_features)} features: {available_features}")
+        print(f"Volatility model using {len(feature_columns)} total features:")
+        print(f"  Technical indicators: {[col for col in feature_columns if col in ['atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width']]}")
+        print(f"  Custom features: {[col for col in feature_columns if 'volatility' in col.lower() or col in ['high_low_ratio', 'gap_pct', 'price_vs_vwap', 'volatility_spike_flag', 'candle_asymmetry_ratio', 'parkinson_volatility']]}")
+        print(f"  Lagged features: {[col for col in feature_columns if 'lag_' in col]}")
+        print(f"  Time features: {[col for col in feature_columns if col in ['hour', 'minute', 'day_of_week', 'is_post_10am', 'is_opening_range', 'is_closing_phase', 'is_weekend']]}")
         
-        self.feature_names = available_features
+        self.feature_names = feature_columns
         return result_df
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:

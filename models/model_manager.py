@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Any
@@ -71,14 +70,28 @@ class ModelManager:
         targets = {}
 
         try:
+            from features.technical_indicators import TechnicalIndicators
+            from features.custom_engineered import compute_custom_volatility_features
+            from features.lagged_features import add_volatility_lagged_features
+            from features.time_context_features import add_time_context_features
+
+            # Calculate all features
+            df_with_features = df.copy()
+            df_with_features = TechnicalIndicators.calculate_volatility_indicators(df_with_features)
+            df_with_features = compute_custom_volatility_features(df_with_features)
+            df_with_features = add_volatility_lagged_features(df_with_features)
+            df_with_features = add_time_context_features(df_with_features)
+
             # Prepare features for volatility model
-            features['volatility'] = self.models['volatility'].prepare_features(df)
+            X_volatility = self.models['volatility'].prepare_features(df_with_features)
 
             # Create targets for volatility model
-            targets['volatility'] = self.models['volatility'].create_target(df)
+            y_volatility = self.models['volatility'].create_target(df)
 
-            print(f"✅ Prepared volatility: {features['volatility'].shape[1]} features, {len(targets['volatility'])} targets")
+            features['volatility'] = X_volatility
+            targets['volatility'] = y_volatility
 
+            print(f"✅ Prepared volatility features: {X_volatility.shape} with all feature types")
         except Exception as e:
             print(f"❌ Error preparing volatility model: {str(e)}")
             features['volatility'] = None

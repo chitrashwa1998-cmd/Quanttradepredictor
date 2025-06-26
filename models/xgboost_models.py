@@ -73,33 +73,43 @@ class QuantTradingModels(ModelManager):
             print(f"Error saving models to database: {str(e)}")
 
     def prepare_features(self, df: pd.DataFrame, model_name: str = 'volatility') -> pd.DataFrame:
-        """Prepare features for volatility model training."""
+        """Prepare all features for volatility model training."""
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
-        # Remove any rows with NaN values
-        df_clean = df.dropna()
+        from features.technical_indicators import TechnicalIndicators
+        from features.custom_engineered import compute_custom_volatility_features
+        from features.lagged_features import add_volatility_lagged_features
+        from features.time_context_features import add_time_context_features
 
-        if df_clean.empty:
-            raise ValueError("DataFrame is empty after removing NaN values")
-
-        # Use volatility-specific features only
-        volatility_features = ['atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width']
-
-        # Check which features are available
-        available_features = [col for col in volatility_features if col in df_clean.columns]
-
-        if len(available_features) == 0:
-            raise ValueError(f"No volatility features found. Available columns: {list(df_clean.columns)}")
-
-        result_df = df_clean[available_features]
+        # Start with the input dataframe
+        result_df = df.copy()
+        
+        # 1. Calculate technical indicators
+        result_df = TechnicalIndicators.calculate_volatility_indicators(result_df)
+        
+        # 2. Add custom engineered features
+        result_df = compute_custom_volatility_features(result_df)
+        
+        # 3. Add lagged features
+        result_df = add_volatility_lagged_features(result_df)
+        
+        # 4. Add time context features
+        result_df = add_time_context_features(result_df)
+        
+        # Define all feature columns (excluding OHLC)
+        feature_columns = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'open', 'high', 'low', 'close']]
+        
+        # Remove any NaN values
+        result_df = result_df[feature_columns].dropna()
 
         if result_df.empty:
-            raise ValueError("Feature DataFrame is empty after column selection")
+            raise ValueError("Feature DataFrame is empty after removing NaN values")
 
         # Store feature names
         self.feature_names = list(result_df.columns)
-        print(f"Volatility model prepared with {len(self.feature_names)} features: {self.feature_names}")
+        print(f"Volatility model prepared with {len(self.feature_names)} total features:")
+        print(f"  Features: {self.feature_names}")
 
         return result_df
 
@@ -343,16 +353,18 @@ class QuantTradingModels(ModelManager):
         if X.empty:
             raise ValueError("Input DataFrame is empty")
 
-        # Use volatility-specific features
-        volatility_features = ['atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width']
-        available_features = [col for col in volatility_features if col in X.columns]
-
-        if len(available_features) == 0:
-            raise ValueError(f"No volatility features found in prediction data. Available columns: {list(X.columns)}")
-
-        # Keep only the specified features
-        X_features = X[available_features]
-        print(f"Using {len(available_features)} volatility features for prediction: {available_features}")
+        # Use all available features that match the trained model
+        if self.feature_names:
+            available_features = [col for col in self.feature_names if col in X.columns]
+            if len(available_features) == 0:
+                raise ValueError(f"No trained features found in prediction data. Expected: {self.feature_names[:10]}...")
+            X_features = X[available_features]
+        else:
+            # Fallback: exclude OHLC columns
+            feature_columns = [col for col in X.columns if col not in ['Open', 'High', 'Low', 'Close', 'open', 'high', 'low', 'close']]
+            X_features = X[feature_columns]
+            
+        print(f"Using {len(X_features.columns)} features for prediction")
 
         # Handle scaling
         if 'volatility' in self.scalers:
