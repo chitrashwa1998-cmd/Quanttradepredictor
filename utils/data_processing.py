@@ -151,10 +151,14 @@ class DataProcessor:
                         '%d/%m/%Y',             # 01/12/2023
                         '%d.%m.%Y',             # 01.12.2023
                         '%Y-%m-%d %H:%M:%S',    # 2023-12-01 09:30:00
+                        '%Y-%m-%d %H:%M',       # 2023-12-01 09:30
                         '%Y-%m-%d',             # 2023-12-01
                         '%m/%d/%Y %H:%M:%S',    # 12/01/2023 09:30:00
+                        '%m/%d/%Y %H:%M',       # 12/01/2023 09:30
                         '%m/%d/%Y',             # 12/01/2023
                         '%Y/%m/%d',             # 2023/12/01
+                        '%m-%d-%Y %H:%M:%S',    # 12-01-2023 09:30:00
+                        '%m-%d-%Y %H:%M',       # 12-01-2023 09:30
                         '%m-%d-%Y'              # 12-01-2023
                     ]
                     parsed = False
@@ -174,7 +178,7 @@ class DataProcessor:
                     
                     if not parsed:
                         attempted_formats = ', '.join(date_formats[:5])  # Show first 5 attempted formats
-                        return None, f"Could not parse date column '{date_col}'. Sample dates: {sample_dates}. Attempted formats: {attempted_formats}. Last error: {last_error}. Please ensure your dates match one of the supported formats (preferably DD-MM-YYYY HH:MM:SS)."
+                        return None, f"Could not parse date column '{date_col}'. Sample dates: {sample_dates}. Data type: {df[date_col].dtype}. Attempted formats: {attempted_formats}. Last error: {last_error}. Please ensure your dates match one of the supported formats (preferably DD-MM-YYYY HH:MM:SS). If using Excel, save as CSV with proper date formatting."
                 
                 df.set_index(date_col, inplace=True)
             else:
