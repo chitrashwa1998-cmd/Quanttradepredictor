@@ -84,9 +84,10 @@ class VolatilityModel:
         # 4. Add time context features
         result_df = add_time_context_features(result_df)
         
-        # Extract ONLY the exact 26 features specified
+        # Extract ONLY the exact 26 features specified - exclude any extra features
         feature_columns = []
         missing_features = []
+        extra_features = []
         
         for feature in self.volatility_features:
             if feature in result_df.columns:
@@ -94,10 +95,18 @@ class VolatilityModel:
             else:
                 missing_features.append(feature)
         
+        # Check for extra features not in our specification
+        for col in result_df.columns:
+            if col not in self.volatility_features:
+                extra_features.append(col)
+        
         if missing_features:
             print(f"Warning: Missing features: {missing_features}")
         
-        # Use only the exact features that exist
+        if extra_features:
+            print(f"Warning: Excluding extra features: {extra_features}")
+        
+        # Use only the exact 26 features that exist
         result_df = result_df[feature_columns].copy()
         
         # Remove rows with any NaN values

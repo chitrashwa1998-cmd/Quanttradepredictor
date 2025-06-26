@@ -33,6 +33,12 @@ def compute_custom_volatility_features(df):
     # Volatility spike flag
     rolling_vol = df['realized_volatility'].rolling(20).mean()
     df['volatility_spike_flag'] = (df['realized_volatility'] > rolling_vol * 1.5).astype(int)
+    
+    # Remove any extra features that might cause feature count mismatch
+    extra_features = ['candle_asymmetry_ratio']
+    for feature in extra_features:
+        if feature in df.columns:
+            df = df.drop(columns=[feature])
 
     # Candle body to range ratio
     body_size = abs(df[close_col] - df[open_col])
