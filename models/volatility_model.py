@@ -18,11 +18,19 @@ class VolatilityModel:
         self.task_type = 'regression'
         self.model_name = 'volatility'
         
-        # Specific features for volatility prediction
+        # Exact 26 features for volatility prediction - DO NOT MODIFY
         self.volatility_features = [
-            'volatility_10', 'atr', 'volatility_regime', 'ema_5', 
-            'bb_upper', 'bb_lower', 'bb_width', 'high_low_ratio', 
-            'price_vs_vwap', 'momentum_acceleration', 'rsi', 'bb_position'
+            # Technical indicators (5 features)
+            'atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width',
+            # Custom engineered features (7 features)
+            'log_return', 'realized_volatility', 'parkinson_volatility', 
+            'high_low_ratio', 'gap_pct', 'price_vs_vwap', 'volatility_spike_flag',
+            # Lagged features (7 features)
+            'lag_volatility_1', 'lag_volatility_3', 'lag_volatility_5',
+            'lag_atr_1', 'lag_atr_3', 'lag_bb_width', 'volatility_regime',
+            # Time context features (7 features)
+            'hour', 'minute', 'day_of_week', 'is_post_10am', 
+            'is_opening_range', 'is_closing_phase', 'is_weekend'
         ]
 
     def create_target(self, df: pd.DataFrame) -> pd.Series:
@@ -41,17 +49,16 @@ class VolatilityModel:
 
         # Debug volatility distribution
         if len(future_vol) > 0:
-            vol_stats = future_vol.describe()
             print(f"Volatility Target Statistics:")
-            print(f"  Count: {vol_stats['count']}")
-            print(f"  Mean: {vol_stats['mean']:.6f}")
-            print(f"  Min: {vol_stats['min']:.6f}")
-            print(f"  Max: {vol_stats['max']:.6f}")
+            print(f"  Count: {len(future_vol)}")
+            print(f"  Mean: {future_vol.mean():.6f}")
+            print(f"  Min: {future_vol.min():.6f}")
+            print(f"  Max: {future_vol.max():.6f}")
 
-        return future_vol
+        return pd.Series(future_vol, index=future_vol.index)
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Prepare all features for volatility model."""
+        """Prepare exactly 26 features for volatility model - NO MODIFICATIONS ALLOWED."""
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
@@ -75,24 +82,34 @@ class VolatilityModel:
         # 4. Add time context features
         result_df = add_time_context_features(result_df)
         
-        # Define all feature columns (excluding OHLC)
-        ohlc_columns = ['Open', 'High', 'Low', 'Close', 'open', 'high', 'low', 'close', 'OPEN', 'HIGH', 'LOW', 'CLOSE']
-        feature_columns = [col for col in result_df.columns if col not in ohlc_columns]
+        # Extract ONLY the exact 26 features specified
+        feature_columns = []
+        missing_features = []
         
-        # Remove any NaN values
-        result_df = result_df[feature_columns].dropna()
+        for feature in self.volatility_features:
+            if feature in result_df.columns:
+                feature_columns.append(feature)
+            else:
+                missing_features.append(feature)
+        
+        if missing_features:
+            print(f"Warning: Missing features: {missing_features}")
+            print(f"Available features: {list(result_df.columns)}")
+        
+        # Use only the exact 26 features that exist
+        result_df = result_df[feature_columns].copy()
+        
+        # Remove rows with any NaN values
+        result_df = result_df.dropna()
         
         if result_df.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
         
-        print(f"Volatility model using {len(feature_columns)} total features:")
-        print(f"  Technical indicators: {[col for col in feature_columns if col in ['atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width']]}")
-        print(f"  Custom features: {[col for col in feature_columns if 'volatility' in col.lower() or col in ['high_low_ratio', 'gap_pct', 'price_vs_vwap', 'volatility_spike_flag', 'candle_asymmetry_ratio', 'parkinson_volatility']]}")
-        print(f"  Lagged features: {[col for col in feature_columns if 'lag_' in col]}")
-        print(f"  Time features: {[col for col in feature_columns if col in ['hour', 'minute', 'day_of_week', 'is_post_10am', 'is_opening_range', 'is_closing_phase', 'is_weekend']]}")
+        print(f"Volatility model using exactly {len(feature_columns)} features (target: 26)")
+        print(f"Features: {feature_columns}")
         
         self.feature_names = feature_columns
-        return result_df
+        return pd.DataFrame(result_df, columns=feature_columns)
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:
         """Train volatility prediction model."""
@@ -216,6 +233,8 @@ class VolatilityModel:
             raise ValueError("No volatility features found in input data")
 
         X_features = X[available_features]
+        if self.scaler is None:
+            raise ValueError("Scaler not fitted. Model training failed.")
         X_scaled = self.scaler.transform(X_features)
         predictions = self.model.predict(X_scaled)
 

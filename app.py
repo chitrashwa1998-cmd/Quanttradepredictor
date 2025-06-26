@@ -52,7 +52,7 @@ def initialize_session_state():
             if st.session_state.data is None:
                 recovered_data = trading_db.load_ohlc_data("main_dataset")
                 if recovered_data is not None:
-                    st.session_state.data = recovered_datata
+                    st.session_state.data = recovered_data
 
                     # Auto-calculate features if data is recovered
                     try:
