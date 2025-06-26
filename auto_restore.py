@@ -4,6 +4,7 @@ This script ensures trained models persist between app restarts
 """
 
 import streamlit as st
+import pandas as pd
 from datetime import datetime
 
 def auto_restore_system():
