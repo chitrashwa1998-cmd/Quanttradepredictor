@@ -1,49 +1,47 @@
-
 import pandas as pd
 import numpy as np
 
-def create_volatility_features(df):
-    """Create volatility-specific custom features"""
-    
-    # Calculate rolling volatility
-    returns = df['Close'].pct_change()
-    df['volatility_10'] = returns.rolling(10).std()
-    df['volatility_20'] = returns.rolling(20).std()
-    
-    # Volatility ratios
-    df['volatility_ratio'] = df['volatility_10'] / df['volatility_20'].replace(0, np.nan)
-    
-    # Volatility regime detection
-    df['volatility_regime'] = np.where(df['volatility_10'] > df['volatility_20'].rolling(50).quantile(0.7), 'high', 'low')
-    df['volatility_regime'] = np.where(df['volatility_10'] < df['volatility_20'].rolling(50).quantile(0.3), 'low', df['volatility_regime'])
-    df['volatility_regime'] = np.where((df['volatility_10'] >= df['volatility_20'].rolling(50).quantile(0.3)) & 
-                                     (df['volatility_10'] <= df['volatility_20'].rolling(50).quantile(0.7)), 'medium', df['volatility_regime'])
-    
-    # Convert to numeric for model training
-    volatility_regime_map = {'low': 0, 'medium': 1, 'high': 2}
-    df['volatility_regime'] = df['volatility_regime'].map(volatility_regime_map)
-    
-    return df
+def compute_custom_volatility_features(df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+    """
+    Compute custom engineered volatility features from OHLC data.
+    Assumes df has columns: ['open', 'high', 'low', 'close'] with datetime index.
+    Volume is not required.
+    """
+    df = df.copy()
 
-def create_candle_behavior_features(df):
-    """Create basic candle behavior features for volatility context"""
-    
-    # Basic candle metrics
-    df['body_size'] = abs(df['Close'] - df['Open'])
-    df['upper_wick'] = df['High'] - df[['Open', 'Close']].max(axis=1)
-    df['lower_wick'] = df[['Open', 'Close']].min(axis=1) - df['Low']
-    df['total_range'] = df['High'] - df['Low']
-    
-    # Ratios for volatility analysis
-    df['body_ratio'] = df['body_size'] / df['total_range'].replace(0, np.nan)
-    df['wick_ratio'] = (df['upper_wick'] + df['lower_wick']) / df['total_range'].replace(0, np.nan)
-    
-    return df
+    # 1. Log returns
+    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
 
-def create_all_custom_features(df):
-    """Create all volatility-focused custom features"""
-    
-    df = create_volatility_features(df)
-    df = create_candle_behavior_features(df)
-    
+    # 2. Realized volatility (rolling std of log returns)
+    df['realized_volatility'] = df['log_return'].rolling(window=window).std()
+
+    # 3. Parkinson volatility
+    df['parkinson_volatility'] = (1 / (4 * np.log(2))) * ((np.log(df['high'] / df['low'])) ** 2)
+    df['parkinson_volatility'] = df['parkinson_volatility'].rolling(window=window).mean()
+
+    # 4. High-Low ratio
+    df['high_low_ratio'] = (df['high'] / df['low']) - 1
+
+    # 5. Gap percentage from previous close
+    df['prev_close'] = df['close'].shift(1)
+    df['gap_pct'] = (df['open'] - df['prev_close']) / df['prev_close']
+
+    # 6. Price vs VWAP (using rolling VWAP without volume)
+    df['vwap_like'] = (df['high'] + df['low'] + df['close']) / 3
+    df['rolling_vwap'] = df['vwap_like'].rolling(window=window).mean()
+    df['price_vs_vwap'] = (df['close'] - df['rolling_vwap']) / df['rolling_vwap']
+
+    # 7. Volatility spike flag (candle range exceeds rolling high range by 2 std devs)
+    df['candle_range'] = df['high'] - df['low']
+    df['range_mean'] = df['candle_range'].rolling(window).mean()
+    df['range_std'] = df['candle_range'].rolling(window).std()
+    df['volatility_spike_flag'] = (df['candle_range'] > df['range_mean'] + 2 * df['range_std']).astype(int)
+
+    # 8. Candle body asymmetry ratio
+    df['body'] = abs(df['close'] - df['open'])
+    df['candle_asymmetry_ratio'] = df['body'] / df['candle_range']
+
+    # Optional: drop helper columns
+    df.drop(['prev_close', 'vwap_like', 'rolling_vwap', 'range_mean', 'range_std', 'body'], axis=1, inplace=True)
+
     return df
