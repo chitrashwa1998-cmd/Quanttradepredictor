@@ -111,6 +111,10 @@ if st.button("🚀 Generate Volatility Predictions", type="primary"):
 
             st.success(f"✅ Generated {len(predictions)} volatility predictions!")
 
+    except Exception as e:
+        st.error(f"❌ Failed to generate predictions: {str(e)}")
+        st.info("Please check your model training and data processing.")
+
 # Display predictions if available
 if hasattr(st.session_state, 'predictions') and st.session_state.predictions is not None:
     pred_df = st.session_state.predictions
