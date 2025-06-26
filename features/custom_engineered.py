@@ -33,16 +33,20 @@ def compute_custom_volatility_features(df):
     # Volatility spike flag
     rolling_vol = df['realized_volatility'].rolling(20).mean()
     df['volatility_spike_flag'] = (df['realized_volatility'] > rolling_vol * 1.5).astype(int)
-    
-    # Remove any extra features that might cause feature count mismatch
-    extra_features = ['candle_asymmetry_ratio']
-    for feature in extra_features:
-        if feature in df.columns:
-            df = df.drop(columns=[feature])
 
     # Candle body to range ratio
     body_size = abs(df[close_col] - df[open_col])
     candle_range = df[high_col] - df[low_col]
-    df['candle_asymmetry_ratio'] = body_size / (candle_range + 1e-10)
+
+    # Avoid division by zero
+    candle_range = candle_range.replace(0, np.nan)
+    df['candle_body_ratio'] = body_size / candle_range
+
+    # Replace infinities with NaN
+    df['candle_body_ratio'] = df['candle_body_ratio'].replace([np.inf, -np.inf], np.nan)
+
+    # Ensure we don't have candle_asymmetry_ratio which causes feature mismatch
+    if 'candle_asymmetry_ratio' in df.columns:
+        df = df.drop(columns=['candle_asymmetry_ratio'])
 
     return df
