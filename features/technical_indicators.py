@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from typing import Dict, List
-import pandas_ta as ta
 
 class TechnicalIndicators:
     """Calculate volatility-specific technical indicators for trading analysis."""

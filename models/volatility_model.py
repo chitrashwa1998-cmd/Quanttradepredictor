@@ -54,8 +54,14 @@ class VolatilityModel:
         future_vol = future_vol.ffill().bfill()
         future_vol = future_vol.clip(lower=0.0001)  # Minimum volatility threshold
 
-        # Filter out infinite values
+        # Filter out infinite values and ensure it's a Series
         future_vol = future_vol[np.isfinite(future_vol)]
+        
+        # Ensure return type is Series
+        if isinstance(future_vol, pd.DataFrame):
+            future_vol = future_vol.iloc[:, 0]
+        
+        future_vol = pd.Series(future_vol, name='volatility_target')
 
         print(f"Volatility target statistics: Count={len(future_vol)}, Mean={future_vol.mean():.6f}")
         return future_vol
@@ -107,8 +113,11 @@ class VolatilityModel:
         if extra_features:
             print(f"Warning: Excluding extra features: {extra_features}")
 
-        # Use only the exact 26 features that exist
-        result_df = result_df[feature_columns].copy()
+        # Use only the exact features that exist
+        if feature_columns:
+            result_df = result_df[feature_columns].copy()
+        else:
+            raise ValueError("No features found matching the required 27 features")
 
         # Remove rows with any NaN values
         result_df = result_df.dropna()
@@ -117,6 +126,13 @@ class VolatilityModel:
             raise ValueError("DataFrame is empty after removing NaN values")
 
         print(f"Volatility model using exactly {len(feature_columns)} features (target: 27)")
+        
+        # Ensure return type is DataFrame
+        if isinstance(result_df, pd.Series):
+            result_df = pd.DataFrame(result_df)
+        
+        # Ensure it's a proper DataFrame
+        result_df = pd.DataFrame(result_df)
 
         self.feature_names = feature_columns
         return result_df
