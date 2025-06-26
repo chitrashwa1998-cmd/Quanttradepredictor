@@ -51,32 +51,28 @@ class DirectionModel:
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
-        # Remove any rows with NaN values
-        df_clean = df.dropna()
-
-        if df_clean.empty:
-            raise ValueError("DataFrame is empty after removing NaN values")
-
-        # Select feature columns (exclude OHLC and target columns)
-        feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
-
-        # Remove data leakage features
-        leakage_features = [
-            'Prediction', 'predicted_direction', 'predictions',
-            'Signal', 'Signal_Name', 'Confidence',
-            'accuracy', 'precision', 'recall'
-        ]
-        feature_cols = [col for col in feature_cols if col not in leakage_features]
-
-        if not feature_cols:
-            raise ValueError("No feature columns found. Make sure technical indicators are calculated.")
-
-        result_df = df_clean[feature_cols]
-
+        from features.technical_indicators import TechnicalIndicators
+        
+        # Calculate direction-specific indicators
+        result_df = TechnicalIndicators.calculate_direction_indicators(df)
+        
+        # Define direction-specific features
+        direction_features = ['rsi', 'macd', 'macd_signal', 'ema_fast', 'ema_slow', 'adx', 'obv', 'stoch_k', 'stoch_d']
+        
+        # Check which features are available
+        available_features = [col for col in direction_features if col in result_df.columns]
+        
+        if len(available_features) == 0:
+            raise ValueError(f"No direction features found. Available columns: {list(result_df.columns)}")
+        
+        # Select only direction features and remove NaN
+        result_df = result_df[available_features].dropna()
+        
         if result_df.empty:
-            raise ValueError("Feature DataFrame is empty after column selection")
-
+            raise ValueError("DataFrame is empty after removing NaN values")
+        
+        print(f"Direction model using {len(available_features)} features: {available_features}")
+        
         return result_df
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:

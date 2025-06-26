@@ -55,25 +55,29 @@ class VolatilityModel:
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
-        df_clean = df.dropna()
-        if df_clean.empty:
+        from features.technical_indicators import TechnicalIndicators
+        
+        # Calculate volatility-specific indicators
+        result_df = TechnicalIndicators.calculate_volatility_indicators(df)
+        
+        # Define volatility-specific features
+        volatility_features = ['atr', 'bb_width', 'kc_width', 'rsi', 'dc_width']
+        
+        # Check which features are available
+        available_features = [col for col in volatility_features if col in result_df.columns]
+        
+        if len(available_features) == 0:
+            raise ValueError(f"No volatility features found. Available columns: {list(result_df.columns)}")
+        
+        # Select only volatility features and remove NaN
+        result_df = result_df[available_features].dropna()
+        
+        if result_df.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
-
-        # Filter to only include volatility-specific features
-        available_volatility_features = [col for col in self.volatility_features if col in df_clean.columns]
         
-        if len(available_volatility_features) == 0:
-            raise ValueError(f"None of the specified volatility features found. Available columns: {list(df_clean.columns)}")
+        print(f"Volatility model using {len(available_features)} features: {available_features}")
         
-        result_df = df_clean[available_volatility_features]
-        
-        print(f"Using {len(available_volatility_features)} specified features for volatility model: {available_volatility_features}")
-        
-        if len(available_volatility_features) < len(self.volatility_features):
-            missing_features = [f for f in self.volatility_features if f not in available_volatility_features]
-            print(f"Warning: Missing volatility features: {missing_features}")
-
-        self.feature_names = available_volatility_features
+        self.feature_names = available_features
         return result_df
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:

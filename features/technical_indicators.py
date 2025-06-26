@@ -100,6 +100,271 @@ class TechnicalIndicators:
         return pd.Series(obv_values, index=close.index)
     
     @staticmethod
+    def adx(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
+        """Average Directional Index"""
+        tr = pd.concat([high - low, 
+                       (high - close.shift()).abs(), 
+                       (low - close.shift()).abs()], axis=1).max(axis=1)
+        
+        plus_dm = high.diff()
+        minus_dm = -low.diff()
+        plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+        minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+        
+        plus_di = 100 * (plus_dm.rolling(window).mean() / tr.rolling(window).mean())
+        minus_di = 100 * (minus_dm.rolling(window).mean() / tr.rolling(window).mean())
+        
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+        adx = dx.rolling(window).mean()
+        
+        return adx
+    
+    @staticmethod
+    def keltner_channel(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 20, multiplier: float = 2) -> Dict[str, pd.Series]:
+        """Keltner Channel"""
+        ema = TechnicalIndicators.ema(close, window)
+        atr = TechnicalIndicators.atr(high, low, close, window)
+        
+        upper = ema + (multiplier * atr)
+        lower = ema - (multiplier * atr)
+        width = upper - lower
+        
+        return {
+            'upper': upper,
+            'middle': ema,
+            'lower': lower,
+            'width': width
+        }
+    
+    @staticmethod
+    def donchian_channel(high: pd.Series, low: pd.Series, window: int = 20) -> Dict[str, pd.Series]:
+        """Donchian Channel"""
+        upper = high.rolling(window).max()
+        lower = low.rolling(window).min()
+        middle = (upper + lower) / 2
+        width = upper - lower
+        
+        return {
+            'upper': upper,
+            'middle': middle,
+            'lower': lower,
+            'width': width
+        }
+    
+    @staticmethod
+    def ema_deviation(close: pd.Series, window: int = 20) -> pd.Series:
+        """EMA Deviation (percentage difference from EMA)"""
+        ema = TechnicalIndicators.ema(close, window)
+        return ((close - ema) / ema) * 100
+    
+    @staticmethod
+    def ema_crossover(close: pd.Series, fast: int = 12, slow: int = 26) -> Dict[str, pd.Series]:
+        """EMA Crossover signals"""
+        ema_fast = TechnicalIndicators.ema(close, fast)
+        ema_slow = TechnicalIndicators.ema(close, slow)
+        
+        crossover = (ema_fast > ema_slow).astype(int)
+        signal_change = crossover.diff()
+        
+        return {
+            'ema_fast': ema_fast,
+            'ema_slow': ema_slow,
+            'crossover': crossover,
+            'signal_change': signal_change
+        }
+
+    @staticmethod
+    def calculate_volatility_indicators(df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate indicators specifically for volatility model"""
+        result_df = df.copy()
+        
+        # ATR
+        result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
+        
+        # Bollinger Band Width
+        bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
+        result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
+        
+        # Keltner Channel Width
+        kc_data = TechnicalIndicators.keltner_channel(df['High'], df['Low'], df['Close'])
+        result_df['kc_width'] = kc_data['width']
+        
+        # RSI
+        result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
+        
+        # Donchian Channel Width
+        dc_data = TechnicalIndicators.donchian_channel(df['High'], df['Low'])
+        result_df['dc_width'] = dc_data['width']
+        
+        return result_df
+
+    @staticmethod
+    def calculate_direction_indicators(df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate indicators specifically for direction model"""
+        result_df = df.copy()
+        
+        # RSI
+        result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
+        
+        # MACD
+        macd_data = TechnicalIndicators.macd(df['Close'])
+        result_df['macd'] = macd_data['macd']
+        result_df['macd_signal'] = macd_data['signal']
+        
+        # EMA Fast & Slow
+        ema_cross = TechnicalIndicators.ema_crossover(df['Close'])
+        result_df['ema_fast'] = ema_cross['ema_fast']
+        result_df['ema_slow'] = ema_cross['ema_slow']
+        
+        # ADX
+        result_df['adx'] = TechnicalIndicators.adx(df['High'], df['Low'], df['Close'])
+        
+        # OBV
+        if 'Volume' in df.columns:
+            result_df['obv'] = TechnicalIndicators.obv(df['Close'], df['Volume'])
+        else:
+            result_df['obv'] = 0
+        
+        # Stochastic Oscillator
+        stoch_data = TechnicalIndicators.stochastic(df['High'], df['Low'], df['Close'])
+        result_df['stoch_k'] = stoch_data['k']
+        result_df['stoch_d'] = stoch_data['d']
+        
+        return result_df
+
+    @staticmethod
+    def calculate_magnitude_indicators(df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate indicators specifically for magnitude model"""
+        result_df = df.copy()
+        
+        # ATR
+        result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
+        
+        # Bollinger Band Width
+        bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
+        result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
+        
+        # EMA Deviation
+        result_df['ema_deviation'] = TechnicalIndicators.ema_deviation(df['Close'])
+        
+        # Donchian Channel
+        dc_data = TechnicalIndicators.donchian_channel(df['High'], df['Low'])
+        result_df['dc_upper'] = dc_data['upper']
+        result_df['dc_lower'] = dc_data['lower']
+        result_df['dc_width'] = dc_data['width']
+        
+        # RSI
+        result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
+        
+        # MACD Histogram
+        macd_data = TechnicalIndicators.macd(df['Close'])
+        result_df['macd_histogram'] = macd_data['histogram']
+        
+        return result_df
+
+    @staticmethod
+    def calculate_profit_probability_indicators(df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate indicators specifically for profit probability model"""
+        result_df = df.copy()
+        
+        # MACD
+        macd_data = TechnicalIndicators.macd(df['Close'])
+        result_df['macd'] = macd_data['macd']
+        result_df['macd_signal'] = macd_data['signal']
+        
+        # RSI
+        result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
+        
+        # ATR
+        result_df['atr'] = TechnicalIndicators.atr(df['High'], df['Low'], df['Close'])
+        
+        # EMA Crossover
+        ema_cross = TechnicalIndicators.ema_crossover(df['Close'])
+        result_df['ema_fast'] = ema_cross['ema_fast']
+        result_df['ema_slow'] = ema_cross['ema_slow']
+        result_df['ema_crossover'] = ema_cross['crossover']
+        
+        # Bollinger Bands
+        bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
+        result_df['bb_upper'] = bb_data['upper']
+        result_df['bb_lower'] = bb_data['lower']
+        result_df['bb_position'] = (df['Close'] - bb_data['lower']) / (bb_data['upper'] - bb_data['lower'])
+        
+        # Stochastic Oscillator
+        stoch_data = TechnicalIndicators.stochastic(df['High'], df['Low'], df['Close'])
+        result_df['stoch_k'] = stoch_data['k']
+        result_df['stoch_d'] = stoch_data['d']
+        
+        return result_df
+
+    @staticmethod
+    def calculate_trend_indicators(df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate indicators specifically for trend classification model"""
+        result_df = df.copy()
+        
+        # ADX
+        result_df['adx'] = TechnicalIndicators.adx(df['High'], df['Low'], df['Close'])
+        
+        # RSI
+        result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
+        
+        # Bollinger Band Width
+        bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
+        result_df['bb_width'] = bb_data['upper'] - bb_data['lower']
+        
+        # Donchian Channels
+        dc_data = TechnicalIndicators.donchian_channel(df['High'], df['Low'])
+        result_df['dc_upper'] = dc_data['upper']
+        result_df['dc_lower'] = dc_data['lower']
+        result_df['dc_width'] = dc_data['width']
+        
+        # EMA Fast & Slow
+        ema_cross = TechnicalIndicators.ema_crossover(df['Close'])
+        result_df['ema_fast'] = ema_cross['ema_fast']
+        result_df['ema_slow'] = ema_cross['ema_slow']
+        
+        # MACD Histogram
+        macd_data = TechnicalIndicators.macd(df['Close'])
+        result_df['macd_histogram'] = macd_data['histogram']
+        
+        # OBV
+        if 'Volume' in df.columns:
+            result_df['obv'] = TechnicalIndicators.obv(df['Close'], df['Volume'])
+        else:
+            result_df['obv'] = 0
+        
+        return result_df
+
+    @staticmethod
+    def calculate_reversal_indicators(df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate indicators specifically for reversal model"""
+        result_df = df.copy()
+        
+        # RSI
+        result_df['rsi'] = TechnicalIndicators.rsi(df['Close'])
+        
+        # Williams %R
+        result_df['williams_r'] = TechnicalIndicators.williams_r(df['High'], df['Low'], df['Close'])
+        
+        # Stochastic Oscillator
+        stoch_data = TechnicalIndicators.stochastic(df['High'], df['Low'], df['Close'])
+        result_df['stoch_k'] = stoch_data['k']
+        result_df['stoch_d'] = stoch_data['d']
+        
+        # Bollinger Bands (for upper/lower hits)
+        bb_data = TechnicalIndicators.bollinger_bands(df['Close'])
+        result_df['bb_upper'] = bb_data['upper']
+        result_df['bb_lower'] = bb_data['lower']
+        result_df['bb_upper_hit'] = (df['Close'] >= bb_data['upper']).astype(int)
+        result_df['bb_lower_hit'] = (df['Close'] <= bb_data['lower']).astype(int)
+        
+        # MACD Histogram
+        macd_data = TechnicalIndicators.macd(df['Close'])
+        result_df['macd_histogram'] = macd_data['histogram']
+        
+        return result_df
+
+    @staticmethod
     def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
         """Calculate all technical indicators for the dataset"""
         result_df = df.copy()

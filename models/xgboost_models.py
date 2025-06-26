@@ -110,18 +110,18 @@ class QuantTradingModels(ModelManager):
                 'bb_upper', 'bb_lower', 'bb_width', 'high_low_ratio', 
                 'price_vs_vwap', 'momentum_acceleration', 'rsi', 'bb_position'
             ]
-            
+
             # Filter to only include features that exist in the dataframe
             available_volatility_features = [col for col in volatility_features if col in df_clean.columns]
-            
+
             if len(available_volatility_features) == 0:
                 raise ValueError(f"None of the specified volatility features found in data. Available columns: {list(df_clean.columns)}")
-            
+
             # Replace feature_cols with only the specified features
             feature_cols = available_volatility_features
-            
+
             print(f"Using ONLY {len(available_volatility_features)} specified features for volatility model: {available_volatility_features}")
-            
+
             if len(available_volatility_features) < len(volatility_features):
                 missing_features = [f for f in volatility_features if f not in available_volatility_features]
                 print(f"Warning: Missing volatility features: {missing_features}")
@@ -167,22 +167,22 @@ class QuantTradingModels(ModelManager):
 
         # 1. Direction prediction (up/down) - Enhanced with noise filtering
         future_return = df['Close'].shift(-1) / df['Close'] - 1
-        
+
         # Calculate dynamic threshold based on recent volatility
         rolling_vol = df['Close'].pct_change().rolling(20).std()
         noise_threshold = rolling_vol * 0.3  # 30% of recent volatility
-        
+
         # Only predict direction for moves above noise threshold
         significant_up = future_return > noise_threshold
         significant_down = future_return < -noise_threshold
-        
+
         # Create direction target: 1 for up, 0 for down, exclude sideways moves
         direction_raw = np.where(significant_up, 1, np.where(significant_down, 0, np.nan))
         direction_series = pd.Series(direction_raw, index=df.index)
-        
+
         # Remove NaN values (sideways moves)
         targets['direction'] = direction_series.dropna().astype(int)
-        
+
         print(f"Direction target filtering: {len(targets['direction'])} significant moves out of {len(df)} total ({len(targets['direction'])/len(df)*100:.1f}%)")
 
         # 2. Magnitude of move (percentage change)
@@ -693,14 +693,14 @@ class QuantTradingModels(ModelManager):
         if task_type == 'classification' and model_name == 'direction':
             # For direction model, use stratified split while maintaining time order
             from sklearn.model_selection import train_test_split
-            
+
             # First do time-based split
             split_idx = int(len(X_clean) * train_split)
             X_temp_train = X_clean.iloc[:split_idx]
             y_temp_train = y_clean.iloc[:split_idx]
             X_test = X_clean.iloc[split_idx:]
             y_test = y_clean.iloc[split_idx:]
-            
+
             # Then stratify the training set to ensure balanced classes
             try:
                 X_train, X_val, y_train, y_val = train_test_split(
@@ -730,23 +730,23 @@ class QuantTradingModels(ModelManager):
         if model_name == 'direction':
             # Feature selection for direction model
             from sklearn.feature_selection import SelectKBest, mutual_info_classif
-            
+
             # Select top 35 features based on mutual information
             selector = SelectKBest(score_func=mutual_info_classif, k=min(35, X_train.shape[1]))
             X_train_selected = selector.fit_transform(X_train, y_train)
             X_test_selected = selector.transform(X_test)
-            
+
             # Store selected feature names
             selected_feature_mask = selector.get_support()
             selected_features = [self.feature_names[i] for i in range(len(self.feature_names)) if selected_feature_mask[i]]
             print(f"Selected {len(selected_features)} most informative features for direction model")
-            
+
             # Use RobustScaler for better handling of outliers
             from sklearn.preprocessing import RobustScaler
             scaler = RobustScaler()
             X_train_scaled = scaler.fit_transform(X_train_selected)
             X_test_scaled = scaler.transform(X_test_selected)
-            
+
             # Store both scaler and selector for direction model
             self.scalers[model_name] = {
                 'scaler': scaler,
@@ -758,7 +758,7 @@ class QuantTradingModels(ModelManager):
             scaler = StandardScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
-            
+
             # Store only scaler for other models
             self.scalers[model_name] = scaler
 
@@ -803,14 +803,14 @@ class QuantTradingModels(ModelManager):
                 random_state=random_state,
                 n_jobs=-1
             )
-            
+
             # Add LightGBM for better ensemble diversity (optional)
             estimators = [
                 ('xgboost', xgb_model),
                 ('catboost', catboost_model),
                 ('random_forest', rf_model)
             ]
-            
+
             try:
                 import lightgbm as lgb
                 lgb_model = lgb.LGBMClassifier(
@@ -835,13 +835,13 @@ class QuantTradingModels(ModelManager):
                 weights = [0.3, 0.25, 0.25, 0.2]  # XGB, CatBoost, RF, LightGBM
             else:
                 weights = [0.4, 0.3, 0.3]  # XGB, CatBoost, RF only
-            
+
             base_ensemble = VotingClassifier(
                 estimators=estimators,
                 voting='soft',
                 weights=weights
             )
-            
+
             # Apply calibration for direction model to address overconfidence
             if model_name == 'direction':
                 print(f"Applying calibration to {model_name} model to reduce overconfidence...")
@@ -929,21 +929,21 @@ class QuantTradingModels(ModelManager):
                 try:
                     # Calculate calibration metrics
                     from sklearn.calibration import calibration_curve
-                    
+
                     # Get calibrated probabilities
                     prob_pos = ensemble_model.predict_proba(X_test_scaled)[:, 1]
-                    
+
                     # Calculate calibration curve (reliability diagram)
                     fraction_of_positives, mean_predicted_value = calibration_curve(
                         y_test, prob_pos, n_bins=10
                     )
-                    
+
                     # Calculate Brier score (lower is better)
                     brier_score = np.mean((prob_pos - y_test) ** 2)
-                    
+
                     # Check if model was successfully calibrated
                     is_calibrated = hasattr(ensemble_model, 'calibrated_classifiers_')
-                    
+
                     metrics['calibration'] = {
                         'brier_score': brier_score,
                         'is_calibrated': is_calibrated,
@@ -951,13 +951,13 @@ class QuantTradingModels(ModelManager):
                         'mean_predicted_probability': np.mean(prob_pos),
                         'actual_positive_rate': np.mean(y_test)
                     }
-                    
+
                     print(f"Calibration results for {model_name}:")
                     print(f"  Successfully calibrated: {is_calibrated}")
                     print(f"  Brier Score: {brier_score:.4f} (lower is better)")
                     print(f"  Mean Predicted Probability: {np.mean(prob_pos):.3f}")
                     print(f"  Actual Positive Rate: {np.mean(y_test):.3f}")
-                    
+
                 except Exception as e:
                     print(f"Error calculating calibration metrics for {model_name}: {str(e)}")
                     metrics['calibration'] = {
@@ -966,15 +966,15 @@ class QuantTradingModels(ModelManager):
                         'calibration_method': 'Error during calibration',
                         'error': str(e)
                     }
-            
+
             # Calculate individual model accuracies for comparison
             individual_scores = {}
-            
+
             # For calibrated models, get base estimators differently
             if hasattr(ensemble_model, 'calibrated_classifiers_'):
                 # This is a calibrated classifier
                 calibrated_classifier = ensemble_model.calibrated_classifiers_[0]
-                
+
                 # Try different attribute names for compatibility
                 if hasattr(calibrated_classifier, 'estimator'):
                     base_classifier = calibrated_classifier.estimator
@@ -982,7 +982,7 @@ class QuantTradingModels(ModelManager):
                     base_classifier = calibrated_classifier.base_estimator
                 else:
                     base_classifier = None
-                
+
                 if base_classifier and hasattr(base_classifier, 'named_estimators_'):
                     for name, model in base_classifier.named_estimators_.items():
                         individual_pred = model.predict(X_test_scaled)
@@ -1019,7 +1019,7 @@ class QuantTradingModels(ModelManager):
             if hasattr(ensemble_model, 'calibrated_classifiers_'):
                 # For calibrated models, access the base estimator
                 calibrated_classifier = ensemble_model.calibrated_classifiers_[0]
-                
+
                 # Try different attribute names for compatibility
                 if hasattr(calibrated_classifier, 'estimator'):
                     base_classifier = calibrated_classifier.estimator
@@ -1027,29 +1027,29 @@ class QuantTradingModels(ModelManager):
                     base_classifier = calibrated_classifier.base_estimator
                 else:
                     raise AttributeError("Cannot find base estimator in calibrated classifier")
-                
+
                 if hasattr(base_classifier, 'named_estimators_'):
                     xgb_estimator = base_classifier.named_estimators_['xgboost']
                 else:
                     xgb_estimator = base_classifier
             else:
                 xgb_estimator = ensemble_model.named_estimators_['xgboost']
-            
+
             # Use model-specific feature names for importance mapping
             current_feature_names = model_feature_names
-            
+
             # Ensure we have the right number of features
             if len(current_feature_names) == len(xgb_estimator.feature_importances_):
                 feature_importance = dict(zip(current_feature_names, xgb_estimator.feature_importances_))
                 print(f"Feature importance extracted for {model_name}: {len(feature_importance)} features")
-                
+
                 # Debug: Show top 5 important features for this model
                 sorted_importance = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)
                 print(f"Top 5 features for {model_name}: {sorted_importance[:5]}")
             else:
                 print(f"Feature count mismatch for {model_name}: expected {len(current_feature_names)}, got {len(xgb_estimator.feature_importances_)}")
                 feature_importance = {}
-                
+
         except Exception as e:
             print(f"Could not extract feature importance for {model_name}: {e}")
             feature_importance = {}
@@ -1059,14 +1059,14 @@ class QuantTradingModels(ModelManager):
             if hasattr(ensemble_model, 'calibrated_classifiers_'):
                 # For calibrated models, get base estimator names
                 calibrated_classifier = ensemble_model.calibrated_classifiers_[0]
-                
+
                 if hasattr(calibrated_classifier, 'estimator'):
                     base_estimator = calibrated_classifier.estimator
                 elif hasattr(calibrated_classifier, 'base_estimator'):
                     base_estimator = calibrated_classifier.base_estimator
                 else:
                     base_estimator = ensemble_model
-                
+
                 if hasattr(base_estimator, 'named_estimators_'):
                     base_model_names = list(base_estimator.named_estimators_.keys())
                 else:
@@ -1219,7 +1219,7 @@ class QuantTradingModels(ModelManager):
                         st.info(f"📊 Volatility model using {X_model_specific.shape[1]} specified features: {list(X_model_specific.columns)}")
                     else:
                         X_model_specific = X
-                    
+
                     # Ensure X and target are properly aligned by using common index
                     target_series = targets[model_name]
                     common_index = X_model_specific.index.intersection(target_series.index)
@@ -1242,7 +1242,7 @@ class QuantTradingModels(ModelManager):
 
                     result = self.train_model(model_name, X_aligned, y_aligned, task_type, train_split)
                     results[model_name] = result
-                    
+
                     # Show immediate results
                     if result and 'metrics' in result:
                         metrics = result['metrics']
@@ -1275,17 +1275,17 @@ class QuantTradingModels(ModelManager):
         except Exception as e:
             st.warning(f"⚠️ Models trained but database save failed: {str(e)}")
             status_text.text("✅ Selected models trained!")
-        
+
         # Clear progress indicators
         progress_bar.empty()
         status_text.empty()
-        
+
         return results
-        
+
         # Clear progress indicators
         progress_bar.empty()
         status_text.empty()
-        
+
         return results
 
     def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
@@ -1305,17 +1305,17 @@ class QuantTradingModels(ModelManager):
                 'bb_upper', 'bb_lower', 'bb_width', 'high_low_ratio', 
                 'price_vs_vwap', 'momentum_acceleration', 'rsi', 'bb_position'
             ]
-            
+
             # Filter to only include features that exist in the input data
             available_volatility_features = [col for col in volatility_features if col in X.columns]
-            
+
             if len(available_volatility_features) == 0:
                 raise ValueError(f"None of the specified volatility features found in prediction data. Available columns: {list(X.columns)}")
-            
+
             # Keep only the specified features
             X = X[available_volatility_features]
             print(f"Using ONLY {len(available_volatility_features)} specified features for volatility prediction: {available_volatility_features}")
-            
+
             if len(available_volatility_features) < len(volatility_features):
                 missing_features = [f for f in volatility_features if f not in available_volatility_features]
                 print(f"Warning: Missing volatility features in prediction: {missing_features}")
@@ -1382,7 +1382,7 @@ class QuantTradingModels(ModelManager):
         # Handle feature selection and scaling
         if model_name in self.scalers:
             scaler_info = self.scalers[model_name]
-            
+
             # Check if this is direction model with feature selection
             if isinstance(scaler_info, dict) and 'selector' in scaler_info:
                 # Apply feature selection first
@@ -1412,17 +1412,17 @@ class QuantTradingModels(ModelManager):
             if hasattr(model, 'calibrated_classifiers_'):
                 # This is a calibrated model - probabilities are already well-calibrated
                 calibrated_probabilities = model.predict_proba(X_scaled)
-                
+
                 # For calibrated models, use the calibrated probabilities directly
                 n_samples = len(predictions)
                 confidence_scores = np.max(calibrated_probabilities, axis=1)
-                
+
                 # Create probability matrix
                 probabilities = calibrated_probabilities
-                
+
                 print(f"Using calibrated probabilities for {model_name}")
                 print(f"Confidence range: {confidence_scores.min():.3f} - {confidence_scores.max():.3f}")
-                
+
             else:
                 # Regular ensemble model - use original confidence calculation
                 individual_predictions = []
@@ -1432,7 +1432,7 @@ class QuantTradingModels(ModelManager):
                 if hasattr(model, 'calibrated_classifiers_'):
                     # For calibrated models, get the base estimator
                     calibrated_classifier = model.calibrated_classifiers_[0]
-                    
+
                     # Try different attribute names for compatibility
                     if hasattr(calibrated_classifier, 'estimator'):
                         base_estimator = calibrated_classifier.estimator
@@ -1441,7 +1441,7 @@ class QuantTradingModels(ModelManager):
                     else:
                         # Fallback: use the whole model as base estimator
                         base_estimator = model
-                    
+
                     if hasattr(base_estimator, 'named_estimators_'):
                         estimators = base_estimator.named_estimators_
                     else:
@@ -1496,7 +1496,7 @@ class QuantTradingModels(ModelManager):
                         probabilities[i, 0] = confidence_scores[i]
                         probabilities[i, 1] = 1 - confidence_scores[i]
 
-            
+
         else:
             probabilities = None
 
@@ -1510,29 +1510,29 @@ class QuantTradingModels(ModelManager):
 
         model_info = self.models[model_name]
         feature_importance = model_info.get('feature_importance', {})
-        
+
         # Get model-specific feature names
         model_specific_features = model_info.get('feature_names', [])
-        
+
         print(f"Getting feature importance for {model_name}:")
         print(f"  Model-specific features: {len(model_specific_features)}")
         print(f"  Raw feature importance entries: {len(feature_importance)}")
-        
+
         # If we have model-specific features, ensure we only return those
         if model_specific_features and feature_importance:
             # Filter to only include features that were actually used for this model
             filtered_importance = {feat: feature_importance.get(feat, 0) 
                                  for feat in model_specific_features}
-            
+
             # Debug: show which features have zero importance
             zero_importance = [feat for feat, imp in filtered_importance.items() if imp == 0]
             if zero_importance:
                 print(f"  Features with zero importance: {zero_importance}")
-                
+
             # Debug: show non-zero importance features
             non_zero_importance = {feat: imp for feat, imp in filtered_importance.items() if imp > 0}
             print(f"  Features with non-zero importance: {len(non_zero_importance)}")
-            
+
             return filtered_importance
         elif feature_importance:
             print(f"  Using raw feature importance (no model-specific filtering)")

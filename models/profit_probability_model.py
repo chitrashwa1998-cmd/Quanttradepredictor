@@ -53,42 +53,29 @@ class ProfitProbabilityModel:
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
-        df_clean = df.dropna()
-        if df_clean.empty:
-            raise ValueError("DataFrame is empty after removing NaN values")
-
-        # Select feature columns
-        feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
-
-        # Remove data leakage features
-        leakage_features = [
-            'Prediction', 'predicted_direction', 'predictions',
-            'Signal', 'Signal_Name', 'Confidence',
-            'accuracy', 'precision', 'recall'
-        ]
-        feature_cols = [col for col in feature_cols if col not in leakage_features]
-
-        # Add candle behavior features
-        expected_candle_features = [
-            'body_size', 'upper_wick', 'lower_wick', 'total_range', 'body_ratio', 
-            'wick_ratio', 'is_bullish', 'candle_strength', 'doji', 'marubozu', 
-            'hammer', 'shooting_star', 'engulfing_bull', 'engulfing_bear',
-            'bull_streak_3', 'bear_streak_2', 'inside_bar', 'outside_bar', 
-            'reversal_bar', 'gap_up', 'gap_down', 'direction_change', 
-            'momentum_surge', 'minute_of_hour', 'is_opening_range', 'is_closing_phase'
-        ]
-
-        for feature in expected_candle_features:
-            if feature in df_clean.columns and feature not in feature_cols and feature not in leakage_features:
-                feature_cols.append(feature)
-
-        if not feature_cols:
-            raise ValueError("No feature columns found")
-
-        result_df = df_clean[feature_cols]
-        self.feature_names = list(result_df.columns)
+        from features.technical_indicators import TechnicalIndicators
         
+        # Calculate profit probability-specific indicators
+        result_df = TechnicalIndicators.calculate_profit_probability_indicators(df)
+        
+        # Define profit probability-specific features
+        profit_features = ['macd', 'macd_signal', 'rsi', 'atr', 'ema_fast', 'ema_slow', 'ema_crossover', 'bb_upper', 'bb_lower', 'bb_position', 'stoch_k', 'stoch_d']
+        
+        # Check which features are available
+        available_features = [col for col in profit_features if col in result_df.columns]
+        
+        if len(available_features) == 0:
+            raise ValueError(f"No profit probability features found. Available columns: {list(result_df.columns)}")
+        
+        # Select only profit probability features and remove NaN
+        result_df = result_df[available_features].dropna()
+        
+        if result_df.empty:
+            raise ValueError("DataFrame is empty after removing NaN values")
+        
+        print(f"Profit probability model using {len(available_features)} features: {available_features}")
+        
+        self.feature_names = available_features
         return result_df
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:

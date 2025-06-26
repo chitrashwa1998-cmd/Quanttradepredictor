@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Any
@@ -10,10 +9,9 @@ from .volatility_model import VolatilityModel
 from .profit_probability_model import ProfitProbabilityModel
 from .trend_sideways_model import TrendSidewaysModel
 from .reversal_model import ReversalModel
-from .trading_signal_model import TradingSignalModel
 
 class ModelManager:
-    """Centralized manager for all 7 prediction models."""
+    """Centralized manager for prediction models."""
 
     def __init__(self):
         self.models = {
@@ -23,7 +21,6 @@ class ModelManager:
             'profit_prob': ProfitProbabilityModel(),
             'trend_sideways': TrendSidewaysModel(),
             'reversal': ReversalModel(),
-            'trading_signal': TradingSignalModel()
         }
         self.trained_models = {}
         self._load_existing_models()
@@ -39,7 +36,7 @@ class ModelManager:
                 for model_name, model_data in loaded_models.items():
                     # Ensure task_type is present
                     if 'task_type' not in model_data:
-                        if model_name in ['direction', 'profit_prob', 'trend_sideways', 'reversal', 'trading_signal']:
+                        if model_name in ['direction', 'profit_prob', 'trend_sideways', 'reversal']:
                             model_data['task_type'] = 'classification'
                         elif model_name in ['magnitude', 'volatility']:
                             model_data['task_type'] = 'regression'
@@ -88,12 +85,12 @@ class ModelManager:
             try:
                 # Prepare features
                 features[model_name] = model.prepare_features(df)
-                
+
                 # Create targets
                 targets[model_name] = model.create_target(df)
-                
+
                 print(f"✅ Prepared {model_name}: {features[model_name].shape[1]} features, {len(targets[model_name])} targets")
-                
+
             except Exception as e:
                 print(f"❌ Error preparing {model_name}: {str(e)}")
                 features[model_name] = None
@@ -120,11 +117,11 @@ class ModelManager:
                 if features[model_name] is not None and targets[model_name] is not None:
                     # Train the model
                     result = model.train(features[model_name], targets[model_name], train_split)
-                    
+
                     # Store the result
                     self.trained_models[model_name] = result
                     results[model_name] = result
-                    
+
                     st.success(f"✅ {model_name} model trained successfully")
                 else:
                     st.warning(f"⚠️ Could not prepare data for {model_name}")
@@ -164,7 +161,7 @@ class ModelManager:
             try:
                 if model_name in self.models:
                     model = self.models[model_name]
-                    
+
                     if features[model_name] is not None and targets[model_name] is not None:
                         # Show target distribution
                         target_series = targets[model_name]
@@ -177,11 +174,11 @@ class ModelManager:
 
                         # Train the model
                         result = model.train(features[model_name], targets[model_name], train_split)
-                        
+
                         # Store the result
                         self.trained_models[model_name] = result
                         results[model_name] = result
-                        
+
                         # Show immediate results
                         if result and 'metrics' in result:
                             metrics = result['metrics']
@@ -255,7 +252,7 @@ class ModelManager:
 
         model_data = self.trained_models[model_name]
         feature_importance = model_data.get('feature_importance', {})
-        
+
         print(f"Getting feature importance for {model_name}: {len(feature_importance)} features")
         return feature_importance
 

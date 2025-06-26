@@ -29,28 +29,29 @@ class MagnitudeModel:
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
-        df_clean = df.dropna()
-        if df_clean.empty:
-            raise ValueError("DataFrame is empty after removing NaN values")
-
-        # Select feature columns
-        feature_cols = [col for col in df_clean.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        feature_cols = [col for col in feature_cols if not col.startswith(('target_', 'future_'))]
-
-        # Remove data leakage features
-        leakage_features = [
-            'Prediction', 'predicted_direction', 'predictions',
-            'Signal', 'Signal_Name', 'Confidence',
-            'accuracy', 'precision', 'recall'
-        ]
-        feature_cols = [col for col in feature_cols if col not in leakage_features]
-
-        if not feature_cols:
-            raise ValueError("No feature columns found")
-
-        result_df = df_clean[feature_cols]
-        self.feature_names = list(result_df.columns)
+        from features.technical_indicators import TechnicalIndicators
         
+        # Calculate magnitude-specific indicators
+        result_df = TechnicalIndicators.calculate_magnitude_indicators(df)
+        
+        # Define magnitude-specific features
+        magnitude_features = ['atr', 'bb_width', 'ema_deviation', 'dc_upper', 'dc_lower', 'dc_width', 'rsi', 'macd_histogram']
+        
+        # Check which features are available
+        available_features = [col for col in magnitude_features if col in result_df.columns]
+        
+        if len(available_features) == 0:
+            raise ValueError(f"No magnitude features found. Available columns: {list(result_df.columns)}")
+        
+        # Select only magnitude features and remove NaN
+        result_df = result_df[available_features].dropna()
+        
+        if result_df.empty:
+            raise ValueError("DataFrame is empty after removing NaN values")
+        
+        print(f"Magnitude model using {len(available_features)} features: {available_features}")
+        
+        self.feature_names = available_features
         return result_df
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:
