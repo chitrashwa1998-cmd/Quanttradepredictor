@@ -3,40 +3,42 @@ import numpy as np
 
 # Assumes df has 'close', 'high', 'low', and datetime index
 
-def add_volatility_lagged_features(df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+def add_volatility_lagged_features(df):
+    """Add lagged features specifically for volatility prediction."""
     df = df.copy()
 
-    # Log return
-    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    # Ensure we have the right column names
+    close_col = 'Close' if 'Close' in df.columns else 'close'
 
-    # Realized volatility (rolling std of log returns)
-    df['realized_volatility'] = df['log_return'].rolling(window).std()
+    # Ensure we have realized volatility
+    if 'realized_volatility' not in df.columns:
+        returns = df[close_col].pct_change()
+        df['realized_volatility'] = returns.rolling(10).std()
 
-    # Lagged realized volatility
+    # Lagged volatility features
     df['lag_volatility_1'] = df['realized_volatility'].shift(1)
     df['lag_volatility_3'] = df['realized_volatility'].shift(3)
     df['lag_volatility_5'] = df['realized_volatility'].shift(5)
 
-    # ATR (Average True Range)
-    high_low = df['high'] - df['low']
-    high_close = np.abs(df['high'] - df['close'].shift(1))
-    low_close = np.abs(df['low'] - df['close'].shift(1))
-    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    df['atr'] = tr.rolling(window).mean()
+    # Lagged ATR if available
+    if 'atr' in df.columns:
+        df['lag_atr_1'] = df['atr'].shift(1)
+        df['lag_atr_3'] = df['atr'].shift(3)
 
-    # Lagged ATR
-    df['lag_atr_1'] = df['atr'].shift(1)
-    df['lag_atr_3'] = df['atr'].shift(3)
+    # Lagged Bollinger Band width if available
+    if 'bb_width' in df.columns:
+        df['lag_bb_width'] = df['bb_width'].shift(1)
 
-    # Bollinger Band Width
-    rolling_mean = df['close'].rolling(window).mean()
-    rolling_std = df['close'].rolling(window).std()
-    df['bb_upper'] = rolling_mean + 2 * rolling_std
-    df['bb_lower'] = rolling_mean - 2 * rolling_std
-    df['bb_width'] = df['bb_upper'] - df['bb_lower']
-    df['lag_bb_width'] = df['bb_width'].shift(1)
+    # Volatility regime classification
+    if 'realized_volatility' in df.columns:
+        vol_20 = df['realized_volatility'].rolling(20).mean()
+        vol_std = df['realized_volatility'].rolling(20).std()
 
-    # Volatility regime (simple threshold-based)
-    df['volatility_regime'] = pd.qcut(df['realized_volatility'], q=3, labels=["low", "medium", "high"])
+        conditions = [
+            df['realized_volatility'] < (vol_20 - 0.5 * vol_std),
+            df['realized_volatility'] > (vol_20 + 0.5 * vol_std)
+        ]
+        choices = [0, 2]  # 0=low, 1=medium, 2=high
+        df['volatility_regime'] = np.select(conditions, choices, default=1)
 
     return df

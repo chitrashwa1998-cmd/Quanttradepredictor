@@ -11,23 +11,29 @@ class TechnicalIndicators:
         """Calculate indicators specifically for volatility model"""
         df = df.copy()
 
+        # Ensure we have the right column names
+        close_col = 'Close' if 'Close' in df.columns else 'close'
+        open_col = 'Open' if 'Open' in df.columns else 'open'
+        high_col = 'High' if 'High' in df.columns else 'high'
+        low_col = 'Low' if 'Low' in df.columns else 'low'
+
         # ATR
-        df['atr'] = ta.volatility.AverageTrueRange(df['High'], df['Low'], df['Close']).average_true_range()
+        df['atr'] = ta.volatility.AverageTrueRange(df[high_col], df[low_col], df[close_col]).average_true_range()
 
         # Bollinger Band Width
-        bb = ta.volatility.BollingerBands(df['Close'])
+        bb = ta.volatility.BollingerBands(df[close_col])
         df['bb_width'] = (bb.bollinger_hband() - bb.bollinger_lband()) / bb.bollinger_mavg()
 
         # Keltner Channel Width
-        keltner = ta.volatility.KeltnerChannel(df['High'], df['Low'], df['Close'])
+        keltner = ta.volatility.KeltnerChannel(df[high_col], df[low_col], df[close_col])
         df['keltner_width'] = (keltner.keltner_channel_hband() - keltner.keltner_channel_lband()) / keltner.keltner_channel_mband()
 
         # RSI
-        df['rsi'] = ta.momentum.RSIIndicator(df['Close']).rsi()
+        df['rsi'] = ta.momentum.RSIIndicator(df[close_col]).rsi()
 
         # Donchian Channel Width
-        donchian = ta.volatility.DonchianChannel(df['High'], df['Low'], df['Close'])
-        df['donchian_width'] = (donchian.donchian_channel_hband() - donchian.donchian_channel_lband()) / df['Close']
+        donchian = ta.volatility.DonchianChannel(df[high_col], df[low_col], df[close_col])
+        df['donchian_width'] = (donchian.donchian_channel_hband() - donchian.donchian_channel_lband()) / df[close_col]
 
         return df
 

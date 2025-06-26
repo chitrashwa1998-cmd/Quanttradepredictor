@@ -76,7 +76,8 @@ class VolatilityModel:
         result_df = add_time_context_features(result_df)
         
         # Define all feature columns (excluding OHLC)
-        feature_columns = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'open', 'high', 'low', 'close']]
+        ohlc_columns = ['Open', 'High', 'Low', 'Close', 'open', 'high', 'low', 'close', 'OPEN', 'HIGH', 'LOW', 'CLOSE']
+        feature_columns = [col for col in result_df.columns if col not in ohlc_columns]
         
         # Remove any NaN values
         result_df = result_df[feature_columns].dropna()

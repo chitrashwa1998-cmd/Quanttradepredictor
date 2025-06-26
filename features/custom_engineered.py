@@ -1,47 +1,42 @@
 import pandas as pd
 import numpy as np
 
-def compute_custom_volatility_features(df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
-    """
-    Compute custom engineered volatility features from OHLC data.
-    Assumes df has columns: ['open', 'high', 'low', 'close'] with datetime index.
-    Volume is not required.
-    """
+def compute_custom_volatility_features(df):
+    """Compute custom engineered features for volatility prediction."""
     df = df.copy()
 
-    # 1. Log returns
-    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    # Ensure we have the right column names
+    close_col = 'Close' if 'Close' in df.columns else 'close'
+    open_col = 'Open' if 'Open' in df.columns else 'open'
+    high_col = 'High' if 'High' in df.columns else 'high'
+    low_col = 'Low' if 'Low' in df.columns else 'low'
 
-    # 2. Realized volatility (rolling std of log returns)
-    df['realized_volatility'] = df['log_return'].rolling(window=window).std()
+    # Log returns
+    df['log_return'] = np.log(df[close_col] / df[close_col].shift(1))
 
-    # 3. Parkinson volatility
-    df['parkinson_volatility'] = (1 / (4 * np.log(2))) * ((np.log(df['high'] / df['low'])) ** 2)
-    df['parkinson_volatility'] = df['parkinson_volatility'].rolling(window=window).mean()
+    # Realized volatility (rolling standard deviation of log returns)
+    df['realized_volatility'] = df['log_return'].rolling(window=10).std()
 
-    # 4. High-Low ratio
-    df['high_low_ratio'] = (df['high'] / df['low']) - 1
+    # Parkinson volatility estimator
+    df['parkinson_volatility'] = np.sqrt((1/(4*np.log(2))) * np.log(df[high_col]/df[low_col])**2)
 
-    # 5. Gap percentage from previous close
-    df['prev_close'] = df['close'].shift(1)
-    df['gap_pct'] = (df['open'] - df['prev_close']) / df['prev_close']
+    # High-Low ratio
+    df['high_low_ratio'] = df[high_col] / df[low_col]
 
-    # 6. Price vs VWAP (using rolling VWAP without volume)
-    df['vwap_like'] = (df['high'] + df['low'] + df['close']) / 3
-    df['rolling_vwap'] = df['vwap_like'].rolling(window=window).mean()
-    df['price_vs_vwap'] = (df['close'] - df['rolling_vwap']) / df['rolling_vwap']
+    # Gap percentage (current open vs previous close)
+    df['gap_pct'] = (df[open_col] / df[close_col].shift(1) - 1) * 100
 
-    # 7. Volatility spike flag (candle range exceeds rolling high range by 2 std devs)
-    df['candle_range'] = df['high'] - df['low']
-    df['range_mean'] = df['candle_range'].rolling(window).mean()
-    df['range_std'] = df['candle_range'].rolling(window).std()
-    df['volatility_spike_flag'] = (df['candle_range'] > df['range_mean'] + 2 * df['range_std']).astype(int)
+    # Price vs VWAP approximation
+    typical_price = (df[high_col] + df[low_col] + df[close_col]) / 3
+    df['price_vs_vwap'] = df[close_col] / typical_price.rolling(20).mean() - 1
 
-    # 8. Candle body asymmetry ratio
-    df['body'] = abs(df['close'] - df['open'])
-    df['candle_asymmetry_ratio'] = df['body'] / df['candle_range']
+    # Volatility spike flag
+    rolling_vol = df['realized_volatility'].rolling(20).mean()
+    df['volatility_spike_flag'] = (df['realized_volatility'] > rolling_vol * 1.5).astype(int)
 
-    # Optional: drop helper columns
-    df.drop(['prev_close', 'vwap_like', 'rolling_vwap', 'range_mean', 'range_std', 'body'], axis=1, inplace=True)
+    # Candle body to range ratio
+    body_size = abs(df[close_col] - df[open_col])
+    candle_range = df[high_col] - df[low_col]
+    df['candle_asymmetry_ratio'] = body_size / (candle_range + 1e-10)
 
     return df
