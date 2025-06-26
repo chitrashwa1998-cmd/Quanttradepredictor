@@ -413,10 +413,17 @@ if hasattr(st.session_state, 'predictions') and st.session_state.predictions is 
         display_df = display_df.reset_index()
 
         # Format datetime column
+        date_col_created = False
         if len(display_df.columns) > 0:
             timestamp_col = display_df.columns[0]
-            display_df['Date'] = pd.to_datetime(display_df[timestamp_col]).dt.strftime('%Y-%m-%d %H:%M:%S')
-            display_df = display_df.drop(columns=[timestamp_col])
+            try:
+                display_df['Date'] = pd.to_datetime(display_df[timestamp_col]).dt.strftime('%Y-%m-%d %H:%M:%S')
+                display_df = display_df.drop(columns=[timestamp_col])
+                date_col_created = True
+            except Exception as e:
+                # If datetime conversion fails, keep the original column name
+                display_df = display_df.rename(columns={timestamp_col: 'Date'})
+                date_col_created = True
 
         # Round numerical columns
         numeric_columns = display_df.select_dtypes(include=[np.number]).columns
@@ -433,9 +440,10 @@ if hasattr(st.session_state, 'predictions') and st.session_state.predictions is 
                 display_df.loc[actual_mask, 'Actual_Volatility']
             ).round(6)
 
-        # Reorder columns with Date first
-        cols = ['Date'] + [col for col in display_df.columns if col != 'Date']
-        display_df = display_df[cols]
+        # Reorder columns with Date first if it exists
+        if date_col_created and 'Date' in display_df.columns:
+            cols = ['Date'] + [col for col in display_df.columns if col != 'Date']
+            display_df = display_df[cols]
 
         # Show data with pagination
         st.dataframe(
