@@ -10,7 +10,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class VolatilityModel:
-    """Volatility prediction model for forecasting future volatility using exactly 26 features."""
+    """Volatility prediction model for forecasting future volatility using exactly 27 features."""
 
     def __init__(self):
         self.model = None
@@ -19,13 +19,14 @@ class VolatilityModel:
         self.task_type = 'regression'
         self.model_name = 'volatility'
 
-        # Exact 26 features for volatility prediction - DO NOT MODIFY
+        # Exact 27 features for volatility prediction - DO NOT MODIFY
         self.volatility_features = [
             # Technical indicators (5 features)
             'atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width',
-            # Custom engineered features (7 features)
+            # Custom engineered features (8 features)
             'log_return', 'realized_volatility', 'parkinson_volatility', 
             'high_low_ratio', 'gap_pct', 'price_vs_vwap', 'volatility_spike_flag',
+            'candle_body_ratio',
             # Lagged features (7 features)
             'lag_volatility_1', 'lag_volatility_3', 'lag_volatility_5',
             'lag_atr_1', 'lag_atr_3', 'lag_bb_width', 'volatility_regime',
@@ -115,7 +116,7 @@ class VolatilityModel:
         if result_df.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
 
-        print(f"Volatility model using exactly {len(feature_columns)} features (target: 26)")
+        print(f"Volatility model using exactly {len(feature_columns)} features (target: 27)")
 
         self.feature_names = feature_columns
         return result_df

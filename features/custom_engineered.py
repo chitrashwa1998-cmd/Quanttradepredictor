@@ -45,7 +45,8 @@ def compute_custom_volatility_features(df):
     # Replace infinities with NaN
     df['candle_body_ratio'] = df['candle_body_ratio'].replace([np.inf, -np.inf], np.nan)
 
-    # Ensure we don't have candle_asymmetry_ratio which causes feature mismatch
+    # Keep candle_body_ratio as part of the 27 features
+    # Remove any legacy candle_asymmetry_ratio if it exists
     if 'candle_asymmetry_ratio' in df.columns:
         df = df.drop(columns=['candle_asymmetry_ratio'])
 
