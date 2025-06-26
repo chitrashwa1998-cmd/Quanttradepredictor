@@ -200,7 +200,7 @@ if hasattr(st.session_state, 'predictions') and st.session_state.predictions is 
             fig_hist = px.histogram(
                 pred_df, 
                 x='Volatility_Forecast',
-                bins=30,
+                nbins=30,
                 title="Predicted Volatility Distribution",
                 color_discrete_sequence=['#1f77b4']
             )
