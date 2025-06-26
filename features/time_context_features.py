@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 
 def create_time_context_features(df):
+    """Create basic time context features for volatility analysis"""
+
     # Ensure datetime index or column exists
     if not pd.api.types.is_datetime64_any_dtype(df.index):
         if 'timestamp' in df.columns:
@@ -17,19 +19,18 @@ def create_time_context_features(df):
             except:
                 print("Warning: Could not convert index to datetime")
 
+    # Basic time features that affect volatility
     df['hour_of_day'] = df.index.hour
     df['minute_of_hour'] = df.index.minute
-
-    df['is_post_10am'] = (df['hour_of_day'] > 10) | ((df['hour_of_day'] == 10) & (df['minute_of_hour'] >= 0))
-
     df['day_of_week'] = df.index.dayofweek  # Monday = 0, Sunday = 6
 
+    # Market session indicators (volatility varies by session)
     df['is_opening_range'] = ((df['hour_of_day'] == 9) & (df['minute_of_hour'] >= 15)) | \
                               ((df['hour_of_day'] == 10) & (df['minute_of_hour'] < 0))
 
     df['is_closing_phase'] = (df['hour_of_day'] == 15) & (df['minute_of_hour'] >= 0)
 
-    # Categorize market phases
+    # Market phase categorization for volatility patterns
     def get_market_phase(hour, minute):
         time = hour + minute / 60
         if 9.25 <= time < 10.0:
@@ -41,6 +42,7 @@ def create_time_context_features(df):
 
     df['market_phase'] = [get_market_phase(h, m) for h, m in zip(df['hour_of_day'], df['minute_of_hour'])]
 
+    # Time since market open (affects intraday volatility patterns)
     df['time_since_open'] = (df.index - df.index.normalize() - pd.Timedelta(minutes=555)).total_seconds() / 60
     df['time_since_open'] = df['time_since_open'].clip(lower=0)
 
