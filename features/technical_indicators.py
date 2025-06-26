@@ -43,8 +43,10 @@ class TechnicalIndicators:
         print("🔧 Calculating comprehensive technical indicators...")
 
         # Validate input data
-        if not TechnicalIndicators.validate_ohlc_data(df):
-            raise ValueError("Invalid OHLC data provided")
+        from utils.data_processing import DataProcessor
+        is_valid, message = DataProcessor.validate_ohlc_data(df)
+        if not is_valid:
+            raise ValueError(f"Invalid OHLC data provided: {message}")
 
         # Create a copy to avoid modifying original data
         result_df = df.copy()
