@@ -41,6 +41,7 @@ def initialize_session_state():
     # Auto-recovery system
     if not st.session_state.auto_recovery_done:
         try:
+            import pandas as pd
             from utils.database_adapter import get_trading_database
             from models.xgboost_models import QuantTradingModels
             from features.technical_indicators import TechnicalIndicators
@@ -51,7 +52,7 @@ def initialize_session_state():
             if st.session_state.data is None:
                 recovered_data = trading_db.load_ohlc_data("main_dataset")
                 if recovered_data is not None:
-                    st.session_state.data = recovered_data
+                    st.session_state.data = recovered_datata
 
                     # Auto-calculate features if data is recovered
                     try:

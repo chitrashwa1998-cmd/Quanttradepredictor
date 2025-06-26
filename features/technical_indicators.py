@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List
 import ta
-import pandas_ta as pta
+# Remove problematic pandas_ta import due to NumPy compatibility issues
+# import pandas_ta as pta
 from finta import TA
 
 class TechnicalIndicators:
