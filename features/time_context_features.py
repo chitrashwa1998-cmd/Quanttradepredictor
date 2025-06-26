@@ -22,9 +22,15 @@ def add_time_context_features(df: pd.DataFrame) -> pd.DataFrame:
     df['day_of_week'] = df.index.dayofweek  # Monday=0, Sunday=6
 
     # Market session flags (for Indian market: 9:15 AM to 3:30 PM)
-    df['is_post_10am'] = df.index.time >= pd.to_datetime("10:00").time()
-    df['is_opening_range'] = df.index.time.between(pd.to_datetime("09:15").time(), pd.to_datetime("10:00").time())
-    df['is_closing_phase'] = df.index.time >= pd.to_datetime("14:30").time()
+    post_10am_time = pd.to_datetime("10:00").time()
+    df['is_post_10am'] = [t >= post_10am_time for t in df.index.time]
+    # Convert time comparisons to work with datetime index
+    opening_start = pd.to_datetime("09:15").time()
+    opening_end = pd.to_datetime("10:00").time()
+    closing_start = pd.to_datetime("14:30").time()
+    
+    df['is_opening_range'] = [(t >= opening_start) & (t <= opening_end) for t in df.index.time]
+    df['is_closing_phase'] = [t >= closing_start for t in df.index.time]
 
     # Weekend flag
     df['is_weekend'] = df['day_of_week'] >= 5
