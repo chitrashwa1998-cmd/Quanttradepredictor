@@ -14,53 +14,7 @@ if 'data' not in st.session_state or st.session_state.data is None:
     st.error("❌ No data available. Please upload data first in the Data Upload page.")
     st.stop()
 
-# Feature Engineering Section
-st.header("🔧 Feature Engineering")
-
-if 'features' not in st.session_state or st.session_state.features is None:
-    st.warning("⚠️ No features calculated yet. Please calculate technical indicators first.")
-    
-    if st.button("🔧 Calculate Technical Indicators Now", type="primary"):
-        with st.spinner("Calculating technical indicators..."):
-            try:
-                from features.technical_indicators import TechnicalIndicators
-                from utils.data_processing import DataProcessor
-                
-                # Calculate technical indicators
-                features_data = TechnicalIndicators.calculate_all_indicators(st.session_state.data)
-                
-                # Clean the data
-                features_clean = DataProcessor.clean_data(features_data)
-                
-                # Store in session state
-                st.session_state.features = features_clean
-                
-                st.success("✅ Technical indicators calculated successfully!")
-                st.rerun()
-                
-            except Exception as e:
-                st.error(f"❌ Error calculating indicators: {str(e)}")
-                import traceback
-                with st.expander("Show error details"):
-                    st.code(traceback.format_exc())
-else:
-    st.success("✅ Technical indicators ready")
-    
-    # Show feature summary
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Features", len(st.session_state.features.columns))
-    with col2:
-        st.metric("Data Points", len(st.session_state.features))
-    with col3:
-        # Count non-OHLC features
-        ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-        feature_cols = [col for col in st.session_state.features.columns if col not in ohlc_cols]
-        st.metric("Engineered Features", len(feature_cols))
-    
-    # Show sample of features
-    with st.expander("View Feature Sample"):
-        st.dataframe(st.session_state.features.head(10), use_container_width=True)
+# Feature Engineering Section will be handled within each model tab
 
 # Training Configuration
 st.header("⚙️ Training Configuration")
@@ -94,6 +48,54 @@ tab1, tab2 = st.tabs(["Volatility Model", "Direction Model"])
 with tab1:
     st.subheader("📈 Volatility Prediction Model")
     st.markdown("Predicts future market volatility using technical indicators.")
+    
+    # Volatility model features section
+    st.subheader("Volatility Model Features")
+    
+    if 'features' not in st.session_state or st.session_state.features is None:
+        st.warning("⚠️ Volatility features not calculated yet.")
+        
+        if st.button("🔧 Calculate Technical Indicators", type="primary", key="calc_volatility_features"):
+            with st.spinner("Calculating volatility-specific technical indicators..."):
+                try:
+                    from features.technical_indicators import TechnicalIndicators
+                    from utils.data_processing import DataProcessor
+                    
+                    # Calculate technical indicators for volatility
+                    features_data = TechnicalIndicators.calculate_all_indicators(st.session_state.data)
+                    
+                    # Clean the data
+                    features_clean = DataProcessor.clean_data(features_data)
+                    
+                    # Store in session state
+                    st.session_state.features = features_clean
+                    
+                    st.success("✅ Volatility technical indicators calculated successfully!")
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"❌ Error calculating volatility indicators: {str(e)}")
+                    import traceback
+                    with st.expander("Show error details"):
+                        st.code(traceback.format_exc())
+    else:
+        st.success("✅ Volatility features ready")
+        
+        # Show volatility feature summary
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Features", len(st.session_state.features.columns))
+        with col2:
+            st.metric("Data Points", len(st.session_state.features))
+        with col3:
+            # Count non-OHLC features
+            ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+            feature_cols = [col for col in st.session_state.features.columns if col not in ohlc_cols]
+            st.metric("Engineered Features", len(feature_cols))
+        
+        # Show sample of volatility features
+        with st.expander("View Volatility Feature Sample"):
+            st.dataframe(st.session_state.features.head(10), use_container_width=True)
     
     col1, col2 = st.columns([3, 1])
     
@@ -200,14 +202,14 @@ with tab2:
     st.subheader("🎯 Direction Prediction Model")
     st.markdown("Predicts whether price will move up or down.")
     
-    # Direction model features status
+    # Direction model features section
     st.subheader("Direction Model Features")
     
     if 'direction_features' not in st.session_state or st.session_state.direction_features is None:
-        st.warning("⚠️ Direction model features not calculated yet.")
+        st.warning("⚠️ Direction features not calculated yet.")
         
-        if st.button("🔧 Calculate Direction Features", type="primary", key="calc_direction_features"):
-            with st.spinner("Calculating direction-specific features..."):
+        if st.button("🔧 Calculate Technical Indicators", type="primary", key="calc_direction_features"):
+            with st.spinner("Calculating direction-specific technical indicators..."):
                 try:
                     from models.direction_model import DirectionModel
                     
@@ -215,11 +217,11 @@ with tab2:
                     direction_features = direction_model.prepare_features(st.session_state.data)
                     
                     st.session_state.direction_features = direction_features
-                    st.success("✅ Direction features calculated successfully!")
+                    st.success("✅ Direction technical indicators calculated successfully!")
                     st.rerun()
                     
                 except Exception as e:
-                    st.error(f"❌ Error calculating direction features: {str(e)}")
+                    st.error(f"❌ Error calculating direction indicators: {str(e)}")
                     import traceback
                     with st.expander("Show error details"):
                         st.code(traceback.format_exc())
@@ -227,11 +229,16 @@ with tab2:
         st.success("✅ Direction features ready")
         
         # Show direction feature summary
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Direction Features", len(st.session_state.direction_features.columns))
         with col2:
             st.metric("Data Points", len(st.session_state.direction_features))
+        with col3:
+            # Count direction-specific features
+            ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+            direction_feature_cols = [col for col in st.session_state.direction_features.columns if col not in ohlc_cols]
+            st.metric("Direction Indicators", len(direction_feature_cols))
         
         # Show sample of direction features
         with st.expander("View Direction Feature Sample"):
