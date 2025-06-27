@@ -16,25 +16,25 @@ if 'data' not in st.session_state or st.session_state.data is None:
 # Check if features are available - if not, offer to calculate them
 if 'features' not in st.session_state or st.session_state.features is None:
     st.warning("⚠️ No features calculated yet. Please calculate technical indicators first.")
-    
+
     if st.button("🔧 Calculate Technical Indicators Now", type="primary"):
         with st.spinner("Calculating technical indicators..."):
             try:
                 from features.technical_indicators import TechnicalIndicators
                 from utils.data_processing import DataProcessor
-                
+
                 # Calculate technical indicators
                 features_data = TechnicalIndicators.calculate_all_indicators(st.session_state.data)
-                
+
                 # Clean the data
                 features_clean = DataProcessor.clean_data(features_data)
-                
+
                 # Store in session state
                 st.session_state.features = features_clean
-                
+
                 st.success("✅ Technical indicators calculated successfully!")
                 st.rerun()
-                
+
             except Exception as e:
                 st.error(f"❌ Error calculating indicators: {str(e)}")
                 import traceback
@@ -81,11 +81,11 @@ if 'features' in st.session_state and st.session_state.features is not None:
         ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
         feature_cols = [col for col in st.session_state.features.columns if col not in ohlc_cols]
         st.metric("Engineered Features", len(feature_cols))
-        
+
     # Show sample of features
     with st.expander("View Feature Sample"):
         st.dataframe(st.session_state.features.head(10), use_container_width=True)
-        
+
 else:
     st.info("ℹ️ Features will be automatically calculated when training starts")
 
@@ -110,7 +110,7 @@ if st.button("🚀 Train Volatility Model", type="primary", disabled=not train_v
                     st.info("Calculating technical indicators...")
                     from features.technical_indicators import TechnicalIndicators
                     from utils.data_processing import DataProcessor
-                    
+
                     features_data = TechnicalIndicators.calculate_all_indicators(st.session_state.data)
                     combined_data = DataProcessor.clean_data(features_data)
                     st.session_state.features = combined_data
@@ -228,6 +228,268 @@ if st.button("🚀 Train Volatility Model", type="primary", disabled=not train_v
             import traceback
             with st.expander("Show error details"):
                 st.code(traceback.format_exc())
+
+# Model status
+st.header("📈 Model Status")
+
+if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
+    if 'volatility' in st.session_state.trained_models and st.session_state.trained_models['volatility'] is not None:
+        st.success("✅ Volatility Model: Trained and Ready")
+
+        # Show model info
+        result = st.session_state.trained_models['volatility']
+        if 'metrics' in result:
+            metrics = result['metrics']
+            rmse = metrics.get('rmse', 0)
+            st.info(f"📊 Model RMSE: {rmse:.4f}")
+    else:
+        st.warning("⚠️ Volatility Model: Not trained")
+else:
+    st.info("ℹ️ No models trained yet")
+
+# Export trained models
+if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
+    st.header("💾 Export Models")
+
+    if st.button("📥 Save Models to Database"):
+        try:
+            model_trainer = st.session_state.model_trainer
+            model_trainer._save_models_to_database()
+            st.success("✅ Models saved to database successfully!")
+        except Exception as e:
+            st.error(f"❌ Failed to save models: {str(e)}")
+
+# Add direction model training option
+st.subheader("Select Models to Train")
+col1, col2 = st.columns(2)
+
+with col1:
+    train_volatility = st.checkbox("Train Volatility Model", value=True)
+
+with col2:
+    train_direction = st.checkbox("Train Direction Model", value=False)
+# Complete the volatility training section and add direction training
+import time
+from utils import database as db
+
+# Training section
+st.header("Model Training")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("🚀 Train Volatility Model", type="primary", disabled=not train_volatility):
+        if not train_volatility:
+            st.warning("Please select the volatility model to train.")
+        else:
+            try:
+                # Initialize model
+                from models.xgboost_models import QuantTradingModels
+
+                with st.spinner("Initializing model trainer..."):
+                    model_trainer = QuantTradingModels()
+
+                # Prepare data
+                with st.spinner("Preparing training data..."):
+                    # If features aren't calculated, calculate them now
+                    if 'features' not in st.session_state or st.session_state.features is None:
+                        st.info("Calculating technical indicators...")
+                        from features.technical_indicators import TechnicalIndicators
+                        from utils.data_processing import DataProcessor
+
+                        features_data = TechnicalIndicators.calculate_all_indicators(st.session_state.data)
+                        combined_data = DataProcessor.clean_data(features_data)
+                        st.session_state.features = combined_data
+                    else:
+                        combined_data = st.session_state.features.copy()
+
+                    # Ensure we have the required OHLC columns for target creation
+                    if not all(col in combined_data.columns for col in ['Open', 'High', 'Low', 'Close']):
+                        # Add OHLC data if missing
+                        for col in ['Open', 'High', 'Low', 'Close']:
+                            if col in st.session_state.data.columns and col not in combined_data.columns:
+                                combined_data[col] = st.session_state.data[col]
+
+                    # Validate data
+                    if len(combined_data) < 100:
+                        st.error("❌ Insufficient data for training. Need at least 100 rows.")
+                        st.stop()
+
+                    st.info(f"📊 Training data prepared: {len(combined_data)} rows with {len(combined_data.columns)} features")
+
+                # Train the model
+                with st.spinner("Training volatility model..."):
+                    selected_models = ['volatility']
+                    training_results = model_trainer.train_selected_models(
+                        combined_data, 
+                        selected_models,
+                        train_split
+                    )
+
+                # Store results in session state
+                st.session_state.trained_models = training_results
+                st.session_state.model_trainer = model_trainer
+
+                # Display results
+                st.success("🎉 Model training completed!")
+
+                if 'volatility' in training_results and training_results['volatility'] is not None:
+                    result = training_results['volatility']
+                    metrics = result.get('metrics', {})
+
+                    st.subheader("📊 Training Results")
+
+                    col1, col2, col3 = st.columns(3)
+
+                    with col1:
+                        rmse = metrics.get('rmse', 0)
+                        st.metric("RMSE", f"{rmse:.4f}")
+
+                    with col2:
+                        mae = metrics.get('mae', 0)
+                        st.metric("MAE", f"{mae:.4f}")
+
+                    with col3:
+                        mse = metrics.get('mse', 0)
+                        st.metric("MSE", f"{mse:.4f}")
+
+                    # Feature importance
+                    if 'feature_importance' in result:
+                        st.subheader("🎯 Feature Importance")
+
+                        importance_data = result['feature_importance']
+                        if importance_data:
+                            importance_df = pd.DataFrame(
+                                list(importance_data.items()),
+                                columns=['Feature', 'Importance']
+                            ).sort_values('Importance', ascending=False)
+
+                            # Show top 10 features
+                            st.dataframe(importance_df.head(10), use_container_width=True)
+
+                            # Feature importance chart
+                            import plotly.express as px
+
+                            fig = px.bar(
+                                importance_df.head(10),
+                                x='Importance',
+                                y='Feature',
+                                orientation='h',
+                                title="Top 10 Most Important Features"
+                            )
+                            fig.update_layout(yaxis={'categoryorder':'total ascending'})
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.info("Feature importance data not available")
+
+                    # Individual model performance
+                    st.subheader("🔧 Individual Model Performance")
+
+                    model_metrics = {}
+                    for key, value in metrics.items():
+                        if '_mse' in key or '_mae' in key:
+                            model_name = key.split('_')[0]
+                            metric_type = key.split('_')[1]
+
+                            if model_name not in model_metrics:
+                                model_metrics[model_name] = {}
+                            model_metrics[model_name][metric_type] = value
+
+                    if model_metrics:
+                        cols = st.columns(len(model_metrics))
+                        for i, (model_name, model_metric) in enumerate(model_metrics.items()):
+                            with cols[i]:
+                                st.write(f"**{model_name.upper()}**")
+                                if 'mse' in model_metric:
+                                    st.metric("MSE", f"{model_metric['mse']:.4f}")
+                                if 'mae' in model_metric:
+                                    st.metric("MAE", f"{model_metric['mae']:.4f}")
+
+                    st.success("✅ Volatility model is ready for predictions!")
+                else:
+                    st.error("❌ Failed to train volatility model")
+
+            except Exception as e:
+                st.error(f"❌ Training failed: {str(e)}")
+                import traceback
+                with st.expander("Show error details"):
+                    st.code(traceback.format_exc())
+
+with col2:
+    if st.button("🎯 Train Direction Model", type="primary", disabled=not train_direction):
+        if not train_direction:
+            st.warning("Please select the direction model to train.")
+        else:
+            try:
+                # Initialize direction model
+                from models.direction_model import DirectionModel
+
+                with st.spinner("Initializing direction model trainer..."):
+                    direction_model = DirectionModel()
+
+                # Prepare data for direction model
+                with st.spinner("Preparing direction-specific data..."):
+                    if st.session_state.data is None:
+                        st.error("No data available. Please upload data first.")
+                        st.stop()
+
+                    # Prepare features using direction-specific indicators
+                    direction_features = direction_model.prepare_features(st.session_state.data)
+                    direction_target = direction_model.create_target(st.session_state.data)
+
+                    st.success(f"✅ Prepared {len(direction_features)} samples with {len(direction_features.columns)} direction features")
+
+                # Train direction model
+                with st.spinner("Training direction model... This may take a few minutes."):
+                    progress_bar = st.progress(0)
+
+                    # Simulate progress
+                    for i in range(100):
+                        time.sleep(0.02)
+                        progress_bar.progress(i + 1)
+
+                    result = direction_model.train(direction_features, direction_target)
+
+                if result and 'accuracy' in result['metrics']:
+                    st.success("✅ Direction model trained successfully!")
+
+                    # Display results
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Accuracy", f"{result['metrics']['accuracy']:.3f}")
+                    with col2:
+                        if 'classification_report' in result['metrics']:
+                            precision = result['metrics']['classification_report']['weighted avg']['precision']
+                            st.metric("Precision", f"{precision:.3f}")
+                    with col3:
+                        if 'classification_report' in result['metrics']:
+                            recall = result['metrics']['classification_report']['weighted avg']['recall']
+                            st.metric("Recall", f"{recall:.3f}")
+
+                    # Save model to database
+                    with st.spinner("Saving direction model..."):
+                        model_data = {
+                            'metrics': result['metrics'],
+                            'task_type': 'classification',
+                            'trained_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            'accuracy': result['metrics']['accuracy']
+                        }
+                        db.save_model_results('direction', model_data)
+
+                        # Save the trained model object
+                        success = db.save_trained_model('direction', direction_model)
+                        if success:
+                            st.success("✅ Direction model saved to database")
+                        else:
+                            st.warning("⚠️ Model trained but failed to save to database")
+                else:
+                    st.error("❌ Direction model training failed")
+
+            except Exception as e:
+                st.error(f"❌ Direction training failed: {str(e)}")
+                print(f"Direction training error: {e}")
+                import traceback
+                traceback.print_exc()
 
 # Model status
 st.header("📈 Model Status")

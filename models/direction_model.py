@@ -51,16 +51,17 @@ class DirectionModel:
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
-        from features.technical_indicators import TechnicalIndicators
+        from features.direction_technical_indicators import DirectionTechnicalIndicators
         
-        # Calculate direction-specific indicators
-        result_df = TechnicalIndicators.calculate_direction_indicators(df)
+        # Calculate all direction-specific indicators
+        result_df = DirectionTechnicalIndicators.calculate_all_direction_indicators(df)
         
-        # Define direction-specific features
-        direction_features = ['rsi', 'macd', 'macd_signal', 'ema_fast', 'ema_slow', 'adx', 'obv', 'stoch_k', 'stoch_d']
+        # Define core direction-specific features to ensure we have them
+        core_direction_features = ['rsi', 'macd', 'macd_signal', 'ema_fast', 'ema_slow', 'adx', 'obv', 'stoch_k', 'stoch_d']
         
-        # Check which features are available
-        available_features = [col for col in direction_features if col in result_df.columns]
+        # Get all available features excluding OHLC
+        ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        available_features = [col for col in result_df.columns if col not in ohlc_cols]
         
         if len(available_features) == 0:
             raise ValueError(f"No direction features found. Available columns: {list(result_df.columns)}")
