@@ -50,6 +50,7 @@ class ModelManager:
                 if 'model' in model_data:
                     models_to_save['volatility'] = {
                         'ensemble': model_data['model'],
+                        'scaler': model_data.get('scaler'),  # Include the scaler!
                         'feature_names': model_data.get('feature_names', []),
                         'task_type': model_data.get('task_type', 'regression')
                     }
@@ -229,6 +230,10 @@ class ModelManager:
         model_instance.model = ensemble_model
         model_instance.scaler = trained_model_data.get('scaler')
         model_instance.feature_names = trained_model_data.get('feature_names', [])
+
+        # Verify scaler is available
+        if model_instance.scaler is None:
+            raise ValueError("Scaler not found in trained model data. Please retrain the model.")
 
         # Prepare features for volatility model
         X_features = model_instance.prepare_features(X)

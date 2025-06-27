@@ -40,6 +40,11 @@ class QuantTradingModels(ModelManager):
                 if 'feature_names' in model_data and model_data['feature_names']:
                     self.feature_names = model_data['feature_names']
                     print(f"Feature names loaded from volatility model: {len(self.feature_names)} features")
+                
+                # Extract and restore the scaler
+                if 'scaler' in model_data and model_data['scaler'] is not None:
+                    self.scalers['volatility'] = model_data['scaler']
+                    print(f"Scaler loaded from volatility model")
             else:
                 print("No volatility model found in database")
 
@@ -57,6 +62,7 @@ class QuantTradingModels(ModelManager):
             if 'volatility' in self.models and 'ensemble' in self.models['volatility']:
                 models_to_save['volatility'] = {
                     'ensemble': self.models['volatility']['ensemble'],
+                    'scaler': self.scalers.get('volatility'),  # Include the scaler!
                     'feature_names': self.feature_names,
                     'task_type': 'regression'
                 }
