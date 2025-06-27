@@ -35,10 +35,23 @@ if 'direction_probabilities' not in st.session_state:
 st.title("🔮 Model Predictions")
 st.markdown("Generate and analyze predictions using the trained models.")
 
-# Check prerequisites
+# Auto-restore data if missing
 if st.session_state.data is None:
-    st.error("❌ No data available. Please upload data first.")
-    st.stop()
+    try:
+        from utils.database_adapter import get_trading_database
+        db = get_trading_database()
+        
+        # Try to load data from database
+        recovered_data = db.recover_data()
+        if recovered_data is not None and not recovered_data.empty:
+            st.session_state.data = recovered_data
+            st.success("✅ Data restored from database")
+        else:
+            st.warning("⚠️ No data available. Please go to Data Upload page to upload data first.")
+            st.stop()
+    except Exception as e:
+        st.warning("⚠️ No data available. Please go to Data Upload page to upload data first.")
+        st.stop()
 
 # Create tabs for different prediction types
 volatility_tab, direction_tab = st.tabs(["📊 Volatility Predictions", "🎯 Direction Predictions"])
