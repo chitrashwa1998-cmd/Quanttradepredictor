@@ -74,14 +74,24 @@ with volatility_tab:
             st.session_state.trained_models['volatility'] is not None):
             model_available = True
         else:
-            # Check database
+            # Check database for trained models
             try:
                 from utils.database_adapter import get_trading_database
                 db = get_trading_database()
-                db_model = db.load_model_results('volatility')
-                if db_model and 'metrics' in db_model:
+                
+                # Check for trained model objects first (primary storage)
+                trained_models = db.load_trained_models()
+                if trained_models and 'volatility' in trained_models:
                     model_available = True
-            except:
+                    st.info("✅ Volatility model found in database")
+                else:
+                    # Fallback: check for model results
+                    db_model = db.load_model_results('volatility')
+                    if db_model and 'metrics' in db_model:
+                        model_available = True
+                        st.info("✅ Volatility model results found in database")
+            except Exception as e:
+                st.warning(f"Database check failed: {str(e)}")
                 pass
         
         if not model_available:
@@ -115,16 +125,25 @@ with volatility_tab:
                             from models.model_manager import ModelManager
                             
                             db = get_trading_database()
-                            db_model = db.load_model_results('volatility')
                             
-                            if db_model and 'metrics' in db_model:
-                                # Initialize model manager and load from database
+                            # Try to load trained model objects first
+                            trained_models = db.load_trained_models()
+                            if trained_models and 'volatility' in trained_models:
+                                # Initialize model manager and set the loaded model
                                 model_trainer = ModelManager()
+                                model_trainer.trained_models['volatility'] = trained_models['volatility']
                                 st.session_state.model_trainer = model_trainer
                                 st.info("✅ Loaded volatility model from database")
                             else:
-                                st.error("❌ No trained volatility model found in database. Please train the model first.")
-                                st.stop()
+                                # Fallback: try loading model results
+                                db_model = db.load_model_results('volatility')
+                                if db_model and 'metrics' in db_model:
+                                    model_trainer = ModelManager()
+                                    st.session_state.model_trainer = model_trainer
+                                    st.info("✅ Loaded volatility model results from database")
+                                else:
+                                    st.error("❌ No trained volatility model found in database. Please train the model first.")
+                                    st.stop()
                         except Exception as load_error:
                             st.error(f"❌ Error loading model from database: {str(load_error)}")
                             st.stop()
