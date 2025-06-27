@@ -58,7 +58,7 @@ def initialize_session_state():
         try:
             import pandas as pd
             from utils.database_adapter import get_trading_database
-            from models.xgboost_models import QuantTradingModels
+            from models.model_manager import ModelManager
             from features.technical_indicators import TechnicalIndicators
 
             trading_db = get_trading_database()
@@ -78,7 +78,7 @@ def initialize_session_state():
 
             # Recover model trainer
             if st.session_state.model_trainer is None:
-                st.session_state.model_trainer = QuantTradingModels()
+                st.session_state.model_trainer = ModelManager()
 
             # Recover trained models from database
             if not st.session_state.models:
@@ -86,7 +86,8 @@ def initialize_session_state():
                     # First try to load trained model objects
                     trained_models = trading_db.load_trained_models()
                     if trained_models and st.session_state.model_trainer:
-                        st.session_state.model_trainer.models = trained_models
+                        # ModelManager uses trained_models attribute
+                        st.session_state.model_trainer.trained_models = trained_models
 
                     # Then load model results/metadata
                     model_names = ['direction', 'magnitude', 'profit_prob', 'volatility', 'trend_sideways', 'reversal', 'trading_signal']

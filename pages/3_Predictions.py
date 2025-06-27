@@ -140,7 +140,7 @@ with volatility_tab:
                                         'model': volatility_model_data['ensemble'],
                                         'feature_names': volatility_model_data.get('feature_names', []),
                                         'task_type': volatility_model_data.get('task_type', 'regression'),
-                                        'scaler': None  # Will be handled by the model itself
+                                        'scaler': volatility_model_data.get('scaler')  # Include the scaler from database
                                     }
                                 else:
                                     model_trainer.trained_models['volatility'] = volatility_model_data
