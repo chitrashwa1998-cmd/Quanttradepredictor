@@ -138,26 +138,51 @@ class DirectionTechnicalIndicators:
         result_df = df.copy()
 
         # Calculate direction indicators
+        print("Step 1: Calculating basic direction indicators...")
         result_df = DirectionTechnicalIndicators.calculate_direction_indicators(result_df)
+        basic_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+        print(f"After basic indicators: {len(basic_features)} features")
 
         # Add custom engineered features for direction
+        print("Step 2: Adding custom direction features...")
         from features.direction_custom_engineered import add_custom_direction_features
-        result_df = add_custom_direction_features(result_df)
+        try:
+            result_df = add_custom_direction_features(result_df)
+            custom_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+            print(f"After custom features: {len(custom_features)} features")
+        except Exception as e:
+            print(f"Error in custom features: {e}")
 
         # Add lagged features for direction
+        print("Step 3: Adding lagged direction features...")
         from features.direction_lagged_features import add_lagged_direction_features
-        result_df = add_lagged_direction_features(result_df)
+        try:
+            result_df = add_lagged_direction_features(result_df)
+            lagged_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+            print(f"After lagged features: {len(lagged_features)} features")
+        except Exception as e:
+            print(f"Error in lagged features: {e}")
 
         # Add time context features for direction
+        print("Step 4: Adding time context features...")
         from features.direction_time_context import add_time_context_features
-        result_df = add_time_context_features(result_df)
+        try:
+            result_df = add_time_context_features(result_df)
+            time_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+            print(f"After time features: {len(time_features)} features")
+        except Exception as e:
+            print(f"Error in time features: {e}")
 
+        print("Step 5: Final cleanup...")
         # Final cleanup
         result_df = result_df.replace([np.inf, -np.inf], np.nan)
+        before_dropna = len(result_df)
         result_df = result_df.dropna()
+        after_dropna = len(result_df)
+        print(f"Dropped {before_dropna - after_dropna} rows with NaN values")
 
         feature_cols = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        print(f"✅ Calculated {len(feature_cols)} direction-specific indicators")
+        print(f"✅ Final result: {len(feature_cols)} direction-specific indicators")
         print(f"Direction features: {feature_cols}")
 
         return result_df

@@ -248,14 +248,14 @@ with tab2:
         # Show direction feature summary
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Direction Features", len(st.session_state.direction_features.columns))
+            st.metric("Total Features", len(st.session_state.direction_features.columns))
         with col2:
             st.metric("Data Points", len(st.session_state.direction_features))
         with col3:
-            # Count direction-specific features
+            # Count direction-specific features (engineered features)
             ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
             direction_feature_cols = [col for col in st.session_state.direction_features.columns if col not in ohlc_cols]
-            st.metric("Direction Indicators", len(direction_feature_cols))
+            st.metric("Engineered Features", len(direction_feature_cols))
         
         # Show sample of direction features
         with st.expander("View Direction Feature Sample"):

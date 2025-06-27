@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def add_lagged_direction_features(df: pd.DataFrame, ema: pd.Series = None) -> pd.DataFrame:
+def add_lagged_direction_features(df: pd.DataFrame, ema=None) -> pd.DataFrame:
     df = df.copy()
     
     # Determine column names (handle both uppercase and lowercase)
