@@ -452,7 +452,7 @@ with direction_tab:
             st.subheader("📊 Detailed Direction Analysis")
             
             # Create tabbed analysis
-            analysis_tab1, analysis_tab2, analysis_tab3 = st.tabs(["📋 Recent Predictions", "📈 Performance Metrics", "🔍 Signal Quality"])
+            analysis_tab1, analysis_tab2, analysis_tab3, analysis_tab4 = st.tabs(["📋 Recent Predictions", "📈 Performance Metrics", "🔍 Signal Quality", "📊 All Data Table"])
             
             with analysis_tab1:
                 st.markdown("**Last 30 Direction Predictions**")
@@ -598,3 +598,168 @@ with direction_tab:
                                             yaxis_title="Confidence Level",
                                             yaxis=dict(range=[0, 1]))
                     st.plotly_chart(fig_quality, use_container_width=True)
+            
+            with analysis_tab4:
+                st.markdown(f"**All Direction Predictions ({dir_filter})**")
+                
+                # Create comprehensive predictions dataframe for all filtered data
+                all_predictions = predictions
+                all_probs = probabilities if probabilities is not None else None
+                all_prices = filtered_data
+                
+                # Calculate price changes for validation
+                price_changes = all_prices['Close'].pct_change().shift(-1) * 100  # Next period change
+                actual_direction = (price_changes > 0).astype(int)
+                
+                all_predictions_df = pd.DataFrame({
+                    'Timestamp': all_prices.index,
+                    'Open': all_prices['Open'].round(2),
+                    'High': all_prices['High'].round(2),
+                    'Low': all_prices['Low'].round(2),
+                    'Close': all_prices['Close'].round(2),
+                    'Volume': all_prices['Volume'].round(0),
+                    'Predicted Direction': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in all_predictions],
+                    'Direction Binary': all_predictions,
+                    'Confidence': [f"{np.max(prob):.3f}" for prob in all_probs] if all_probs is not None else ['N/A'] * len(all_predictions),
+                    'Confidence Score': [np.max(prob) for prob in all_probs] if all_probs is not None else [0.5] * len(all_predictions),
+                    'Next Change %': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
+                    'Actual Next Direction': [1 if change > 0 else 0 if change <= 0 else np.nan for change in price_changes],
+                    'Correct': ['✅' if pred == actual and not pd.isna(actual) else '❌' if not pd.isna(actual) else '⏳' 
+                               for pred, actual in zip(all_predictions, actual_direction)]
+                })
+                
+                # Add additional analysis columns
+                all_predictions_df['Price Change %'] = all_prices['Close'].pct_change() * 100
+                all_predictions_df['High-Low Range %'] = ((all_prices['High'] - all_prices['Low']) / all_prices['Close']) * 100
+                
+                # Show summary statistics
+                st.subheader("📊 Summary Statistics")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Total Records", len(all_predictions_df))
+                with col2:
+                    bullish_total = (all_predictions_df['Direction Binary'] == 1).sum()
+                    st.metric("Bullish Predictions", f"{bullish_total} ({(bullish_total/len(all_predictions_df)*100):.1f}%)")
+                with col3:
+                    if all_probs is not None:
+                        avg_conf = all_predictions_df['Confidence Score'].mean()
+                        st.metric("Average Confidence", f"{avg_conf:.3f}")
+                    else:
+                        st.metric("Average Confidence", "N/A")
+                with col4:
+                    # Calculate accuracy where we have valid comparisons
+                    valid_mask = ~pd.isna(all_predictions_df['Actual Next Direction'])
+                    if valid_mask.sum() > 0:
+                        correct_predictions = (all_predictions_df.loc[valid_mask, 'Direction Binary'] == 
+                                             all_predictions_df.loc[valid_mask, 'Actual Next Direction']).sum()
+                        accuracy = correct_predictions / valid_mask.sum()
+                        st.metric("Prediction Accuracy", f"{accuracy:.1%}")
+                    else:
+                        st.metric("Prediction Accuracy", "N/A")
+                
+                # Display options
+                st.subheader("📋 Data Display Options")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    show_columns = st.multiselect(
+                        "Select columns to display:",
+                        options=all_predictions_df.columns.tolist(),
+                        default=['Timestamp', 'Close', 'Predicted Direction', 'Confidence', 'Next Change %', 'Correct'],
+                        help="Choose which columns to show in the table"
+                    )
+                
+                with col2:
+                    sort_order = st.selectbox(
+                        "Sort by:",
+                        options=['Newest First', 'Oldest First', 'Highest Confidence', 'Lowest Confidence'],
+                        help="Choose how to sort the data"
+                    )
+                
+                # Apply sorting
+                display_df = all_predictions_df[show_columns].copy()
+                
+                if sort_order == 'Newest First':
+                    display_df = display_df.sort_values('Timestamp', ascending=False)
+                elif sort_order == 'Oldest First':
+                    display_df = display_df.sort_values('Timestamp', ascending=True)
+                elif sort_order == 'Highest Confidence' and 'Confidence Score' in all_predictions_df.columns:
+                    display_df = all_predictions_df[show_columns].sort_values('Confidence Score', ascending=False)
+                elif sort_order == 'Lowest Confidence' and 'Confidence Score' in all_predictions_df.columns:
+                    display_df = all_predictions_df[show_columns].sort_values('Confidence Score', ascending=True)
+                
+                # Show the data table
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                
+                # Download section
+                st.subheader("📥 Download Data")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Download full dataset
+                    full_csv = all_predictions_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Complete Dataset",
+                        data=full_csv,
+                        file_name=f"direction_predictions_complete_{dir_filter.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv",
+                        help="Download all predictions with all columns"
+                    )
+                
+                with col2:
+                    # Download filtered view
+                    filtered_csv = display_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Filtered View",
+                        data=filtered_csv,
+                        file_name=f"direction_predictions_filtered_{dir_filter.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv",
+                        help="Download currently displayed columns only"
+                    )
+                
+                # Additional statistics
+                st.subheader("📈 Additional Analysis")
+                
+                # Performance by confidence level
+                if all_probs is not None:
+                    conf_analysis = pd.DataFrame({
+                        'Confidence Range': ['Very High (>0.8)', 'High (0.7-0.8)', 'Medium (0.6-0.7)', 'Low (≤0.6)'],
+                        'Count': [
+                            (all_predictions_df['Confidence Score'] > 0.8).sum(),
+                            ((all_predictions_df['Confidence Score'] > 0.7) & (all_predictions_df['Confidence Score'] <= 0.8)).sum(),
+                            ((all_predictions_df['Confidence Score'] > 0.6) & (all_predictions_df['Confidence Score'] <= 0.7)).sum(),
+                            (all_predictions_df['Confidence Score'] <= 0.6).sum()
+                        ]
+                    })
+                    
+                    conf_analysis['Percentage'] = (conf_analysis['Count'] / len(all_predictions_df) * 100).round(1)
+                    conf_analysis['Percentage'] = conf_analysis['Percentage'].astype(str) + '%'
+                    
+                    st.dataframe(conf_analysis, use_container_width=True, hide_index=True)
+                
+                # Time period breakdown
+                st.markdown("**Predictions by Time Period**")
+                time_breakdown = pd.DataFrame({
+                    'Period': ['Total Period', 'First Half', 'Second Half', 'Last 30 Days', 'Last 7 Days'],
+                    'Bullish Count': [
+                        bullish_total,
+                        (all_predictions_df.iloc[:len(all_predictions_df)//2]['Direction Binary'] == 1).sum(),
+                        (all_predictions_df.iloc[len(all_predictions_df)//2:]['Direction Binary'] == 1).sum(),
+                        (all_predictions_df.tail(min(30, len(all_predictions_df)))['Direction Binary'] == 1).sum(),
+                        (all_predictions_df.tail(min(7, len(all_predictions_df)))['Direction Binary'] == 1).sum()
+                    ],
+                    'Total Count': [
+                        len(all_predictions_df),
+                        len(all_predictions_df)//2,
+                        len(all_predictions_df) - len(all_predictions_df)//2,
+                        min(30, len(all_predictions_df)),
+                        min(7, len(all_predictions_df))
+                    ]
+                })
+                
+                time_breakdown['Bullish %'] = (time_breakdown['Bullish Count'] / time_breakdown['Total Count'] * 100).round(1)
+                time_breakdown['Bullish %'] = time_breakdown['Bullish %'].astype(str) + '%'
+                
+                st.dataframe(time_breakdown, use_container_width=True, hide_index=True)
