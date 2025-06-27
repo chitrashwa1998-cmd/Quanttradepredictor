@@ -260,13 +260,21 @@ class DirectionModel:
         """Make predictions using trained direction model."""
         if self.model is None:
             raise ValueError("Model not trained. Call train() first.")
+        
+        if self.selected_features is None:
+            raise ValueError("No selected features available. Model not properly trained.")
 
         # Validate features
         if X.empty:
             raise ValueError("Input DataFrame is empty")
 
-        # Use all features - no feature selection
-        X_selected = X.values
+        # Check if all required features are present
+        missing_features = [f for f in self.selected_features if f not in X.columns]
+        if missing_features:
+            raise ValueError(f"Missing required features: {missing_features}")
+
+        # Use only the selected features that were used during training
+        X_selected = X[self.selected_features].values
         X_scaled = self.scaler.transform(X_selected)
 
         # Make predictions

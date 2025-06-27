@@ -198,67 +198,7 @@ with direction_tab:
         4. Return here to generate predictions
         """)
         
-        # Quick training option
-        st.subheader("🚀 Quick Training Option")
-        st.markdown("**Or train the direction model right here:**")
-        
-        if st.button("🤖 Quick Train Direction Model", type="primary", key="quick_train_direction"):
-            try:
-                with st.spinner("Training direction model... This may take a few minutes."):
-                    # Import required modules
-                    from models.direction_model import DirectionModel
-                    from features.direction_technical_indicators import DirectionTechnicalIndicators
-                    from features.direction_custom_engineered import add_custom_direction_features
-                    from features.direction_lagged_features import add_lagged_direction_features
-                    from features.direction_time_context import add_time_context_features
-                    
-                    # Calculate direction features
-                    st.write("🔧 Calculating direction features...")
-                    
-                    # Technical indicators
-                    tech_indicators = DirectionTechnicalIndicators()
-                    features_df = tech_indicators.calculate_all_direction_indicators(st.session_state.data.copy())
-                    
-                    # Custom engineered features
-                    features_df = add_custom_direction_features(features_df)
-                    
-                    # Lagged features
-                    features_df = add_lagged_direction_features(features_df)
-                    
-                    # Time context features
-                    features_df = add_time_context_features(features_df)
-                    
-                    st.write(f"✅ Generated {features_df.shape[1]} direction features")
-                    
-                    # Initialize and train direction model
-                    st.write("🤖 Training direction model...")
-                    direction_model = DirectionModel()
-                    
-                    # Create target
-                    target = direction_model.create_target(st.session_state.data)
-                    st.write(f"✅ Created target with {len(target)} samples")
-                    
-                    # Prepare features for training
-                    prepared_features = direction_model.prepare_features(features_df)
-                    st.write(f"✅ Prepared {prepared_features.shape[1]} features for training")
-                    
-                    # Train the model
-                    results = direction_model.train(prepared_features, target, train_split=0.8)
-                    
-                    # Store in session state
-                    if 'direction_trained_models' not in st.session_state:
-                        st.session_state.direction_trained_models = {}
-                    
-                    st.session_state.direction_trained_models['direction'] = direction_model
-                    st.session_state.direction_features = features_df
-                    
-                    st.success(f"✅ Direction model trained successfully! Accuracy: {results.get('test_accuracy', 'N/A'):.3f}")
-                    st.rerun()
-                    
-            except Exception as e:
-                st.error(f"❌ Error training direction model: {str(e)}")
-                import traceback
-                st.error(f"Error details: {traceback.format_exc()}")
+
         
         # Show preview of what will be available
         st.subheader("🔮 Preview: Direction Prediction Features")
@@ -308,14 +248,14 @@ with direction_tab:
                     direction_model = st.session_state.direction_trained_models['direction']
                     st.write(f"Direction model type: {type(direction_model)}")
                     
-                    # Use direction features for prediction
+                    # Use direction features for prediction (already prepared during training)
                     direction_features = st.session_state.direction_features.copy()
                     st.write(f"Direction features shape: {direction_features.shape}")
                     st.write(f"Direction features columns: {list(direction_features.columns[:10])}...")
                     
-                    # Prepare features for prediction
-                    features_prepared = direction_model.prepare_features(direction_features)
-                    st.write(f"Prepared features shape: {features_prepared.shape}")
+                    # Features are already prepared, just use them directly
+                    features_prepared = direction_features
+                    st.write(f"Using features for prediction: {features_prepared.shape}")
                     
                     # Generate predictions
                     predictions, probabilities = direction_model.predict(features_prepared)
