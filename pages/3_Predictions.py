@@ -360,9 +360,9 @@ with direction_tab:
                     row_heights=[0.7, 0.3]
                 )
                 
-                # Use filtered data for chart (matching the prediction timeframe)
-                data_len = min(len(filtered_data), len(predictions))
-                recent_data = filtered_data.tail(data_len)
+                # Use original data timestamps for proper time display
+                data_len = min(len(st.session_state.data), len(predictions))
+                recent_data = st.session_state.data.tail(data_len)
                 
                 # Add candlestick chart for price
                 fig.add_trace(go.Candlestick(
@@ -404,7 +404,7 @@ with direction_tab:
                         marker=dict(color=bullish_colors if prob_data is not None else 'green', 
                                    size=bullish_sizes if prob_data is not None else 10, 
                                    symbol='triangle-up'),
-                        text=[f'Confidence: {confidences[i]:.1%}' for i in range(len(confidences)) if bullish_mask[i]] if prob_data is not None else None,
+                        text=[f'Confidence: {confidences[i]:.3f}' for i in range(len(confidences)) if bullish_mask[i]] if prob_data is not None else None,
                         hovertemplate='Bullish Signal<br>%{text}<extra></extra>' if prob_data is not None else 'Bullish Signal<extra></extra>'
                     ), row=2, col=1)
                 
@@ -422,7 +422,7 @@ with direction_tab:
                         marker=dict(color=bearish_colors if prob_data is not None else 'red', 
                                    size=bearish_sizes if prob_data is not None else 10, 
                                    symbol='triangle-down'),
-                        text=[f'Confidence: {confidences[i]:.1%}' for i in range(len(confidences)) if bearish_mask[i]] if prob_data is not None else None,
+                        text=[f'Confidence: {confidences[i]:.3f}' for i in range(len(confidences)) if bearish_mask[i]] if prob_data is not None else None,
                         hovertemplate='Bearish Signal<br>%{text}<extra></extra>' if prob_data is not None else 'Bearish Signal<extra></extra>'
                     ), row=2, col=1)
                 
@@ -474,7 +474,7 @@ with direction_tab:
                     'Low': recent_prices['Low'].round(2),
                     'Close': recent_prices['Close'].round(2),
                     'Predicted Direction': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions],
-                    'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs] if recent_probs is not None else ['N/A'] * num_recent,
+                    'Confidence': [f"{np.max(prob):.3f}" for prob in recent_probs] if recent_probs is not None else ['N/A'] * num_recent,
                     'Next Change %': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
                     'Correct': ['✅' if pred == actual and not pd.isna(actual) else '❌' if not pd.isna(actual) else '⏳' 
                                for pred, actual in zip(recent_predictions, actual_direction)]
@@ -508,9 +508,57 @@ with direction_tab:
                         med_conf_mask = (conf_dist >= 0.5) & (conf_dist <= 0.7)
                         low_conf_mask = conf_dist < 0.5
                         
-                        st.metric("High Confidence (>70%)", f"{high_conf_mask.sum()} signals")
-                        st.metric("Medium Confidence (50-70%)", f"{med_conf_mask.sum()} signals")
-                        st.metric("Low Confidence (<50%)", f"{low_conf_mask.sum()} signals")
+                        st.metric("High Confidence (>0.70)", f"{high_conf_mask.sum()} signals")
+                        st.metric("Medium Confidence (0.50-0.70)", f"{med_conf_mask.sum()} signals")
+                        st.metric("Low Confidence (<0.50)", f"{low_conf_mask.sum()} signals")
+                
+                # Add performance data table
+                st.markdown("**📊 Performance Data Table**")
+                
+                # Create performance summary table
+                performance_data = []
+                
+                # Overall performance
+                total_predictions = len(predictions)
+                bullish_predictions = np.sum(predictions == 1)
+                bearish_predictions = total_predictions - bullish_predictions
+                
+                performance_data.append({
+                    'Metric': 'Total Predictions',
+                    'Value': total_predictions,
+                    'Percentage': '100.0%'
+                })
+                
+                performance_data.append({
+                    'Metric': 'Bullish Predictions',
+                    'Value': bullish_predictions,
+                    'Percentage': f'{(bullish_predictions/total_predictions)*100:.1f}%'
+                })
+                
+                performance_data.append({
+                    'Metric': 'Bearish Predictions', 
+                    'Value': bearish_predictions,
+                    'Percentage': f'{(bearish_predictions/total_predictions)*100:.1f}%'
+                })
+                
+                if probabilities is not None:
+                    avg_confidence = np.mean(np.max(probabilities, axis=1))
+                    high_conf_count = np.sum(np.max(probabilities, axis=1) > 0.7)
+                    
+                    performance_data.append({
+                        'Metric': 'Average Confidence',
+                        'Value': f'{avg_confidence:.3f}',
+                        'Percentage': f'{avg_confidence*100:.1f}%'
+                    })
+                    
+                    performance_data.append({
+                        'Metric': 'High Confidence Signals (>0.70)',
+                        'Value': high_conf_count,
+                        'Percentage': f'{(high_conf_count/total_predictions)*100:.1f}%'
+                    })
+                
+                performance_df = pd.DataFrame(performance_data)
+                st.dataframe(performance_df, use_container_width=True, hide_index=True)
             
             with analysis_tab3:
                 st.markdown("**Signal Quality Assessment**")
