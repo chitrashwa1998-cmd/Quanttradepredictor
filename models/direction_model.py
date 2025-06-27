@@ -3,11 +3,11 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import RobustScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import SelectKBest, mutual_info_classif
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.ensemble import VotingClassifier, RandomForestClassifier
-from sklearn.calibration import CalibratedClassifierCV
+
 from catboost import CatBoostClassifier
 from typing import Dict, Tuple, Any
 import streamlit as st
@@ -24,30 +24,22 @@ class DirectionModel:
         self.model_name = 'direction'
 
     def create_target(self, df: pd.DataFrame) -> pd.Series:
-        """Create direction target (up/down) with noise filtering."""
+        """Create direction target (up/down) - simple version without noise filtering."""
         # Ensure we're working with the Close column only (numeric data)
         close_prices = pd.to_numeric(df['Close'], errors='coerce')
         
-        # Direction prediction (up/down) - Enhanced with noise filtering
+        # Simple direction prediction (up/down)
         future_return = close_prices.shift(-1) / close_prices - 1
         
-        # Calculate dynamic threshold based on recent volatility
-        rolling_vol = close_prices.pct_change().rolling(20).std()
-        noise_threshold = rolling_vol * 0.3  # 30% of recent volatility
-        
-        # Only predict direction for moves above noise threshold
-        significant_up = future_return > noise_threshold
-        significant_down = future_return < -noise_threshold
-        
-        # Create direction target: 1 for up, 0 for down, exclude sideways moves
-        direction_raw = np.where(significant_up, 1, np.where(significant_down, 0, np.nan))
+        # Create direction target: 1 for up, 0 for down
+        direction_raw = np.where(future_return > 0, 1, 0)
         direction_series = pd.Series(direction_raw, index=df.index)
         
-        # Remove NaN values (sideways moves) and ensure all values are numeric
+        # Remove NaN values and ensure all values are numeric
         target = direction_series.dropna()
         target = pd.to_numeric(target, errors='coerce').dropna().astype(int)
         
-        print(f"Direction target filtering: {len(target)} significant moves out of {len(df)} total ({len(target)/len(df)*100:.1f}%)")
+        print(f"Direction target created: {len(target)} samples")
         return target
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -171,8 +163,8 @@ class DirectionModel:
         print(f"Using {len(self.selected_features)} numeric direction features")
         print(f"Features: {self.selected_features}")
         
-        # RobustScaler for better handling of outliers
-        self.scaler = RobustScaler()
+        # Standard scaling
+        self.scaler = StandardScaler()
         X_train_scaled = self.scaler.fit_transform(X_train_selected)
         X_test_scaled = self.scaler.transform(X_test_selected)
 
@@ -217,8 +209,8 @@ class DirectionModel:
             n_jobs=-1
         )
 
-        # Create voting classifier
-        base_ensemble = VotingClassifier(
+        # Create voting classifier (ensemble without calibration)
+        self.model = VotingClassifier(
             estimators=[
                 ('xgboost', xgb_model),
                 ('catboost', catboost_model),
@@ -226,14 +218,6 @@ class DirectionModel:
             ],
             voting='soft',
             weights=[0.4, 0.3, 0.3]
-        )
-        
-        # Apply calibration to reduce overconfidence
-        print("Applying calibration to direction model...")
-        self.model = CalibratedClassifierCV(
-            base_ensemble, 
-            method="sigmoid",
-            cv=3
         )
 
         # Train the model
@@ -250,29 +234,13 @@ class DirectionModel:
             'classification_report': classification_report(y_test, y_pred, output_dict=True)
         }
 
-        # Calculate calibration metrics
-        try:
-            from sklearn.calibration import calibration_curve
-            prob_pos = y_pred_proba[:, 1]
-            brier_score = np.mean((prob_pos - y_test) ** 2)
-            
-            metrics['calibration'] = {
-                'brier_score': brier_score,
-                'is_calibrated': True,
-                'calibration_method': 'Platt Scaling (Sigmoid)',
-                'mean_predicted_probability': np.mean(prob_pos),
-                'actual_positive_rate': np.mean(y_test)
-            }
-        except Exception as e:
-            print(f"Error calculating calibration metrics: {str(e)}")
+        
 
-        # Feature importance
+        # Feature importance from XGBoost in ensemble
         feature_importance = {}
         try:
-            if hasattr(self.model, 'calibrated_classifiers_'):
-                calibrated_classifier = self.model.calibrated_classifiers_[0]
-                base_estimator = calibrated_classifier.estimator
-                xgb_estimator = base_estimator.named_estimators_['xgboost']
+            if hasattr(self.model, 'named_estimators_'):
+                xgb_estimator = self.model.named_estimators_['xgboost']
                 feature_importance = dict(zip(self.selected_features, xgb_estimator.feature_importances_))
         except Exception as e:
             print(f"Could not extract feature importance: {e}")
