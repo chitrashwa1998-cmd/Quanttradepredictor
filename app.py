@@ -25,6 +25,7 @@ auto_restore_system()
 # Initialize session state with automatic data recovery
 def initialize_session_state():
     """Initialize session state with automatic data and model recovery."""
+    # Core session state variables
     if 'data' not in st.session_state:
         st.session_state.data = None
     if 'models' not in st.session_state:
@@ -37,6 +38,20 @@ def initialize_session_state():
         st.session_state.model_trainer = None
     if 'auto_recovery_done' not in st.session_state:
         st.session_state.auto_recovery_done = False
+        
+    # Direction model specific variables
+    if 'direction_features' not in st.session_state:
+        st.session_state.direction_features = None
+    if 'direction_trained_models' not in st.session_state:
+        st.session_state.direction_trained_models = {}
+    if 'trained_models' not in st.session_state:
+        st.session_state.trained_models = {}
+    if 'direction_predictions' not in st.session_state:
+        st.session_state.direction_predictions = None
+    if 'direction_probabilities' not in st.session_state:
+        st.session_state.direction_probabilities = None
+    if 'volatility_predictions' not in st.session_state:
+        st.session_state.volatility_predictions = None
 
     # Auto-recovery system
     if not st.session_state.auto_recovery_done:
