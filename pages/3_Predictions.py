@@ -167,13 +167,55 @@ with direction_tab:
     st.header("🎯 Direction Predictions")
     
     # Check if direction features and model are available
-    if not hasattr(st.session_state, 'direction_features') or st.session_state.direction_features is None:
-        st.error("❌ No direction features calculated. Please calculate direction indicators first.")
-    elif not hasattr(st.session_state, 'direction_trained_models') or not st.session_state.direction_trained_models:
-        st.error("❌ No trained direction models available. Please train the direction model first.")
-    elif 'direction' not in st.session_state.direction_trained_models or st.session_state.direction_trained_models['direction'] is None:
-        st.error("❌ Direction model not trained. Please train the direction model first.")
-    else:
+    direction_features_available = (hasattr(st.session_state, 'direction_features') and 
+                                   st.session_state.direction_features is not None)
+    direction_model_available = (hasattr(st.session_state, 'direction_trained_models') and 
+                                st.session_state.direction_trained_models and
+                                'direction' in st.session_state.direction_trained_models and
+                                st.session_state.direction_trained_models['direction'] is not None)
+    
+    # Show status information
+    col1, col2 = st.columns(2)
+    with col1:
+        if direction_features_available:
+            st.success("✅ Direction features calculated")
+        else:
+            st.warning("⚠️ Direction features not calculated")
+    
+    with col2:
+        if direction_model_available:
+            st.success("✅ Direction model trained")
+        else:
+            st.warning("⚠️ Direction model not trained")
+    
+    # Show instructions if prerequisites are missing
+    if not direction_features_available or not direction_model_available:
+        st.info("""
+        📋 **To use Direction Predictions:**
+        1. Go to **Model Training** page
+        2. Click on **Direction Predictions** tab
+        3. Train the direction model
+        4. Return here to generate predictions
+        """)
+        
+        # Show preview of what will be available
+        st.subheader("🔮 Preview: Direction Prediction Features")
+        st.markdown("""
+        **Once the direction model is trained, you'll see:**
+        - 📈 **Interactive Candlestick Chart** with bullish/bearish signals
+        - 🎯 **Confidence-Based Visualization** with signal strength indicators
+        - 📊 **Comprehensive Analysis Tabs:**
+          - Recent Predictions with OHLC data and accuracy validation
+          - Performance Metrics with confidence distribution
+          - Signal Quality Assessment with strength categories
+        - 📋 **Real-time Statistics** including prediction accuracy and confidence levels
+        """)
+        
+        # Show sample chart placeholder
+        st.info("💡 **Sample visualization will appear here after model training**")
+    
+    # Show prediction interface if everything is available
+    if direction_features_available and direction_model_available:
         # Direction prediction controls
         st.subheader("🎯 Prediction Controls")
         
