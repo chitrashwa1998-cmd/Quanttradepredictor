@@ -8,6 +8,30 @@ from plotly.subplots import make_subplots
 
 st.set_page_config(page_title="Predictions", page_icon="🔮", layout="wide")
 
+# Initialize session state variables if they don't exist
+if 'data' not in st.session_state:
+    st.session_state.data = None
+if 'features' not in st.session_state:
+    st.session_state.features = None
+if 'models' not in st.session_state:
+    st.session_state.models = {}
+if 'trained_models' not in st.session_state:
+    st.session_state.trained_models = {}
+if 'model_trainer' not in st.session_state:
+    st.session_state.model_trainer = None
+if 'direction_features' not in st.session_state:
+    st.session_state.direction_features = None
+if 'direction_trained_models' not in st.session_state:
+    st.session_state.direction_trained_models = {}
+if 'predictions' not in st.session_state:
+    st.session_state.predictions = None
+if 'volatility_predictions' not in st.session_state:
+    st.session_state.volatility_predictions = None
+if 'direction_predictions' not in st.session_state:
+    st.session_state.direction_predictions = None
+if 'direction_probabilities' not in st.session_state:
+    st.session_state.direction_probabilities = None
+
 st.title("🔮 Model Predictions")
 st.markdown("Generate and analyze predictions using the trained models.")
 
