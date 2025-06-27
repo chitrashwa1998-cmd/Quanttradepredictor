@@ -271,6 +271,7 @@ with col2:
 # Complete the volatility training section and add direction training
 import time
 from utils import database as db
+from utils.database_adapter import get_trading_database
 
 # Training section
 st.header("Model Training")
@@ -468,16 +469,17 @@ with col2:
 
                     # Save model to database
                     with st.spinner("Saving direction model..."):
+                        trading_db = get_trading_database()
                         model_data = {
                             'metrics': result['metrics'],
                             'task_type': 'classification',
                             'trained_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                             'accuracy': result['metrics']['accuracy']
                         }
-                        db.save_model_results('direction', model_data)
+                        trading_db.save_model_results('direction', model_data)
 
                         # Save the trained model object
-                        success = db.save_trained_model('direction', direction_model)
+                        success = trading_db.save_trained_models({'direction': direction_model})
                         if success:
                             st.success("✅ Direction model saved to database")
                         else:
