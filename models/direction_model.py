@@ -144,13 +144,24 @@ class DirectionModel:
 
         print(f"Training on {len(X_train)} samples, testing on {len(X_test)} samples")
 
-        # Use ALL direction features - no feature selection
-        X_train_selected = X_train.values
-        X_test_selected = X_test.values
+        # Check for and remove any non-numeric columns before training
+        numeric_columns = []
+        for col in X_train.columns:
+            try:
+                # Try to convert to numeric - if successful, it's a valid feature
+                pd.to_numeric(X_train[col].iloc[:10], errors='raise')
+                numeric_columns.append(col)
+            except (ValueError, TypeError):
+                print(f"Excluding non-numeric column from training: {col}")
         
-        # Store all feature names
-        self.selected_features = list(X_train.columns)
-        print(f"Using ALL {len(self.selected_features)} direction features")
+        # Use only numeric direction features
+        X_train_selected = X_train[numeric_columns].values
+        X_test_selected = X_test[numeric_columns].values
+        
+        # Store selected feature names
+        self.selected_features = numeric_columns
+        print(f"Using {len(self.selected_features)} numeric direction features")
+        print(f"Features: {self.selected_features}")
         
         # RobustScaler for better handling of outliers
         self.scaler = RobustScaler()
