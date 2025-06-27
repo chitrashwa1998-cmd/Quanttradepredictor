@@ -34,14 +34,14 @@ def add_custom_direction_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Approx VWAP (typical price)
     df['vwap_approx'] = (df[high_col] + df[low_col] + df[close_col]) / 3
-    df['price_vs_vwap'] = (df['close'] - df['vwap_approx']) / df['vwap_approx']
+    df['price_vs_vwap'] = (df[close_col] - df['vwap_approx']) / df['vwap_approx']
 
     # OBV approximation (direction-based pressure)
-    df['obv_proxy'] = ((df['close'] > df['close'].shift(1)).astype(int)
-                       - (df['close'] < df['close'].shift(1)).astype(int)).cumsum()
+    df['obv_proxy'] = ((df[close_col] > df[close_col].shift(1)).astype(int)
+                       - (df[close_col] < df[close_col].shift(1)).astype(int)).cumsum()
 
     # Volume spike approximation (range spike)
-    df['range'] = df['high'] - df['low']
+    df['range'] = df[high_col] - df[low_col]
     df['vol_spike_proxy'] = df['range'] > df['range'].rolling(10).mean() + 2 * df['range'].rolling(10).std()
 
     # MFI proxy
