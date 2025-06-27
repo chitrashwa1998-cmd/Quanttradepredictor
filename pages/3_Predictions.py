@@ -243,8 +243,25 @@ with direction_tab:
                     direction_model = st.session_state.direction_trained_models['direction']
                     direction_features = st.session_state.direction_features.copy()
                     
+                    # Apply time filter to prevent system hang
+                    if dir_filter == "Last 30 days":
+                        cutoff_date = direction_features.index.max() - pd.Timedelta(days=30)
+                    elif dir_filter == "Last 90 days":
+                        cutoff_date = direction_features.index.max() - pd.Timedelta(days=90)
+                    elif dir_filter == "Last 6 months":
+                        cutoff_date = direction_features.index.max() - pd.Timedelta(days=180)
+                    elif dir_filter == "Last year":
+                        cutoff_date = direction_features.index.max() - pd.Timedelta(days=365)
+                    else:  # All data
+                        cutoff_date = direction_features.index.min()
+                    
+                    # Filter direction features based on selected time period
+                    direction_features_filtered = direction_features[direction_features.index >= cutoff_date]
+                    
+                    st.info(f"Processing {len(direction_features_filtered)} data points for {dir_filter}")
+                    
                     # Generate predictions
-                    predictions, probabilities = direction_model.predict(direction_features)
+                    predictions, probabilities = direction_model.predict(direction_features_filtered)
                     
                     # Store predictions
                     st.session_state.direction_predictions = predictions
@@ -272,6 +289,21 @@ with direction_tab:
             # Show prediction statistics
             predictions = st.session_state.direction_predictions
             probabilities = st.session_state.direction_probabilities
+            
+            # Apply same time filter to data for display consistency
+            if dir_filter == "Last 30 days":
+                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=30)
+            elif dir_filter == "Last 90 days":
+                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=90)
+            elif dir_filter == "Last 6 months":
+                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=180)
+            elif dir_filter == "Last year":
+                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=365)
+            else:  # All data
+                cutoff_date = st.session_state.data.index.min()
+            
+            # Filter data for display
+            filtered_data = st.session_state.data[st.session_state.data.index >= cutoff_date]
             
             # Enhanced statistics
             bullish_count = np.sum(predictions == 1)
@@ -315,9 +347,7 @@ with direction_tab:
                 else:
                     st.metric("Recent Confidence", "N/A")
             with col8:
-                data_len = min(len(st.session_state.data), len(predictions))
-                recent_data = st.session_state.data.tail(data_len)
-                price_change = ((recent_data['Close'].iloc[-1] - recent_data['Close'].iloc[0]) / recent_data['Close'].iloc[0]) * 100
+                price_change = ((filtered_data['Close'].iloc[-1] - filtered_data['Close'].iloc[0]) / filtered_data['Close'].iloc[0]) * 100
                 st.metric("Price Change", f"{price_change:.2f}%")
             
             # Create direction prediction chart
@@ -330,9 +360,9 @@ with direction_tab:
                     row_heights=[0.7, 0.3]
                 )
                 
-                # Add price chart with OHLC
-                data_len = min(len(st.session_state.data), len(predictions))
-                recent_data = st.session_state.data.tail(data_len)
+                # Use filtered data for chart (matching the prediction timeframe)
+                data_len = min(len(filtered_data), len(predictions))
+                recent_data = filtered_data.tail(data_len)
                 
                 # Add candlestick chart for price
                 fig.add_trace(go.Candlestick(
@@ -431,7 +461,7 @@ with direction_tab:
                 num_recent = min(30, len(predictions))
                 recent_predictions = predictions[-num_recent:]
                 recent_probs = probabilities[-num_recent:] if probabilities is not None else None
-                recent_prices = recent_data.tail(num_recent)
+                recent_prices = filtered_data.tail(num_recent)
                 
                 # Calculate price changes for validation
                 price_changes = recent_prices['Close'].pct_change().shift(-1) * 100  # Next period change
@@ -509,8 +539,8 @@ with direction_tab:
                     # Quality over time
                     fig_quality = go.Figure()
                     fig_quality.add_trace(go.Scatter(
-                        x=recent_data.index,
-                        y=conf_scores[-len(recent_data):],
+                        x=filtered_data.index,
+                        y=conf_scores[-len(filtered_data):],
                         mode='lines+markers',
                         name='Confidence Over Time',
                         line=dict(color='blue')
