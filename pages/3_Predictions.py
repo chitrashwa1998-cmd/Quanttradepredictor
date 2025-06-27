@@ -158,17 +158,28 @@ with direction_tab:
         if st.button("🚀 Generate Direction Predictions", type="primary", key="dir_predict"):
             try:
                 with st.spinner("Generating direction predictions..."):
+                    # Debug information
+                    st.write("Debug: Checking direction model and features...")
+                    st.write(f"Direction model available: {hasattr(st.session_state, 'direction_trained_models')}")
+                    st.write(f"Direction features available: {hasattr(st.session_state, 'direction_features')}")
+                    
                     # Get direction model
                     direction_model = st.session_state.direction_trained_models['direction']
+                    st.write(f"Direction model type: {type(direction_model)}")
                     
                     # Use direction features for prediction
                     direction_features = st.session_state.direction_features.copy()
+                    st.write(f"Direction features shape: {direction_features.shape}")
+                    st.write(f"Direction features columns: {list(direction_features.columns[:10])}...")
                     
                     # Prepare features for prediction
                     features_prepared = direction_model.prepare_features(direction_features)
+                    st.write(f"Prepared features shape: {features_prepared.shape}")
                     
                     # Generate predictions
                     predictions, probabilities = direction_model.predict(features_prepared)
+                    st.write(f"Predictions shape: {predictions.shape if hasattr(predictions, 'shape') else len(predictions)}")
+                    st.write(f"Probabilities shape: {probabilities.shape if probabilities is not None else 'None'}")
                     
                     # Store predictions
                     st.session_state.direction_predictions = predictions
@@ -181,6 +192,14 @@ with direction_tab:
                 st.error(f"❌ Error generating direction predictions: {str(e)}")
                 import traceback
                 st.error(f"Error details: {traceback.format_exc()}")
+        
+        # Debug: Show current state
+        st.write("Debug - Current session state:")
+        st.write(f"Has direction_predictions: {hasattr(st.session_state, 'direction_predictions')}")
+        if hasattr(st.session_state, 'direction_predictions'):
+            st.write(f"Direction predictions value: {st.session_state.direction_predictions is not None}")
+            if st.session_state.direction_predictions is not None:
+                st.write(f"Direction predictions length: {len(st.session_state.direction_predictions)}")
         
         # Display direction predictions if available
         if hasattr(st.session_state, 'direction_predictions') and st.session_state.direction_predictions is not None:
