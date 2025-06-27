@@ -294,41 +294,79 @@ with volatility_tab:
                 recent_prices = st.session_state.data.tail(num_recent)
                 
                 # Calculate actual volatility for comparison
-                actual_returns = recent_prices['Close'].pct_change()
-                actual_volatility = actual_returns.rolling(10).std().shift(-1)
-                
-                # Calculate prediction accuracy
-                prediction_error = np.abs(recent_predictions - actual_volatility.values[-num_recent:])
-                relative_error = prediction_error / actual_volatility.values[-num_recent:] * 100
-                
-                predictions_df = pd.DataFrame({
-                    'Timestamp': recent_prices.index,
-                    'Open': recent_prices['Open'].round(4),
-                    'High': recent_prices['High'].round(4),
-                    'Low': recent_prices['Low'].round(4),
-                    'Close': recent_prices['Close'].round(4),
-                    'Predicted Volatility': [f"{pred:.6f}" for pred in recent_predictions],
-                    'Actual Volatility': [f"{actual:.6f}" if not pd.isna(actual) else 'N/A' 
-                                        for actual in actual_volatility.values[-num_recent:]],
-                    'Prediction Error': [f"{error:.6f}" if not pd.isna(error) else 'N/A' 
-                                       for error in prediction_error],
-                    'Relative Error %': [f"{rel_err:.2f}%" if not pd.isna(rel_err) else 'N/A' 
-                                       for rel_err in relative_error],
-                    'Volatility Level': ['🔴 High' if pred > percentile_95 else 
-                                       '🟡 Medium' if pred > median_vol else '🟢 Low' 
-                                       for pred in recent_predictions]
-                })
-                
-                st.dataframe(predictions_df, use_container_width=True)
+                try:
+                    actual_returns = recent_prices['Close'].pct_change()
+                    actual_volatility = actual_returns.rolling(10).std().shift(-1)
+                    
+                    # Calculate prediction accuracy
+                    prediction_error = np.abs(recent_predictions - actual_volatility.values[-num_recent:])
+                    relative_error = prediction_error / actual_volatility.values[-num_recent:] * 100
+                    
+                    # Fix data type issues by ensuring proper conversions
+                    predictions_df = pd.DataFrame({
+                        'Timestamp': recent_prices.index.strftime('%Y-%m-%d %H:%M:%S'),
+                        'Open': recent_prices['Open'].astype(float).round(4),
+                        'High': recent_prices['High'].astype(float).round(4),
+                        'Low': recent_prices['Low'].astype(float).round(4),
+                        'Close': recent_prices['Close'].astype(float).round(4),
+                        'Predicted_Volatility': recent_predictions.astype(float).round(6),
+                        'Actual_Volatility': np.where(
+                            pd.isna(actual_volatility.values[-num_recent:]),
+                            None,
+                            actual_volatility.values[-num_recent:].astype(float).round(6)
+                        ),
+                        'Prediction_Error': np.where(
+                            pd.isna(prediction_error),
+                            None,
+                            prediction_error.astype(float).round(6)
+                        ),
+                        'Relative_Error_Pct': np.where(
+                            pd.isna(relative_error),
+                            None,
+                            relative_error.astype(float).round(2)
+                        ),
+                        'Volatility_Level': ['High' if pred > percentile_95 else 
+                                           'Medium' if pred > median_vol else 'Low' 
+                                           for pred in recent_predictions]
+                    })
+                    
+                    # Display the dataframe
+                    st.dataframe(predictions_df, use_container_width=True, hide_index=True)
+                    
+                except Exception as df_error:
+                    st.warning(f"Data table display issue, showing simplified version")
+                    # Fallback simple table
+                    simple_df = pd.DataFrame({
+                        'Timestamp': recent_prices.index.strftime('%Y-%m-%d %H:%M:%S'),
+                        'Close_Price': recent_prices['Close'].astype(float).round(4),
+                        'Predicted_Volatility': recent_predictions.astype(float).round(6),
+                        'Volatility_Level': ['High' if pred > percentile_95 else 
+                                           'Medium' if pred > median_vol else 'Low' 
+                                           for pred in recent_predictions]
+                    })
+                    st.dataframe(simple_df, use_container_width=True, hide_index=True)
                 
                 # Download button for predictions data
-                csv_data = predictions_df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download Volatility Predictions CSV",
-                    data=csv_data,
-                    file_name=f"volatility_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
-                )
+                try:
+                    csv_data = predictions_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Volatility Predictions CSV",
+                        data=csv_data,
+                        file_name=f"volatility_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
+                except:
+                    # Fallback download option
+                    simple_csv = pd.DataFrame({
+                        'Timestamp': recent_prices.index,
+                        'Predicted_Volatility': recent_predictions
+                    }).to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Volatility Predictions CSV",
+                        data=simple_csv,
+                        file_name=f"volatility_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
             
             with vol_tab3:
                 st.markdown("**Volatility Distribution Analysis**")
@@ -378,7 +416,7 @@ with volatility_tab:
                 stats_df = pd.DataFrame({
                     'Statistic': ['Count', 'Mean', 'Std', 'Min', '25%', '50%', '75%', 'Max'],
                     'Value': [
-                        len(predictions),
+                        str(len(predictions)),
                         f"{np.mean(predictions):.6f}",
                         f"{np.std(predictions):.6f}",
                         f"{np.min(predictions):.6f}",
@@ -388,7 +426,7 @@ with volatility_tab:
                         f"{np.max(predictions):.6f}"
                     ]
                 })
-                st.dataframe(stats_df, use_container_width=True)
+                st.dataframe(stats_df, use_container_width=True, hide_index=True)
             
             with vol_tab4:
                 st.markdown("**Advanced Volatility Analysis**")
@@ -402,8 +440,8 @@ with volatility_tab:
                 high_vol_count = np.sum(predictions > high_vol_threshold)
                 
                 regime_df = pd.DataFrame({
-                    'Volatility Regime': ['Low Volatility', 'Medium Volatility', 'High Volatility'],
-                    'Count': [low_vol_count, medium_vol_count, high_vol_count],
+                    'Volatility_Regime': ['Low Volatility', 'Medium Volatility', 'High Volatility'],
+                    'Count': [str(low_vol_count), str(medium_vol_count), str(high_vol_count)],
                     'Percentage': [
                         f"{(low_vol_count/len(predictions)*100):.1f}%",
                         f"{(medium_vol_count/len(predictions)*100):.1f}%",
@@ -416,7 +454,7 @@ with volatility_tab:
                     ]
                 })
                 
-                st.dataframe(regime_df, use_container_width=True)
+                st.dataframe(regime_df, use_container_width=True, hide_index=True)
                 
                 # Volatility trend analysis
                 if len(predictions) >= 20:
