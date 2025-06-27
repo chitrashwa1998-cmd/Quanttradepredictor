@@ -174,14 +174,37 @@ class DirectionTechnicalIndicators:
             print(f"Error in time features: {e}")
 
         print("Step 5: Final cleanup...")
-        # Final cleanup
+        # Final cleanup - replace inf values
         result_df = result_df.replace([np.inf, -np.inf], np.nan)
-        before_dropna = len(result_df)
-        result_df = result_df.dropna()
-        after_dropna = len(result_df)
-        print(f"Dropped {before_dropna - after_dropna} rows with NaN values")
-
+        
+        # Instead of dropping all NaN rows, use forward fill and backward fill
+        print("Filling NaN values...")
+        result_df = result_df.fillna(method='ffill').fillna(method='bfill')
+        
+        # For any remaining NaN values, fill with appropriate defaults
         feature_cols = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+        for col in feature_cols:
+            if result_df[col].isna().any():
+                if 'ratio' in col.lower() or 'pct' in col.lower():
+                    result_df[col] = result_df[col].fillna(0)
+                elif 'rsi' in col.lower():
+                    result_df[col] = result_df[col].fillna(50)
+                elif 'bollinger_band_position' in col:
+                    result_df[col] = result_df[col].fillna(0.5)
+                elif 'stochastic' in col.lower():
+                    result_df[col] = result_df[col].fillna(50)
+                elif 'adx' in col.lower():
+                    result_df[col] = result_df[col].fillna(25)
+                else:
+                    result_df[col] = result_df[col].fillna(0)
+        
+        before_final_dropna = len(result_df)
+        # Only drop rows where ALL feature columns are NaN (should be none now)
+        result_df = result_df.dropna(subset=feature_cols, how='all')
+        after_final_dropna = len(result_df)
+        
+        print(f"Data points after cleanup: {after_final_dropna} (dropped {before_final_dropna - after_final_dropna} completely empty rows)")
+
         print(f"✅ Final result: {len(feature_cols)} direction-specific indicators")
         print(f"Direction features: {feature_cols}")
 

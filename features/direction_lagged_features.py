@@ -35,11 +35,15 @@ def add_lagged_direction_features(df: pd.DataFrame, ema=None) -> pd.DataFrame:
     df['rolling_high_10'] = df[high_col].rolling(10).max()
     df['rolling_low_10'] = df[low_col].rolling(10).min()
 
-    # EMA diff lagged (optional: pass in EMA externally)
-    if ema is not None:
-        df['ema_diff_lagged_1'] = (df['close'] - ema).shift(1)
+    # EMA diff lagged - use EMA_20 if available, otherwise create simple moving average
+    if 'ema_20' in df.columns:
+        df['ema_diff_lagged_1'] = (df[close_col] - df['ema_20']).shift(1)
+    elif ema is not None:
+        df['ema_diff_lagged_1'] = (df[close_col] - ema).shift(1)
     else:
-        df['ema_diff_lagged_1'] = np.nan  # placeholder if no EMA provided
+        # Create a simple 20-period moving average as fallback
+        simple_ma_20 = df[close_col].rolling(20).mean()
+        df['ema_diff_lagged_1'] = (df[close_col] - simple_ma_20).shift(1)
 
     # Candle pattern shifted — placeholder (you can plug in real pattern detector)
     df['candle_pattern_shifted'] = 0  # set actual logic later if needed
