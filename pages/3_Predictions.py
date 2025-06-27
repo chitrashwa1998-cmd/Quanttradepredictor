@@ -333,76 +333,76 @@ with direction_tab:
                 # Add price chart with OHLC
                 data_len = min(len(st.session_state.data), len(predictions))
                 recent_data = st.session_state.data.tail(data_len)
-            
-            # Add candlestick chart for price
-            fig.add_trace(go.Candlestick(
-                x=recent_data.index,
-                open=recent_data['Open'],
-                high=recent_data['High'],
-                low=recent_data['Low'],
-                close=recent_data['Close'],
-                name='Price',
-                increasing_line_color='green',
-                decreasing_line_color='red'
-            ), row=1, col=1)
-            
-            # Add direction predictions with confidence coloring
-            pred_data = predictions[-data_len:]
-            prob_data = probabilities[-data_len:] if probabilities is not None else None
-            
-            # Create confidence-based colors
-            if prob_data is not None:
-                confidences = np.max(prob_data, axis=1)
-                colors = ['rgba(0, 255, 0, ' + str(conf) + ')' for conf in confidences]
-                sizes = [6 + 6 * conf for conf in confidences]  # Size based on confidence
-            else:
-                confidences = np.ones(len(pred_data)) * 0.5  # Default confidence for fallback
-                colors = ['green'] * len(pred_data)
-                sizes = [8] * len(pred_data)
-            
-            # Bullish signals
-            bullish_mask = pred_data == 1
-            if np.any(bullish_mask):
-                bullish_colors = [colors[i] for i in range(len(colors)) if bullish_mask[i]]
-                bullish_sizes = [sizes[i] for i in range(len(sizes)) if bullish_mask[i]]
                 
-                fig.add_trace(go.Scatter(
-                    x=recent_data.index[bullish_mask],
-                    y=[1] * np.sum(bullish_mask),
-                    mode='markers',
-                    name='Bullish',
-                    marker=dict(color=bullish_colors if prob_data is not None else 'green', 
-                               size=bullish_sizes if prob_data is not None else 10, 
-                               symbol='triangle-up'),
-                    text=[f'Confidence: {confidences[i]:.1%}' for i in range(len(confidences)) if bullish_mask[i]] if prob_data is not None else None,
-                    hovertemplate='Bullish Signal<br>%{text}<extra></extra>' if prob_data is not None else 'Bullish Signal<extra></extra>'
-                ), row=2, col=1)
-            
-            # Bearish signals
-            bearish_mask = pred_data == 0
-            if np.any(bearish_mask):
-                bearish_colors = [colors[i] for i in range(len(colors)) if bearish_mask[i]]
-                bearish_sizes = [sizes[i] for i in range(len(sizes)) if bearish_mask[i]]
+                # Add candlestick chart for price
+                fig.add_trace(go.Candlestick(
+                    x=recent_data.index,
+                    open=recent_data['Open'],
+                    high=recent_data['High'],
+                    low=recent_data['Low'],
+                    close=recent_data['Close'],
+                    name='Price',
+                    increasing_line_color='green',
+                    decreasing_line_color='red'
+                ), row=1, col=1)
                 
-                fig.add_trace(go.Scatter(
-                    x=recent_data.index[bearish_mask],
-                    y=[0] * np.sum(bearish_mask),
-                    mode='markers',
-                    name='Bearish',
-                    marker=dict(color=bearish_colors if prob_data is not None else 'red', 
-                               size=bearish_sizes if prob_data is not None else 10, 
-                               symbol='triangle-down'),
-                    text=[f'Confidence: {confidences[i]:.1%}' for i in range(len(confidences)) if bearish_mask[i]] if prob_data is not None else None,
-                    hovertemplate='Bearish Signal<br>%{text}<extra></extra>' if prob_data is not None else 'Bearish Signal<extra></extra>'
-                ), row=2, col=1)
-            
-            # Update layout
-            fig.update_layout(
-                title="Price vs Direction Predictions",
-                height=600,
-                showlegend=True
-            )
-            
+                # Add direction predictions with confidence coloring
+                pred_data = predictions[-data_len:]
+                prob_data = probabilities[-data_len:] if probabilities is not None else None
+                
+                # Create confidence-based colors
+                if prob_data is not None:
+                    confidences = np.max(prob_data, axis=1)
+                    colors = ['rgba(0, 255, 0, ' + str(conf) + ')' for conf in confidences]
+                    sizes = [6 + 6 * conf for conf in confidences]  # Size based on confidence
+                else:
+                    confidences = np.ones(len(pred_data)) * 0.5  # Default confidence for fallback
+                    colors = ['green'] * len(pred_data)
+                    sizes = [8] * len(pred_data)
+                
+                # Bullish signals
+                bullish_mask = pred_data == 1
+                if np.any(bullish_mask):
+                    bullish_colors = [colors[i] for i in range(len(colors)) if bullish_mask[i]]
+                    bullish_sizes = [sizes[i] for i in range(len(sizes)) if bullish_mask[i]]
+                    
+                    fig.add_trace(go.Scatter(
+                        x=recent_data.index[bullish_mask],
+                        y=[1] * np.sum(bullish_mask),
+                        mode='markers',
+                        name='Bullish',
+                        marker=dict(color=bullish_colors if prob_data is not None else 'green', 
+                                   size=bullish_sizes if prob_data is not None else 10, 
+                                   symbol='triangle-up'),
+                        text=[f'Confidence: {confidences[i]:.1%}' for i in range(len(confidences)) if bullish_mask[i]] if prob_data is not None else None,
+                        hovertemplate='Bullish Signal<br>%{text}<extra></extra>' if prob_data is not None else 'Bullish Signal<extra></extra>'
+                    ), row=2, col=1)
+                
+                # Bearish signals
+                bearish_mask = pred_data == 0
+                if np.any(bearish_mask):
+                    bearish_colors = [colors[i] for i in range(len(colors)) if bearish_mask[i]]
+                    bearish_sizes = [sizes[i] for i in range(len(sizes)) if bearish_mask[i]]
+                    
+                    fig.add_trace(go.Scatter(
+                        x=recent_data.index[bearish_mask],
+                        y=[0] * np.sum(bearish_mask),
+                        mode='markers',
+                        name='Bearish',
+                        marker=dict(color=bearish_colors if prob_data is not None else 'red', 
+                                   size=bearish_sizes if prob_data is not None else 10, 
+                                   symbol='triangle-down'),
+                        text=[f'Confidence: {confidences[i]:.1%}' for i in range(len(confidences)) if bearish_mask[i]] if prob_data is not None else None,
+                        hovertemplate='Bearish Signal<br>%{text}<extra></extra>' if prob_data is not None else 'Bearish Signal<extra></extra>'
+                    ), row=2, col=1)
+                
+                # Update layout
+                fig.update_layout(
+                    title="Price vs Direction Predictions",
+                    height=600,
+                    showlegend=True
+                )
+                
                 fig.update_xaxes(title_text="Time", row=2, col=1)
                 fig.update_yaxes(title_text="Price", row=1, col=1)
                 fig.update_yaxes(title_text="Direction", row=2, col=1, range=[-0.1, 1.1])
