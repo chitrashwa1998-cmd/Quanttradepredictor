@@ -65,14 +65,21 @@ else:
 # Training Configuration
 st.header("⚙️ Training Configuration")
 
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     train_split = st.slider("Training Split", 0.6, 0.9, 0.8, 0.05,
                            help="Percentage of data used for training")
 
 with col2:
-    st.info(f"Training: {int(train_split*100)}% | Testing: {int((1-train_split)*100)}%")
+    max_depth = st.selectbox("Max Depth", [4, 6, 8, 10, 12], index=1,
+                            help="Maximum depth of decision trees")
+
+with col3:
+    n_estimators = st.selectbox("Number of Estimators", [50, 100, 150, 200, 250, 300], index=1,
+                               help="Number of trees in the ensemble")
+
+st.info(f"Training: {int(train_split*100)}% | Testing: {int((1-train_split)*100)}%")
 
 # Model Selection and Training
 st.header("🎯 Model Selection")
@@ -122,12 +129,14 @@ with tab1:
                     
                     st.info(f"📊 Training data: {len(combined_data)} rows with {len(combined_data.columns)} features")
                     
-                    # Train the model
+                    # Train the model with configuration parameters
                     selected_models = ['volatility']
                     training_results = model_trainer.train_selected_models(
                         combined_data, 
                         selected_models,
-                        train_split
+                        train_split,
+                        max_depth=max_depth,
+                        n_estimators=n_estimators
                     )
                     
                     # Store results
@@ -157,10 +166,12 @@ with tab1:
                         # Feature importance
                         if 'feature_importance' in result and result['feature_importance']:
                             with st.expander("📊 Feature Importance"):
-                                importance_df = pd.DataFrame(
-                                    list(result['feature_importance'].items()),
-                                    columns=['Feature', 'Importance']
-                                ).sort_values('Importance', ascending=False)
+                                features = list(result['feature_importance'].keys())
+                                importances = list(result['feature_importance'].values())
+                                importance_df = pd.DataFrame({
+                                    'Feature': features,
+                                    'Importance': importances
+                                }).sort_values('Importance', ascending=False)
                                 
                                 st.dataframe(importance_df.head(10))
                                 
@@ -187,6 +198,43 @@ with tab2:
     st.subheader("🎯 Direction Prediction Model")
     st.markdown("Predicts whether price will move up or down.")
     
+    # Direction model features status
+    st.subheader("Direction Model Features")
+    
+    if 'direction_features' not in st.session_state or st.session_state.direction_features is None:
+        st.warning("⚠️ Direction model features not calculated yet.")
+        
+        if st.button("🔧 Calculate Direction Features", type="primary", key="calc_direction_features"):
+            with st.spinner("Calculating direction-specific features..."):
+                try:
+                    from models.direction_model import DirectionModel
+                    
+                    direction_model = DirectionModel()
+                    direction_features = direction_model.prepare_features(st.session_state.data)
+                    
+                    st.session_state.direction_features = direction_features
+                    st.success("✅ Direction features calculated successfully!")
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"❌ Error calculating direction features: {str(e)}")
+                    import traceback
+                    with st.expander("Show error details"):
+                        st.code(traceback.format_exc())
+    else:
+        st.success("✅ Direction features ready")
+        
+        # Show direction feature summary
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Direction Features", len(st.session_state.direction_features.columns))
+        with col2:
+            st.metric("Data Points", len(st.session_state.direction_features))
+        
+        # Show sample of direction features
+        with st.expander("View Direction Feature Sample"):
+            st.dataframe(st.session_state.direction_features.head(10), use_container_width=True)
+    
     col1, col2 = st.columns([3, 1])
     
     with col1:
@@ -201,8 +249,15 @@ with tab2:
                     
                     direction_model = DirectionModel()
                     
-                    # Prepare direction-specific data
-                    direction_features = direction_model.prepare_features(st.session_state.data)
+                    # Use pre-calculated direction features if available, otherwise calculate them
+                    if 'direction_features' in st.session_state and st.session_state.direction_features is not None:
+                        direction_features = st.session_state.direction_features
+                    else:
+                        st.info("Calculating direction-specific features...")
+                        direction_features = direction_model.prepare_features(st.session_state.data)
+                        st.session_state.direction_features = direction_features
+                    
+                    # Create direction target
                     direction_target = direction_model.create_target(st.session_state.data)
                     
                     # Validate data
@@ -212,8 +267,14 @@ with tab2:
                     
                     st.info(f"📊 Direction data: {len(direction_features)} samples with {len(direction_features.columns)} features")
                     
-                    # Train direction model
-                    training_result = direction_model.train(direction_features, direction_target, train_split)
+                    # Train direction model with configuration parameters
+                    training_result = direction_model.train(
+                        direction_features, 
+                        direction_target, 
+                        train_split,
+                        max_depth=max_depth,
+                        n_estimators=n_estimators
+                    )
                     
                     # Store results
                     if 'trained_models' not in st.session_state:
@@ -241,10 +302,12 @@ with tab2:
                         # Feature importance for direction model
                         if 'feature_importance' in training_result and training_result['feature_importance']:
                             with st.expander("📊 Direction Feature Importance"):
-                                importance_df = pd.DataFrame(
-                                    list(training_result['feature_importance'].items()),
-                                    columns=['Feature', 'Importance']
-                                ).sort_values('Importance', ascending=False)
+                                features = list(training_result['feature_importance'].keys())
+                                importances = list(training_result['feature_importance'].values())
+                                importance_df = pd.DataFrame({
+                                    'Feature': features,
+                                    'Importance': importances
+                                }).sort_values('Importance', ascending=False)
                                 
                                 st.dataframe(importance_df.head(10))
                                 
