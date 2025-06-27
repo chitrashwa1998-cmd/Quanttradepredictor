@@ -360,9 +360,9 @@ with direction_tab:
                     row_heights=[0.7, 0.3]
                 )
                 
-                # Use original data timestamps for proper time display
-                data_len = min(len(st.session_state.data), len(predictions))
-                recent_data = st.session_state.data.tail(data_len)
+                # Use filtered data for chart (matching the prediction timeframe)
+                data_len = min(len(filtered_data), len(predictions))
+                recent_data = filtered_data.tail(data_len)
                 
                 # Add candlestick chart for price
                 fig.add_trace(go.Candlestick(
@@ -404,7 +404,7 @@ with direction_tab:
                         marker=dict(color=bullish_colors if prob_data is not None else 'green', 
                                    size=bullish_sizes if prob_data is not None else 10, 
                                    symbol='triangle-up'),
-                        text=[f'Confidence: {confidences[i]:.3f}' for i in range(len(confidences)) if bullish_mask[i]] if prob_data is not None else None,
+                        text=[f'Confidence: {confidences[i]:.1%}' for i in range(len(confidences)) if bullish_mask[i]] if prob_data is not None else None,
                         hovertemplate='Bullish Signal<br>%{text}<extra></extra>' if prob_data is not None else 'Bullish Signal<extra></extra>'
                     ), row=2, col=1)
                 
@@ -422,7 +422,7 @@ with direction_tab:
                         marker=dict(color=bearish_colors if prob_data is not None else 'red', 
                                    size=bearish_sizes if prob_data is not None else 10, 
                                    symbol='triangle-down'),
-                        text=[f'Confidence: {confidences[i]:.3f}' for i in range(len(confidences)) if bearish_mask[i]] if prob_data is not None else None,
+                        text=[f'Confidence: {confidences[i]:.1%}' for i in range(len(confidences)) if bearish_mask[i]] if prob_data is not None else None,
                         hovertemplate='Bearish Signal<br>%{text}<extra></extra>' if prob_data is not None else 'Bearish Signal<extra></extra>'
                     ), row=2, col=1)
                 
@@ -452,7 +452,7 @@ with direction_tab:
             st.subheader("📊 Detailed Direction Analysis")
             
             # Create tabbed analysis
-            analysis_tab1, analysis_tab2, analysis_tab3, analysis_tab4 = st.tabs(["📋 Recent Predictions", "📈 Performance Metrics", "🔍 Signal Quality", "📊 All Data Table"])
+            analysis_tab1, analysis_tab2, analysis_tab3 = st.tabs(["📋 Recent Predictions", "📈 Performance Metrics", "🔍 Signal Quality"])
             
             with analysis_tab1:
                 st.markdown("**Last 30 Direction Predictions**")
@@ -474,7 +474,7 @@ with direction_tab:
                     'Low': recent_prices['Low'].round(2),
                     'Close': recent_prices['Close'].round(2),
                     'Predicted Direction': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions],
-                    'Confidence': [f"{np.max(prob):.3f}" for prob in recent_probs] if recent_probs is not None else ['N/A'] * num_recent,
+                    'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs] if recent_probs is not None else ['N/A'] * num_recent,
                     'Next Change %': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
                     'Correct': ['✅' if pred == actual and not pd.isna(actual) else '❌' if not pd.isna(actual) else '⏳' 
                                for pred, actual in zip(recent_predictions, actual_direction)]
@@ -508,57 +508,9 @@ with direction_tab:
                         med_conf_mask = (conf_dist >= 0.5) & (conf_dist <= 0.7)
                         low_conf_mask = conf_dist < 0.5
                         
-                        st.metric("High Confidence (>0.70)", f"{high_conf_mask.sum()} signals")
-                        st.metric("Medium Confidence (0.50-0.70)", f"{med_conf_mask.sum()} signals")
-                        st.metric("Low Confidence (<0.50)", f"{low_conf_mask.sum()} signals")
-                
-                # Add performance data table
-                st.markdown("**📊 Performance Data Table**")
-                
-                # Create performance summary table
-                performance_data = []
-                
-                # Overall performance
-                total_predictions = len(predictions)
-                bullish_predictions = np.sum(predictions == 1)
-                bearish_predictions = total_predictions - bullish_predictions
-                
-                performance_data.append({
-                    'Metric': 'Total Predictions',
-                    'Value': total_predictions,
-                    'Percentage': '100.0%'
-                })
-                
-                performance_data.append({
-                    'Metric': 'Bullish Predictions',
-                    'Value': bullish_predictions,
-                    'Percentage': f'{(bullish_predictions/total_predictions)*100:.1f}%'
-                })
-                
-                performance_data.append({
-                    'Metric': 'Bearish Predictions', 
-                    'Value': bearish_predictions,
-                    'Percentage': f'{(bearish_predictions/total_predictions)*100:.1f}%'
-                })
-                
-                if probabilities is not None:
-                    avg_confidence = np.mean(np.max(probabilities, axis=1))
-                    high_conf_count = np.sum(np.max(probabilities, axis=1) > 0.7)
-                    
-                    performance_data.append({
-                        'Metric': 'Average Confidence',
-                        'Value': f'{avg_confidence:.3f}',
-                        'Percentage': f'{avg_confidence*100:.1f}%'
-                    })
-                    
-                    performance_data.append({
-                        'Metric': 'High Confidence Signals (>0.70)',
-                        'Value': high_conf_count,
-                        'Percentage': f'{(high_conf_count/total_predictions)*100:.1f}%'
-                    })
-                
-                performance_df = pd.DataFrame(performance_data)
-                st.dataframe(performance_df, use_container_width=True, hide_index=True)
+                        st.metric("High Confidence (>70%)", f"{high_conf_mask.sum()} signals")
+                        st.metric("Medium Confidence (50-70%)", f"{med_conf_mask.sum()} signals")
+                        st.metric("Low Confidence (<50%)", f"{low_conf_mask.sum()} signals")
             
             with analysis_tab3:
                 st.markdown("**Signal Quality Assessment**")
@@ -598,174 +550,3 @@ with direction_tab:
                                             yaxis_title="Confidence Level",
                                             yaxis=dict(range=[0, 1]))
                     st.plotly_chart(fig_quality, use_container_width=True)
-            
-            with analysis_tab4:
-                st.markdown(f"**All Direction Predictions ({dir_filter})**")
-                
-                # Create comprehensive predictions dataframe for all filtered data
-                all_predictions = predictions
-                all_probs = probabilities if probabilities is not None else None
-                all_prices = filtered_data
-                
-                # Calculate price changes for validation
-                price_changes = all_prices['Close'].pct_change().shift(-1) * 100  # Next period change
-                actual_direction = (price_changes > 0).astype(int)
-                
-                # Create base dataframe structure
-                all_predictions_df_dict = {
-                    'Timestamp': all_prices.index,
-                    'Open': all_prices['Open'].round(2),
-                    'High': all_prices['High'].round(2),
-                    'Low': all_prices['Low'].round(2),
-                    'Close': all_prices['Close'].round(2),
-                    'Predicted Direction': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in all_predictions],
-                    'Direction Binary': all_predictions,
-                    'Confidence': [f"{np.max(prob):.3f}" for prob in all_probs] if all_probs is not None else ['N/A'] * len(all_predictions),
-                    'Confidence Score': [np.max(prob) for prob in all_probs] if all_probs is not None else [0.5] * len(all_predictions),
-                    'Next Change %': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
-                    'Actual Next Direction': [1 if change > 0 else 0 if change <= 0 else np.nan for change in price_changes],
-                    'Correct': ['✅' if pred == actual and not pd.isna(actual) else '❌' if not pd.isna(actual) else '⏳' 
-                               for pred, actual in zip(all_predictions, actual_direction)]
-                }
-                
-                # Add Volume column only if it exists in the data
-                if 'Volume' in all_prices.columns:
-                    all_predictions_df_dict['Volume'] = all_prices['Volume'].round(0)
-                
-                all_predictions_df = pd.DataFrame(all_predictions_df_dict)
-                
-                # Add additional analysis columns
-                all_predictions_df['Price Change %'] = all_prices['Close'].pct_change() * 100
-                all_predictions_df['High-Low Range %'] = ((all_prices['High'] - all_prices['Low']) / all_prices['Close']) * 100
-                
-                # Show summary statistics
-                st.subheader("📊 Summary Statistics")
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric("Total Records", len(all_predictions_df))
-                with col2:
-                    bullish_total = (all_predictions_df['Direction Binary'] == 1).sum()
-                    st.metric("Bullish Predictions", f"{bullish_total} ({(bullish_total/len(all_predictions_df)*100):.1f}%)")
-                with col3:
-                    if all_probs is not None:
-                        avg_conf = all_predictions_df['Confidence Score'].mean()
-                        st.metric("Average Confidence", f"{avg_conf:.3f}")
-                    else:
-                        st.metric("Average Confidence", "N/A")
-                with col4:
-                    # Calculate accuracy where we have valid comparisons
-                    valid_mask = ~pd.isna(all_predictions_df['Actual Next Direction'])
-                    if valid_mask.sum() > 0:
-                        correct_predictions = (all_predictions_df.loc[valid_mask, 'Direction Binary'] == 
-                                             all_predictions_df.loc[valid_mask, 'Actual Next Direction']).sum()
-                        accuracy = correct_predictions / valid_mask.sum()
-                        st.metric("Prediction Accuracy", f"{accuracy:.1%}")
-                    else:
-                        st.metric("Prediction Accuracy", "N/A")
-                
-                # Display options
-                st.subheader("📋 Data Display Options")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    show_columns = st.multiselect(
-                        "Select columns to display:",
-                        options=all_predictions_df.columns.tolist(),
-                        default=['Timestamp', 'Close', 'Predicted Direction', 'Confidence', 'Next Change %', 'Correct'],
-                        help="Choose which columns to show in the table"
-                    )
-                
-                with col2:
-                    sort_order = st.selectbox(
-                        "Sort by:",
-                        options=['Newest First', 'Oldest First', 'Highest Confidence', 'Lowest Confidence'],
-                        help="Choose how to sort the data"
-                    )
-                
-                # Apply sorting
-                display_df = all_predictions_df[show_columns].copy()
-                
-                if sort_order == 'Newest First':
-                    display_df = display_df.sort_values('Timestamp', ascending=False)
-                elif sort_order == 'Oldest First':
-                    display_df = display_df.sort_values('Timestamp', ascending=True)
-                elif sort_order == 'Highest Confidence' and 'Confidence Score' in all_predictions_df.columns:
-                    display_df = all_predictions_df[show_columns].sort_values('Confidence Score', ascending=False)
-                elif sort_order == 'Lowest Confidence' and 'Confidence Score' in all_predictions_df.columns:
-                    display_df = all_predictions_df[show_columns].sort_values('Confidence Score', ascending=True)
-                
-                # Show the data table
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
-                
-                # Download section
-                st.subheader("📥 Download Data")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    # Download full dataset
-                    full_csv = all_predictions_df.to_csv(index=False)
-                    st.download_button(
-                        label="📥 Download Complete Dataset",
-                        data=full_csv,
-                        file_name=f"direction_predictions_complete_{dir_filter.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                        mime="text/csv",
-                        help="Download all predictions with all columns"
-                    )
-                
-                with col2:
-                    # Download filtered view
-                    filtered_csv = display_df.to_csv(index=False)
-                    st.download_button(
-                        label="📥 Download Filtered View",
-                        data=filtered_csv,
-                        file_name=f"direction_predictions_filtered_{dir_filter.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                        mime="text/csv",
-                        help="Download currently displayed columns only"
-                    )
-                
-                # Additional statistics
-                st.subheader("📈 Additional Analysis")
-                
-                # Performance by confidence level
-                if all_probs is not None:
-                    conf_analysis = pd.DataFrame({
-                        'Confidence Range': ['Very High (>0.8)', 'High (0.7-0.8)', 'Medium (0.6-0.7)', 'Low (≤0.6)'],
-                        'Count': [
-                            (all_predictions_df['Confidence Score'] > 0.8).sum(),
-                            ((all_predictions_df['Confidence Score'] > 0.7) & (all_predictions_df['Confidence Score'] <= 0.8)).sum(),
-                            ((all_predictions_df['Confidence Score'] > 0.6) & (all_predictions_df['Confidence Score'] <= 0.7)).sum(),
-                            (all_predictions_df['Confidence Score'] <= 0.6).sum()
-                        ]
-                    })
-                    
-                    conf_analysis['Percentage'] = (conf_analysis['Count'] / len(all_predictions_df) * 100).round(1)
-                    conf_analysis['Percentage'] = conf_analysis['Percentage'].astype(str) + '%'
-                    
-                    st.dataframe(conf_analysis, use_container_width=True, hide_index=True)
-                
-                # Time period breakdown
-                st.markdown("**Predictions by Time Period**")
-                time_breakdown = pd.DataFrame({
-                    'Period': ['Total Period', 'First Half', 'Second Half', 'Last 30 Days', 'Last 7 Days'],
-                    'Bullish Count': [
-                        bullish_total,
-                        (all_predictions_df.iloc[:len(all_predictions_df)//2]['Direction Binary'] == 1).sum(),
-                        (all_predictions_df.iloc[len(all_predictions_df)//2:]['Direction Binary'] == 1).sum(),
-                        (all_predictions_df.tail(min(30, len(all_predictions_df)))['Direction Binary'] == 1).sum(),
-                        (all_predictions_df.tail(min(7, len(all_predictions_df)))['Direction Binary'] == 1).sum()
-                    ],
-                    'Total Count': [
-                        len(all_predictions_df),
-                        len(all_predictions_df)//2,
-                        len(all_predictions_df) - len(all_predictions_df)//2,
-                        min(30, len(all_predictions_df)),
-                        min(7, len(all_predictions_df))
-                    ]
-                })
-                
-                time_breakdown['Bullish %'] = (time_breakdown['Bullish Count'] / time_breakdown['Total Count'] * 100).round(1)
-                time_breakdown['Bullish %'] = time_breakdown['Bullish %'].astype(str) + '%'
-                
-                st.dataframe(time_breakdown, use_container_width=True, hide_index=True)

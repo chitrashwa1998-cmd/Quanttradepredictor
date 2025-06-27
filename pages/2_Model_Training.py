@@ -52,25 +52,8 @@ with tab1:
     # Volatility model features section
     st.subheader("Volatility Model Features")
     
-    # Check if volatility model actually exists in database
-    try:
-        from utils.database_adapter import get_trading_database
-        db = get_trading_database()
-        db_volatility_model = db.load_model_results('volatility')
-        db_has_volatility_model = db_volatility_model is not None
-    except:
-        db_has_volatility_model = False
-    
-    # Reset session state if database doesn't have the model
-    if not db_has_volatility_model:
-        if 'features' in st.session_state:
-            st.session_state.features = None
-        if 'volatility_trainer' in st.session_state:
-            st.session_state.volatility_trainer = None
-        if 'trained_models' in st.session_state and 'volatility' in st.session_state.trained_models:
-            del st.session_state.trained_models['volatility']
-    
     if 'features' not in st.session_state or st.session_state.features is None:
+        st.warning("⚠️ Volatility features not calculated yet.")
         
         if st.button("🔧 Calculate Technical Indicators", type="primary", key="calc_volatility_features"):
             with st.spinner("Calculating volatility-specific technical indicators..."):
@@ -222,25 +205,8 @@ with tab2:
     # Direction model features section
     st.subheader("Direction Model Features")
     
-    # Check if direction model actually exists in database
-    try:
-        from utils.database_adapter import get_trading_database
-        db = get_trading_database()
-        db_direction_model = db.load_model_results('direction')
-        db_has_direction_model = db_direction_model is not None
-    except:
-        db_has_direction_model = False
-    
-    # Reset session state if database doesn't have the model
-    if not db_has_direction_model:
-        if 'direction_features' in st.session_state:
-            st.session_state.direction_features = None
-        if 'direction_trained_models' in st.session_state:
-            st.session_state.direction_trained_models = {}
-        if 'trained_models' in st.session_state and 'direction' in st.session_state.trained_models:
-            del st.session_state.trained_models['direction']
-    
     if 'direction_features' not in st.session_state or st.session_state.direction_features is None:
+        st.warning("⚠️ Direction features not calculated yet.")
         
         if st.button("🔧 Calculate Technical Indicators", type="primary", key="calc_direction_features"):
             with st.spinner("Calculating direction-specific technical indicators..."):
@@ -396,35 +362,30 @@ with tab2:
 # Model Status Section
 st.header("📊 Model Status")
 
-# Check actual database status for both models
-try:
-    from utils.database_adapter import get_trading_database
-    db = get_trading_database()
-    db_volatility_model = db.load_model_results('volatility')
-    db_direction_model = db.load_model_results('direction')
-except:
-    db_volatility_model = None
-    db_direction_model = None
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("Volatility Model")
-    if db_volatility_model and 'metrics' in db_volatility_model:
-        metrics = db_volatility_model.get('metrics', {})
-        rmse = metrics.get('rmse', 0)
-        st.success(f"✅ Trained - RMSE: {rmse:.4f}")
-    else:
-        st.warning("⚠️ Not trained")
-
-with col2:
-    st.subheader("Direction Model")
-    if db_direction_model and 'metrics' in db_direction_model:
-        metrics = db_direction_model.get('metrics', {})
-        accuracy = metrics.get('accuracy', 0)
-        st.success(f"✅ Trained - Accuracy: {accuracy:.2%}")
-    else:
-        st.warning("⚠️ Not trained")
+if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Volatility Model")
+        if 'volatility' in st.session_state.trained_models and st.session_state.trained_models['volatility']:
+            result = st.session_state.trained_models['volatility']
+            metrics = result.get('metrics', {})
+            rmse = metrics.get('rmse', 0)
+            st.success(f"✅ Trained - RMSE: {rmse:.4f}")
+        else:
+            st.warning("⚠️ Not trained")
+    
+    with col2:
+        st.subheader("Direction Model")
+        if 'direction' in st.session_state.trained_models and st.session_state.trained_models['direction']:
+            result = st.session_state.trained_models['direction']
+            metrics = result.get('metrics', {})
+            accuracy = metrics.get('accuracy', 0)
+            st.success(f"✅ Trained - Accuracy: {accuracy:.2%}")
+        else:
+            st.warning("⚠️ Not trained")
+else:
+    st.info("ℹ️ No models trained yet")
 
 # Export Models Section
 if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
