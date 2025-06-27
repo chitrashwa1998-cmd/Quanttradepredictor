@@ -144,9 +144,17 @@ class DirectionModel:
 
         print(f"Training on {len(X_train)} samples, testing on {len(X_test)} samples")
 
+        # Exclude OHLC columns and timestamp columns from training features
+        ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        timestamp_cols = ['timestamp', 'date', 'datetime', 'time', 'Timestamp', 'Date', 'Datetime', 'Time']
+        exclude_cols = ohlc_cols + timestamp_cols
+        
         # Check for and remove any non-numeric columns before training
         numeric_columns = []
         for col in X_train.columns:
+            if col in exclude_cols:
+                print(f"Excluding OHLC/timestamp column from training: {col}")
+                continue
             try:
                 # Try to convert to numeric - if successful, it's a valid feature
                 pd.to_numeric(X_train[col].iloc[:10], errors='raise')
@@ -154,7 +162,7 @@ class DirectionModel:
             except (ValueError, TypeError):
                 print(f"Excluding non-numeric column from training: {col}")
         
-        # Use only numeric direction features
+        # Use only numeric direction features (excluding OHLC and timestamp)
         X_train_selected = X_train[numeric_columns].values
         X_test_selected = X_test[numeric_columns].values
         
