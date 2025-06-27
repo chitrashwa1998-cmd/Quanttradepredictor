@@ -130,15 +130,13 @@ class DirectionModel:
 
         print(f"Training on {len(X_train)} samples, testing on {len(X_test)} samples")
 
-        # Feature selection for direction model
-        self.selector = SelectKBest(score_func=mutual_info_classif, k=min(35, X_train.shape[1]))
-        X_train_selected = self.selector.fit_transform(X_train, y_train)
-        X_test_selected = self.selector.transform(X_test)
+        # Use ALL direction features - no feature selection
+        X_train_selected = X_train.values
+        X_test_selected = X_test.values
         
-        # Store selected feature names
-        selected_feature_mask = self.selector.get_support()
-        self.selected_features = [X_train.columns[i] for i in range(len(X_train.columns)) if selected_feature_mask[i]]
-        print(f"Selected {len(self.selected_features)} most informative features")
+        # Store all feature names
+        self.selected_features = list(X_train.columns)
+        print(f"Using ALL {len(self.selected_features)} direction features")
         
         # RobustScaler for better handling of outliers
         self.scaler = RobustScaler()
@@ -266,11 +264,8 @@ class DirectionModel:
         if X.empty:
             raise ValueError("Input DataFrame is empty")
 
-        # Apply feature selection
-        if self.selector is None:
-            raise ValueError("Feature selector not initialized")
-
-        X_selected = self.selector.transform(X)
+        # Use all features - no feature selection
+        X_selected = X.values
         X_scaled = self.scaler.transform(X_selected)
 
         # Make predictions

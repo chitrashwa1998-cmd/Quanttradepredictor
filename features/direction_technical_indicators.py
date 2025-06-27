@@ -141,16 +141,16 @@ class DirectionTechnicalIndicators:
         result_df = DirectionTechnicalIndicators.calculate_direction_indicators(result_df)
 
         # Add custom engineered features for direction
-        from features.direction_custom_engineered import compute_direction_custom_features
-        result_df = compute_direction_custom_features(result_df)
+        from features.direction_custom_engineered import add_custom_direction_features
+        result_df = add_custom_direction_features(result_df)
 
         # Add lagged features for direction
-        from features.direction_lagged_features import add_direction_lagged_features
-        result_df = add_direction_lagged_features(result_df)
+        from features.direction_lagged_features import add_lagged_direction_features
+        result_df = add_lagged_direction_features(result_df)
 
         # Add time context features for direction
-        from features.direction_time_context import add_direction_time_context_features
-        result_df = add_direction_time_context_features(result_df)
+        from features.direction_time_context import add_time_context_features
+        result_df = add_time_context_features(result_df)
 
         # Final cleanup
         result_df = result_df.replace([np.inf, -np.inf], np.nan)
