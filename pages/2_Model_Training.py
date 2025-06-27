@@ -211,10 +211,11 @@ with tab2:
         if st.button("🔧 Calculate Technical Indicators", type="primary", key="calc_direction_features"):
             with st.spinner("Calculating direction-specific technical indicators..."):
                 try:
-                    from models.direction_model import DirectionModel
+                    from features.direction_technical_indicators import DirectionTechnicalIndicators
                     
-                    direction_model = DirectionModel()
-                    direction_features = direction_model.prepare_features(st.session_state.data)
+                    # Calculate direction indicators directly
+                    st.info("Starting direction indicator calculation...")
+                    direction_features = DirectionTechnicalIndicators.calculate_all_direction_indicators(st.session_state.data)
                     
                     st.session_state.direction_features = direction_features
                     st.success("✅ Direction technical indicators calculated successfully!")
@@ -223,8 +224,24 @@ with tab2:
                 except Exception as e:
                     st.error(f"❌ Error calculating direction indicators: {str(e)}")
                     import traceback
-                    with st.expander("Show error details"):
-                        st.code(traceback.format_exc())
+                    error_details = traceback.format_exc()
+                    st.error(f"Full error: {error_details}")
+                    
+                    # Try fallback calculation
+                    try:
+                        st.warning("Attempting fallback calculation...")
+                        from features.direction_technical_indicators import DirectionTechnicalIndicators
+                        
+                        # Calculate only basic direction indicators
+                        direction_features = DirectionTechnicalIndicators.calculate_direction_indicators(st.session_state.data)
+                        st.session_state.direction_features = direction_features
+                        st.success("✅ Basic direction indicators calculated successfully!")
+                        st.rerun()
+                        
+                    except Exception as e2:
+                        st.error(f"❌ Fallback also failed: {str(e2)}")
+                        with st.expander("Show fallback error details"):
+                            st.code(traceback.format_exc())
     else:
         st.success("✅ Direction features ready")
         
