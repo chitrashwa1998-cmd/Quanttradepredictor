@@ -60,15 +60,34 @@ volatility_tab, direction_tab = st.tabs(["📊 Volatility Predictions", "🎯 Di
 with volatility_tab:
     st.header("📊 Volatility Predictions")
     
-    # Check if volatility features and model are available
+    # Check if volatility features are available
     if st.session_state.features is None:
         st.error("❌ No volatility features calculated. Please calculate technical indicators first.")
-    elif not hasattr(st.session_state, 'trained_models') or not st.session_state.trained_models:
-        st.error("❌ No trained models available. Please train the volatility model first.")
-    elif 'volatility' not in st.session_state.trained_models or st.session_state.trained_models['volatility'] is None:
-        st.error("❌ Volatility model not trained. Please train the model first.")
     else:
-        # Volatility prediction controls
+        # Check if volatility model is available in database or session state
+        model_available = False
+        
+        # Check session state first
+        if (hasattr(st.session_state, 'trained_models') and 
+            st.session_state.trained_models and 
+            'volatility' in st.session_state.trained_models and 
+            st.session_state.trained_models['volatility'] is not None):
+            model_available = True
+        else:
+            # Check database
+            try:
+                from utils.database_adapter import get_trading_database
+                db = get_trading_database()
+                db_model = db.load_model_results('volatility')
+                if db_model and 'metrics' in db_model:
+                    model_available = True
+            except:
+                pass
+        
+        if not model_available:
+            st.error("❌ Volatility model not trained. Please train the model first.")
+    else:
+            # Volatility prediction controls
         st.subheader("🎯 Prediction Controls")
         
         col1, col2 = st.columns(2)
@@ -89,13 +108,33 @@ with volatility_tab:
         if st.button("🚀 Generate Volatility Predictions", type="primary", key="vol_predict"):
             try:
                 with st.spinner("Generating volatility predictions..."):
-                    # Get model trainer
+                    # Load model from database if not in session state
+                    if not hasattr(st.session_state, 'model_trainer') or st.session_state.model_trainer is None:
+                        try:
+                            from utils.database_adapter import get_trading_database
+                            from models.model_manager import ModelManager
+                            
+                            db = get_trading_database()
+                            db_model = db.load_model_results('volatility')
+                            
+                            if db_model and 'metrics' in db_model:
+                                # Initialize model manager and load from database
+                                model_trainer = ModelManager()
+                                st.session_state.model_trainer = model_trainer
+                                st.info("✅ Loaded volatility model from database")
+                            else:
+                                st.error("❌ No trained volatility model found in database. Please train the model first.")
+                                st.stop()
+                        except Exception as load_error:
+                            st.error(f"❌ Error loading model from database: {str(load_error)}")
+                            st.stop()
+                    
                     model_trainer = st.session_state.model_trainer
                     
                     # Use volatility features for prediction
                     data_for_prediction = st.session_state.features.copy()
                     
-                    # Generate predictions
+                    # Generate predictions using the model manager
                     predictions, _ = model_trainer.predict('volatility', data_for_prediction)
                     
                     # Store predictions
