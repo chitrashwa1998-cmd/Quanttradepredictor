@@ -25,11 +25,14 @@ class DirectionModel:
 
     def create_target(self, df: pd.DataFrame) -> pd.Series:
         """Create direction target (up/down) with noise filtering."""
+        # Ensure we're working with the Close column only (numeric data)
+        close_prices = pd.to_numeric(df['Close'], errors='coerce')
+        
         # Direction prediction (up/down) - Enhanced with noise filtering
-        future_return = df['Close'].shift(-1) / df['Close'] - 1
+        future_return = close_prices.shift(-1) / close_prices - 1
         
         # Calculate dynamic threshold based on recent volatility
-        rolling_vol = df['Close'].pct_change().rolling(20).std()
+        rolling_vol = close_prices.pct_change().rolling(20).std()
         noise_threshold = rolling_vol * 0.3  # 30% of recent volatility
         
         # Only predict direction for moves above noise threshold
@@ -40,8 +43,9 @@ class DirectionModel:
         direction_raw = np.where(significant_up, 1, np.where(significant_down, 0, np.nan))
         direction_series = pd.Series(direction_raw, index=df.index)
         
-        # Remove NaN values (sideways moves)
-        target = direction_series.dropna().astype(int)
+        # Remove NaN values (sideways moves) and ensure all values are numeric
+        target = direction_series.dropna()
+        target = pd.to_numeric(target, errors='coerce').dropna().astype(int)
         
         print(f"Direction target filtering: {len(target)} significant moves out of {len(df)} total ({len(target)/len(df)*100:.1f}%)")
         return target
@@ -61,22 +65,32 @@ class DirectionModel:
                                  'bollinger_band_position', 'bb_width', 'stochastic_k', 'stochastic_d', 
                                  'adx', 'obv', 'donchian_high_20', 'donchian_low_20']
         
-        # Get all available features excluding OHLC
+        # Get all available features excluding OHLC and timestamp columns
         ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-        available_features = [col for col in result_df.columns if col not in ohlc_cols]
+        timestamp_cols = ['timestamp', 'date', 'datetime', 'time']
+        exclude_cols = ohlc_cols + timestamp_cols
+        
+        available_features = [col for col in result_df.columns if col not in exclude_cols]
         
         if len(available_features) == 0:
             raise ValueError(f"No direction features found. Available columns: {list(result_df.columns)}")
         
-        # Select only direction features and remove NaN
-        result_df = result_df[available_features].dropna()
+        # Select only numeric direction features
+        feature_df = result_df[available_features].copy()
         
-        if result_df.empty:
+        # Convert all features to numeric, replacing any non-numeric values with NaN
+        for col in feature_df.columns:
+            feature_df[col] = pd.to_numeric(feature_df[col], errors='coerce')
+        
+        # Remove rows with NaN values
+        feature_df = feature_df.dropna()
+        
+        if feature_df.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
         
         print(f"Direction model using {len(available_features)} features: {available_features}")
         
-        return result_df
+        return feature_df
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8, max_depth: int = 6, n_estimators: int = 100) -> Dict[str, Any]:
         """Train direction prediction model."""
