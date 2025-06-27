@@ -220,8 +220,13 @@ class ModelManager:
         model_instance = self.models['volatility']
         trained_model_data = self.trained_models['volatility']
 
+        # Handle both 'model' and 'ensemble' keys for backward compatibility
+        ensemble_model = trained_model_data.get('model') or trained_model_data.get('ensemble')
+        if ensemble_model is None:
+            raise ValueError("No trained model found in model data")
+
         # Set the trained model in the instance
-        model_instance.model = trained_model_data['model']
+        model_instance.model = ensemble_model
         model_instance.scaler = trained_model_data.get('scaler')
         model_instance.feature_names = trained_model_data.get('feature_names', [])
 

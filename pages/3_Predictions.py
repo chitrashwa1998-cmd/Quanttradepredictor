@@ -131,24 +131,41 @@ with volatility_tab:
                             if trained_models and 'volatility' in trained_models:
                                 # Initialize model manager and set the loaded model
                                 model_trainer = ModelManager()
-                                model_trainer.trained_models['volatility'] = trained_models['volatility']
+                                
+                                # Properly structure the model data
+                                volatility_model_data = trained_models['volatility']
+                                if 'ensemble' in volatility_model_data:
+                                    # Restructure the data to match expected format
+                                    model_trainer.trained_models['volatility'] = {
+                                        'model': volatility_model_data['ensemble'],
+                                        'feature_names': volatility_model_data.get('feature_names', []),
+                                        'task_type': volatility_model_data.get('task_type', 'regression'),
+                                        'scaler': None  # Will be handled by the model itself
+                                    }
+                                else:
+                                    model_trainer.trained_models['volatility'] = volatility_model_data
+                                
                                 st.session_state.model_trainer = model_trainer
                                 st.info("✅ Loaded volatility model from database")
                             else:
-                                # Fallback: try loading model results
-                                db_model = db.load_model_results('volatility')
-                                if db_model and 'metrics' in db_model:
-                                    model_trainer = ModelManager()
-                                    st.session_state.model_trainer = model_trainer
-                                    st.info("✅ Loaded volatility model results from database")
-                                else:
-                                    st.error("❌ No trained volatility model found in database. Please train the model first.")
-                                    st.stop()
+                                st.error("❌ No trained volatility model found in database. Please train the model first.")
+                                st.stop()
                         except Exception as load_error:
                             st.error(f"❌ Error loading model from database: {str(load_error)}")
+                            st.error(f"Debug: {str(load_error)}")
                             st.stop()
                     
                     model_trainer = st.session_state.model_trainer
+                    
+                    # Verify the model is properly loaded
+                    if 'volatility' not in model_trainer.trained_models:
+                        st.error("❌ Volatility model not found in trainer")
+                        st.stop()
+                    
+                    volatility_model_data = model_trainer.trained_models['volatility']
+                    if 'model' not in volatility_model_data and 'ensemble' not in volatility_model_data:
+                        st.error("❌ Model object not found in volatility model data")
+                        st.stop()
                     
                     # Use volatility features for prediction
                     data_for_prediction = st.session_state.features.copy()
