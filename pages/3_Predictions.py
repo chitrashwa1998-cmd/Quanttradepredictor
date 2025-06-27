@@ -611,13 +611,13 @@ with direction_tab:
                 price_changes = all_prices['Close'].pct_change().shift(-1) * 100  # Next period change
                 actual_direction = (price_changes > 0).astype(int)
                 
-                all_predictions_df = pd.DataFrame({
+                # Create base dataframe structure
+                all_predictions_df_dict = {
                     'Timestamp': all_prices.index,
                     'Open': all_prices['Open'].round(2),
                     'High': all_prices['High'].round(2),
                     'Low': all_prices['Low'].round(2),
                     'Close': all_prices['Close'].round(2),
-                    'Volume': all_prices['Volume'].round(0),
                     'Predicted Direction': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in all_predictions],
                     'Direction Binary': all_predictions,
                     'Confidence': [f"{np.max(prob):.3f}" for prob in all_probs] if all_probs is not None else ['N/A'] * len(all_predictions),
@@ -626,7 +626,13 @@ with direction_tab:
                     'Actual Next Direction': [1 if change > 0 else 0 if change <= 0 else np.nan for change in price_changes],
                     'Correct': ['✅' if pred == actual and not pd.isna(actual) else '❌' if not pd.isna(actual) else '⏳' 
                                for pred, actual in zip(all_predictions, actual_direction)]
-                })
+                }
+                
+                # Add Volume column only if it exists in the data
+                if 'Volume' in all_prices.columns:
+                    all_predictions_df_dict['Volume'] = all_prices['Volume'].round(0)
+                
+                all_predictions_df = pd.DataFrame(all_predictions_df_dict)
                 
                 # Add additional analysis columns
                 all_predictions_df['Price Change %'] = all_prices['Close'].pct_change() * 100
