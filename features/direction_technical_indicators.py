@@ -19,24 +19,43 @@ class DirectionTechnicalIndicators:
         volume_col = 'Volume' if 'Volume' in df.columns else 'volume'
 
         try:
-            # RSI calculation
+            # EMA calculations - only 5, 10, 20
+            df['ema_5'] = df[close_col].ewm(span=5).mean()
+            df['ema_10'] = df[close_col].ewm(span=10).mean()
+            df['ema_20'] = df[close_col].ewm(span=20).mean()
+
+            # RSI calculation (14 period)
             delta = df[close_col].diff()
             gain = delta.where(delta > 0, 0)
             loss = -delta.where(delta < 0, 0)
             avg_gain = gain.rolling(window=14).mean()
             avg_loss = loss.rolling(window=14).mean()
             rs = avg_gain / avg_loss
-            df['rsi'] = 100 - (100 / (1 + rs))
+            df['rsi_14'] = 100 - (100 / (1 + rs))
 
             # MACD calculation
             ema_12 = df[close_col].ewm(span=12).mean()
             ema_26 = df[close_col].ewm(span=26).mean()
-            df['macd'] = ema_12 - ema_26
-            df['macd_signal'] = df['macd'].ewm(span=9).mean()
+            macd = ema_12 - ema_26
+            macd_signal = macd.ewm(span=9).mean()
+            df['macd_histogram'] = macd - macd_signal
 
-            # EMA fast and slow
-            df['ema_fast'] = df[close_col].ewm(span=12).mean()
-            df['ema_slow'] = df[close_col].ewm(span=26).mean()
+            # Bollinger Bands (20 period, 2 std)
+            bb_period = 20
+            bb_std = 2
+            bb_middle = df[close_col].rolling(bb_period).mean()
+            bb_std_dev = df[close_col].rolling(bb_period).std()
+            bb_upper = bb_middle + (bb_std_dev * bb_std)
+            bb_lower = bb_middle - (bb_std_dev * bb_std)
+            df['bb_width'] = (bb_upper - bb_lower) / bb_middle
+            # Bollinger Band position (0 = at lower band, 1 = at upper band)
+            df['bollinger_band_position'] = (df[close_col] - bb_lower) / (bb_upper - bb_lower)
+
+            # Stochastic Oscillator (14 period)
+            lowest_low = df[low_col].rolling(window=14).min()
+            highest_high = df[high_col].rolling(window=14).max()
+            df['stochastic_k'] = 100 * ((df[close_col] - lowest_low) / (highest_high - lowest_low))
+            df['stochastic_d'] = df['stochastic_k'].rolling(window=3).mean()
 
             # ADX calculation (Average Directional Index)
             high_low = df[high_col] - df[low_col]
@@ -72,24 +91,14 @@ class DirectionTechnicalIndicators:
             else:
                 df['obv'] = 0
 
-            # Stochastic Oscillator
-            lowest_low = df[low_col].rolling(window=14).min()
-            highest_high = df[high_col].rolling(window=14).max()
-            df['stoch_k'] = 100 * ((df[close_col] - lowest_low) / (highest_high - lowest_low))
-            df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
-
-            # Williams %R
-            df['williams_r'] = -100 * ((highest_high - df[close_col]) / (highest_high - lowest_low))
-
-            # Momentum
-            df['momentum'] = df[close_col] / df[close_col].shift(10) - 1
-
-            # Rate of Change (ROC)
-            df['roc'] = ((df[close_col] - df[close_col].shift(12)) / df[close_col].shift(12)) * 100
+            # Donchian Channel (20 period)
+            df['donchian_high_20'] = df[high_col].rolling(window=20).max()
+            df['donchian_low_20'] = df[low_col].rolling(window=20).min()
 
             # Replace inf and nan values
-            direction_features = ['rsi', 'macd', 'macd_signal', 'ema_fast', 'ema_slow', 'adx', 
-                                'obv', 'stoch_k', 'stoch_d', 'williams_r', 'momentum', 'roc']
+            direction_features = ['ema_5', 'ema_10', 'ema_20', 'rsi_14', 'macd_histogram', 
+                                'bollinger_band_position', 'bb_width', 'stochastic_k', 'stochastic_d', 
+                                'adx', 'obv', 'donchian_high_20', 'donchian_low_20']
             
             for col in direction_features:
                 if col in df.columns:
@@ -98,18 +107,19 @@ class DirectionTechnicalIndicators:
         except Exception as e:
             print(f"Error calculating direction indicators: {e}")
             # Fallback calculations
-            df['rsi'] = 50.0  # Neutral RSI
-            df['macd'] = 0.0
-            df['macd_signal'] = 0.0
-            df['ema_fast'] = df[close_col]
-            df['ema_slow'] = df[close_col]
+            df['ema_5'] = df[close_col]
+            df['ema_10'] = df[close_col]
+            df['ema_20'] = df[close_col]
+            df['rsi_14'] = 50.0  # Neutral RSI
+            df['macd_histogram'] = 0.0
+            df['bollinger_band_position'] = 0.5  # Middle position
+            df['bb_width'] = 0.1
+            df['stochastic_k'] = 50.0
+            df['stochastic_d'] = 50.0
             df['adx'] = 25.0  # Neutral ADX
             df['obv'] = 0.0
-            df['stoch_k'] = 50.0
-            df['stoch_d'] = 50.0
-            df['williams_r'] = -50.0
-            df['momentum'] = 0.0
-            df['roc'] = 0.0
+            df['donchian_high_20'] = df[high_col]
+            df['donchian_low_20'] = df[low_col]
 
         return df
 

@@ -57,7 +57,9 @@ class DirectionModel:
         result_df = DirectionTechnicalIndicators.calculate_all_direction_indicators(df)
         
         # Define core direction-specific features to ensure we have them
-        core_direction_features = ['rsi', 'macd', 'macd_signal', 'ema_fast', 'ema_slow', 'adx', 'obv', 'stoch_k', 'stoch_d']
+        core_direction_features = ['ema_5', 'ema_10', 'ema_20', 'rsi_14', 'macd_histogram', 
+                                 'bollinger_band_position', 'bb_width', 'stochastic_k', 'stochastic_d', 
+                                 'adx', 'obv', 'donchian_high_20', 'donchian_low_20']
         
         # Get all available features excluding OHLC
         ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
