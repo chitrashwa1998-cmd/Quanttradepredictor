@@ -306,7 +306,11 @@ with tab2:
                     if 'trained_models' not in st.session_state:
                         st.session_state.trained_models = {}
                     st.session_state.trained_models['direction'] = training_result
-                    st.session_state.direction_model = direction_model
+                    
+                    # Store direction models separately for predictions
+                    if 'direction_trained_models' not in st.session_state:
+                        st.session_state.direction_trained_models = {}
+                    st.session_state.direction_trained_models['direction'] = direction_model
                     
                     # Display results
                     if training_result is not None:
