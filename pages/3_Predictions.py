@@ -86,9 +86,9 @@ with volatility_tab:
         
         if not model_available:
             st.error("❌ Volatility model not trained. Please train the model first.")
-    else:
+        else:
             # Volatility prediction controls
-        st.subheader("🎯 Prediction Controls")
+            st.subheader("🎯 Prediction Controls")
         
         col1, col2 = st.columns(2)
         
