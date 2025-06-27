@@ -189,44 +189,60 @@ with volatility_tab:
             # Show prediction statistics
             predictions = st.session_state.volatility_predictions
             
+            # Calculate key statistics
+            mean_vol = float(np.mean(predictions))
+            max_vol = float(np.max(predictions))
+            min_vol = float(np.min(predictions))
+            std_vol = float(np.std(predictions))
+            median_vol = float(np.median(predictions))
+            percentile_95 = float(np.percentile(predictions, 95))
+            percentile_75 = float(np.percentile(predictions, 75))
+            percentile_25 = float(np.percentile(predictions, 25))
+            
             # Enhanced statistics with more details
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                st.metric("Avg Volatility", f"{np.mean(predictions):.6f}")
+                st.metric("Avg Volatility", f"{mean_vol:.6f}")
             with col2:
-                st.metric("Max Volatility", f"{np.max(predictions):.6f}")
+                st.metric("Max Volatility", f"{max_vol:.6f}")
             with col3:
-                st.metric("Min Volatility", f"{np.min(predictions):.6f}")
+                st.metric("Min Volatility", f"{min_vol:.6f}")
             with col4:
-                st.metric("Volatility Range", f"{np.max(predictions) - np.min(predictions):.6f}")
+                st.metric("Volatility Range", f"{max_vol - min_vol:.6f}")
             
             # Additional volatility statistics
             col5, col6, col7, col8 = st.columns(4)
             
             with col5:
-                st.metric("Std Dev", f"{np.std(predictions):.6f}")
+                st.metric("Std Dev", f"{std_vol:.6f}")
             with col6:
-                median_vol = np.median(predictions)
                 st.metric("Median Volatility", f"{median_vol:.6f}")
             with col7:
-                percentile_95 = np.percentile(predictions, 95)
                 st.metric("95th Percentile", f"{percentile_95:.6f}")
             with col8:
-                high_vol_count = np.sum(predictions > median_vol * 1.5)
+                high_vol_count = int(np.sum(predictions > median_vol * 1.5))
                 st.metric("High Vol Periods", f"{high_vol_count}")
             
-            # Create tabbed analysis for volatility predictions
-            vol_tab1, vol_tab2, vol_tab3, vol_tab4 = st.tabs(["📊 Main Chart", "📋 Data Table", "📈 Distribution", "🔍 Analysis"])
+            # Create comprehensive tabbed analysis for volatility predictions
+            vol_tab1, vol_tab2, vol_tab3, vol_tab4, vol_tab5 = st.tabs([
+                "📊 Interactive Chart", 
+                "📋 Detailed Data Table", 
+                "📈 Distribution Analysis", 
+                "🔍 Statistical Analysis",
+                "📈 Performance Metrics"
+            ])
             
             with vol_tab1:
-                # Enhanced volatility prediction chart
+                st.markdown("**Price vs Predicted Volatility Analysis**")
+                
+                # Enhanced volatility prediction chart with multiple visualizations
                 fig = make_subplots(
-                    rows=2, cols=1,
+                    rows=3, cols=1,
                     shared_xaxes=True,
-                    vertical_spacing=0.1,
-                    subplot_titles=('Price Chart', 'Predicted Volatility'),
-                    row_heights=[0.7, 0.3]
+                    vertical_spacing=0.08,
+                    subplot_titles=('Price Chart with Volume', 'Predicted Volatility', 'Volatility Regime'),
+                    row_heights=[0.5, 0.3, 0.2]
                 )
                 
                 # Filter data for display consistency
@@ -246,15 +262,33 @@ with volatility_tab:
                     decreasing_line_color='red'
                 ), row=1, col=1)
                 
-                # Add volatility predictions with color coding
+                # Add volume bars
+                if 'Volume' in recent_data.columns:
+                    fig.add_trace(go.Bar(
+                        x=recent_data.index,
+                        y=recent_data['Volume'],
+                        name='Volume',
+                        marker_color='lightblue',
+                        opacity=0.3,
+                        yaxis='y2'
+                    ), row=1, col=1)
+                
+                # Add volatility predictions with enhanced color coding
                 volatility_colors = []
+                volatility_sizes = []
                 for vol in recent_predictions:
                     if vol > percentile_95:
                         volatility_colors.append('red')  # High volatility
+                        volatility_sizes.append(6)
+                    elif vol > percentile_75:
+                        volatility_colors.append('orange')  # Medium-high volatility
+                        volatility_sizes.append(5)
                     elif vol > median_vol:
-                        volatility_colors.append('orange')  # Medium volatility
+                        volatility_colors.append('yellow')  # Medium volatility
+                        volatility_sizes.append(4)
                     else:
                         volatility_colors.append('green')  # Low volatility
+                        volatility_sizes.append(3)
                 
                 fig.add_trace(go.Scatter(
                     x=recent_data.index,
@@ -262,194 +296,338 @@ with volatility_tab:
                     mode='lines+markers',
                     name='Predicted Volatility',
                     line=dict(color='purple', width=2),
-                    marker=dict(color=volatility_colors, size=4),
-                    hovertemplate='Volatility: %{y:.6f}<extra></extra>'
+                    marker=dict(color=volatility_colors, size=volatility_sizes),
+                    hovertemplate='Date: %{x}<br>Volatility: %{y:.6f}<extra></extra>'
                 ), row=2, col=1)
                 
                 # Add volatility threshold lines
                 fig.add_hline(y=median_vol, line_dash="dash", line_color="blue", 
                              annotation_text="Median", row=2, col=1)
                 fig.add_hline(y=percentile_95, line_dash="dash", line_color="red", 
-                             annotation_text="95th Percentile", row=2, col=1)
+                             annotation_text="95th %ile", row=2, col=1)
+                fig.add_hline(y=percentile_75, line_dash="dot", line_color="orange", 
+                             annotation_text="75th %ile", row=2, col=1)
+                
+                # Add volatility regime visualization
+                regime_colors = ['green' if vol <= percentile_25 else 
+                               'yellow' if vol <= percentile_75 else 
+                               'orange' if vol <= percentile_95 else 'red' 
+                               for vol in recent_predictions]
+                
+                fig.add_trace(go.Scatter(
+                    x=recent_data.index,
+                    y=[1] * len(recent_predictions),
+                    mode='markers',
+                    name='Volatility Regime',
+                    marker=dict(color=regime_colors, size=8, symbol='square'),
+                    showlegend=False,
+                    hovertemplate='Regime: %{marker.color}<extra></extra>'
+                ), row=3, col=1)
                 
                 # Update layout
                 fig.update_layout(
-                    title="Price vs Predicted Volatility Analysis",
-                    height=800,
-                    showlegend=True
+                    title="Comprehensive Volatility Analysis Dashboard",
+                    height=900,
+                    showlegend=True,
+                    hovermode='x unified'
                 )
                 
-                fig.update_xaxes(title_text="Time", row=2, col=1)
+                fig.update_xaxes(title_text="Time", row=3, col=1)
                 fig.update_yaxes(title_text="Price", row=1, col=1)
                 fig.update_yaxes(title_text="Volatility", row=2, col=1)
+                fig.update_yaxes(title_text="Regime", row=3, col=1, range=[0.5, 1.5])
                 
                 st.plotly_chart(fig, use_container_width=True)
             
             with vol_tab2:
-                st.markdown("**Volatility Predictions Data Table**")
+                st.markdown("**Comprehensive Volatility Predictions Data Table**")
                 
-                # Create comprehensive predictions dataframe
-                num_recent = min(100, len(predictions))  # Show last 100 predictions
+                # Create comprehensive predictions dataframe with proper data types
+                num_recent = min(150, len(predictions))  # Show more predictions
                 recent_predictions = predictions[-num_recent:]
-                recent_prices = st.session_state.data.tail(num_recent)
+                recent_prices = st.session_state.data.tail(num_recent).copy()
                 
-                # Calculate actual volatility for comparison
                 try:
+                    # Calculate actual volatility for comparison
                     actual_returns = recent_prices['Close'].pct_change()
                     actual_volatility = actual_returns.rolling(10).std().shift(-1)
                     
-                    # Calculate prediction accuracy
-                    prediction_error = np.abs(recent_predictions - actual_volatility.values[-num_recent:])
-                    relative_error = prediction_error / actual_volatility.values[-num_recent:] * 100
+                    # Calculate prediction accuracy metrics
+                    valid_indices = ~pd.isna(actual_volatility)
+                    prediction_error = np.abs(recent_predictions - actual_volatility.values)
+                    relative_error = (prediction_error / actual_volatility.values) * 100
                     
-                    # Fix data type issues by ensuring proper conversions
+                    # Create regime classification
+                    def classify_volatility(vol):
+                        if vol > percentile_95:
+                            return "🔴 Very High"
+                        elif vol > percentile_75:
+                            return "🟠 High" 
+                        elif vol > median_vol:
+                            return "🟡 Medium"
+                        elif vol > percentile_25:
+                            return "🟢 Low"
+                        else:
+                            return "🔵 Very Low"
+                    
+                    # Create the main predictions dataframe with proper data types
                     predictions_df = pd.DataFrame({
-                        'Timestamp': recent_prices.index.strftime('%Y-%m-%d %H:%M:%S'),
-                        'Open': recent_prices['Open'].astype(float).round(4),
-                        'High': recent_prices['High'].astype(float).round(4),
-                        'Low': recent_prices['Low'].astype(float).round(4),
-                        'Close': recent_prices['Close'].astype(float).round(4),
-                        'Predicted_Volatility': recent_predictions.astype(float).round(6),
-                        'Actual_Volatility': np.where(
-                            pd.isna(actual_volatility.values[-num_recent:]),
-                            None,
-                            actual_volatility.values[-num_recent:].astype(float).round(6)
-                        ),
-                        'Prediction_Error': np.where(
-                            pd.isna(prediction_error),
-                            None,
-                            prediction_error.astype(float).round(6)
-                        ),
-                        'Relative_Error_Pct': np.where(
-                            pd.isna(relative_error),
-                            None,
-                            relative_error.astype(float).round(2)
-                        ),
-                        'Volatility_Level': ['High' if pred > percentile_95 else 
-                                           'Medium' if pred > median_vol else 'Low' 
-                                           for pred in recent_predictions]
+                        'Date': recent_prices.index.strftime('%Y-%m-%d'),
+                        'Time': recent_prices.index.strftime('%H:%M:%S'),
+                        'Open': recent_prices['Open'].round(4),
+                        'High': recent_prices['High'].round(4),
+                        'Low': recent_prices['Low'].round(4),
+                        'Close': recent_prices['Close'].round(4),
+                        'Predicted_Vol': recent_predictions.round(6),
+                        'Actual_Vol': actual_volatility.round(6),
+                        'Error': prediction_error.round(6),
+                        'Error_Pct': relative_error.round(2),
+                        'Vol_Regime': [classify_volatility(pred) for pred in recent_predictions],
+                        'Price_Change': recent_prices['Close'].pct_change().round(4),
+                        'Vol_Rank': pd.qcut(recent_predictions, 5, labels=['Q1', 'Q2', 'Q3', 'Q4', 'Q5'])
                     })
                     
-                    # Display the dataframe
-                    st.dataframe(predictions_df, use_container_width=True, hide_index=True)
+                    # Display the dataframe with enhanced formatting
+                    st.dataframe(
+                        predictions_df, 
+                        use_container_width=True, 
+                        hide_index=True,
+                        column_config={
+                            "Date": st.column_config.DateColumn("Date"),
+                            "Time": st.column_config.TimeColumn("Time"),
+                            "Open": st.column_config.NumberColumn("Open", format="%.4f"),
+                            "High": st.column_config.NumberColumn("High", format="%.4f"),
+                            "Low": st.column_config.NumberColumn("Low", format="%.4f"),
+                            "Close": st.column_config.NumberColumn("Close", format="%.4f"),
+                            "Predicted_Vol": st.column_config.NumberColumn("Pred Vol", format="%.6f"),
+                            "Actual_Vol": st.column_config.NumberColumn("Actual Vol", format="%.6f"),
+                            "Error": st.column_config.NumberColumn("Error", format="%.6f"),
+                            "Error_Pct": st.column_config.NumberColumn("Error %", format="%.2f%%"),
+                            "Price_Change": st.column_config.NumberColumn("Price Δ", format="%.4f"),
+                        }
+                    )
+                    
+                    # Show summary statistics
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        avg_error = np.nanmean(prediction_error)
+                        st.metric("Avg Prediction Error", f"{avg_error:.6f}")
+                    with col2:
+                        avg_rel_error = np.nanmean(relative_error)
+                        st.metric("Avg Relative Error", f"{avg_rel_error:.2f}%")
+                    with col3:
+                        correlation = np.corrcoef(recent_predictions[valid_indices], 
+                                                actual_volatility[valid_indices])[0,1]
+                        st.metric("Prediction Correlation", f"{correlation:.3f}")
+                    with col4:
+                        rmse = np.sqrt(np.nanmean(prediction_error**2))
+                        st.metric("RMSE", f"{rmse:.6f}")
                     
                 except Exception as df_error:
-                    st.warning(f"Data table display issue, showing simplified version")
-                    # Fallback simple table
+                    st.warning("Creating simplified data table due to data processing issue")
+                    # Fallback simplified table
                     simple_df = pd.DataFrame({
-                        'Timestamp': recent_prices.index.strftime('%Y-%m-%d %H:%M:%S'),
-                        'Close_Price': recent_prices['Close'].astype(float).round(4),
-                        'Predicted_Volatility': recent_predictions.astype(float).round(6),
-                        'Volatility_Level': ['High' if pred > percentile_95 else 
-                                           'Medium' if pred > median_vol else 'Low' 
-                                           for pred in recent_predictions]
+                        'Date': recent_prices.index.strftime('%Y-%m-%d %H:%M:%S'),
+                        'Close_Price': recent_prices['Close'].round(4),
+                        'Predicted_Volatility': recent_predictions.round(6),
+                        'Volatility_Level': [classify_volatility(pred) for pred in recent_predictions],
+                        'Vol_Percentile': pd.qcut(recent_predictions, 10, labels=False) + 1
                     })
                     st.dataframe(simple_df, use_container_width=True, hide_index=True)
                 
-                # Download button for predictions data
-                try:
-                    csv_data = predictions_df.to_csv(index=False)
-                    st.download_button(
-                        label="📥 Download Volatility Predictions CSV",
-                        data=csv_data,
-                        file_name=f"volatility_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
-                    )
-                except:
-                    # Fallback download option
-                    simple_csv = pd.DataFrame({
+                # Enhanced download options
+                col1, col2 = st.columns(2)
+                with col1:
+                    try:
+                        csv_data = predictions_df.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download Full Data CSV",
+                            data=csv_data,
+                            file_name=f"volatility_predictions_full_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+                    except:
+                        st.info("Full download not available")
+                
+                with col2:
+                    # Simple summary download
+                    summary_df = pd.DataFrame({
                         'Timestamp': recent_prices.index,
-                        'Predicted_Volatility': recent_predictions
-                    }).to_csv(index=False)
+                        'Predicted_Volatility': recent_predictions,
+                        'Volatility_Regime': [classify_volatility(pred) for pred in recent_predictions]
+                    })
+                    summary_csv = summary_df.to_csv(index=False)
                     st.download_button(
-                        label="📥 Download Volatility Predictions CSV",
-                        data=simple_csv,
-                        file_name=f"volatility_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        label="📥 Download Summary CSV",
+                        data=summary_csv,
+                        file_name=f"volatility_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv"
                     )
             
             with vol_tab3:
-                st.markdown("**Volatility Distribution Analysis**")
+                st.markdown("**Volatility Distribution and Pattern Analysis**")
                 
-                # Volatility histogram
-                fig_hist = go.Figure()
-                fig_hist.add_trace(go.Histogram(
-                    x=predictions,
-                    nbinsx=50,
-                    name='Volatility Distribution',
-                    marker_color='lightblue',
-                    opacity=0.7
+                # Enhanced distribution analysis with multiple charts
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Volatility histogram with statistical overlays
+                    fig_hist = go.Figure()
+                    fig_hist.add_trace(go.Histogram(
+                        x=predictions,
+                        nbinsx=50,
+                        name='Volatility Distribution',
+                        marker_color='lightblue',
+                        opacity=0.7,
+                        histnorm='probability'
+                    ))
+                    
+                    # Add statistical lines
+                    fig_hist.add_vline(x=mean_vol, line_dash="solid", line_color="red", 
+                                      annotation_text=f"Mean: {mean_vol:.6f}")
+                    fig_hist.add_vline(x=median_vol, line_dash="dash", line_color="blue", 
+                                      annotation_text=f"Median: {median_vol:.6f}")
+                    fig_hist.add_vline(x=percentile_95, line_dash="dot", line_color="orange", 
+                                      annotation_text=f"95th: {percentile_95:.6f}")
+                    
+                    fig_hist.update_layout(
+                        title="Volatility Distribution with Statistics",
+                        xaxis_title="Volatility",
+                        yaxis_title="Probability Density",
+                        height=400
+                    )
+                    st.plotly_chart(fig_hist, use_container_width=True)
+                
+                with col2:
+                    # Enhanced box plot with outlier analysis
+                    fig_box = go.Figure()
+                    fig_box.add_trace(go.Box(
+                        y=predictions,
+                        name='Volatility',
+                        boxpoints='suspectedoutliers',
+                        marker_color='lightgreen',
+                        fillcolor='rgba(144,238,144,0.5)',
+                        line_color='green'
+                    ))
+                    fig_box.update_layout(
+                        title="Volatility Box Plot with Outliers",
+                        yaxis_title="Volatility",
+                        height=400
+                    )
+                    st.plotly_chart(fig_box, use_container_width=True)
+                
+                # Time series decomposition of volatility
+                st.markdown("**Volatility Time Series Analysis**")
+                
+                # Volatility over time with trend
+                fig_ts = go.Figure()
+                
+                # Add the main volatility line
+                data_len = min(len(st.session_state.data), len(predictions))
+                recent_data = st.session_state.data.tail(data_len)
+                recent_predictions = predictions[-data_len:]
+                
+                fig_ts.add_trace(go.Scatter(
+                    x=recent_data.index,
+                    y=recent_predictions,
+                    mode='lines',
+                    name='Predicted Volatility',
+                    line=dict(color='blue', width=1)
                 ))
                 
-                # Add statistical lines
-                fig_hist.add_vline(x=np.mean(predictions), line_dash="dash", line_color="red", 
-                                  annotation_text="Mean")
-                fig_hist.add_vline(x=median_vol, line_dash="dash", line_color="blue", 
-                                  annotation_text="Median")
-                fig_hist.add_vline(x=percentile_95, line_dash="dash", line_color="orange", 
-                                  annotation_text="95th %ile")
+                # Add moving average trend
+                if len(recent_predictions) >= 20:
+                    vol_ma = pd.Series(recent_predictions).rolling(20).mean()
+                    fig_ts.add_trace(go.Scatter(
+                        x=recent_data.index,
+                        y=vol_ma,
+                        mode='lines',
+                        name='20-Period MA',
+                        line=dict(color='red', width=2)
+                    ))
                 
-                fig_hist.update_layout(
-                    title="Predicted Volatility Distribution",
-                    xaxis_title="Volatility",
-                    yaxis_title="Frequency",
-                    height=400
-                )
-                st.plotly_chart(fig_hist, use_container_width=True)
+                # Add regime bands
+                fig_ts.add_hline(y=percentile_95, line_dash="dash", line_color="red", 
+                                annotation_text="High Vol Threshold")
+                fig_ts.add_hline(y=median_vol, line_dash="dash", line_color="blue", 
+                                annotation_text="Median")
+                fig_ts.add_hline(y=percentile_25, line_dash="dash", line_color="green", 
+                                annotation_text="Low Vol Threshold")
                 
-                # Volatility box plot
-                fig_box = go.Figure()
-                fig_box.add_trace(go.Box(
-                    y=predictions,
-                    name='Volatility',
-                    boxpoints='outliers',
-                    marker_color='lightgreen'
-                ))
-                fig_box.update_layout(
-                    title="Volatility Box Plot",
+                fig_ts.update_layout(
+                    title="Volatility Time Series with Trend and Regimes",
+                    xaxis_title="Time",
                     yaxis_title="Volatility",
                     height=400
                 )
-                st.plotly_chart(fig_box, use_container_width=True)
-                
-                # Volatility statistics table
-                stats_df = pd.DataFrame({
-                    'Statistic': ['Count', 'Mean', 'Std', 'Min', '25%', '50%', '75%', 'Max'],
-                    'Value': [
-                        str(len(predictions)),
-                        f"{np.mean(predictions):.6f}",
-                        f"{np.std(predictions):.6f}",
-                        f"{np.min(predictions):.6f}",
-                        f"{np.percentile(predictions, 25):.6f}",
-                        f"{np.percentile(predictions, 50):.6f}",
-                        f"{np.percentile(predictions, 75):.6f}",
-                        f"{np.max(predictions):.6f}"
-                    ]
-                })
-                st.dataframe(stats_df, use_container_width=True, hide_index=True)
+                st.plotly_chart(fig_ts, use_container_width=True)
             
             with vol_tab4:
-                st.markdown("**Advanced Volatility Analysis**")
+                st.markdown("**Advanced Statistical Analysis**")
+                
+                # Comprehensive statistics table
+                stats_data = {
+                    'Statistic': [
+                        'Count', 'Mean', 'Std Dev', 'Min', 'Max', 'Range',
+                        '1st Percentile', '5th Percentile', '25th Percentile', 'Median (50th)', 
+                        '75th Percentile', '95th Percentile', '99th Percentile',
+                        'Skewness', 'Kurtosis', 'Coefficient of Variation'
+                    ],
+                    'Value': [
+                        f"{len(predictions):,}",
+                        f"{mean_vol:.6f}",
+                        f"{std_vol:.6f}",
+                        f"{min_vol:.6f}",
+                        f"{max_vol:.6f}",
+                        f"{max_vol - min_vol:.6f}",
+                        f"{np.percentile(predictions, 1):.6f}",
+                        f"{np.percentile(predictions, 5):.6f}",
+                        f"{percentile_25:.6f}",
+                        f"{median_vol:.6f}",
+                        f"{percentile_75:.6f}",
+                        f"{percentile_95:.6f}",
+                        f"{np.percentile(predictions, 99):.6f}",
+                        f"{float(pd.Series(predictions).skew()):.4f}",
+                        f"{float(pd.Series(predictions).kurtosis()):.4f}",
+                        f"{(std_vol/mean_vol):.4f}"
+                    ]
+                }
+                
+                stats_df = pd.DataFrame(stats_data)
+                st.dataframe(stats_df, use_container_width=True, hide_index=True)
                 
                 # Volatility regime analysis
-                low_vol_threshold = np.percentile(predictions, 33)
-                high_vol_threshold = np.percentile(predictions, 67)
+                st.markdown("**Volatility Regime Classification**")
                 
-                low_vol_count = np.sum(predictions <= low_vol_threshold)
-                medium_vol_count = np.sum((predictions > low_vol_threshold) & (predictions <= high_vol_threshold))
-                high_vol_count = np.sum(predictions > high_vol_threshold)
+                low_vol_threshold = percentile_25
+                med_low_threshold = median_vol
+                med_high_threshold = percentile_75
+                high_vol_threshold = percentile_95
+                
+                very_low_count = int(np.sum(predictions <= low_vol_threshold))
+                low_count = int(np.sum((predictions > low_vol_threshold) & (predictions <= med_low_threshold)))
+                medium_count = int(np.sum((predictions > med_low_threshold) & (predictions <= med_high_threshold)))
+                high_count = int(np.sum((predictions > med_high_threshold) & (predictions <= high_vol_threshold)))
+                very_high_count = int(np.sum(predictions > high_vol_threshold))
+                
+                total_count = len(predictions)
                 
                 regime_df = pd.DataFrame({
-                    'Volatility_Regime': ['Low Volatility', 'Medium Volatility', 'High Volatility'],
-                    'Count': [str(low_vol_count), str(medium_vol_count), str(high_vol_count)],
+                    'Volatility_Regime': ['Very Low (≤25th)', 'Low (25th-50th)', 'Medium (50th-75th)', 
+                                         'High (75th-95th)', 'Very High (>95th)'],
+                    'Count': [very_low_count, low_count, medium_count, high_count, very_high_count],
                     'Percentage': [
-                        f"{(low_vol_count/len(predictions)*100):.1f}%",
-                        f"{(medium_vol_count/len(predictions)*100):.1f}%",
-                        f"{(high_vol_count/len(predictions)*100):.1f}%"
+                        f"{(very_low_count/total_count*100):.1f}%",
+                        f"{(low_count/total_count*100):.1f}%",
+                        f"{(medium_count/total_count*100):.1f}%",
+                        f"{(high_count/total_count*100):.1f}%",
+                        f"{(very_high_count/total_count*100):.1f}%"
                     ],
-                    'Threshold': [
+                    'Threshold_Range': [
                         f"≤ {low_vol_threshold:.6f}",
-                        f"{low_vol_threshold:.6f} - {high_vol_threshold:.6f}",
+                        f"{low_vol_threshold:.6f} - {med_low_threshold:.6f}",
+                        f"{med_low_threshold:.6f} - {med_high_threshold:.6f}",
+                        f"{med_high_threshold:.6f} - {high_vol_threshold:.6f}",
                         f"> {high_vol_threshold:.6f}"
                     ]
                 })
@@ -457,45 +635,156 @@ with volatility_tab:
                 st.dataframe(regime_df, use_container_width=True, hide_index=True)
                 
                 # Volatility trend analysis
-                if len(predictions) >= 20:
-                    recent_20 = predictions[-20:]
-                    previous_20 = predictions[-40:-20] if len(predictions) >= 40 else predictions[:-20]
+                st.markdown("**Volatility Trend Analysis**")
+                if len(predictions) >= 40:
+                    recent_40 = predictions[-40:]
+                    recent_20 = recent_40[-20:]
+                    previous_20 = recent_40[:20]
                     
-                    if len(previous_20) > 0:
-                        recent_avg = np.mean(recent_20)
-                        previous_avg = np.mean(previous_20)
-                        volatility_trend = "Increasing" if recent_avg > previous_avg else "Decreasing"
-                        trend_change = ((recent_avg - previous_avg) / previous_avg) * 100
-                        
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Recent Avg (Last 20)", f"{recent_avg:.6f}")
-                        with col2:
-                            st.metric("Previous Avg", f"{previous_avg:.6f}")
-                        with col3:
-                            st.metric("Trend", volatility_trend, f"{trend_change:+.2f}%")
+                    recent_avg = float(np.mean(recent_20))
+                    previous_avg = float(np.mean(previous_20))
+                    volatility_trend = "📈 Increasing" if recent_avg > previous_avg else "📉 Decreasing"
+                    trend_change = ((recent_avg - previous_avg) / previous_avg) * 100
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Recent Avg (Last 20)", f"{recent_avg:.6f}")
+                    with col2:
+                        st.metric("Previous Avg (20 before)", f"{previous_avg:.6f}")
+                    with col3:
+                        st.metric("Trend Direction", volatility_trend)
+                    with col4:
+                        st.metric("Trend Change", f"{trend_change:+.2f}%")
+            
+            with vol_tab5:
+                st.markdown("**Model Performance and Validation Metrics**")
                 
-                # Volatility clustering analysis
-                high_vol_periods = predictions > percentile_95
-                if np.any(high_vol_periods):
-                    # Find consecutive high volatility periods
-                    high_vol_clusters = []
-                    cluster_start = None
+                # Model performance analysis
+                if len(predictions) >= 20:
+                    try:
+                        # Calculate rolling performance metrics
+                        recent_data = st.session_state.data.tail(len(predictions))
+                        actual_returns = recent_data['Close'].pct_change()
+                        actual_volatility = actual_returns.rolling(10).std()
+                        
+                        # Performance metrics where we have actual data
+                        valid_mask = ~pd.isna(actual_volatility)
+                        if valid_mask.sum() > 10:
+                            pred_valid = predictions[valid_mask.values]
+                            actual_valid = actual_volatility[valid_mask].values
+                            
+                            # Calculate comprehensive metrics
+                            mae = float(np.mean(np.abs(pred_valid - actual_valid)))
+                            rmse = float(np.sqrt(np.mean((pred_valid - actual_valid)**2)))
+                            mape = float(np.mean(np.abs((pred_valid - actual_valid) / actual_valid)) * 100)
+                            correlation = float(np.corrcoef(pred_valid, actual_valid)[0,1])
+                            r_squared = float(correlation ** 2)
+                            
+                            # Display performance metrics
+                            col1, col2, col3, col4, col5 = st.columns(5)
+                            with col1:
+                                st.metric("MAE", f"{mae:.6f}")
+                            with col2:
+                                st.metric("RMSE", f"{rmse:.6f}")
+                            with col3:
+                                st.metric("MAPE", f"{mape:.2f}%")
+                            with col4:
+                                st.metric("Correlation", f"{correlation:.4f}")
+                            with col5:
+                                st.metric("R²", f"{r_squared:.4f}")
+                            
+                            # Prediction vs Actual scatter plot
+                            fig_scatter = go.Figure()
+                            fig_scatter.add_trace(go.Scatter(
+                                x=actual_valid,
+                                y=pred_valid,
+                                mode='markers',
+                                name='Predictions vs Actual',
+                                marker=dict(color='blue', size=6, opacity=0.6)
+                            ))
+                            
+                            # Add perfect prediction line
+                            min_val = min(np.min(actual_valid), np.min(pred_valid))
+                            max_val = max(np.max(actual_valid), np.max(pred_valid))
+                            fig_scatter.add_trace(go.Scatter(
+                                x=[min_val, max_val],
+                                y=[min_val, max_val],
+                                mode='lines',
+                                name='Perfect Prediction',
+                                line=dict(color='red', dash='dash')
+                            ))
+                            
+                            fig_scatter.update_layout(
+                                title="Predicted vs Actual Volatility",
+                                xaxis_title="Actual Volatility",
+                                yaxis_title="Predicted Volatility",
+                                height=400
+                            )
+                            st.plotly_chart(fig_scatter, use_container_width=True)
+                            
+                        else:
+                            st.info("Insufficient actual volatility data for validation")
+                            
+                    except Exception as perf_error:
+                        st.warning("Performance metrics calculation not available")
+                
+                # Feature importance (if available from model)
+                st.markdown("**Model Feature Analysis**")
+                try:
+                    model_trainer = st.session_state.model_trainer
+                    feature_importance = model_trainer.get_feature_importance('volatility')
                     
-                    for i, is_high_vol in enumerate(high_vol_periods):
-                        if is_high_vol and cluster_start is None:
-                            cluster_start = i
-                        elif not is_high_vol and cluster_start is not None:
-                            high_vol_clusters.append((cluster_start, i - 1))
-                            cluster_start = None
-                    
-                    if cluster_start is not None:  # Handle case where cluster extends to end
-                        high_vol_clusters.append((cluster_start, len(high_vol_periods) - 1))
-                    
-                    if high_vol_clusters:
-                        avg_cluster_length = np.mean([end - start + 1 for start, end in high_vol_clusters])
-                        st.metric("High Vol Clusters", len(high_vol_clusters))
-                        st.metric("Avg Cluster Length", f"{avg_cluster_length:.1f} periods")
+                    if feature_importance:
+                        # Convert to sorted dataframe
+                        importance_df = pd.DataFrame(
+                            list(feature_importance.items()),
+                            columns=['Feature', 'Importance']
+                        ).sort_values('Importance', ascending=False)
+                        
+                        # Show top features
+                        st.markdown("**Top 15 Most Important Features**")
+                        top_features = importance_df.head(15)
+                        st.dataframe(top_features, use_container_width=True, hide_index=True)
+                        
+                        # Feature importance chart
+                        fig_importance = go.Figure()
+                        fig_importance.add_trace(go.Bar(
+                            x=top_features['Importance'],
+                            y=top_features['Feature'],
+                            orientation='h',
+                            name='Feature Importance',
+                            marker_color='lightcoral'
+                        ))
+                        fig_importance.update_layout(
+                            title="Top Feature Importance",
+                            xaxis_title="Importance Score",
+                            yaxis_title="Features",
+                            height=500
+                        )
+                        st.plotly_chart(fig_importance, use_container_width=True)
+                    else:
+                        st.info("Feature importance data not available")
+                        
+                except Exception as feature_error:
+                    st.info("Feature importance analysis not available")
+                
+                # Model configuration summary
+                st.markdown("**Model Configuration Summary**")
+                config_info = {
+                    'Model Type': 'Ensemble (Volatility Prediction)',
+                    'Task Type': 'Regression',
+                    'Prediction Window': '1 Period Ahead',
+                    'Total Predictions': f"{len(predictions):,}",
+                    'Feature Count': f"{len(st.session_state.features.columns) if st.session_state.features is not None else 'N/A'}",
+                    'Data Points Used': f"{len(st.session_state.data):,}",
+                    'Prediction Date Range': f"{st.session_state.data.index[0].strftime('%Y-%m-%d')} to {st.session_state.data.index[-1].strftime('%Y-%m-%d')}"
+                }
+                
+                config_df = pd.DataFrame(
+                    list(config_info.items()),
+                    columns=['Configuration', 'Value']
+                )
+                st.dataframe(config_df, use_container_width=True, hide_index=True)
 
 # Direction Predictions Tab
 with direction_tab:
