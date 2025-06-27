@@ -239,28 +239,12 @@ with direction_tab:
         if st.button("🚀 Generate Direction Predictions", type="primary", key="dir_predict"):
             try:
                 with st.spinner("Generating direction predictions..."):
-                    # Debug information
-                    st.write("Debug: Checking direction model and features...")
-                    st.write(f"Direction model available: {hasattr(st.session_state, 'direction_trained_models')}")
-                    st.write(f"Direction features available: {hasattr(st.session_state, 'direction_features')}")
-                    
-                    # Get direction model
+                    # Get direction model and features
                     direction_model = st.session_state.direction_trained_models['direction']
-                    st.write(f"Direction model type: {type(direction_model)}")
-                    
-                    # Use direction features for prediction (already prepared during training)
                     direction_features = st.session_state.direction_features.copy()
-                    st.write(f"Direction features shape: {direction_features.shape}")
-                    st.write(f"Direction features columns: {list(direction_features.columns[:10])}...")
-                    
-                    # Features are already prepared, just use them directly
-                    features_prepared = direction_features
-                    st.write(f"Using features for prediction: {features_prepared.shape}")
                     
                     # Generate predictions
-                    predictions, probabilities = direction_model.predict(features_prepared)
-                    st.write(f"Predictions shape: {predictions.shape if hasattr(predictions, 'shape') else len(predictions)}")
-                    st.write(f"Probabilities shape: {probabilities.shape if probabilities is not None else 'None'}")
+                    predictions, probabilities = direction_model.predict(direction_features)
                     
                     # Store predictions
                     st.session_state.direction_predictions = predictions
@@ -271,16 +255,15 @@ with direction_tab:
                     
             except Exception as e:
                 st.error(f"❌ Error generating direction predictions: {str(e)}")
-                import traceback
-                st.error(f"Error details: {traceback.format_exc()}")
+                # Show only the main error message, not full traceback
+                if "Missing required features" in str(e):
+                    st.error("The model was trained with different features. Please retrain the model.")
+                elif "No selected features" in str(e):
+                    st.error("Model training data is incomplete. Please retrain the model.")
+                else:
+                    st.error(f"Technical error: {str(e)[:100]}...")
         
-        # Debug: Show current state
-        st.write("Debug - Current session state:")
-        st.write(f"Has direction_predictions: {hasattr(st.session_state, 'direction_predictions')}")
-        if hasattr(st.session_state, 'direction_predictions'):
-            st.write(f"Direction predictions value: {st.session_state.direction_predictions is not None}")
-            if st.session_state.direction_predictions is not None:
-                st.write(f"Direction predictions length: {len(st.session_state.direction_predictions)}")
+
         
         # Display direction predictions if available
         if hasattr(st.session_state, 'direction_predictions') and st.session_state.direction_predictions is not None:
@@ -338,17 +321,18 @@ with direction_tab:
                 st.metric("Price Change", f"{price_change:.2f}%")
             
             # Create direction prediction chart
-            fig = make_subplots(
-                rows=2, cols=1,
-                shared_xaxes=True,
-                vertical_spacing=0.1,
-                subplot_titles=('Price Chart', 'Direction Predictions'),
-                row_heights=[0.7, 0.3]
-            )
-            
-            # Add price chart with OHLC
-            data_len = min(len(st.session_state.data), len(predictions))
-            recent_data = st.session_state.data.tail(data_len)
+            try:
+                fig = make_subplots(
+                    rows=2, cols=1,
+                    shared_xaxes=True,
+                    vertical_spacing=0.1,
+                    subplot_titles=('Price Chart', 'Direction Predictions'),
+                    row_heights=[0.7, 0.3]
+                )
+                
+                # Add price chart with OHLC
+                data_len = min(len(st.session_state.data), len(predictions))
+                recent_data = st.session_state.data.tail(data_len)
             
             # Add candlestick chart for price
             fig.add_trace(go.Candlestick(
@@ -419,11 +403,20 @@ with direction_tab:
                 showlegend=True
             )
             
-            fig.update_xaxes(title_text="Time", row=2, col=1)
-            fig.update_yaxes(title_text="Price", row=1, col=1)
-            fig.update_yaxes(title_text="Direction", row=2, col=1, range=[-0.1, 1.1])
-            
-            st.plotly_chart(fig, use_container_width=True)
+                fig.update_xaxes(title_text="Time", row=2, col=1)
+                fig.update_yaxes(title_text="Price", row=1, col=1)
+                fig.update_yaxes(title_text="Direction", row=2, col=1, range=[-0.1, 1.1])
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+            except Exception as chart_error:
+                st.error(f"Chart generation error: {str(chart_error)[:100]}...")
+                # Show basic prediction data without chart
+                st.subheader("📊 Basic Prediction Results")
+                bullish_signals = np.sum(predictions == 1)
+                total_signals = len(predictions)
+                st.metric("Bullish Signals", f"{bullish_signals}/{total_signals}")
+                st.metric("Bearish Signals", f"{total_signals - bullish_signals}/{total_signals}")
             
             # Show detailed analysis section
             st.subheader("📊 Detailed Direction Analysis")
