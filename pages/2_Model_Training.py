@@ -79,7 +79,11 @@ with col3:
     n_estimators = st.selectbox("Number of Estimators", [50, 100, 150, 200, 250, 300], index=1,
                                help="Number of trees in the ensemble")
 
-st.info(f"Training: {int(train_split*100)}% | Testing: {int((1-train_split)*100)}%")
+col1, col2 = st.columns(2)
+with col1:
+    st.info(f"Training: {int(train_split*100)}% | Testing: {int((1-train_split)*100)}%")
+with col2:
+    st.info(f"Max Depth: {max_depth} | Estimators: {n_estimators}")
 
 # Model Selection and Training
 st.header("🎯 Model Selection")
@@ -134,9 +138,7 @@ with tab1:
                     training_results = model_trainer.train_selected_models(
                         combined_data, 
                         selected_models,
-                        train_split,
-                        max_depth=max_depth,
-                        n_estimators=n_estimators
+                        train_split
                     )
                     
                     # Store results

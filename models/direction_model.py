@@ -78,7 +78,7 @@ class DirectionModel:
         
         return result_df
 
-    def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:
+    def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8, max_depth: int = 6, n_estimators: int = 100) -> Dict[str, Any]:
         """Train direction prediction model."""
         # Ensure X and y have the same index
         common_index = X.index.intersection(y.index)
@@ -146,11 +146,11 @@ class DirectionModel:
         # Build ensemble model
         random_state = 42
 
-        # XGBoost Classifier
+        # XGBoost Classifier with configurable parameters
         xgb_model = xgb.XGBClassifier(
-            max_depth=8,
+            max_depth=max_depth,
             learning_rate=0.05,
-            n_estimators=200,
+            n_estimators=n_estimators,
             subsample=0.85,
             colsample_bytree=0.85,
             reg_alpha=0.1,

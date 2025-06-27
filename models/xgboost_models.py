@@ -330,7 +330,7 @@ class QuantTradingModels(ModelManager):
         status_text.text("Volatility model trained and saved!")
         return results
 
-    def train_selected_models(self, df: pd.DataFrame, selected_models: list, train_split: float = 0.8) -> Dict[str, Any]:
+    def train_selected_models(self, df: pd.DataFrame, selected_models: list, train_split: float = 0.8, **kwargs) -> Dict[str, Any]:
         """Train volatility model if selected."""
         if 'volatility' not in selected_models:
             st.warning("Only volatility model is available")
