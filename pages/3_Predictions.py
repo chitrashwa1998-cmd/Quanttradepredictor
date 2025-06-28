@@ -1108,102 +1108,586 @@ with direction_tab:
             # Show detailed analysis section
             st.subheader("📊 Detailed Direction Analysis")
             
-            # Create tabbed analysis
-            analysis_tab1, analysis_tab2, analysis_tab3 = st.tabs(["📋 Recent Predictions", "📈 Performance Metrics", "🔍 Signal Quality"])
+            # Create comprehensive tabbed analysis for direction predictions (5 tabs like volatility)
+            dir_tab1, dir_tab2, dir_tab3, dir_tab4, dir_tab5 = st.tabs([
+                "📊 Interactive Chart", 
+                "📋 Detailed Data Table", 
+                "📈 Distribution Analysis", 
+                "🔍 Statistical Analysis",
+                "📈 Performance Metrics"
+            ])
             
-            with analysis_tab1:
-                st.markdown("**Last 30 Direction Predictions**")
+            with dir_tab1:
+                st.markdown("**Enhanced Price vs Direction Predictions Analysis**")
+                
+                # Enhanced direction prediction chart with additional analysis
+                fig = make_subplots(
+                    rows=3, cols=1,
+                    shared_xaxes=True,
+                    vertical_spacing=0.08,
+                    subplot_titles=('Price Chart with Direction Signals', 'Signal Confidence', 'Direction Pattern'),
+                    row_heights=[0.5, 0.3, 0.2]
+                )
+                
+                # Use filtered data for chart
+                data_len = min(len(filtered_data), len(predictions))
+                recent_data = filtered_data.tail(data_len)
+                pred_data = predictions[-data_len:]
+                prob_data = probabilities[-data_len:] if probabilities is not None else None
+                
+                # Add candlestick chart for price
+                fig.add_trace(go.Candlestick(
+                    x=recent_data.index,
+                    open=recent_data['Open'],
+                    high=recent_data['High'],
+                    low=recent_data['Low'],
+                    close=recent_data['Close'],
+                    name='Price',
+                    increasing_line_color='green',
+                    decreasing_line_color='red'
+                ), row=1, col=1)
+                
+                # Add direction arrows on price chart
+                for i, (idx, pred) in enumerate(zip(recent_data.index, pred_data)):
+                    if i % 5 == 0:  # Show every 5th prediction to avoid clutter
+                        if pred == 1:  # Bullish
+                            fig.add_annotation(
+                                x=idx, y=recent_data.iloc[i]['High'],
+                                text="▲", showarrow=False,
+                                font=dict(color="green", size=12),
+                                row=1, col=1
+                            )
+                        else:  # Bearish
+                            fig.add_annotation(
+                                x=idx, y=recent_data.iloc[i]['Low'],
+                                text="▼", showarrow=False,
+                                font=dict(color="red", size=12),
+                                row=1, col=1
+                            )
+                
+                # Add confidence line chart
+                if prob_data is not None:
+                    confidences = np.max(prob_data, axis=1)
+                    fig.add_trace(go.Scatter(
+                        x=recent_data.index,
+                        y=confidences,
+                        mode='lines+markers',
+                        name='Prediction Confidence',
+                        line=dict(color='purple', width=2),
+                        marker=dict(size=4),
+                        hovertemplate='Confidence: %{y:.1%}<extra></extra>'
+                    ), row=2, col=1)
+                    
+                    # Add confidence threshold lines
+                    fig.add_hline(y=0.8, line_dash="dash", line_color="green", 
+                                 annotation_text="High Confidence", row=2, col=1)
+                    fig.add_hline(y=0.6, line_dash="dot", line_color="orange", 
+                                 annotation_text="Medium Confidence", row=2, col=1)
+                
+                # Add direction pattern visualization
+                direction_y = [1 if p == 1 else 0 for p in pred_data]
+                colors = ['green' if p == 1 else 'red' for p in pred_data]
+                
+                fig.add_trace(go.Scatter(
+                    x=recent_data.index,
+                    y=direction_y,
+                    mode='markers',
+                    name='Direction Pattern',
+                    marker=dict(color=colors, size=6),
+                    showlegend=False,
+                    hovertemplate='Direction: %{text}<extra></extra>',
+                    text=['Bullish' if p == 1 else 'Bearish' for p in pred_data]
+                ), row=3, col=1)
+                
+                # Update layout
+                fig.update_layout(
+                    title="Comprehensive Direction Analysis Dashboard",
+                    height=800,
+                    showlegend=True,
+                    hovermode='x unified'
+                )
+                
+                fig.update_xaxes(title_text="Time", row=3, col=1)
+                fig.update_yaxes(title_text="Price", row=1, col=1)
+                fig.update_yaxes(title_text="Confidence", row=2, col=1, range=[0, 1])
+                fig.update_yaxes(title_text="Direction", row=3, col=1, range=[-0.1, 1.1])
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with dir_tab2:
+                st.markdown("**Comprehensive Direction Predictions Data Table**")
                 
                 # Create comprehensive predictions dataframe
-                num_recent = min(30, len(predictions))
+                num_recent = min(150, len(predictions))
                 recent_predictions = predictions[-num_recent:]
                 recent_probs = probabilities[-num_recent:] if probabilities is not None else None
                 recent_prices = filtered_data.tail(num_recent)
                 
-                # Calculate price changes for validation
-                price_changes = recent_prices['Close'].pct_change().shift(-1) * 100  # Next period change
-                actual_direction = (price_changes > 0).astype(int)
-                
-                predictions_df = pd.DataFrame({
-                    'Timestamp': recent_prices.index,
-                    'Open': recent_prices['Open'].round(2),
-                    'High': recent_prices['High'].round(2),
-                    'Low': recent_prices['Low'].round(2),
-                    'Close': recent_prices['Close'].round(2),
-                    'Predicted Direction': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions],
-                    'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs] if recent_probs is not None else ['N/A'] * num_recent,
-                    'Next Change %': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
-                    'Correct': ['✅' if pred == actual and not pd.isna(actual) else '❌' if not pd.isna(actual) else '⏳' 
-                               for pred, actual in zip(recent_predictions, actual_direction)]
-                })
-                
-                st.dataframe(predictions_df, use_container_width=True)
-            
-            with analysis_tab2:
-                st.markdown("**Model Performance Analysis**")
-                
-                # Calculate accuracy where we have actual data
-                valid_comparisons = ~pd.isna(actual_direction[:-1])  # Exclude last as it has no future data
-                if valid_comparisons.sum() > 0:
-                    accuracy = (recent_predictions[:-1][valid_comparisons] == actual_direction[:-1][valid_comparisons]).mean()
-                    st.metric("Prediction Accuracy", f"{accuracy:.1%}")
-                
-                # Confidence distribution
-                if probabilities is not None:
-                    conf_dist = np.max(probabilities, axis=1)
+                try:
+                    # Calculate price changes for validation
+                    price_changes = recent_prices['Close'].pct_change().shift(-1) * 100
+                    actual_direction = (price_changes > 0).astype(int)
                     
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        # Confidence histogram
-                        fig_hist = go.Figure(data=[go.Histogram(x=conf_dist, nbinsx=20, name='Confidence Distribution')])
-                        fig_hist.update_layout(title="Confidence Distribution", xaxis_title="Confidence Level", yaxis_title="Count")
-                        st.plotly_chart(fig_hist, use_container_width=True)
+                    # Calculate prediction accuracy metrics
+                    valid_indices = ~pd.isna(actual_direction)
+                    prediction_correct = (recent_predictions == actual_direction.values) & valid_indices
                     
-                    with col2:
-                        # Confidence vs accuracy
-                        high_conf_mask = conf_dist > 0.7
-                        med_conf_mask = (conf_dist >= 0.5) & (conf_dist <= 0.7)
-                        low_conf_mask = conf_dist < 0.5
-                        
-                        st.metric("High Confidence (>70%)", f"{high_conf_mask.sum()} signals")
-                        st.metric("Medium Confidence (50-70%)", f"{med_conf_mask.sum()} signals")
-                        st.metric("Low Confidence (<50%)", f"{low_conf_mask.sum()} signals")
-            
-            with analysis_tab3:
-                st.markdown("**Signal Quality Assessment**")
-                
-                # Signal strength analysis
-                if probabilities is not None:
-                    conf_scores = np.max(probabilities, axis=1)
+                    # Create signal classification
+                    def classify_signal_strength(pred, conf):
+                        if conf is None:
+                            return "🟡 Medium"
+                        if conf > 0.8:
+                            return "🟢 Very Strong" if pred == 1 else "🔴 Very Strong"
+                        elif conf > 0.7:
+                            return "🟢 Strong" if pred == 1 else "🔴 Strong"
+                        elif conf > 0.6:
+                            return "🟢 Medium" if pred == 1 else "🔴 Medium"
+                        else:
+                            return "🟡 Weak"
                     
-                    # Quality categories
-                    very_high = (conf_scores > 0.8).sum()
-                    high = ((conf_scores > 0.7) & (conf_scores <= 0.8)).sum()
-                    medium = ((conf_scores > 0.6) & (conf_scores <= 0.7)).sum()
-                    low = (conf_scores <= 0.6).sum()
+                    # Create the main predictions dataframe
+                    if hasattr(recent_prices.index, 'strftime'):
+                        date_col = recent_prices.index.strftime('%Y-%m-%d')
+                        time_col = recent_prices.index.strftime('%H:%M:%S')
+                    else:
+                        date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
+                        time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices))]
                     
-                    quality_df = pd.DataFrame({
-                        'Quality Level': ['Very High (>80%)', 'High (70-80%)', 'Medium (60-70%)', 'Low (≤60%)'],
-                        'Signal Count': [very_high, high, medium, low],
-                        'Percentage': [f"{(very_high/len(conf_scores)*100):.1f}%",
-                                     f"{(high/len(conf_scores)*100):.1f}%",
-                                     f"{(medium/len(conf_scores)*100):.1f}%",
-                                     f"{(low/len(conf_scores)*100):.1f}%"]
+                    predictions_df = pd.DataFrame({
+                        'Date': date_col,
+                        'Time': time_col,
+                        'Open': recent_prices['Open'].round(4),
+                        'High': recent_prices['High'].round(4),
+                        'Low': recent_prices['Low'].round(4),
+                        'Close': recent_prices['Close'].round(4),
+                        'Predicted_Dir': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions],
+                        'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs] if recent_probs is not None else ['N/A'] * num_recent,
+                        'Next_Change_%': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
+                        'Actual_Dir': ['🟢 Up' if actual == 1 and not pd.isna(actual) else '🔴 Down' if actual == 0 and not pd.isna(actual) else '⏳ Pending' 
+                                      for actual in actual_direction],
+                        'Correct': ['✅' if correct else '❌' if valid else '⏳' 
+                                   for correct, valid in zip(prediction_correct, valid_indices)],
+                        'Signal_Strength': [classify_signal_strength(pred, np.max(prob) if prob is not None else None) 
+                                          for pred, prob in zip(recent_predictions, recent_probs if recent_probs is not None else [None]*len(recent_predictions))],
+                        'Price_Change': recent_prices['Close'].pct_change().round(4),
+                        'Direction_Streak': pd.Series(recent_predictions).rolling(3).apply(lambda x: (x == x.iloc[-1]).sum()).fillna(1).astype(int)
                     })
                     
-                    st.dataframe(quality_df, use_container_width=True)
+                    # Display the dataframe with enhanced formatting
+                    st.dataframe(
+                        predictions_df, 
+                        use_container_width=True, 
+                        hide_index=True,
+                        column_config={
+                            "Date": st.column_config.DateColumn("Date"),
+                            "Time": st.column_config.TimeColumn("Time"),
+                            "Open": st.column_config.NumberColumn("Open", format="%.4f"),
+                            "High": st.column_config.NumberColumn("High", format="%.4f"),
+                            "Low": st.column_config.NumberColumn("Low", format="%.4f"),
+                            "Close": st.column_config.NumberColumn("Close", format="%.4f"),
+                            "Confidence": st.column_config.TextColumn("Confidence"),
+                            "Next_Change_%": st.column_config.TextColumn("Next Δ%"),
+                            "Price_Change": st.column_config.NumberColumn("Price Δ", format="%.4f"),
+                            "Direction_Streak": st.column_config.NumberColumn("Streak", format="%d"),
+                        }
+                    )
                     
-                    # Quality over time
-                    fig_quality = go.Figure()
-                    fig_quality.add_trace(go.Scatter(
-                        x=filtered_data.index,
-                        y=conf_scores[-len(filtered_data):],
-                        mode='lines+markers',
-                        name='Confidence Over Time',
-                        line=dict(color='blue')
-                    ))
-                    fig_quality.update_layout(title="Signal Confidence Over Time", 
-                                            xaxis_title="Time", 
-                                            yaxis_title="Confidence Level",
-                                            yaxis=dict(range=[0, 1]))
-                    st.plotly_chart(fig_quality, use_container_width=True)
+                    # Show summary statistics
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        total_correct = prediction_correct.sum()
+                        total_valid = valid_indices.sum()
+                        accuracy = total_correct / total_valid if total_valid > 0 else 0
+                        st.metric("Prediction Accuracy", f"{accuracy:.1%}")
+                    with col2:
+                        if recent_probs is not None:
+                            avg_confidence = np.mean([np.max(prob) for prob in recent_probs])
+                            st.metric("Avg Confidence", f"{avg_confidence:.1%}")
+                        else:
+                            st.metric("Avg Confidence", "N/A")
+                    with col3:
+                        bullish_correct = prediction_correct[recent_predictions == 1].sum()
+                        bullish_total = (recent_predictions == 1).sum()
+                        bullish_acc = bullish_correct / bullish_total if bullish_total > 0 else 0
+                        st.metric("Bullish Accuracy", f"{bullish_acc:.1%}")
+                    with col4:
+                        bearish_correct = prediction_correct[recent_predictions == 0].sum()
+                        bearish_total = (recent_predictions == 0).sum()
+                        bearish_acc = bearish_correct / bearish_total if bearish_total > 0 else 0
+                        st.metric("Bearish Accuracy", f"{bearish_acc:.1%}")
+                    
+                except Exception as df_error:
+                    st.warning("Creating simplified data table due to data processing issue")
+                    # Fallback simplified table
+                    if hasattr(recent_prices.index, 'strftime'):
+                        date_col = recent_prices.index.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
+                    
+                    simple_df = pd.DataFrame({
+                        'Date': date_col,
+                        'Close_Price': recent_prices['Close'].round(4),
+                        'Predicted_Direction': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions],
+                        'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs] if recent_probs is not None else ['N/A'] * num_recent,
+                        'Signal_Rank': pd.qcut(recent_predictions, 2, labels=['Bearish', 'Bullish'])
+                    })
+                    st.dataframe(simple_df, use_container_width=True, hide_index=True)
+                
+                # Enhanced download options
+                col1, col2 = st.columns(2)
+                with col1:
+                    try:
+                        csv_data = predictions_df.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download Full Data CSV",
+                            data=csv_data,
+                            file_name=f"direction_predictions_full_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+                    except:
+                        st.info("Full download not available")
+                
+                with col2:
+                    # Simple summary download
+                    summary_df = pd.DataFrame({
+                        'Timestamp': recent_prices.index,
+                        'Predicted_Direction': recent_predictions,
+                        'Direction_Label': ['Bullish' if p == 1 else 'Bearish' for p in recent_predictions],
+                        'Confidence': [np.max(prob) if prob is not None else 0.5 for prob in recent_probs] if recent_probs is not None else [0.5] * len(recent_predictions)
+                    })
+                    summary_csv = summary_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Summary CSV",
+                        data=summary_csv,
+                        file_name=f"direction_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
+            
+            with dir_tab3:
+                st.markdown("**Direction Distribution and Pattern Analysis**")
+                
+                # Enhanced distribution analysis with multiple charts
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Direction distribution pie chart
+                    bullish_count = (predictions == 1).sum()
+                    bearish_count = (predictions == 0).sum()
+                    
+                    fig_pie = go.Figure(data=[go.Pie(
+                        labels=['Bullish', 'Bearish'],
+                        values=[bullish_count, bearish_count],
+                        marker_colors=['green', 'red'],
+                        textinfo='label+percent+value'
+                    )])
+                    fig_pie.update_layout(
+                        title="Direction Distribution",
+                        height=400
+                    )
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                
+                with col2:
+                    # Confidence distribution if available
+                    if probabilities is not None:
+                        conf_scores = np.max(probabilities, axis=1)
+                        fig_conf = go.Figure()
+                        fig_conf.add_trace(go.Histogram(
+                            x=conf_scores,
+                            nbinsx=30,
+                            name='Confidence Distribution',
+                            marker_color='lightblue',
+                            opacity=0.7
+                        ))
+                        fig_conf.update_layout(
+                            title="Confidence Score Distribution",
+                            xaxis_title="Confidence Level",
+                            yaxis_title="Frequency",
+                            height=400
+                        )
+                        st.plotly_chart(fig_conf, use_container_width=True)
+                    else:
+                        st.info("Confidence distribution not available (no probabilities)")
+                
+                # Direction patterns over time
+                st.markdown("**Direction Patterns Over Time**")
+                
+                # Create rolling direction analysis
+                direction_series = pd.Series(predictions, index=filtered_data.index[-len(predictions):])
+                rolling_bullish = direction_series.rolling(20).mean()
+                
+                fig_pattern = go.Figure()
+                fig_pattern.add_trace(go.Scatter(
+                    x=direction_series.index,
+                    y=rolling_bullish,
+                    mode='lines',
+                    name='20-Period Bullish Ratio',
+                    line=dict(color='blue', width=2)
+                ))
+                
+                # Add horizontal reference lines
+                fig_pattern.add_hline(y=0.7, line_dash="dash", line_color="green", 
+                                     annotation_text="Strong Bullish")
+                fig_pattern.add_hline(y=0.5, line_dash="solid", line_color="gray", 
+                                     annotation_text="Neutral")
+                fig_pattern.add_hline(y=0.3, line_dash="dash", line_color="red", 
+                                     annotation_text="Strong Bearish")
+                
+                fig_pattern.update_layout(
+                    title="Direction Bias Over Time (20-Period Rolling Average)",
+                    xaxis_title="Time",
+                    yaxis_title="Bullish Ratio",
+                    height=400,
+                    yaxis=dict(range=[0, 1])
+                )
+                st.plotly_chart(fig_pattern, use_container_width=True)
+                
+                # Direction streaks analysis
+                st.markdown("**Direction Streaks Analysis**")
+                
+                # Calculate consecutive direction streaks
+                direction_changes = np.diff(predictions, prepend=predictions[0])
+                streak_lengths = []
+                current_streak = 1
+                
+                for change in direction_changes[1:]:
+                    if change == 0:
+                        current_streak += 1
+                    else:
+                        streak_lengths.append(current_streak)
+                        current_streak = 1
+                streak_lengths.append(current_streak)
+                
+                if len(streak_lengths) > 0:
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Max Streak Length", f"{max(streak_lengths)}")
+                    with col2:
+                        st.metric("Avg Streak Length", f"{np.mean(streak_lengths):.1f}")
+                    with col3:
+                        st.metric("Total Direction Changes", f"{len(streak_lengths)}")
+            
+            with dir_tab4:
+                st.markdown("**Advanced Statistical Analysis**")
+                
+                # Comprehensive statistics table
+                bullish_pct = (predictions == 1).mean() * 100
+                bearish_pct = (predictions == 0).mean() * 100
+                
+                if probabilities is not None:
+                    conf_scores = np.max(probabilities, axis=1)
+                    avg_conf = np.mean(conf_scores)
+                    std_conf = np.std(conf_scores)
+                    min_conf = np.min(conf_scores)
+                    max_conf = np.max(conf_scores)
+                    median_conf = np.median(conf_scores)
+                else:
+                    avg_conf = std_conf = min_conf = max_conf = median_conf = 0
+                
+                stats_data = {
+                    'Statistic': [
+                        'Total Predictions', 'Bullish Signals', 'Bearish Signals', 'Bullish %', 'Bearish %',
+                        'Avg Confidence', 'Std Confidence', 'Min Confidence', 'Max Confidence', 'Median Confidence',
+                        'High Confidence (>80%)', 'Medium Confidence (60-80%)', 'Low Confidence (<60%)'
+                    ],
+                    'Value': [
+                        f"{len(predictions):,}",
+                        f"{(predictions == 1).sum():,}",
+                        f"{(predictions == 0).sum():,}",
+                        f"{bullish_pct:.1f}%",
+                        f"{bearish_pct:.1f}%",
+                        f"{avg_conf:.3f}" if probabilities is not None else "N/A",
+                        f"{std_conf:.3f}" if probabilities is not None else "N/A",
+                        f"{min_conf:.3f}" if probabilities is not None else "N/A",
+                        f"{max_conf:.3f}" if probabilities is not None else "N/A",
+                        f"{median_conf:.3f}" if probabilities is not None else "N/A",
+                        f"{(conf_scores > 0.8).sum():,}" if probabilities is not None else "N/A",
+                        f"{((conf_scores >= 0.6) & (conf_scores <= 0.8)).sum():,}" if probabilities is not None else "N/A",
+                        f"{(conf_scores < 0.6).sum():,}" if probabilities is not None else "N/A"
+                    ]
+                }
+                
+                stats_df = pd.DataFrame(stats_data)
+                st.dataframe(stats_df, use_container_width=True, hide_index=True)
+                
+                # Direction regime analysis
+                st.markdown("**Direction Regime Classification**")
+                
+                if probabilities is not None:
+                    # Classify signals by confidence and direction
+                    high_conf_bullish = ((conf_scores > 0.7) & (predictions == 1)).sum()
+                    high_conf_bearish = ((conf_scores > 0.7) & (predictions == 0)).sum()
+                    med_conf_bullish = ((conf_scores >= 0.5) & (conf_scores <= 0.7) & (predictions == 1)).sum()
+                    med_conf_bearish = ((conf_scores >= 0.5) & (conf_scores <= 0.7) & (predictions == 0)).sum()
+                    low_conf_bullish = ((conf_scores < 0.5) & (predictions == 1)).sum()
+                    low_conf_bearish = ((conf_scores < 0.5) & (predictions == 0)).sum()
+                    
+                    total_signals = len(predictions)
+                    
+                    regime_df = pd.DataFrame({
+                        'Signal_Category': [
+                            'High Conf Bullish', 'High Conf Bearish', 
+                            'Med Conf Bullish', 'Med Conf Bearish',
+                            'Low Conf Bullish', 'Low Conf Bearish'
+                        ],
+                        'Count': [
+                            high_conf_bullish, high_conf_bearish,
+                            med_conf_bullish, med_conf_bearish,
+                            low_conf_bullish, low_conf_bearish
+                        ],
+                        'Percentage': [
+                            f"{(high_conf_bullish/total_signals*100):.1f}%",
+                            f"{(high_conf_bearish/total_signals*100):.1f}%",
+                            f"{(med_conf_bullish/total_signals*100):.1f}%",
+                            f"{(med_conf_bearish/total_signals*100):.1f}%",
+                            f"{(low_conf_bullish/total_signals*100):.1f}%",
+                            f"{(low_conf_bearish/total_signals*100):.1f}%"
+                        ],
+                        'Confidence_Range': [
+                            ">70%", ">70%", "50-70%", "50-70%", "<50%", "<50%"
+                        ]
+                    })
+                    
+                    st.dataframe(regime_df, use_container_width=True, hide_index=True)
+                
+                # Direction trend analysis
+                st.markdown("**Recent Direction Trend Analysis**")
+                if len(predictions) >= 40:
+                    recent_40 = predictions[-40:]
+                    recent_20 = recent_40[-20:]
+                    previous_20 = recent_40[:20]
+                    
+                    recent_bullish = (recent_20 == 1).mean()
+                    previous_bullish = (previous_20 == 1).mean()
+                    trend_direction = "📈 More Bullish" if recent_bullish > previous_bullish else "📉 More Bearish"
+                    trend_change = (recent_bullish - previous_bullish) * 100
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Recent Bullish % (Last 20)", f"{recent_bullish:.1%}")
+                    with col2:
+                        st.metric("Previous Bullish % (20 before)", f"{previous_bullish:.1%}")
+                    with col3:
+                        st.metric("Trend Direction", trend_direction)
+                    with col4:
+                        st.metric("Trend Change", f"{trend_change:+.1f}%")
+            
+            with dir_tab5:
+                st.markdown("**Model Performance and Validation Metrics**")
+                
+                # Model performance analysis
+                if len(predictions) >= 20:
+                    try:
+                        # Calculate performance metrics where we have actual data
+                        recent_data = filtered_data.tail(len(predictions))
+                        price_changes = recent_data['Close'].pct_change().shift(-1)
+                        actual_directions = (price_changes > 0).astype(int)
+                        
+                        # Performance metrics where we have actual data
+                        valid_mask = ~pd.isna(actual_directions)
+                        if valid_mask.sum() > 10:
+                            pred_valid = predictions[valid_mask.values]
+                            actual_valid = actual_directions[valid_mask].values
+                            
+                            # Calculate comprehensive metrics
+                            accuracy = (pred_valid == actual_valid).mean()
+                            precision_bull = ((pred_valid == 1) & (actual_valid == 1)).sum() / ((pred_valid == 1).sum() + 1e-8)
+                            recall_bull = ((pred_valid == 1) & (actual_valid == 1)).sum() / ((actual_valid == 1).sum() + 1e-8)
+                            precision_bear = ((pred_valid == 0) & (actual_valid == 0)).sum() / ((pred_valid == 0).sum() + 1e-8)
+                            recall_bear = ((pred_valid == 0) & (actual_valid == 0)).sum() / ((actual_valid == 0).sum() + 1e-8)
+                            
+                            # Display performance metrics
+                            col1, col2, col3, col4, col5 = st.columns(5)
+                            with col1:
+                                st.metric("Overall Accuracy", f"{accuracy:.1%}")
+                            with col2:
+                                st.metric("Bullish Precision", f"{precision_bull:.1%}")
+                            with col3:
+                                st.metric("Bullish Recall", f"{recall_bull:.1%}")
+                            with col4:
+                                st.metric("Bearish Precision", f"{precision_bear:.1%}")
+                            with col5:
+                                st.metric("Bearish Recall", f"{recall_bear:.1%}")
+                            
+                            # Confusion matrix visualization
+                            from sklearn.metrics import confusion_matrix
+                            cm = confusion_matrix(actual_valid, pred_valid)
+                            
+                            fig_cm = go.Figure(data=go.Heatmap(
+                                z=cm,
+                                x=['Predicted Bearish', 'Predicted Bullish'],
+                                y=['Actual Bearish', 'Actual Bullish'],
+                                colorscale='Blues',
+                                text=cm,
+                                texttemplate="%{text}",
+                                textfont={"size": 20}
+                            ))
+                            fig_cm.update_layout(
+                                title="Prediction Confusion Matrix",
+                                height=400
+                            )
+                            st.plotly_chart(fig_cm, use_container_width=True)
+                            
+                        else:
+                            st.info("Insufficient actual direction data for validation")
+                            
+                    except Exception as perf_error:
+                        st.warning("Performance metrics calculation not available")
+                
+                # Feature importance (if available from model)
+                st.markdown("**Model Feature Analysis**")
+                try:
+                    if hasattr(st.session_state, 'direction_trained_models') and st.session_state.direction_trained_models:
+                        direction_model_data = st.session_state.direction_trained_models.get('direction', {})
+                        feature_importance = direction_model_data.get('feature_importance', {})
+                        
+                        if feature_importance:
+                            # Convert to sorted dataframe
+                            importance_df = pd.DataFrame(
+                                list(feature_importance.items()),
+                                columns=['Feature', 'Importance']
+                            ).sort_values('Importance', ascending=False)
+                            
+                            # Show top features
+                            st.markdown("**Top 15 Most Important Features**")
+                            top_features = importance_df.head(15)
+                            st.dataframe(top_features, use_container_width=True, hide_index=True)
+                            
+                            # Feature importance chart
+                            fig_importance = go.Figure()
+                            fig_importance.add_trace(go.Bar(
+                                x=top_features['Importance'],
+                                y=top_features['Feature'],
+                                orientation='h',
+                                name='Feature Importance',
+                                marker_color='lightcoral'
+                            ))
+                            fig_importance.update_layout(
+                                title="Top Feature Importance",
+                                xaxis_title="Importance Score",
+                                yaxis_title="Features",
+                                height=500
+                            )
+                            st.plotly_chart(fig_importance, use_container_width=True)
+                        else:
+                            st.info("Feature importance data not available")
+                            
+                except Exception as feature_error:
+                    st.info("Feature importance analysis not available")
+                
+                # Model configuration summary
+                st.markdown("**Model Configuration Summary**")
+                config_info = {
+                    'Model Type': 'Ensemble (Direction Prediction)',
+                    'Task Type': 'Classification',
+                    'Classes': 'Bullish (1), Bearish (0)',
+                    'Total Predictions': f"{len(predictions):,}",
+                    'Feature Count': f"{len(st.session_state.direction_features.columns) if st.session_state.direction_features is not None else 'N/A'}",
+                    'Data Points Used': f"{len(st.session_state.data):,}",
+                    'Prediction Date Range': f"{st.session_state.data.index[0].strftime('%Y-%m-%d')} to {st.session_state.data.index[-1].strftime('%Y-%m-%d')}"
+                }
+                
+                config_df = pd.DataFrame(
+                    list(config_info.items()),
+                    columns=['Configuration', 'Value']
+                )
+                st.dataframe(config_df, use_container_width=True, hide_index=True)
