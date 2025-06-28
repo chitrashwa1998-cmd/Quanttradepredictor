@@ -1287,29 +1287,48 @@ with direction_tab:
                       f"recent_probs_aligned={len(recent_probs_aligned) if recent_probs_aligned is not None else 'None'}, "
                       f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
                 
-                # Calculate derived columns with proper length
-                price_change_col = recent_prices_aligned['Close'].pct_change().round(4)
-                direction_streak_col = pd.Series(recent_predictions_aligned).rolling(3).apply(lambda x: (x == x.iloc[-1]).sum()).fillna(1).astype(int)
-                
-                predictions_df = pd.DataFrame({
+                # Build DataFrame step by step to avoid index mismatch
+                # Convert pandas series to plain lists to avoid index conflicts
+                ohlc_dict = {
                     'Date': date_col,
                     'Time': time_col,
-                    'Open': recent_prices_aligned['Open'].round(4),
-                    'High': recent_prices_aligned['High'].round(4),
-                    'Low': recent_prices_aligned['Low'].round(4),
-                    'Close': recent_prices_aligned['Close'].round(4),
+                    'Open': recent_prices_aligned['Open'].values.round(4).tolist(),
+                    'High': recent_prices_aligned['High'].values.round(4).tolist(),
+                    'Low': recent_prices_aligned['Low'].values.round(4).tolist(),
+                    'Close': recent_prices_aligned['Close'].values.round(4).tolist(),
+                }
+                
+                # Convert all other arrays to simple lists
+                pred_dict = {
                     'Predicted_Dir': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions_aligned],
-                    'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs_aligned] if recent_probs_aligned is not None else ['N/A'] * actual_len,
+                    'Confidence': ([f"{np.max(prob):.1f}%" for prob in recent_probs_aligned] 
+                                  if recent_probs_aligned is not None else ['N/A'] * actual_len),
                     'Next_Change_%': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
-                    'Actual_Dir': ['🟢 Up' if actual == 1 and not pd.isna(actual) else '🔴 Down' if actual == 0 and not pd.isna(actual) else '⏳ Pending' 
-                                  for actual in actual_direction],
+                    'Actual_Dir': ['🟢 Up' if actual == 1 and not pd.isna(actual) 
+                                  else '🔴 Down' if actual == 0 and not pd.isna(actual) 
+                                  else '⏳ Pending' for actual in actual_direction],
                     'Correct': ['✅' if correct else '❌' if valid else '⏳' 
                                for correct, valid in zip(prediction_correct, valid_indices)],
-                    'Signal_Strength': [classify_signal_strength(pred, np.max(prob) if prob is not None else None) 
-                                      for pred, prob in zip(recent_predictions_aligned, recent_probs_aligned if recent_probs_aligned is not None else [None]*len(recent_predictions_aligned))],
-                    'Price_Change': price_change_col,
-                    'Direction_Streak': direction_streak_col
-                })
+                }
+                
+                # Add signal strength and derived columns
+                signal_strength = [classify_signal_strength(pred, np.max(prob) if prob is not None else None) 
+                                  for pred, prob in zip(recent_predictions_aligned, 
+                                                       recent_probs_aligned if recent_probs_aligned is not None 
+                                                       else [None]*len(recent_predictions_aligned))]
+                
+                price_change_list = recent_prices_aligned['Close'].pct_change().round(4).fillna(0).tolist()
+                direction_streak_list = (pd.Series(recent_predictions_aligned)
+                                       .rolling(3).apply(lambda x: (x == x.iloc[-1]).sum())
+                                       .fillna(1).astype(int).tolist())
+                
+                # Combine all dictionaries
+                all_data = {**ohlc_dict, **pred_dict, 
+                           'Signal_Strength': signal_strength,
+                           'Price_Change': price_change_list,
+                           'Direction_Streak': direction_streak_list}
+                
+                predictions_df = pd.DataFrame(all_data)
                 
                 # Display the dataframe with enhanced formatting
                 st.dataframe(
