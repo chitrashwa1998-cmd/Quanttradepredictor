@@ -167,11 +167,28 @@ with volatility_tab:
                         st.error("❌ Model object not found in volatility model data")
                         st.stop()
                     
-                    # Use volatility features for prediction
-                    data_for_prediction = st.session_state.features.copy()
+                    # Apply time filter to features for prediction
+                    features_for_prediction = st.session_state.features.copy()
+                    
+                    # Apply volatility filter to prevent system hang
+                    if vol_filter == "Last 30 days":
+                        cutoff_date = features_for_prediction.index.max() - pd.Timedelta(days=30)
+                    elif vol_filter == "Last 90 days":
+                        cutoff_date = features_for_prediction.index.max() - pd.Timedelta(days=90)
+                    elif vol_filter == "Last 6 months":
+                        cutoff_date = features_for_prediction.index.max() - pd.Timedelta(days=180)
+                    elif vol_filter == "Last year":
+                        cutoff_date = features_for_prediction.index.max() - pd.Timedelta(days=365)
+                    else:  # All data
+                        cutoff_date = features_for_prediction.index.min()
+                    
+                    # Filter features based on selected time period
+                    features_filtered = features_for_prediction[features_for_prediction.index >= cutoff_date]
+                    
+                    st.info(f"Processing {len(features_filtered)} data points for volatility predictions ({vol_filter})")
                     
                     # Generate predictions using the model manager
-                    predictions, _ = model_trainer.predict('volatility', data_for_prediction)
+                    predictions, _ = model_trainer.predict('volatility', features_filtered)
                     
                     # Store predictions
                     st.session_state.volatility_predictions = predictions
@@ -371,9 +388,19 @@ with volatility_tab:
                             return "🔵 Very Low"
                     
                     # Create the main predictions dataframe with proper data types
+                    # Handle different index types (datetime vs range)
+                    if hasattr(recent_prices.index, 'strftime'):
+                        # DateTime index
+                        date_col = recent_prices.index.strftime('%Y-%m-%d')
+                        time_col = recent_prices.index.strftime('%H:%M:%S')
+                    else:
+                        # Range index or other - create sequential dates
+                        date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
+                        time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices))]
+                    
                     predictions_df = pd.DataFrame({
-                        'Date': recent_prices.index.strftime('%Y-%m-%d'),
-                        'Time': recent_prices.index.strftime('%H:%M:%S'),
+                        'Date': date_col,
+                        'Time': time_col,
                         'Open': recent_prices['Open'].round(4),
                         'High': recent_prices['High'].round(4),
                         'Low': recent_prices['Low'].round(4),
@@ -426,8 +453,14 @@ with volatility_tab:
                 except Exception as df_error:
                     st.warning("Creating simplified data table due to data processing issue")
                     # Fallback simplified table
+                    # Handle different index types safely
+                    if hasattr(recent_prices.index, 'strftime'):
+                        date_col = recent_prices.index.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
+                    
                     simple_df = pd.DataFrame({
-                        'Date': recent_prices.index.strftime('%Y-%m-%d %H:%M:%S'),
+                        'Date': date_col,
                         'Close_Price': recent_prices['Close'].round(4),
                         'Predicted_Volatility': recent_predictions.round(6),
                         'Volatility_Level': [classify_volatility(pred) for pred in recent_predictions],
