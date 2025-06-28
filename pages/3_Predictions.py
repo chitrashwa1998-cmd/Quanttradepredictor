@@ -365,13 +365,9 @@ with volatility_tab:
                 recent_prices = st.session_state.data.tail(num_recent).copy()
                 
                 try:
-                    # Calculate actual volatility for comparison - use realized volatility of each candle
+                    # Calculate actual volatility for comparison
                     actual_returns = recent_prices['Close'].pct_change()
-                    # Use the actual returns of each candle as realized volatility proxy
-                    actual_volatility = actual_returns.abs()  # Absolute returns as realized volatility
-                    
-                    # Alternative: Use a shorter rolling window to approximate realized volatility
-                    # actual_volatility = actual_returns.rolling(3, min_periods=1).std()
+                    actual_volatility = actual_returns.rolling(10).std().shift(-1)
                     
                     # Calculate prediction accuracy metrics
                     valid_indices = ~pd.isna(actual_volatility)
