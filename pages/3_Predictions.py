@@ -1223,115 +1223,107 @@ with direction_tab:
                 recent_probs = probabilities[-num_recent:] if probabilities is not None else None
                 recent_prices = filtered_data.tail(num_recent)
                 
-                try:
-                    # Calculate price changes for validation
-                    price_changes = recent_prices['Close'].pct_change().shift(-1) * 100
-                    actual_direction = (price_changes > 0).astype(int)
-                    
-                    # Calculate prediction accuracy metrics
-                    valid_indices = ~pd.isna(actual_direction)
-                    prediction_correct = (recent_predictions == actual_direction.values) & valid_indices
-                    
-                    # Create signal classification
-                    def classify_signal_strength(pred, conf):
-                        if conf is None:
-                            return "🟡 Medium"
-                        if conf > 0.8:
-                            return "🟢 Very Strong" if pred == 1 else "🔴 Very Strong"
-                        elif conf > 0.7:
-                            return "🟢 Strong" if pred == 1 else "🔴 Strong"
-                        elif conf > 0.6:
-                            return "🟢 Medium" if pred == 1 else "🔴 Medium"
-                        else:
-                            return "🟡 Weak"
-                    
-                    # Create the main predictions dataframe
-                    if hasattr(recent_prices.index, 'strftime'):
-                        date_col = recent_prices.index.strftime('%Y-%m-%d')
-                        time_col = recent_prices.index.strftime('%H:%M:%S')
+                # Ensure data alignment - match lengths
+                data_len = min(len(recent_prices), len(recent_predictions))
+                if len(recent_probs) > 0:
+                    data_len = min(data_len, len(recent_probs))
+                
+                # Trim all arrays to the same length
+                recent_prices_aligned = recent_prices.tail(data_len)
+                recent_predictions_aligned = recent_predictions[-data_len:]
+                recent_probs_aligned = recent_probs[-data_len:] if recent_probs is not None else None
+                
+                # Calculate price changes for validation
+                price_changes = recent_prices_aligned['Close'].pct_change().shift(-1) * 100
+                actual_direction = (price_changes > 0).astype(int)
+                
+                # Calculate prediction accuracy metrics
+                valid_indices = ~pd.isna(actual_direction)
+                prediction_correct = (recent_predictions_aligned == actual_direction.values) & valid_indices
+                
+                # Create signal classification
+                def classify_signal_strength(pred, conf):
+                    if conf is None:
+                        return "🟡 Medium"
+                    if conf > 0.8:
+                        return "🟢 Very Strong" if pred == 1 else "🔴 Very Strong"
+                    elif conf > 0.7:
+                        return "🟢 Strong" if pred == 1 else "🔴 Strong"
+                    elif conf > 0.6:
+                        return "🟢 Medium" if pred == 1 else "🔴 Medium"
                     else:
-                        date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
-                        time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices))]
-                    
-                    predictions_df = pd.DataFrame({
-                        'Date': date_col,
-                        'Time': time_col,
-                        'Open': recent_prices['Open'].round(4),
-                        'High': recent_prices['High'].round(4),
-                        'Low': recent_prices['Low'].round(4),
-                        'Close': recent_prices['Close'].round(4),
-                        'Predicted_Dir': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions],
-                        'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs] if recent_probs is not None else ['N/A'] * num_recent,
-                        'Next_Change_%': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
-                        'Actual_Dir': ['🟢 Up' if actual == 1 and not pd.isna(actual) else '🔴 Down' if actual == 0 and not pd.isna(actual) else '⏳ Pending' 
-                                      for actual in actual_direction],
-                        'Correct': ['✅' if correct else '❌' if valid else '⏳' 
-                                   for correct, valid in zip(prediction_correct, valid_indices)],
-                        'Signal_Strength': [classify_signal_strength(pred, np.max(prob) if prob is not None else None) 
-                                          for pred, prob in zip(recent_predictions, recent_probs if recent_probs is not None else [None]*len(recent_predictions))],
-                        'Price_Change': recent_prices['Close'].pct_change().round(4),
-                        'Direction_Streak': pd.Series(recent_predictions).rolling(3).apply(lambda x: (x == x.iloc[-1]).sum()).fillna(1).astype(int)
-                    })
-                    
-                    # Display the dataframe with enhanced formatting
-                    st.dataframe(
-                        predictions_df, 
-                        use_container_width=True, 
-                        hide_index=True,
-                        column_config={
-                            "Date": st.column_config.DateColumn("Date"),
-                            "Time": st.column_config.TimeColumn("Time"),
-                            "Open": st.column_config.NumberColumn("Open", format="%.4f"),
-                            "High": st.column_config.NumberColumn("High", format="%.4f"),
-                            "Low": st.column_config.NumberColumn("Low", format="%.4f"),
-                            "Close": st.column_config.NumberColumn("Close", format="%.4f"),
-                            "Confidence": st.column_config.TextColumn("Confidence"),
-                            "Next_Change_%": st.column_config.TextColumn("Next Δ%"),
-                            "Price_Change": st.column_config.NumberColumn("Price Δ", format="%.4f"),
-                            "Direction_Streak": st.column_config.NumberColumn("Streak", format="%d"),
-                        }
-                    )
-                    
-                    # Show summary statistics
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        total_correct = prediction_correct.sum()
-                        total_valid = valid_indices.sum()
-                        accuracy = total_correct / total_valid if total_valid > 0 else 0
-                        st.metric("Prediction Accuracy", f"{accuracy:.1%}")
-                    with col2:
-                        if recent_probs is not None:
-                            avg_confidence = np.mean([np.max(prob) for prob in recent_probs])
-                            st.metric("Avg Confidence", f"{avg_confidence:.1%}")
-                        else:
-                            st.metric("Avg Confidence", "N/A")
-                    with col3:
-                        bullish_correct = prediction_correct[recent_predictions == 1].sum()
-                        bullish_total = (recent_predictions == 1).sum()
-                        bullish_acc = bullish_correct / bullish_total if bullish_total > 0 else 0
-                        st.metric("Bullish Accuracy", f"{bullish_acc:.1%}")
-                    with col4:
-                        bearish_correct = prediction_correct[recent_predictions == 0].sum()
-                        bearish_total = (recent_predictions == 0).sum()
-                        bearish_acc = bearish_correct / bearish_total if bearish_total > 0 else 0
-                        st.metric("Bearish Accuracy", f"{bearish_acc:.1%}")
-                    
-                except Exception as df_error:
-                    st.warning("Creating simplified data table due to data processing issue")
-                    # Fallback simplified table
-                    if hasattr(recent_prices.index, 'strftime'):
-                        date_col = recent_prices.index.strftime('%Y-%m-%d %H:%M:%S')
+                        return "🟡 Weak"
+                
+                # Create the main predictions dataframe
+                if hasattr(recent_prices_aligned.index, 'strftime'):
+                    date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
+                    time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
+                else:
+                    date_col = [f"Point_{i+1}" for i in range(len(recent_prices_aligned))]
+                    time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices_aligned))]
+                
+                predictions_df = pd.DataFrame({
+                    'Date': date_col,
+                    'Time': time_col,
+                    'Open': recent_prices_aligned['Open'].round(4),
+                    'High': recent_prices_aligned['High'].round(4),
+                    'Low': recent_prices_aligned['Low'].round(4),
+                    'Close': recent_prices_aligned['Close'].round(4),
+                    'Predicted_Dir': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions_aligned],
+                    'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs_aligned] if recent_probs_aligned is not None else ['N/A'] * data_len,
+                    'Next_Change_%': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
+                    'Actual_Dir': ['🟢 Up' if actual == 1 and not pd.isna(actual) else '🔴 Down' if actual == 0 and not pd.isna(actual) else '⏳ Pending' 
+                                  for actual in actual_direction],
+                    'Correct': ['✅' if correct else '❌' if valid else '⏳' 
+                               for correct, valid in zip(prediction_correct, valid_indices)],
+                    'Signal_Strength': [classify_signal_strength(pred, np.max(prob) if prob is not None else None) 
+                                      for pred, prob in zip(recent_predictions_aligned, recent_probs_aligned if recent_probs_aligned is not None else [None]*len(recent_predictions_aligned))],
+                    'Price_Change': recent_prices_aligned['Close'].pct_change().round(4),
+                    'Direction_Streak': pd.Series(recent_predictions_aligned).rolling(3).apply(lambda x: (x == x.iloc[-1]).sum()).fillna(1).astype(int)
+                })
+                
+                # Display the dataframe with enhanced formatting
+                st.dataframe(
+                    predictions_df, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Date": st.column_config.DateColumn("Date"),
+                        "Time": st.column_config.TimeColumn("Time"),
+                        "Open": st.column_config.NumberColumn("Open", format="%.4f"),
+                        "High": st.column_config.NumberColumn("High", format="%.4f"),
+                        "Low": st.column_config.NumberColumn("Low", format="%.4f"),
+                        "Close": st.column_config.NumberColumn("Close", format="%.4f"),
+                        "Confidence": st.column_config.TextColumn("Confidence"),
+                        "Next_Change_%": st.column_config.TextColumn("Next Δ%"),
+                        "Price_Change": st.column_config.NumberColumn("Price Δ", format="%.4f"),
+                        "Direction_Streak": st.column_config.NumberColumn("Streak", format="%d"),
+                    }
+                )
+                
+                # Show summary statistics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    total_correct = prediction_correct.sum()
+                    total_valid = valid_indices.sum()
+                    accuracy = total_correct / total_valid if total_valid > 0 else 0
+                    st.metric("Prediction Accuracy", f"{accuracy:.1%}")
+                with col2:
+                    if recent_probs_aligned is not None:
+                        avg_confidence = np.mean([np.max(prob) for prob in recent_probs_aligned])
+                        st.metric("Avg Confidence", f"{avg_confidence:.1%}")
                     else:
-                        date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
-                    
-                    simple_df = pd.DataFrame({
-                        'Date': date_col,
-                        'Close_Price': recent_prices['Close'].round(4),
-                        'Predicted_Direction': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions],
-                        'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs] if recent_probs is not None else ['N/A'] * num_recent,
-                        'Signal_Rank': pd.qcut(recent_predictions, 2, labels=['Bearish', 'Bullish'])
-                    })
-                    st.dataframe(simple_df, use_container_width=True, hide_index=True)
+                        st.metric("Avg Confidence", "N/A")
+                with col3:
+                    bullish_correct = prediction_correct[recent_predictions_aligned == 1].sum()
+                    bullish_total = (recent_predictions_aligned == 1).sum()
+                    bullish_acc = bullish_correct / bullish_total if bullish_total > 0 else 0
+                    st.metric("Bullish Accuracy", f"{bullish_acc:.1%}")
+                with col4:
+                    bearish_correct = prediction_correct[recent_predictions_aligned == 0].sum()
+                    bearish_total = (recent_predictions_aligned == 0).sum()
+                    bearish_acc = bearish_correct / bearish_total if bearish_total > 0 else 0
+                    st.metric("Bearish Accuracy", f"{bearish_acc:.1%}")
                 
                 # Enhanced download options
                 col1, col2 = st.columns(2)
