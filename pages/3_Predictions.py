@@ -1270,10 +1270,26 @@ with direction_tab:
                 # Ensure all arrays match the exact same length
                 actual_len = len(recent_prices_aligned)
                 recent_predictions_aligned = recent_predictions_aligned[:actual_len]
+                if recent_probs_aligned is not None:
+                    recent_probs_aligned = recent_probs_aligned[:actual_len]
                 price_changes = price_changes[:actual_len]
                 actual_direction = actual_direction[:actual_len]
                 prediction_correct = prediction_correct[:actual_len]
                 valid_indices = valid_indices[:actual_len]
+                
+                # Ensure date/time columns match the same length
+                date_col = date_col[:actual_len]
+                time_col = time_col[:actual_len]
+                
+                # Debug: Print lengths after alignment
+                print(f"DEBUG FINAL: actual_len={actual_len}, date_col={len(date_col)}, time_col={len(time_col)}, "
+                      f"recent_predictions_aligned={len(recent_predictions_aligned)}, "
+                      f"recent_probs_aligned={len(recent_probs_aligned) if recent_probs_aligned is not None else 'None'}, "
+                      f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
+                
+                # Calculate derived columns with proper length
+                price_change_col = recent_prices_aligned['Close'].pct_change().round(4)
+                direction_streak_col = pd.Series(recent_predictions_aligned).rolling(3).apply(lambda x: (x == x.iloc[-1]).sum()).fillna(1).astype(int)
                 
                 predictions_df = pd.DataFrame({
                     'Date': date_col,
@@ -1283,7 +1299,7 @@ with direction_tab:
                     'Low': recent_prices_aligned['Low'].round(4),
                     'Close': recent_prices_aligned['Close'].round(4),
                     'Predicted_Dir': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions_aligned],
-                    'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs_aligned] if recent_probs_aligned is not None else ['N/A'] * data_len,
+                    'Confidence': [f"{np.max(prob):.1f}%" for prob in recent_probs_aligned] if recent_probs_aligned is not None else ['N/A'] * actual_len,
                     'Next_Change_%': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
                     'Actual_Dir': ['🟢 Up' if actual == 1 and not pd.isna(actual) else '🔴 Down' if actual == 0 and not pd.isna(actual) else '⏳ Pending' 
                                   for actual in actual_direction],
@@ -1291,8 +1307,8 @@ with direction_tab:
                                for correct, valid in zip(prediction_correct, valid_indices)],
                     'Signal_Strength': [classify_signal_strength(pred, np.max(prob) if prob is not None else None) 
                                       for pred, prob in zip(recent_predictions_aligned, recent_probs_aligned if recent_probs_aligned is not None else [None]*len(recent_predictions_aligned))],
-                    'Price_Change': recent_prices_aligned['Close'].pct_change().round(4),
-                    'Direction_Streak': pd.Series(recent_predictions_aligned).rolling(3).apply(lambda x: (x == x.iloc[-1]).sum()).fillna(1).astype(int)
+                    'Price_Change': price_change_col,
+                    'Direction_Streak': direction_streak_col
                 })
                 
                 # Display the dataframe with enhanced formatting
