@@ -265,6 +265,29 @@ with col1:
 with col2:
     st.subheader("⚠️ Danger Zone")
     
+    # Session data clearing
+    if st.button("🧹 Clear Session Data", type="secondary", help="Clear all session state variables"):
+        # Clear all session state thoroughly
+        keys_to_clear = [
+            'data', 'features', 'models', 'predictions', 'model_trainer',
+            'trained_models', 'direction_features', 'direction_trained_models',
+            'direction_predictions', 'direction_probabilities', 'volatility_predictions',
+            'auto_recovery_done', 'backtest_results', 'backtest_signals'
+        ]
+        for key in keys_to_clear:
+            if key in st.session_state:
+                del st.session_state[key]
+        
+        # Also clear any other prediction-related keys
+        for key in list(st.session_state.keys()):
+            if any(term in key.lower() for term in ['prediction', 'model', 'feature', 'train']):
+                del st.session_state[key]
+        
+        st.success("✅ Session data cleared successfully!")
+        st.rerun()
+    
+    st.markdown("---")
+    
     # Initialize confirmation state
     if 'confirm_clear_all' not in st.session_state:
         st.session_state.confirm_clear_all = False
@@ -291,9 +314,20 @@ with col2:
                     st.success("✅ All database data cleared successfully")
                     
                     # Clear all session state thoroughly
-                    keys_to_clear = ['data', 'features', 'models', 'predictions', 'model_trainer']
+                    keys_to_clear = [
+                        'data', 'features', 'models', 'predictions', 'model_trainer',
+                        'trained_models', 'direction_features', 'direction_trained_models',
+                        'direction_predictions', 'direction_probabilities', 'volatility_predictions',
+                        'auto_recovery_done', 'backtest_results', 'backtest_signals',
+                        'confirm_clear_all'
+                    ]
                     for key in keys_to_clear:
                         if key in st.session_state:
+                            del st.session_state[key]
+                    
+                    # Also clear any other prediction-related keys
+                    for key in list(st.session_state.keys()):
+                        if any(term in key.lower() for term in ['prediction', 'model', 'feature', 'train']):
                             del st.session_state[key]
                     
                     # Reset models dictionary
