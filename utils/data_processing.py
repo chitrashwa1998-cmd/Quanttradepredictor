@@ -72,6 +72,14 @@ class DataProcessor:
     def load_and_process_data(uploaded_file) -> Tuple[pd.DataFrame, str]:
         """Load and process uploaded OHLC data."""
         try:
+            # Validate file object
+            if uploaded_file is None:
+                return None, "No file provided"
+            
+            # Check if file has content
+            if uploaded_file.size == 0:
+                return None, "File is empty"
+            
             # Reset file pointer to beginning
             uploaded_file.seek(0)
             
@@ -86,13 +94,17 @@ class DataProcessor:
                 for sep in separators:
                     try:
                         uploaded_file.seek(0)
-                        df = pd.read_csv(uploaded_file, encoding=encoding, sep=sep)
-                        if len(df.columns) >= 4:  # At least Date, Open, High, Low, Close
+                        df = pd.read_csv(uploaded_file, encoding=encoding, sep=sep, low_memory=False)
+                        if len(df.columns) >= 4 and len(df) > 0:  # At least Date, Open, High, Low, Close and has data
                             successful_config = f"encoding={encoding}, separator='{sep}'"
                             break
-                    except Exception:
+                    except (UnicodeDecodeError, pd.errors.EmptyDataError, pd.errors.ParserError):
                         continue
-                if df is not None and len(df.columns) >= 4:
+                    except Exception as e:
+                        # Log other exceptions for debugging
+                        print(f"Error reading with {encoding}, {sep}: {str(e)}")
+                        continue
+                if df is not None and len(df.columns) >= 4 and len(df) > 0:
                     break
             
             if df is None:

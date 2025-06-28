@@ -58,30 +58,61 @@ with col2:
         st.info("Large datasets will be intelligently sampled (50k rows max)")
 
 if uploaded_file is not None:
-    # Display file info
-    st.info(f"**File Info**: {uploaded_file.name} ({uploaded_file.size:,} bytes)")
+    try:
+        # Display file info
+        st.info(f"**File Info**: {uploaded_file.name} ({uploaded_file.size:,} bytes)")
 
-    with st.spinner("Loading and processing data..."):
-        df, message = DataProcessor.load_and_process_data(uploaded_file)
+        # Validate file size (limit to 100MB)
+        if uploaded_file.size > 100 * 1024 * 1024:
+            st.error("❌ File too large. Please upload a file smaller than 100MB.")
+            st.stop()
 
-    if df is not None:
-        st.session_state.data = df
-        st.session_state.features = None  # Reset features when new data is loaded
-        st.session_state.models = {}  # Reset models when new data is loaded
-        st.session_state.predictions = None  # Reset predictions
+        # Validate file type
+        if not uploaded_file.name.lower().endswith('.csv'):
+            st.error("❌ Please upload a CSV file.")
+            st.stop()
 
-        # Automatically save to database
-        from utils.database_adapter import DatabaseAdapter
-        trading_db = DatabaseAdapter()
-        if trading_db.save_ohlc_data(df, "main_dataset", preserve_full_data):
-            if preserve_full_data:
-                st.success(f"✅ {message} & Full dataset saved to database!")
-            else:
-                st.success(f"✅ {message} & Auto-saved to database!")
-        else:
-            st.success(f"✅ {message}")
-            st.warning("⚠️ Data loaded but failed to save to database")
-        st.rerun()
+        with st.spinner("Loading and processing data..."):
+            # Reset file pointer before processing
+            uploaded_file.seek(0)
+            df, message = DataProcessor.load_and_process_data(uploaded_file)
+
+        if df is not None:
+            # Validate dataframe before storing
+            if len(df) == 0:
+                st.error("❌ Uploaded file contains no valid data rows.")
+                st.stop()
+
+            # Clear existing session data properly
+            st.session_state.data = df
+            st.session_state.features = None
+            st.session_state.models = {}
+            st.session_state.predictions = None
+            st.session_state.volatility_predictions = None
+            st.session_state.direction_predictions = None
+            st.session_state.direction_probabilities = None
+
+            # Automatically save to database with error handling
+            try:
+                from utils.database_adapter import DatabaseAdapter
+                trading_db = DatabaseAdapter()
+                
+                if trading_db.save_ohlc_data(df, "main_dataset", preserve_full_data):
+                    if preserve_full_data:
+                        st.success(f"✅ {message} & Full dataset saved to database!")
+                    else:
+                        st.success(f"✅ {message} & Auto-saved to database!")
+                else:
+                    st.success(f"✅ {message}")
+                    st.warning("⚠️ Data loaded but failed to save to database")
+            except Exception as db_error:
+                st.success(f"✅ {message}")
+                st.warning(f"⚠️ Database save failed: {str(db_error)}")
+            
+            st.rerun()
+    except Exception as upload_error:
+        st.error(f"❌ Upload failed: {str(upload_error)}")
+        st.error("Please check your file format and try again.")
 
         # Manual save to database
         st.subheader("💾 Save to Database")
