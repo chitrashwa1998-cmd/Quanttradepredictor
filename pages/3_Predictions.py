@@ -1225,7 +1225,7 @@ with direction_tab:
                 
                 # Ensure data alignment - match lengths
                 data_len = min(len(recent_prices), len(recent_predictions))
-                if len(recent_probs) > 0:
+                if recent_probs is not None and len(recent_probs) > 0:
                     data_len = min(data_len, len(recent_probs))
                 
                 # Trim all arrays to the same length
@@ -1261,6 +1261,19 @@ with direction_tab:
                 else:
                     date_col = [f"Point_{i+1}" for i in range(len(recent_prices_aligned))]
                     time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices_aligned))]
+                
+                # Debug: ensure all arrays have the same length
+                print(f"DEBUG: data_len={data_len}, recent_prices_aligned={len(recent_prices_aligned)}, "
+                      f"recent_predictions_aligned={len(recent_predictions_aligned)}, "
+                      f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
+                
+                # Ensure all arrays match the exact same length
+                actual_len = len(recent_prices_aligned)
+                recent_predictions_aligned = recent_predictions_aligned[:actual_len]
+                price_changes = price_changes[:actual_len]
+                actual_direction = actual_direction[:actual_len]
+                prediction_correct = prediction_correct[:actual_len]
+                valid_indices = valid_indices[:actual_len]
                 
                 predictions_df = pd.DataFrame({
                     'Date': date_col,
