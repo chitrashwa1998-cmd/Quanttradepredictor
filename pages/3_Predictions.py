@@ -1218,9 +1218,10 @@ with direction_tab:
                 st.markdown("**Comprehensive Direction Predictions Data Table**")
                 
                 # Create comprehensive predictions dataframe
-                num_recent = min(150, len(predictions))
-                recent_predictions = predictions[-num_recent:]
-                recent_probs = probabilities[-num_recent:] if probabilities is not None else None
+                # Use all available data from the selected time filter instead of limiting to 150 rows
+                num_recent = len(predictions)  # Use all predictions from the selected time filter
+                recent_predictions = predictions
+                recent_probs = probabilities if probabilities is not None else None
                 recent_prices = filtered_data.tail(num_recent)
                 
                 # Ensure data alignment - match lengths
