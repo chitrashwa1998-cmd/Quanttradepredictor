@@ -3,7 +3,7 @@ import numpy as np
 
 def add_lagged_direction_features(df: pd.DataFrame, ema=None) -> pd.DataFrame:
     df = df.copy()
-    
+
     # Determine column names (handle both uppercase and lowercase)
     close_col = 'Close' if 'Close' in df.columns else 'close'
     open_col = 'Open' if 'Open' in df.columns else 'open'
@@ -35,9 +35,9 @@ def add_lagged_direction_features(df: pd.DataFrame, ema=None) -> pd.DataFrame:
     df['rolling_high_10'] = df[high_col].rolling(10).max()
     df['rolling_low_10'] = df[low_col].rolling(10).min()
 
-    # EMA diff lagged - use EMA_20 if available, otherwise create simple moving average
-    if 'ema_20' in df.columns:
-        df['ema_diff_lagged_1'] = (df[close_col] - df['ema_20']).shift(1)
+    # EMA diff lagged - use EMA_8 if available, otherwise create simple moving average
+    if 'ema_8' in df.columns:
+        df['ema_diff_lagged_1'] = (df[close_col] - df['ema_8']).shift(1)
     elif ema is not None:
         df['ema_diff_lagged_1'] = (df[close_col] - ema).shift(1)
     else:
@@ -47,5 +47,11 @@ def add_lagged_direction_features(df: pd.DataFrame, ema=None) -> pd.DataFrame:
 
     # Candle pattern shifted — placeholder (you can plug in real pattern detector)
     df['candle_pattern_shifted'] = 0  # set actual logic later if needed
+    # Price momentum - enhanced for scalping
+    df['momentum_1'] = df[close_col] - df[close_col].shift(1)
+    df['momentum_2'] = df[close_col] - df[close_col].shift(2)
+    df['momentum_3'] = df[close_col] - df[close_col].shift(3)
+    df['momentum_5'] = df[close_col] - df[close_col].shift(5)
+    df['momentum_acceleration'] = df['momentum_3'] - df['momentum_5']
 
     return df
