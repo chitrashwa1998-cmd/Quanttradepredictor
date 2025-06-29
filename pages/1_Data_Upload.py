@@ -62,9 +62,10 @@ if uploaded_file is not None:
         # Display file info
         st.info(f"**File Info**: {uploaded_file.name} ({uploaded_file.size:,} bytes)")
 
-        # Validate file size (limit to 100MB)
-        if uploaded_file.size > 100 * 1024 * 1024:
-            st.error("❌ File too large. Please upload a file smaller than 100MB.")
+        # Validate file size (limit to 50MB to prevent memory issues)
+        if uploaded_file.size > 50 * 1024 * 1024:
+            st.error("❌ File too large. Please upload a file smaller than 50MB.")
+            st.error("💡 **Tip**: For large datasets, try splitting your data into smaller chunks or use data sampling.")
             st.stop()
 
         # Validate file type
@@ -72,10 +73,31 @@ if uploaded_file is not None:
             st.error("❌ Please upload a CSV file.")
             st.stop()
 
+        # Additional validation for empty files
+        if uploaded_file.size == 0:
+            st.error("❌ The uploaded file is empty.")
+            st.stop()
+
+        # Check if file is too small (likely corrupted)
+        if uploaded_file.size < 100:
+            st.error("❌ File is too small. Please check if the file is corrupted.")
+            st.stop()
+
         with st.spinner("Loading and processing data..."):
             # Reset file pointer before processing
             uploaded_file.seek(0)
-            df, message = DataProcessor.load_and_process_data(uploaded_file)
+            
+            # Add try-catch specifically for file processing
+            try:
+                df, message = DataProcessor.load_and_process_data(uploaded_file)
+            except Exception as processing_error:
+                st.error(f"❌ Error processing file: {str(processing_error)}")
+                st.error("💡 **Common fixes:**")
+                st.error("• Ensure your CSV uses comma separators")
+                st.error("• Check that your file encoding is UTF-8")
+                st.error("• Verify column names include Date, Open, High, Low, Close")
+                st.error("• Remove any special characters from the file")
+                st.stop()
 
         if df is not None:
             # Validate dataframe before storing

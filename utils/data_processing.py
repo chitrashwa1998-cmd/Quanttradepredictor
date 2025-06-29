@@ -80,8 +80,29 @@ class DataProcessor:
             if uploaded_file.size == 0:
                 return None, "File is empty"
             
+            # Check file size limit (25MB for processing)
+            if uploaded_file.size > 25 * 1024 * 1024:
+                return None, "File too large for processing. Please use a smaller file or contact support."
+            
             # Reset file pointer to beginning
             uploaded_file.seek(0)
+            
+            # Validate file content by reading first few bytes
+            try:
+                first_bytes = uploaded_file.read(1024)
+                uploaded_file.seek(0)
+                
+                # Check if file contains readable content
+                if not first_bytes:
+                    return None, "File appears to be empty or corrupted"
+                
+                # Basic CSV validation - should contain commas or semicolons
+                first_line = first_bytes.decode('utf-8', errors='ignore').split('\n')[0]
+                if ',' not in first_line and ';' not in first_line and '\t' not in first_line:
+                    return None, "File doesn't appear to be a valid CSV format"
+                    
+            except Exception as validation_error:
+                return None, f"File validation failed: {str(validation_error)}"
             
             # Try different encodings and separators
             encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
