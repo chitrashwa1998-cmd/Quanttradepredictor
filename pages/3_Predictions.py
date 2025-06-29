@@ -40,7 +40,7 @@ if st.session_state.data is None:
     try:
         from utils.database_adapter import get_trading_database
         db = get_trading_database()
-
+        
         # Try to load data from database
         recovered_data = db.recover_data()
         if recovered_data is not None and not recovered_data.empty:
@@ -59,14 +59,14 @@ volatility_tab, direction_tab = st.tabs(["📊 Volatility Predictions", "🎯 Di
 # Volatility Predictions Tab
 with volatility_tab:
     st.header("📊 Volatility Predictions")
-
+    
     # Check if volatility features are available
     if st.session_state.features is None:
         st.error("❌ No volatility features calculated. Please calculate technical indicators first.")
     else:
         # Check if volatility model is available in database or session state
         model_available = False
-
+        
         # Check session state first
         if (hasattr(st.session_state, 'trained_models') and 
             st.session_state.trained_models and 
@@ -78,7 +78,7 @@ with volatility_tab:
             try:
                 from utils.database_adapter import get_trading_database
                 db = get_trading_database()
-
+                
                 # Check for trained model objects first (primary storage)
                 trained_models = db.load_trained_models()
                 if trained_models and 'volatility' in trained_models:
@@ -93,15 +93,15 @@ with volatility_tab:
             except Exception as e:
                 st.warning(f"Database check failed: {str(e)}")
                 pass
-
+        
         if not model_available:
             st.error("❌ Volatility model not trained. Please train the model first.")
         else:
             # Volatility prediction controls
             st.subheader("🎯 Prediction Controls")
-
+        
         col1, col2 = st.columns(2)
-
+        
         with col1:
             vol_filter = st.selectbox(
                 "📅 Time Period Filter",
@@ -110,10 +110,10 @@ with volatility_tab:
                 help="Select the time period for volatility predictions",
                 key="vol_filter"
             )
-
+        
         with col2:
             st.metric("Volatility Model Status", "✅ Ready", help="Volatility model is trained and ready")
-
+        
         # Generate volatility predictions button
         if st.button("🚀 Generate Volatility Predictions", type="primary", key="vol_predict"):
             try:
@@ -123,15 +123,15 @@ with volatility_tab:
                         try:
                             from utils.database_adapter import get_trading_database
                             from models.model_manager import ModelManager
-
+                            
                             db = get_trading_database()
-
+                            
                             # Try to load trained model objects first
                             trained_models = db.load_trained_models()
                             if trained_models and 'volatility' in trained_models:
                                 # Initialize model manager and set the loaded model
                                 model_trainer = ModelManager()
-
+                                
                                 # Properly structure the model data
                                 volatility_model_data = trained_models['volatility']
                                 if 'ensemble' in volatility_model_data:
@@ -144,7 +144,7 @@ with volatility_tab:
                                     }
                                 else:
                                     model_trainer.trained_models['volatility'] = volatility_model_data
-
+                                
                                 st.session_state.model_trainer = model_trainer
                                 st.info("✅ Loaded volatility model from database")
                             else:
@@ -154,22 +154,22 @@ with volatility_tab:
                             st.error(f"❌ Error loading model from database: {str(load_error)}")
                             st.error(f"Debug: {str(load_error)}")
                             st.stop()
-
+                    
                     model_trainer = st.session_state.model_trainer
-
+                    
                     # Verify the model is properly loaded
                     if 'volatility' not in model_trainer.trained_models:
                         st.error("❌ Volatility model not found in trainer")
                         st.stop()
-
+                    
                     volatility_model_data = model_trainer.trained_models['volatility']
                     if 'model' not in volatility_model_data and 'ensemble' not in volatility_model_data:
                         st.error("❌ Model object not found in volatility model data")
                         st.stop()
-
+                    
                     # Apply time filter to features for prediction
                     features_for_prediction = st.session_state.features.copy()
-
+                    
                     # Apply volatility filter to prevent system hang
                     if vol_filter == "Last 30 days":
                         cutoff_date = features_for_prediction.index.max() - pd.Timedelta(days=30)
@@ -181,31 +181,31 @@ with volatility_tab:
                         cutoff_date = features_for_prediction.index.max() - pd.Timedelta(days=365)
                     else:  # All data
                         cutoff_date = features_for_prediction.index.min()
-
+                    
                     # Filter features based on selected time period
                     features_filtered = features_for_prediction[features_for_prediction.index >= cutoff_date]
-
+                    
                     st.info(f"Processing {len(features_filtered)} data points for volatility predictions ({vol_filter})")
-
+                    
                     # Generate predictions using the model manager
                     predictions, _ = model_trainer.predict('volatility', features_filtered)
-
+                    
                     # Store predictions
                     st.session_state.volatility_predictions = predictions
-
+                    
                     st.success("✅ Volatility predictions generated successfully!")
                     st.rerun()
-
+                    
             except Exception as e:
                 st.error(f"❌ Error generating volatility predictions: {str(e)}")
-
+        
         # Display volatility predictions if available
         if hasattr(st.session_state, 'volatility_predictions') and st.session_state.volatility_predictions is not None:
             st.subheader("📈 Volatility Prediction Results")
-
+            
             # Show prediction statistics
             predictions = st.session_state.volatility_predictions
-
+            
             # Calculate key statistics
             mean_vol = float(np.mean(predictions))
             max_vol = float(np.max(predictions))
@@ -215,10 +215,10 @@ with volatility_tab:
             percentile_95 = float(np.percentile(predictions, 95))
             percentile_75 = float(np.percentile(predictions, 75))
             percentile_25 = float(np.percentile(predictions, 25))
-
+            
             # Enhanced statistics with more details
             col1, col2, col3, col4 = st.columns(4)
-
+            
             with col1:
                 st.metric("Avg Volatility", f"{mean_vol:.6f}")
             with col2:
@@ -227,10 +227,10 @@ with volatility_tab:
                 st.metric("Min Volatility", f"{min_vol:.6f}")
             with col4:
                 st.metric("Volatility Range", f"{max_vol - min_vol:.6f}")
-
+            
             # Additional volatility statistics
             col5, col6, col7, col8 = st.columns(4)
-
+            
             with col5:
                 st.metric("Std Dev", f"{std_vol:.6f}")
             with col6:
@@ -240,7 +240,7 @@ with volatility_tab:
             with col8:
                 high_vol_count = int(np.sum(predictions > median_vol * 1.5))
                 st.metric("High Vol Periods", f"{high_vol_count}")
-
+            
             # Create comprehensive tabbed analysis for volatility predictions
             vol_tab1, vol_tab2, vol_tab3, vol_tab4, vol_tab5 = st.tabs([
                 "📊 Interactive Chart", 
@@ -249,10 +249,10 @@ with volatility_tab:
                 "🔍 Statistical Analysis",
                 "📈 Performance Metrics"
             ])
-
+            
             with vol_tab1:
                 st.markdown("**Price vs Predicted Volatility Analysis**")
-
+                
                 # Enhanced volatility prediction chart with multiple visualizations
                 fig = make_subplots(
                     rows=3, cols=1,
@@ -261,12 +261,12 @@ with volatility_tab:
                     subplot_titles=('Price Chart with Volume', 'Predicted Volatility', 'Volatility Regime'),
                     row_heights=[0.5, 0.3, 0.2]
                 )
-
+                
                 # Filter data for display consistency
                 data_len = min(len(st.session_state.data), len(predictions))
                 recent_data = st.session_state.data.tail(data_len)
                 recent_predictions = predictions[-data_len:]
-
+                
                 # Add candlestick chart for price
                 fig.add_trace(go.Candlestick(
                     x=recent_data.index,
@@ -278,7 +278,7 @@ with volatility_tab:
                     increasing_line_color='green',
                     decreasing_line_color='red'
                 ), row=1, col=1)
-
+                
                 # Add volume bars
                 if 'Volume' in recent_data.columns:
                     fig.add_trace(go.Bar(
@@ -289,7 +289,7 @@ with volatility_tab:
                         opacity=0.3,
                         yaxis='y2'
                     ), row=1, col=1)
-
+                
                 # Add volatility predictions with enhanced color coding
                 volatility_colors = []
                 volatility_sizes = []
@@ -306,7 +306,7 @@ with volatility_tab:
                     else:
                         volatility_colors.append('green')  # Low volatility
                         volatility_sizes.append(3)
-
+                
                 fig.add_trace(go.Scatter(
                     x=recent_data.index,
                     y=recent_predictions,
@@ -316,7 +316,7 @@ with volatility_tab:
                     marker=dict(color=volatility_colors, size=volatility_sizes),
                     hovertemplate='Date: %{x}<br>Volatility: %{y:.6f}<extra></extra>'
                 ), row=2, col=1)
-
+                
                 # Add volatility threshold lines
                 fig.add_hline(y=median_vol, line_dash="dash", line_color="blue", 
                              annotation_text="Median", row=2, col=1)
@@ -324,13 +324,13 @@ with volatility_tab:
                              annotation_text="95th %ile", row=2, col=1)
                 fig.add_hline(y=percentile_75, line_dash="dot", line_color="orange", 
                              annotation_text="75th %ile", row=2, col=1)
-
+                
                 # Add volatility regime visualization
                 regime_colors = ['green' if vol <= percentile_25 else 
                                'yellow' if vol <= percentile_75 else 
                                'orange' if vol <= percentile_95 else 'red' 
                                for vol in recent_predictions]
-
+                
                 fig.add_trace(go.Scatter(
                     x=recent_data.index,
                     y=[1] * len(recent_predictions),
@@ -340,7 +340,7 @@ with volatility_tab:
                     showlegend=False,
                     hovertemplate='Regime: %{marker.color}<extra></extra>'
                 ), row=3, col=1)
-
+                
                 # Update layout
                 fig.update_layout(
                     title="Comprehensive Volatility Analysis Dashboard",
@@ -348,32 +348,32 @@ with volatility_tab:
                     showlegend=True,
                     hovermode='x unified'
                 )
-
+                
                 fig.update_xaxes(title_text="Time", row=3, col=1)
                 fig.update_yaxes(title_text="Price", row=1, col=1)
                 fig.update_yaxes(title_text="Volatility", row=2, col=1)
                 fig.update_yaxes(title_text="Regime", row=3, col=1, range=[0.5, 1.5])
-
+                
                 st.plotly_chart(fig, use_container_width=True)
-
+            
             with vol_tab2:
                 st.markdown("**Comprehensive Volatility Predictions Data Table**")
-
+                
                 # Create comprehensive predictions dataframe with proper data types
                 num_recent = min(150, len(predictions))  # Show more predictions
                 recent_predictions = predictions[-num_recent:]
                 recent_prices = st.session_state.data.tail(num_recent).copy()
-
+                
                 try:
                     # Calculate actual volatility for comparison
                     actual_returns = recent_prices['Close'].pct_change()
                     actual_volatility = actual_returns.rolling(10).std().shift(-1)
-
+                    
                     # Calculate prediction accuracy metrics
                     valid_indices = ~pd.isna(actual_volatility)
                     prediction_error = np.abs(recent_predictions - actual_volatility.values)
                     relative_error = (prediction_error / actual_volatility.values) * 100
-
+                    
                     # Create regime classification
                     def classify_volatility(vol):
                         if vol > percentile_95:
@@ -386,7 +386,7 @@ with volatility_tab:
                             return "🟢 Low"
                         else:
                             return "🔵 Very Low"
-
+                    
                     # Create the main predictions dataframe with proper data types
                     # Handle different index types (datetime vs range)
                     if hasattr(recent_prices.index, 'strftime'):
@@ -397,7 +397,7 @@ with volatility_tab:
                         # Range index or other - create sequential dates
                         date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
                         time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices))]
-
+                    
                     predictions_df = pd.DataFrame({
                         'Date': date_col,
                         'Time': time_col,
@@ -413,7 +413,7 @@ with volatility_tab:
                         'Price_Change': recent_prices['Close'].pct_change().round(4),
                         'Vol_Rank': pd.qcut(recent_predictions, 5, labels=['Q1', 'Q2', 'Q3', 'Q4', 'Q5'])
                     })
-
+                    
                     # Display the dataframe with enhanced formatting
                     st.dataframe(
                         predictions_df, 
@@ -433,7 +433,7 @@ with volatility_tab:
                             "Price_Change": st.column_config.NumberColumn("Price Δ", format="%.4f"),
                         }
                     )
-
+                    
                     # Show summary statistics
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
@@ -449,7 +449,7 @@ with volatility_tab:
                     with col4:
                         rmse = np.sqrt(np.nanmean(prediction_error**2))
                         st.metric("RMSE", f"{rmse:.6f}")
-
+                    
                 except Exception as df_error:
                     st.warning("Creating simplified data table due to data processing issue")
                     # Fallback simplified table
@@ -458,7 +458,7 @@ with volatility_tab:
                         date_col = recent_prices.index.strftime('%Y-%m-%d %H:%M:%S')
                     else:
                         date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
-
+                    
                     simple_df = pd.DataFrame({
                         'Date': date_col,
                         'Close_Price': recent_prices['Close'].round(4),
@@ -467,7 +467,7 @@ with volatility_tab:
                         'Vol_Percentile': pd.qcut(recent_predictions, 10, labels=False) + 1
                     })
                     st.dataframe(simple_df, use_container_width=True, hide_index=True)
-
+                
                 # Enhanced download options
                 col1, col2 = st.columns(2)
                 with col1:
@@ -481,7 +481,7 @@ with volatility_tab:
                         )
                     except:
                         st.info("Full download not available")
-
+                
                 with col2:
                     # Simple summary download
                     summary_df = pd.DataFrame({
@@ -496,13 +496,13 @@ with volatility_tab:
                         file_name=f"volatility_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv"
                     )
-
+            
             with vol_tab3:
                 st.markdown("**Volatility Distribution and Pattern Analysis**")
-
+                
                 # Enhanced distribution analysis with multiple charts
                 col1, col2 = st.columns(2)
-
+                
                 with col1:
                     # Volatility histogram with statistical overlays
                     fig_hist = go.Figure()
@@ -514,7 +514,7 @@ with volatility_tab:
                         opacity=0.7,
                         histnorm='probability'
                     ))
-
+                    
                     # Add statistical lines
                     fig_hist.add_vline(x=mean_vol, line_dash="solid", line_color="red", 
                                       annotation_text=f"Mean: {mean_vol:.6f}")
@@ -522,7 +522,7 @@ with volatility_tab:
                                       annotation_text=f"Median: {median_vol:.6f}")
                     fig_hist.add_vline(x=percentile_95, line_dash="dot", line_color="orange", 
                                       annotation_text=f"95th: {percentile_95:.6f}")
-
+                    
                     fig_hist.update_layout(
                         title="Volatility Distribution with Statistics",
                         xaxis_title="Volatility",
@@ -530,7 +530,7 @@ with volatility_tab:
                         height=400
                     )
                     st.plotly_chart(fig_hist, use_container_width=True)
-
+                
                 with col2:
                     # Enhanced box plot with outlier analysis
                     fig_box = go.Figure()
@@ -548,18 +548,18 @@ with volatility_tab:
                         height=400
                     )
                     st.plotly_chart(fig_box, use_container_width=True)
-
+                
                 # Time series decomposition of volatility
                 st.markdown("**Volatility Time Series Analysis**")
-
+                
                 # Volatility over time with trend
                 fig_ts = go.Figure()
-
+                
                 # Add the main volatility line
                 data_len = min(len(st.session_state.data), len(predictions))
                 recent_data = st.session_state.data.tail(data_len)
                 recent_predictions = predictions[-data_len:]
-
+                
                 fig_ts.add_trace(go.Scatter(
                     x=recent_data.index,
                     y=recent_predictions,
@@ -567,7 +567,7 @@ with volatility_tab:
                     name='Predicted Volatility',
                     line=dict(color='blue', width=1)
                 ))
-
+                
                 # Add moving average trend
                 if len(recent_predictions) >= 20:
                     vol_ma = pd.Series(recent_predictions).rolling(20).mean()
@@ -578,7 +578,7 @@ with volatility_tab:
                         name='20-Period MA',
                         line=dict(color='red', width=2)
                     ))
-
+                
                 # Add regime bands
                 fig_ts.add_hline(y=percentile_95, line_dash="dash", line_color="red", 
                                 annotation_text="High Vol Threshold")
@@ -586,7 +586,7 @@ with volatility_tab:
                                 annotation_text="Median")
                 fig_ts.add_hline(y=percentile_25, line_dash="dash", line_color="green", 
                                 annotation_text="Low Vol Threshold")
-
+                
                 fig_ts.update_layout(
                     title="Volatility Time Series with Trend and Regimes",
                     xaxis_title="Time",
@@ -594,10 +594,10 @@ with volatility_tab:
                     height=400
                 )
                 st.plotly_chart(fig_ts, use_container_width=True)
-
+            
             with vol_tab4:
                 st.markdown("**Advanced Statistical Analysis**")
-
+                
                 # Comprehensive statistics table
                 stats_data = {
                     'Statistic': [
@@ -625,26 +625,26 @@ with volatility_tab:
                         f"{(std_vol/mean_vol):.4f}"
                     ]
                 }
-
+                
                 stats_df = pd.DataFrame(stats_data)
                 st.dataframe(stats_df, use_container_width=True, hide_index=True)
-
+                
                 # Volatility regime analysis
                 st.markdown("**Volatility Regime Classification**")
-
+                
                 low_vol_threshold = percentile_25
                 med_low_threshold = median_vol
                 med_high_threshold = percentile_75
                 high_vol_threshold = percentile_95
-
+                
                 very_low_count = int(np.sum(predictions <= low_vol_threshold))
                 low_count = int(np.sum((predictions > low_vol_threshold) & (predictions <= med_low_threshold)))
                 medium_count = int(np.sum((predictions > med_low_threshold) & (predictions <= med_high_threshold)))
                 high_count = int(np.sum((predictions > med_high_threshold) & (predictions <= high_vol_threshold)))
                 very_high_count = int(np.sum(predictions > high_vol_threshold))
-
+                
                 total_count = len(predictions)
-
+                
                 regime_df = pd.DataFrame({
                     'Volatility_Regime': ['Very Low (≤25th)', 'Low (25th-50th)', 'Medium (50th-75th)', 
                                          'High (75th-95th)', 'Very High (>95th)'],
@@ -664,21 +664,21 @@ with volatility_tab:
                         f"> {high_vol_threshold:.6f}"
                     ]
                 })
-
+                
                 st.dataframe(regime_df, use_container_width=True, hide_index=True)
-
+                
                 # Volatility trend analysis
                 st.markdown("**Volatility Trend Analysis**")
                 if len(predictions) >= 40:
                     recent_40 = predictions[-40:]
                     recent_20 = recent_40[-20:]
                     previous_20 = recent_40[:20]
-
+                    
                     recent_avg = float(np.mean(recent_20))
                     previous_avg = float(np.mean(previous_20))
                     volatility_trend = "📈 Increasing" if recent_avg > previous_avg else "📉 Decreasing"
                     trend_change = ((recent_avg - previous_avg) / previous_avg) * 100
-
+                    
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Recent Avg (Last 20)", f"{recent_avg:.6f}")
@@ -688,10 +688,10 @@ with volatility_tab:
                         st.metric("Trend Direction", volatility_trend)
                     with col4:
                         st.metric("Trend Change", f"{trend_change:+.2f}%")
-
+            
             with vol_tab5:
                 st.markdown("**Model Performance and Validation Metrics**")
-
+                
                 # Model performance analysis
                 if len(predictions) >= 20:
                     try:
@@ -699,23 +699,22 @@ with volatility_tab:
                         recent_data = st.session_state.data.tail(len(predictions))
                         actual_returns = recent_data['Close'].pct_change()
                         actual_volatility = actual_returns.rolling(10).std()
-
+                        
                         # Performance metrics where we have actual data
                         valid_mask = ~pd.isna(actual_volatility)
                         if valid_mask.sum() > 10:
                             pred_valid = predictions[valid_mask.values]
                             actual_valid = actual_volatility[valid_mask].values
-
+                            
                             # Calculate comprehensive metrics
                             mae = float(np.mean(np.abs(pred_valid - actual_valid)))
                             rmse = float(np.sqrt(np.mean((pred_valid - actual_valid)**2)))
                             mape = float(np.mean(np.abs((pred_valid - actual_valid) / actual_valid)) * 100)
                             correlation = float(np.corrcoef(pred_valid, actual_valid)[0,1])
                             r_squared = float(correlation ** 2)
-
+                            
                             # Display performance metrics
-                            col1, col2, col3```python
-, col4, col5 = st.columns(5)
+                            col1, col2, col3, col4, col5 = st.columns(5)
                             with col1:
                                 st.metric("MAE", f"{mae:.6f}")
                             with col2:
@@ -726,7 +725,7 @@ with volatility_tab:
                                 st.metric("Correlation", f"{correlation:.4f}")
                             with col5:
                                 st.metric("R²", f"{r_squared:.4f}")
-
+                            
                             # Prediction vs Actual scatter plot
                             fig_scatter = go.Figure()
                             fig_scatter.add_trace(go.Scatter(
@@ -736,7 +735,7 @@ with volatility_tab:
                                 name='Predictions vs Actual',
                                 marker=dict(color='blue', size=6, opacity=0.6)
                             ))
-
+                            
                             # Add perfect prediction line
                             min_val = min(np.min(actual_valid), np.min(pred_valid))
                             max_val = max(np.max(actual_valid), np.max(pred_valid))
@@ -747,7 +746,7 @@ with volatility_tab:
                                 name='Perfect Prediction',
                                 line=dict(color='red', dash='dash')
                             ))
-
+                            
                             fig_scatter.update_layout(
                                 title="Predicted vs Actual Volatility",
                                 xaxis_title="Actual Volatility",
@@ -755,31 +754,31 @@ with volatility_tab:
                                 height=400
                             )
                             st.plotly_chart(fig_scatter, use_container_width=True)
-
+                            
                         else:
                             st.info("Insufficient actual volatility data for validation")
-
+                            
                     except Exception as perf_error:
                         st.warning("Performance metrics calculation not available")
-
+                
                 # Feature importance (if available from model)
                 st.markdown("**Model Feature Analysis**")
                 try:
                     model_trainer = st.session_state.model_trainer
                     feature_importance = model_trainer.get_feature_importance('volatility')
-
+                    
                     if feature_importance:
                         # Convert to sorted dataframe
                         importance_df = pd.DataFrame(
                             list(feature_importance.items()),
                             columns=['Feature', 'Importance']
                         ).sort_values('Importance', ascending=False)
-
+                        
                         # Show top features
                         st.markdown("**Top 15 Most Important Features**")
                         top_features = importance_df.head(15)
                         st.dataframe(top_features, use_container_width=True, hide_index=True)
-
+                        
                         # Feature importance chart
                         fig_importance = go.Figure()
                         fig_importance.add_trace(go.Bar(
@@ -798,10 +797,10 @@ with volatility_tab:
                         st.plotly_chart(fig_importance, use_container_width=True)
                     else:
                         st.info("Feature importance data not available")
-
+                        
                 except Exception as feature_error:
                     st.info("Feature importance analysis not available")
-
+                
                 # Model configuration summary
                 st.markdown("**Model Configuration Summary**")
                 config_info = {
@@ -813,7 +812,7 @@ with volatility_tab:
                     'Data Points Used': f"{len(st.session_state.data):,}",
                     'Prediction Date Range': f"{st.session_state.data.index[0].strftime('%Y-%m-%d')} to {st.session_state.data.index[-1].strftime('%Y-%m-%d')}"
                 }
-
+                
                 config_df = pd.DataFrame(
                     list(config_info.items()),
                     columns=['Configuration', 'Value']
@@ -823,7 +822,7 @@ with volatility_tab:
 # Direction Predictions Tab
 with direction_tab:
     st.header("🎯 Direction Predictions")
-
+    
     # Check if direction features and model are available
     direction_features_available = (hasattr(st.session_state, 'direction_features') and 
                                    st.session_state.direction_features is not None)
@@ -831,7 +830,7 @@ with direction_tab:
                                 st.session_state.direction_trained_models and
                                 'direction' in st.session_state.direction_trained_models and
                                 st.session_state.direction_trained_models['direction'] is not None)
-
+    
     # Show status information
     col1, col2 = st.columns(2)
     with col1:
@@ -839,13 +838,13 @@ with direction_tab:
             st.success("✅ Direction features calculated")
         else:
             st.warning("⚠️ Direction features not calculated")
-
+    
     with col2:
         if direction_model_available:
             st.success("✅ Direction model trained")
         else:
             st.warning("⚠️ Direction model not trained")
-
+    
     # Show instructions if prerequisites are missing
     if not direction_features_available or not direction_model_available:
         st.info("""
@@ -855,9 +854,9 @@ with direction_tab:
         3. Train the direction model
         4. Return here to generate predictions
         """)
+        
 
-
-
+        
         # Show preview of what will be available
         st.subheader("🔮 Preview: Direction Prediction Features")
         st.markdown("""
@@ -870,17 +869,17 @@ with direction_tab:
           - Signal Quality Assessment with strength categories
         - 📋 **Real-time Statistics** including prediction accuracy and confidence levels
         """)
-
+        
         # Show sample chart placeholder
         st.info("💡 **Sample visualization will appear here after model training**")
-
+    
     # Show prediction interface if everything is available
     if direction_features_available and direction_model_available:
         # Direction prediction controls
         st.subheader("🎯 Prediction Controls")
-
+        
         col1, col2 = st.columns(2)
-
+        
         with col1:
             dir_filter = st.selectbox(
                 "📅 Time Period Filter",
@@ -889,10 +888,10 @@ with direction_tab:
                 help="Select the time period for direction predictions",
                 key="dir_filter"
             )
-
+        
         with col2:
             st.metric("Direction Model Status", "✅ Ready", help="Direction model is trained and ready")
-
+        
         # Generate direction predictions button
         if st.button("🚀 Generate Direction Predictions", type="primary", key="dir_predict"):
             try:
@@ -900,7 +899,7 @@ with direction_tab:
                     # Get direction model and features
                     direction_model = st.session_state.direction_trained_models['direction']
                     direction_features = st.session_state.direction_features.copy()
-
+                    
                     # Apply time filter to prevent system hang
                     if dir_filter == "Last 30 days":
                         cutoff_date = direction_features.index.max() - pd.Timedelta(days=30)
@@ -912,22 +911,22 @@ with direction_tab:
                         cutoff_date = direction_features.index.max() - pd.Timedelta(days=365)
                     else:  # All data
                         cutoff_date = direction_features.index.min()
-
+                    
                     # Filter direction features based on selected time period
                     direction_features_filtered = direction_features[direction_features.index >= cutoff_date]
-
+                    
                     st.info(f"Processing {len(direction_features_filtered)} data points for {dir_filter}")
-
+                    
                     # Generate predictions
                     predictions, probabilities = direction_model.predict(direction_features_filtered)
-
+                    
                     # Store predictions
                     st.session_state.direction_predictions = predictions
                     st.session_state.direction_probabilities = probabilities
-
+                    
                     st.success("✅ Direction predictions generated successfully!")
                     st.rerun()
-
+                    
             except Exception as e:
                 st.error(f"❌ Error generating direction predictions: {str(e)}")
                 # Show only the main error message, not full traceback
@@ -937,17 +936,17 @@ with direction_tab:
                     st.error("Model training data is incomplete. Please retrain the model.")
                 else:
                     st.error(f"Technical error: {str(e)[:100]}...")
+        
 
-
-
+        
         # Display direction predictions if available
         if hasattr(st.session_state, 'direction_predictions') and st.session_state.direction_predictions is not None:
             st.subheader("📈 Direction Prediction Results")
-
+            
             # Show prediction statistics
             predictions = st.session_state.direction_predictions
             probabilities = st.session_state.direction_probabilities
-
+            
             # Apply same time filter to data for display consistency
             if dir_filter == "Last 30 days":
                 cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=30)
@@ -959,15 +958,15 @@ with direction_tab:
                 cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=365)
             else:  # All data
                 cutoff_date = st.session_state.data.index.min()
-
+            
             # Filter data for display
             filtered_data = st.session_state.data[st.session_state.data.index >= cutoff_date]
-
+            
             # Enhanced statistics
             bullish_count = np.sum(predictions == 1)
             bearish_count = np.sum(predictions == 0)
             bullish_pct = (bullish_count / len(predictions)) * 100
-
+            
             if probabilities is not None:
                 avg_confidence = np.mean(np.max(probabilities, axis=1)) * 100
                 high_confidence = np.sum(np.max(probabilities, axis=1) > 0.7)
@@ -976,10 +975,10 @@ with direction_tab:
                 avg_confidence = 0
                 high_confidence = 0
                 high_conf_pct = 0
-
+            
             # Display key metrics
             col1, col2, col3, col4 = st.columns(4)
-
+            
             with col1:
                 st.metric("Total Predictions", f"{len(predictions)}")
             with col2:
@@ -988,10 +987,10 @@ with direction_tab:
                 st.metric("Bearish Signals", f"{bearish_count} ({100-bullish_pct:.1f}%)")
             with col4:
                 st.metric("Avg Confidence", f"{avg_confidence:.1f}%")
-
+            
             # Additional statistics
             col5, col6, col7, col8 = st.columns(4)
-
+            
             with col5:
                 st.metric("High Confidence", f"{high_confidence} ({high_conf_pct:.1f}%)")
             with col6:
@@ -1007,7 +1006,7 @@ with direction_tab:
             with col8:
                 price_change = ((filtered_data['Close'].iloc[-1] - filtered_data['Close'].iloc[0]) / filtered_data['Close'].iloc[0]) * 100
                 st.metric("Price Change", f"{price_change:.2f}%")
-
+            
             # Create direction prediction chart
             try:
                 fig = make_subplots(
@@ -1017,11 +1016,11 @@ with direction_tab:
                     subplot_titles=('Price Chart', 'Direction Predictions'),
                     row_heights=[0.7, 0.3]
                 )
-
+                
                 # Use filtered data for chart (matching the prediction timeframe)
                 data_len = min(len(filtered_data), len(predictions))
                 recent_data = filtered_data.tail(data_len)
-
+                
                 # Add candlestick chart for price
                 fig.add_trace(go.Candlestick(
                     x=recent_data.index,
@@ -1033,11 +1032,11 @@ with direction_tab:
                     increasing_line_color='green',
                     decreasing_line_color='red'
                 ), row=1, col=1)
-
+                
                 # Add direction predictions with confidence coloring
                 pred_data = predictions[-data_len:]
                 prob_data = probabilities[-data_len:] if probabilities is not None else None
-
+                
                 # Create confidence-based colors
                 if prob_data is not None:
                     confidences = np.max(prob_data, axis=1)
@@ -1047,13 +1046,13 @@ with direction_tab:
                     confidences = np.ones(len(pred_data)) * 0.5  # Default confidence for fallback
                     colors = ['green'] * len(pred_data)
                     sizes = [8] * len(pred_data)
-
+                
                 # Bullish signals
                 bullish_mask = pred_data == 1
                 if np.any(bullish_mask):
                     bullish_colors = [colors[i] for i in range(len(colors)) if bullish_mask[i]]
                     bullish_sizes = [sizes[i] for i in range(len(sizes)) if bullish_mask[i]]
-
+                    
                     fig.add_trace(go.Scatter(
                         x=recent_data.index[bullish_mask],
                         y=[1] * np.sum(bullish_mask),
@@ -1065,13 +1064,13 @@ with direction_tab:
                         text=[f'Confidence: {confidences[i]:.1%}' for i in range(len(confidences)) if bullish_mask[i]] if prob_data is not None else None,
                         hovertemplate='Bullish Signal<br>%{text}<extra></extra>' if prob_data is not None else 'Bullish Signal<extra></extra>'
                     ), row=2, col=1)
-
+                
                 # Bearish signals
                 bearish_mask = pred_data == 0
                 if np.any(bearish_mask):
                     bearish_colors = [colors[i] for i in range(len(colors)) if bearish_mask[i]]
                     bearish_sizes = [sizes[i] for i in range(len(sizes)) if bearish_mask[i]]
-
+                    
                     fig.add_trace(go.Scatter(
                         x=recent_data.index[bearish_mask],
                         y=[0] * np.sum(bearish_mask),
@@ -1083,20 +1082,20 @@ with direction_tab:
                         text=[f'Confidence: {confidences[i]:.1%}' for i in range(len(confidences)) if bearish_mask[i]] if prob_data is not None else None,
                         hovertemplate='Bearish Signal<br>%{text}<extra></extra>' if prob_data is not None else 'Bearish Signal<extra></extra>'
                     ), row=2, col=1)
-
+                
                 # Update layout
                 fig.update_layout(
                     title="Price vs Direction Predictions",
                     height=600,
                     showlegend=True
                 )
-
+                
                 fig.update_xaxes(title_text="Time", row=2, col=1)
                 fig.update_yaxes(title_text="Price", row=1, col=1)
                 fig.update_yaxes(title_text="Direction", row=2, col=1, range=[-0.1, 1.1])
-
+                
                 st.plotly_chart(fig, use_container_width=True)
-
+                
             except Exception as chart_error:
                 st.error(f"Chart generation error: {str(chart_error)[:100]}...")
                 # Show basic prediction data without chart
@@ -1105,10 +1104,10 @@ with direction_tab:
                 total_signals = len(predictions)
                 st.metric("Bullish Signals", f"{bullish_signals}/{total_signals}")
                 st.metric("Bearish Signals", f"{total_signals - bullish_signals}/{total_signals}")
-
+            
             # Show detailed analysis section
             st.subheader("📊 Detailed Direction Analysis")
-
+            
             # Create comprehensive tabbed analysis for direction predictions (5 tabs like volatility)
             dir_tab1, dir_tab2, dir_tab3, dir_tab4, dir_tab5 = st.tabs([
                 "📊 Interactive Chart", 
@@ -1117,10 +1116,10 @@ with direction_tab:
                 "🔍 Statistical Analysis",
                 "📈 Performance Metrics"
             ])
-
+            
             with dir_tab1:
                 st.markdown("**Enhanced Price vs Direction Predictions Analysis**")
-
+                
                 # Enhanced direction prediction chart with additional analysis
                 fig = make_subplots(
                     rows=3, cols=1,
@@ -1129,13 +1128,13 @@ with direction_tab:
                     subplot_titles=('Price Chart with Direction Signals', 'Signal Confidence', 'Direction Pattern'),
                     row_heights=[0.5, 0.3, 0.2]
                 )
-
+                
                 # Use filtered data for chart
                 data_len = min(len(filtered_data), len(predictions))
                 recent_data = filtered_data.tail(data_len)
                 pred_data = predictions[-data_len:]
                 prob_data = probabilities[-data_len:] if probabilities is not None else None
-
+                
                 # Add candlestick chart for price
                 fig.add_trace(go.Candlestick(
                     x=recent_data.index,
@@ -1147,7 +1146,7 @@ with direction_tab:
                     increasing_line_color='green',
                     decreasing_line_color='red'
                 ), row=1, col=1)
-
+                
                 # Add direction arrows on price chart
                 for i, (idx, pred) in enumerate(zip(recent_data.index, pred_data)):
                     if i % 5 == 0:  # Show every 5th prediction to avoid clutter
@@ -1165,7 +1164,7 @@ with direction_tab:
                                 font=dict(color="red", size=12),
                                 row=1, col=1
                             )
-
+                
                 # Add confidence line chart
                 if prob_data is not None:
                     confidences = np.max(prob_data, axis=1)
@@ -1178,17 +1177,17 @@ with direction_tab:
                         marker=dict(size=4),
                         hovertemplate='Confidence: %{y:.1%}<extra></extra>'
                     ), row=2, col=1)
-
+                    
                     # Add confidence threshold lines
                     fig.add_hline(y=0.8, line_dash="dash", line_color="green", 
                                  annotation_text="High Confidence", row=2, col=1)
                     fig.add_hline(y=0.6, line_dash="dot", line_color="orange", 
                                  annotation_text="Medium Confidence", row=2, col=1)
-
+                
                 # Add direction pattern visualization
                 direction_y = [1 if p == 1 else 0 for p in pred_data]
                 colors = ['green' if p == 1 else 'red' for p in pred_data]
-
+                
                 fig.add_trace(go.Scatter(
                     x=recent_data.index,
                     y=direction_y,
@@ -1199,7 +1198,7 @@ with direction_tab:
                     hovertemplate='Direction: %{text}<extra></extra>',
                     text=['Bullish' if p == 1 else 'Bearish' for p in pred_data]
                 ), row=3, col=1)
-
+                
                 # Update layout
                 fig.update_layout(
                     title="Comprehensive Direction Analysis Dashboard",
@@ -1207,41 +1206,41 @@ with direction_tab:
                     showlegend=True,
                     hovermode='x unified'
                 )
-
+                
                 fig.update_xaxes(title_text="Time", row=3, col=1)
                 fig.update_yaxes(title_text="Price", row=1, col=1)
                 fig.update_yaxes(title_text="Confidence", row=2, col=1, range=[0, 1])
                 fig.update_yaxes(title_text="Direction", row=3, col=1, range=[-0.1, 1.1])
-
+                
                 st.plotly_chart(fig, use_container_width=True)
-
+            
             with dir_tab2:
                 st.markdown("**Comprehensive Direction Predictions Data Table**")
-
+                
                 # Create comprehensive predictions dataframe
                 num_recent = min(150, len(predictions))
                 recent_predictions = predictions[-num_recent:]
                 recent_probs = probabilities[-num_recent:] if probabilities is not None else None
                 recent_prices = filtered_data.tail(num_recent)
-
+                
                 # Ensure data alignment - match lengths
                 data_len = min(len(recent_prices), len(recent_predictions))
                 if recent_probs is not None and len(recent_probs) > 0:
                     data_len = min(data_len, len(recent_probs))
-
+                
                 # Trim all arrays to the same length
                 recent_prices_aligned = recent_prices.tail(data_len)
                 recent_predictions_aligned = recent_predictions[-data_len:]
                 recent_probs_aligned = recent_probs[-data_len:] if recent_probs is not None else None
-
+                
                 # Calculate price changes for validation
                 price_changes = recent_prices_aligned['Close'].pct_change().shift(-1) * 100
                 actual_direction = (price_changes > 0).astype(int)
-
+                
                 # Calculate prediction accuracy metrics
                 valid_indices = ~pd.isna(actual_direction)
                 prediction_correct = (recent_predictions_aligned == actual_direction.values) & valid_indices
-
+                
                 # Create signal classification
                 def classify_signal_strength(pred, conf):
                     if conf is None:
@@ -1254,7 +1253,7 @@ with direction_tab:
                         return "🟢 Medium" if pred == 1 else "🔴 Medium"
                     else:
                         return "🟡 Weak"
-
+                
                 # Create the main predictions dataframe
                 if hasattr(recent_prices_aligned.index, 'strftime'):
                     date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
@@ -1262,12 +1261,12 @@ with direction_tab:
                 else:
                     date_col = [f"Point_{i+1}" for i in range(len(recent_prices_aligned))]
                     time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices_aligned))]
-
+                
                 # Debug: ensure all arrays have the same length
                 print(f"DEBUG: data_len={data_len}, recent_prices_aligned={len(recent_prices_aligned)}, "
                       f"recent_predictions_aligned={len(recent_predictions_aligned)}, "
                       f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
-
+                
                 # Ensure all arrays match the exact same length
                 actual_len = len(recent_prices_aligned)
                 recent_predictions_aligned = recent_predictions_aligned[:actual_len]
@@ -1277,17 +1276,17 @@ with direction_tab:
                 actual_direction = actual_direction[:actual_len]
                 prediction_correct = prediction_correct[:actual_len]
                 valid_indices = valid_indices[:actual_len]
-
+                
                 # Ensure date/time columns match the same length
                 date_col = date_col[:actual_len]
                 time_col = time_col[:actual_len]
-
+                
                 # Debug: Print lengths after alignment
                 print(f"DEBUG FINAL: actual_len={actual_len}, date_col={len(date_col)}, time_col={len(time_col)}, "
                       f"recent_predictions_aligned={len(recent_predictions_aligned)}, "
                       f"recent_probs_aligned={len(recent_probs_aligned) if recent_probs_aligned is not None else 'None'}, "
                       f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
-
+                
                 # Build DataFrame step by step to avoid index mismatch
                 # Convert pandas series to plain lists to avoid index conflicts
                 ohlc_dict = {
@@ -1298,7 +1297,7 @@ with direction_tab:
                     'Low': recent_prices_aligned['Low'].values.round(4).tolist(),
                     'Close': recent_prices_aligned['Close'].values.round(4).tolist(),
                 }
-
+                
                 # Convert all other arrays to simple lists
                 pred_dict = {
                     'Predicted_Dir': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions_aligned],
@@ -1311,26 +1310,26 @@ with direction_tab:
                     'Correct': ['✅' if correct else '❌' if valid else '⏳' 
                                for correct, valid in zip(prediction_correct, valid_indices)],
                 }
-
+                
                 # Add signal strength and derived columns
                 signal_strength = [classify_signal_strength(pred, np.max(prob) if prob is not None else None) 
                                   for pred, prob in zip(recent_predictions_aligned, 
                                                        recent_probs_aligned if recent_probs_aligned is not None 
                                                        else [None]*len(recent_predictions_aligned))]
-
+                
                 price_change_list = recent_prices_aligned['Close'].pct_change().round(4).fillna(0).tolist()
                 direction_streak_list = (pd.Series(recent_predictions_aligned)
                                        .rolling(3).apply(lambda x: (x == x.iloc[-1]).sum())
                                        .fillna(1).astype(int).tolist())
-
+                
                 # Combine all dictionaries
                 all_data = {**ohlc_dict, **pred_dict, 
                            'Signal_Strength': signal_strength,
                            'Price_Change': price_change_list,
                            'Direction_Streak': direction_streak_list}
-
+                
                 predictions_df = pd.DataFrame(all_data)
-
+                
                 # Display the dataframe with enhanced formatting
                 st.dataframe(
                     predictions_df, 
@@ -1349,7 +1348,7 @@ with direction_tab:
                         "Direction_Streak": st.column_config.NumberColumn("Streak", format="%d"),
                     }
                 )
-
+                
                 # Show summary statistics
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
@@ -1360,7 +1359,7 @@ with direction_tab:
                 with col2:
                     if recent_probs_aligned is not None:
                         avg_confidence = np.mean([np.max(prob) for prob in recent_probs_aligned])
-                        st.metric("Avg Confidence", f"{avg_confidence:.3f}")
+                        st.metric("Avg Confidence", f"{avg_confidence:.1%}")
                     else:
                         st.metric("Avg Confidence", "N/A")
                 with col3:
@@ -1373,30 +1372,12 @@ with direction_tab:
                     bearish_total = (recent_predictions_aligned == 0).sum()
                     bearish_acc = bearish_correct / bearish_total if bearish_total > 0 else 0
                     st.metric("Bearish Accuracy", f"{bearish_acc:.1%}")
-
+                
                 # Enhanced download options
                 col1, col2 = st.columns(2)
                 with col1:
                     try:
                         csv_data = predictions_df.to_csv(index=False)
-
-                        # Prepare data for the past year
-                        past_year_data = st.session_state.data[st.session_state.data.index >= (datetime.now() - timedelta(days=365))]
-                        past_year_features = st.session_state.direction_features[st.session_state.direction_features.index >= (datetime.now() - timedelta(days=365))]
-
-                        # Generate past year predictions
-                        past_year_predictions, past_year_probabilities = st.session_state.direction_trained_models['direction'].predict(past_year_features)
-
-                        # Create a DataFrame for the past year predictions
-                        past_year_predictions_df = pd.DataFrame({
-                            'Date': past_year_features.index,
-                            'Predicted_Direction': past_year_predictions,
-                            'Confidence': np.max(past_year_probabilities, axis=1) if past_year_probabilities is not None else None
-                        })
-
-                        # Convert the past year predictions DataFrame to CSV
-                        past_year_csv_data = past_year_predictions_df.to_csv(index=False)
-
                         st.download_button(
                             label="📥 Download Full Data CSV",
                             data=csv_data,
@@ -1405,7 +1386,7 @@ with direction_tab:
                         )
                     except:
                         st.info("Full download not available")
-
+                
                 with col2:
                     # Simple summary download
                     summary_df = pd.DataFrame({
@@ -1421,18 +1402,18 @@ with direction_tab:
                         file_name=f"direction_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv"
                     )
-
+            
             with dir_tab3:
                 st.markdown("**Direction Distribution and Pattern Analysis**")
-
+                
                 # Enhanced distribution analysis with multiple charts
                 col1, col2 = st.columns(2)
-
+                
                 with col1:
                     # Direction distribution pie chart
                     bullish_count = (predictions == 1).sum()
                     bearish_count = (predictions == 0).sum()
-
+                    
                     fig_pie = go.Figure(data=[go.Pie(
                         labels=['Bullish', 'Bearish'],
                         values=[bullish_count, bearish_count],
@@ -1444,7 +1425,7 @@ with direction_tab:
                         height=400
                     )
                     st.plotly_chart(fig_pie, use_container_width=True)
-
+                
                 with col2:
                     # Confidence distribution if available
                     if probabilities is not None:
@@ -1466,14 +1447,14 @@ with direction_tab:
                         st.plotly_chart(fig_conf, use_container_width=True)
                     else:
                         st.info("Confidence distribution not available (no probabilities)")
-
+                
                 # Direction patterns over time
                 st.markdown("**Direction Patterns Over Time**")
-
+                
                 # Create rolling direction analysis
                 direction_series = pd.Series(predictions, index=filtered_data.index[-len(predictions):])
                 rolling_bullish = direction_series.rolling(20).mean()
-
+                
                 fig_pattern = go.Figure()
                 fig_pattern.add_trace(go.Scatter(
                     x=direction_series.index,
@@ -1482,7 +1463,7 @@ with direction_tab:
                     name='20-Period Bullish Ratio',
                     line=dict(color='blue', width=2)
                 ))
-
+                
                 # Add horizontal reference lines
                 fig_pattern.add_hline(y=0.7, line_dash="dash", line_color="green", 
                                      annotation_text="Strong Bullish")
@@ -1490,7 +1471,7 @@ with direction_tab:
                                      annotation_text="Neutral")
                 fig_pattern.add_hline(y=0.3, line_dash="dash", line_color="red", 
                                      annotation_text="Strong Bearish")
-
+                
                 fig_pattern.update_layout(
                     title="Direction Bias Over Time (20-Period Rolling Average)",
                     xaxis_title="Time",
@@ -1499,15 +1480,15 @@ with direction_tab:
                     yaxis=dict(range=[0, 1])
                 )
                 st.plotly_chart(fig_pattern, use_container_width=True)
-
+                
                 # Direction streaks analysis
                 st.markdown("**Direction Streaks Analysis**")
-
+                
                 # Calculate consecutive direction streaks
                 direction_changes = np.diff(predictions, prepend=predictions[0])
                 streak_lengths = []
                 current_streak = 1
-
+                
                 for change in direction_changes[1:]:
                     if change == 0:
                         current_streak += 1
@@ -1515,7 +1496,7 @@ with direction_tab:
                         streak_lengths.append(current_streak)
                         current_streak = 1
                 streak_lengths.append(current_streak)
-
+                
                 if len(streak_lengths) > 0:
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -1524,14 +1505,14 @@ with direction_tab:
                         st.metric("Avg Streak Length", f"{np.mean(streak_lengths):.1f}")
                     with col3:
                         st.metric("Total Direction Changes", f"{len(streak_lengths)}")
-
+            
             with dir_tab4:
                 st.markdown("**Advanced Statistical Analysis**")
-
+                
                 # Comprehensive statistics table
                 bullish_pct = (predictions == 1).mean() * 100
                 bearish_pct = (predictions == 0).mean() * 100
-
+                
                 if probabilities is not None:
                     conf_scores = np.max(probabilities, axis=1)
                     avg_conf = np.mean(conf_scores)
@@ -1541,7 +1522,7 @@ with direction_tab:
                     median_conf = np.median(conf_scores)
                 else:
                     avg_conf = std_conf = min_conf = max_conf = median_conf = 0
-
+                
                 stats_data = {
                     'Statistic': [
                         'Total Predictions', 'Bullish Signals', 'Bearish Signals', 'Bullish %', 'Bearish %',
@@ -1564,13 +1545,13 @@ with direction_tab:
                         f"{(conf_scores < 0.6).sum():,}" if probabilities is not None else "N/A"
                     ]
                 }
-
+                
                 stats_df = pd.DataFrame(stats_data)
                 st.dataframe(stats_df, use_container_width=True, hide_index=True)
-
+                
                 # Direction regime analysis
                 st.markdown("**Direction Regime Classification**")
-
+                
                 if probabilities is not None:
                     # Classify signals by confidence and direction
                     high_conf_bullish = ((conf_scores > 0.7) & (predictions == 1)).sum()
@@ -1579,9 +1560,9 @@ with direction_tab:
                     med_conf_bearish = ((conf_scores >= 0.5) & (conf_scores <= 0.7) & (predictions == 0)).sum()
                     low_conf_bullish = ((conf_scores < 0.5) & (predictions == 1)).sum()
                     low_conf_bearish = ((conf_scores < 0.5) & (predictions == 0)).sum()
-
+                    
                     total_signals = len(predictions)
-
+                    
                     regime_df = pd.DataFrame({
                         'Signal_Category': [
                             'High Conf Bullish', 'High Conf Bearish', 
@@ -1605,21 +1586,21 @@ with direction_tab:
                             ">70%", ">70%", "50-70%", "50-70%", "<50%", "<50%"
                         ]
                     })
-
+                    
                     st.dataframe(regime_df, use_container_width=True, hide_index=True)
-
+                
                 # Direction trend analysis
                 st.markdown("**Recent Direction Trend Analysis**")
                 if len(predictions) >= 40:
                     recent_40 = predictions[-40:]
                     recent_20 = recent_40[-20:]
                     previous_20 = recent_40[:20]
-
+                    
                     recent_bullish = (recent_20 == 1).mean()
                     previous_bullish = (previous_20 == 1).mean()
                     trend_direction = "📈 More Bullish" if recent_bullish > previous_bullish else "📉 More Bearish"
                     trend_change = (recent_bullish - previous_bullish) * 100
-
+                    
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Recent Bullish % (Last 20)", f"{recent_bullish:.1%}")
@@ -1629,10 +1610,10 @@ with direction_tab:
                         st.metric("Trend Direction", trend_direction)
                     with col4:
                         st.metric("Trend Change", f"{trend_change:+.1f}%")
-
+            
             with dir_tab5:
                 st.markdown("**Model Performance and Validation Metrics**")
-
+                
                 # Model performance analysis
                 if len(predictions) >= 20:
                     try:
@@ -1640,20 +1621,20 @@ with direction_tab:
                         recent_data = filtered_data.tail(len(predictions))
                         price_changes = recent_data['Close'].pct_change().shift(-1)
                         actual_directions = (price_changes > 0).astype(int)
-
+                        
                         # Performance metrics where we have actual data
                         valid_mask = ~pd.isna(actual_directions)
                         if valid_mask.sum() > 10:
                             pred_valid = predictions[valid_mask.values]
                             actual_valid = actual_directions[valid_mask].values
-
+                            
                             # Calculate comprehensive metrics
                             accuracy = (pred_valid == actual_valid).mean()
                             precision_bull = ((pred_valid == 1) & (actual_valid == 1)).sum() / ((pred_valid == 1).sum() + 1e-8)
                             recall_bull = ((pred_valid == 1) & (actual_valid == 1)).sum() / ((actual_valid == 1).sum() + 1e-8)
                             precision_bear = ((pred_valid == 0) & (actual_valid == 0)).sum() / ((pred_valid == 0).sum() + 1e-8)
                             recall_bear = ((pred_valid == 0) & (actual_valid == 0)).sum() / ((actual_valid == 0).sum() + 1e-8)
-
+                            
                             # Display performance metrics
                             col1, col2, col3, col4, col5 = st.columns(5)
                             with col1:
@@ -1666,11 +1647,11 @@ with direction_tab:
                                 st.metric("Bearish Precision", f"{precision_bear:.1%}")
                             with col5:
                                 st.metric("Bearish Recall", f"{recall_bear:.1%}")
-
+                            
                             # Confusion matrix visualization
                             from sklearn.metrics import confusion_matrix
                             cm = confusion_matrix(actual_valid, pred_valid)
-
+                            
                             fig_cm = go.Figure(data=go.Heatmap(
                                 z=cm,
                                 x=['Predicted Bearish', 'Predicted Bullish'],
@@ -1685,32 +1666,32 @@ with direction_tab:
                                 height=400
                             )
                             st.plotly_chart(fig_cm, use_container_width=True)
-
+                            
                         else:
                             st.info("Insufficient actual direction data for validation")
-
+                            
                     except Exception as perf_error:
                         st.warning("Performance metrics calculation not available")
-
+                
                 # Feature importance (if available from model)
                 st.markdown("**Model Feature Analysis**")
                 try:
                     if hasattr(st.session_state, 'direction_trained_models') and st.session_state.direction_trained_models:
                         direction_model_data = st.session_state.direction_trained_models.get('direction', {})
                         feature_importance = direction_model_data.get('feature_importance', {})
-
+                        
                         if feature_importance:
                             # Convert to sorted dataframe
                             importance_df = pd.DataFrame(
                                 list(feature_importance.items()),
                                 columns=['Feature', 'Importance']
                             ).sort_values('Importance', ascending=False)
-
+                            
                             # Show top features
                             st.markdown("**Top 15 Most Important Features**")
                             top_features = importance_df.head(15)
                             st.dataframe(top_features, use_container_width=True, hide_index=True)
-
+                            
                             # Feature importance chart
                             fig_importance = go.Figure()
                             fig_importance.add_trace(go.Bar(
@@ -1729,10 +1710,10 @@ with direction_tab:
                             st.plotly_chart(fig_importance, use_container_width=True)
                         else:
                             st.info("Feature importance data not available")
-
+                            
                 except Exception as feature_error:
                     st.info("Feature importance analysis not available")
-
+                
                 # Model configuration summary
                 st.markdown("**Model Configuration Summary**")
                 config_info = {
@@ -1744,7 +1725,7 @@ with direction_tab:
                     'Data Points Used': f"{len(st.session_state.data):,}",
                     'Prediction Date Range': f"{st.session_state.data.index[0].strftime('%Y-%m-%d')} to {st.session_state.data.index[-1].strftime('%Y-%m-%d')}"
                 }
-
+                
                 config_df = pd.DataFrame(
                     list(config_info.items()),
                     columns=['Configuration', 'Value']
