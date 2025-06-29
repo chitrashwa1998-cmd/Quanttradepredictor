@@ -1301,7 +1301,7 @@ with direction_tab:
                 # Convert all other arrays to simple lists
                 pred_dict = {
                     'Predicted_Dir': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions_aligned],
-                    'Confidence': ([f"{np.max(prob):.1f}%" for prob in recent_probs_aligned] 
+                    'Confidence': ([f"{np.max(prob):.3f}" for prob in recent_probs_aligned] 
                                   if recent_probs_aligned is not None else ['N/A'] * actual_len),
                     'Next_Change_%': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
                     'Actual_Dir': ['🟢 Up' if actual == 1 and not pd.isna(actual) 
