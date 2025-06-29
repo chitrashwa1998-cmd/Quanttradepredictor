@@ -40,9 +40,9 @@ def add_custom_direction_features(df: pd.DataFrame) -> pd.DataFrame:
     df['obv_proxy'] = ((df[close_col] > df[close_col].shift(1)).astype(int)
                        - (df[close_col] < df[close_col].shift(1)).astype(int)).cumsum()
 
-    # Volume spike approximation (range spike) - more sensitive threshold
+    # Volume spike approximation (range spike)
     df['range'] = df[high_col] - df[low_col]
-    df['vol_spike_proxy'] = df['range'] > df['range'].rolling(10).mean() + 1.5 * df['range'].rolling(10).std()
+    df['vol_spike_proxy'] = df['range'] > df['range'].rolling(10).mean() + 2 * df['range'].rolling(10).std()
 
     # MFI proxy
     df['typical_price'] = df['vwap_approx']
