@@ -170,20 +170,26 @@ with volatility_tab:
                     # Apply time filter to features for prediction
                     features_for_prediction = st.session_state.features.copy()
 
-                    # Apply volatility filter to prevent system hang
+                    # Apply volatility filter using realistic row counts for trading data
+                    total_rows = len(features_for_prediction)
+                    
                     if vol_filter == "Last 30 days":
-                        cutoff_date = features_for_prediction.index.max() - pd.Timedelta(days=30)
+                        # 30 days × ~78 bars/day (6.5 trading hours × 12 bars/hour) = ~2,340 bars
+                        target_rows = min(2500, total_rows // 8)  # Cap at 12.5% of total data
                     elif vol_filter == "Last 90 days":
-                        cutoff_date = features_for_prediction.index.max() - pd.Timedelta(days=90)
+                        # 90 days × ~78 bars/day = ~7,020 bars
+                        target_rows = min(7500, total_rows // 4)  # Cap at 25% of total data
                     elif vol_filter == "Last 6 months":
-                        cutoff_date = features_for_prediction.index.max() - pd.Timedelta(days=180)
+                        # ~180 days × ~78 bars/day = ~14,040 bars
+                        target_rows = min(15000, total_rows // 2)  # Cap at 50% of total data
                     elif vol_filter == "Last year":
-                        cutoff_date = features_for_prediction.index.max() - pd.Timedelta(days=365)
+                        # ~252 trading days × ~78 bars/day = ~19,656 bars
+                        target_rows = min(20000, int(total_rows * 0.75))  # Cap at 75% of total data
                     else:  # All data
-                        cutoff_date = features_for_prediction.index.min()
-
-                    # Filter features based on selected time period
-                    features_filtered = features_for_prediction[features_for_prediction.index >= cutoff_date]
+                        target_rows = total_rows
+                    
+                    start_idx = max(0, total_rows - target_rows)
+                    features_filtered = features_for_prediction.iloc[start_idx:]
 
                     st.info(f"Processing {len(features_filtered)} data points for volatility predictions ({vol_filter})")
 
@@ -900,20 +906,26 @@ with direction_tab:
                     direction_model = st.session_state.direction_trained_models['direction']
                     direction_features = st.session_state.direction_features.copy()
 
-                    # Apply time filter to prevent system hang
+                    # Apply direction filter using realistic row counts for trading data
+                    total_rows = len(direction_features)
+                    
                     if dir_filter == "Last 30 days":
-                        cutoff_date = direction_features.index.max() - pd.Timedelta(days=30)
+                        # 30 days × ~78 bars/day (6.5 trading hours × 12 bars/hour) = ~2,340 bars
+                        target_rows = min(2500, total_rows // 8)  # Cap at 12.5% of total data
                     elif dir_filter == "Last 90 days":
-                        cutoff_date = direction_features.index.max() - pd.Timedelta(days=90)
+                        # 90 days × ~78 bars/day = ~7,020 bars
+                        target_rows = min(7500, total_rows // 4)  # Cap at 25% of total data
                     elif dir_filter == "Last 6 months":
-                        cutoff_date = direction_features.index.max() - pd.Timedelta(days=180)
+                        # ~180 days × ~78 bars/day = ~14,040 bars
+                        target_rows = min(15000, total_rows // 2)  # Cap at 50% of total data
                     elif dir_filter == "Last year":
-                        cutoff_date = direction_features.index.max() - pd.Timedelta(days=365)
+                        # ~252 trading days × ~78 bars/day = ~19,656 bars
+                        target_rows = min(20000, int(total_rows * 0.75))  # Cap at 75% of total data
                     else:  # All data
-                        cutoff_date = direction_features.index.min()
-
-                    # Filter direction features based on selected time period
-                    direction_features_filtered = direction_features[direction_features.index >= cutoff_date]
+                        target_rows = total_rows
+                    
+                    start_idx = max(0, total_rows - target_rows)
+                    direction_features_filtered = direction_features.iloc[start_idx:]
 
                     st.info(f"Processing {len(direction_features_filtered)} data points for {dir_filter}")
 
@@ -1812,36 +1824,28 @@ with profit_prob_tab:
                     profit_prob_model = st.session_state.profit_prob_trained_models['profit_probability']
                     profit_prob_features = st.session_state.profit_prob_features.copy()
 
-                    # Apply time filter to prevent system hang - handle different index types
+                    # Apply time filter to prevent system hang - use realistic row-based limits for trading data
                     try:
-                        # Check if index is datetime-like
-                        if hasattr(profit_prob_features.index, 'max') and pd.api.types.is_datetime64_any_dtype(profit_prob_features.index):
-                            # Datetime index - use Timedelta
-                            if profit_filter == "Last 30 days":
-                                cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=30)
-                            elif profit_filter == "Last 90 days":
-                                cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=90)
-                            elif profit_filter == "Last 6 months":
-                                cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=180)
-                            elif profit_filter == "Last year":
-                                cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=365)
-                            else:  # All data
-                                cutoff_date = profit_prob_features.index.min()
-                            profit_prob_features_filtered = profit_prob_features[profit_prob_features.index >= cutoff_date]
-                        else:
-                            # Non-datetime index - use row count filtering with proper limits
-                            total_rows = len(profit_prob_features)
-                            if profit_filter == "Last 30 days":
-                                start_idx = max(0, total_rows - min(8640, total_rows // 4))  # Max 25% of data or 30 days
-                            elif profit_filter == "Last 90 days":
-                                start_idx = max(0, total_rows - min(25920, total_rows // 2))  # Max 50% of data or 90 days
-                            elif profit_filter == "Last 6 months":
-                                start_idx = max(0, total_rows - min(51840, int(total_rows * 0.75)))  # Max 75% of data or 6 months
-                            elif profit_filter == "Last year":
-                                start_idx = max(0, total_rows - min(103680, int(total_rows * 0.9)))  # Max 90% of data or 1 year
-                            else:  # All data
-                                start_idx = 0
-                            profit_prob_features_filtered = profit_prob_features.iloc[start_idx:]
+                        total_rows = len(profit_prob_features)
+                        
+                        # Use realistic row counts for trading data (assuming 5-min bars, ~6.5 hours trading per day)
+                        if profit_filter == "Last 30 days":
+                            # 30 days × ~78 bars/day (6.5 trading hours × 12 bars/hour) = ~2,340 bars
+                            target_rows = min(2500, total_rows // 8)  # Cap at 12.5% of total data
+                        elif profit_filter == "Last 90 days":
+                            # 90 days × ~78 bars/day = ~7,020 bars
+                            target_rows = min(7500, total_rows // 4)  # Cap at 25% of total data
+                        elif profit_filter == "Last 6 months":
+                            # ~180 days × ~78 bars/day = ~14,040 bars
+                            target_rows = min(15000, total_rows // 2)  # Cap at 50% of total data
+                        elif profit_filter == "Last year":
+                            # ~252 trading days × ~78 bars/day = ~19,656 bars
+                            target_rows = min(20000, int(total_rows * 0.75))  # Cap at 75% of total data
+                        else:  # All data
+                            target_rows = total_rows
+                        
+                        start_idx = max(0, total_rows - target_rows)
+                        profit_prob_features_filtered = profit_prob_features.iloc[start_idx:]
                         
                         # Log the actual filtering result
                         original_count = len(profit_prob_features)
