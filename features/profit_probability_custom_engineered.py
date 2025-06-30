@@ -3,11 +3,17 @@ import numpy as np
 
 def add_custom_profit_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
+    
+    # Handle column name compatibility
+    close_col = 'Close' if 'Close' in df.columns else 'close'
+    open_col = 'Open' if 'Open' in df.columns else 'open'
+    high_col = 'High' if 'High' in df.columns else 'high'
+    low_col = 'Low' if 'Low' in df.columns else 'low'
 
     # Body and wick calculations
-    df['body_size'] = abs(df['close'] - df['open'])
-    df['wick_upper'] = df['high'] - df[['close', 'open']].max(axis=1)
-    df['wick_lower'] = df[['close', 'open']].min(axis=1) - df['low']
+    df['body_size'] = abs(df[close_col] - df[open_col])
+    df['wick_upper'] = df[high_col] - df[[close_col, open_col]].max(axis=1)
+    df['wick_lower'] = df[[close_col, open_col]].min(axis=1) - df[low_col]
     df['wick_ratio'] = (df['wick_upper'] + df['wick_lower']) / df['body_size'].replace(0, np.nan)
     df['candle_strength'] = df['body_size'] / (df['high'] - df['low']).replace(0, np.nan)
 

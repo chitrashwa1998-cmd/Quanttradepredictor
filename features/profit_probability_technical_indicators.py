@@ -129,9 +129,9 @@ class ProfitProbabilityTechnicalIndicators:
 
         # Add custom engineered features for profit probability
         print("Step 2: Adding custom profit probability features...")
-        from features.profit_probability_custom_engineered import add_custom_profit_probability_features
+        from features.profit_probability_custom_engineered import add_custom_profit_features
         try:
-            result_df = add_custom_profit_probability_features(result_df)
+            result_df = add_custom_profit_features(result_df)
             custom_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
             print(f"After custom features: {len(custom_features)} features")
         except Exception as e:
@@ -139,9 +139,9 @@ class ProfitProbabilityTechnicalIndicators:
 
         # Add lagged features for profit probability
         print("Step 3: Adding lagged profit probability features...")
-        from features.profit_probability_lagged_features import add_lagged_profit_probability_features
+        from features.profit_probability_lagged_features import add_lagged_features_profit_prob
         try:
-            result_df = add_lagged_profit_probability_features(result_df)
+            result_df = add_lagged_features_profit_prob(result_df)
             lagged_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
             print(f"After lagged features: {len(lagged_features)} features")
         except Exception as e:
@@ -149,9 +149,9 @@ class ProfitProbabilityTechnicalIndicators:
 
         # Add time context features for profit probability
         print("Step 4: Adding time context features...")
-        from features.profit_probability_time_context import add_profit_probability_time_context_features
+        from features.profit_probability_time_context import add_time_context_features_profit_prob
         try:
-            result_df = add_profit_probability_time_context_features(result_df)
+            result_df = add_time_context_features_profit_prob(result_df)
             time_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
             print(f"After time features: {len(time_features)} features")
         except Exception as e:
@@ -171,7 +171,8 @@ class ProfitProbabilityTechnicalIndicators:
         
         # Count completely empty rows
         non_ohlc_cols = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        empty_rows = result_df[non_ohlc_cols].isna().all(axis=1).sum()
+        empty_rows_mask = result_df[non_ohlc_cols].isna().all(axis=1)
+        empty_rows = empty_rows_mask.sum()
         
         # Drop completely empty rows
         result_df = result_df.dropna(subset=non_ohlc_cols, how='all')
