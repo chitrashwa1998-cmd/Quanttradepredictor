@@ -1829,24 +1829,39 @@ with profit_prob_tab:
                                 cutoff_date = profit_prob_features.index.min()
                             profit_prob_features_filtered = profit_prob_features[profit_prob_features.index >= cutoff_date]
                         else:
-                            # Non-datetime index - use row count filtering
+                            # Non-datetime index - use row count filtering with proper limits
                             total_rows = len(profit_prob_features)
                             if profit_filter == "Last 30 days":
-                                start_idx = max(0, total_rows - 8640)  # ~30 days of 5-min data
+                                start_idx = max(0, total_rows - min(8640, total_rows // 4))  # Max 25% of data or 30 days
                             elif profit_filter == "Last 90 days":
-                                start_idx = max(0, total_rows - 25920)  # ~90 days of 5-min data
+                                start_idx = max(0, total_rows - min(25920, total_rows // 2))  # Max 50% of data or 90 days
                             elif profit_filter == "Last 6 months":
-                                start_idx = max(0, total_rows - 51840)  # ~6 months of 5-min data
+                                start_idx = max(0, total_rows - min(51840, int(total_rows * 0.75)))  # Max 75% of data or 6 months
                             elif profit_filter == "Last year":
-                                start_idx = max(0, total_rows - 103680)  # ~1 year of 5-min data
+                                start_idx = max(0, total_rows - min(103680, int(total_rows * 0.9)))  # Max 90% of data or 1 year
                             else:  # All data
                                 start_idx = 0
                             profit_prob_features_filtered = profit_prob_features.iloc[start_idx:]
+                        
+                        # Log the actual filtering result
+                        original_count = len(profit_prob_features)
+                        filtered_count = len(profit_prob_features_filtered)
+                        filter_percent = (filtered_count / original_count) * 100 if original_count > 0 else 0
+                        print(f"Profit probability filter '{profit_filter}': {original_count} → {filtered_count} rows ({filter_percent:.1f}%)")
+                        
                     except Exception as filter_error:
                         st.warning(f"Time filtering failed, using all data: {str(filter_error)}")
                         profit_prob_features_filtered = profit_prob_features
 
-                    st.info(f"Processing {len(profit_prob_features_filtered)} data points for {profit_filter}")
+                    # Show filtering information to user
+                    original_size = len(profit_prob_features)
+                    filtered_size = len(profit_prob_features_filtered)
+                    reduction_pct = ((original_size - filtered_size) / original_size * 100) if original_size > 0 else 0
+                    
+                    if profit_filter != "All data":
+                        st.info(f"Time filter '{profit_filter}': Processing {filtered_size:,} data points ({100-reduction_pct:.1f}% of total {original_size:,} points)")
+                    else:
+                        st.info(f"Processing all {filtered_size:,} data points")
 
                     # Generate predictions
                     predictions, probabilities = profit_prob_model.predict(profit_prob_features_filtered)
@@ -1876,9 +1891,12 @@ with profit_prob_tab:
             predictions = st.session_state.profit_prob_predictions
             probabilities = st.session_state.profit_prob_probabilities
 
-            # Apply same time filter to data for display consistency - handle different index types
+            # Apply same time filter to data for display consistency
+            # Use the length of predictions to determine the data slice
+            predictions_length = len(predictions)
+            
+            # Filter data to match the prediction length and respect the time filter
             try:
-                # Check if index is datetime-like
                 if hasattr(st.session_state.data.index, 'max') and pd.api.types.is_datetime64_any_dtype(st.session_state.data.index):
                     # Datetime index - use Timedelta
                     if profit_filter == "Last 30 days":
@@ -1893,22 +1911,22 @@ with profit_prob_tab:
                         cutoff_date = st.session_state.data.index.min()
                     filtered_data = st.session_state.data[st.session_state.data.index >= cutoff_date]
                 else:
-                    # Non-datetime index - use row count filtering
+                    # Non-datetime index - filter based on predictions length
                     total_rows = len(st.session_state.data)
-                    if profit_filter == "Last 30 days":
-                        start_idx = max(0, total_rows - 8640)  # ~30 days of 5-min data
-                    elif profit_filter == "Last 90 days":
-                        start_idx = max(0, total_rows - 25920)  # ~90 days of 5-min data
-                    elif profit_filter == "Last 6 months":
-                        start_idx = max(0, total_rows - 51840)  # ~6 months of 5-min data
-                    elif profit_filter == "Last year":
-                        start_idx = max(0, total_rows - 103680)  # ~1 year of 5-min data
-                    else:  # All data
-                        start_idx = 0
+                    start_idx = max(0, total_rows - predictions_length)
                     filtered_data = st.session_state.data.iloc[start_idx:]
+                    
+                # Ensure filtered_data matches predictions length exactly
+                if len(filtered_data) > predictions_length:
+                    filtered_data = filtered_data.tail(predictions_length)
+                    
+                # Log the actual filtering result for display data
+                display_count = len(filtered_data)
+                print(f"Profit probability display data: {len(st.session_state.data)} → {display_count} rows (matching {predictions_length} predictions)")
+                
             except Exception as filter_error:
                 st.warning(f"Display filtering failed, using all data: {str(filter_error)}")
-                filtered_data = st.session_state.data
+                filtered_data = st.session_state.data.tail(predictions_length)
 
             # Enhanced statistics
             profitable_count = np.sum(predictions == 1)
