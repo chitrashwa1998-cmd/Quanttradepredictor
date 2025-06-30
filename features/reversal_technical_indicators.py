@@ -194,3 +194,7 @@ class ReversalTechnicalIndicators:
         print(f"Generated reversal features: {feature_cols}")
 
         return result_df
+
+def add_reversal_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """Wrapper function to calculate reversal technical indicators"""
+    return ReversalTechnicalIndicators.calculate_reversal_indicators(df)

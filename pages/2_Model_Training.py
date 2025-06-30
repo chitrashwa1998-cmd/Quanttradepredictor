@@ -530,7 +530,7 @@ with tab4:
         if st.button("🔧 Calculate Technical Indicators", type="primary", key="calc_reversal_features"):
             with st.spinner("Calculating reversal-specific technical indicators..."):
                 try:
-                    from features.reversal_technical_indicators import add_reversal_technical_indicators
+                    from features.reversal_technical_indicators import ReversalTechnicalIndicators
                     from features.reversal_custom_engineered import add_custom_reversal_features
                     from features.reversal_lagged_features import add_lagged_reversal_features
                     from features.reversal_time_context import add_time_context_features_reversal
@@ -540,16 +540,7 @@ with tab4:
                     reversal_features = st.session_state.data.copy()
                     
                     # Add reversal technical indicators
-                    reversal_features = add_reversal_technical_indicators(reversal_features)
-                    
-                    # Add custom engineered features
-                    reversal_features = add_custom_reversal_features(reversal_features)
-                    
-                    # Add lagged features
-                    reversal_features = add_lagged_reversal_features(reversal_features)
-                    
-                    # Add time/context features
-                    reversal_features = add_time_context_features_reversal(reversal_features)
+                    reversal_features = ReversalTechnicalIndicators.calculate_all_reversal_indicators(reversal_features)
                     
                     st.session_state.reversal_features = reversal_features
                     st.success("✅ Reversal features calculated successfully!")
