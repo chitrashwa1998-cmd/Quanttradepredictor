@@ -1018,15 +1018,31 @@ with direction_tab:
 
             # Apply same time filter to data for display consistency
             if dir_filter == "Last 30 days":
-                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=30)
+                if pd.api.types.is_datetime64_any_dtype(st.session_state.data.index):
+                    cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=30)
+                else:
+                    # For non-datetime index, use last N rows
+                    cutoff_date = len(st.session_state.data) - (30 * 24 * 4)  # Assuming 15-min data
             elif dir_filter == "Last 90 days":
-                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=90)
+                if pd.api.types.is_datetime64_any_dtype(st.session_state.data.index):
+                    cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=90)
+                else:
+                    cutoff_date = len(st.session_state.data) - (90 * 24 * 4)
             elif dir_filter == "Last 6 months":
-                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=180)
+                if pd.api.types.is_datetime64_any_dtype(st.session_state.data.index):
+                    cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=180)
+                else:
+                    cutoff_date = len(st.session_state.data) - (180 * 24 * 4)
             elif dir_filter == "Last year":
-                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=365)
+                if pd.api.types.is_datetime64_any_dtype(st.session_state.data.index):
+                    cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=365)
+                else:
+                    cutoff_date = len(st.session_state.data) - (365 * 24 * 4)
             else:  # All data
-                cutoff_date = st.session_state.data.index.min()
+                if pd.api.types.is_datetime64_any_dtype(st.session_state.data.index):
+                    cutoff_date = st.session_state.data.index.min()
+                else:
+                    cutoff_date = 0
 
             # Filter data for display
             filtered_data = st.session_state.data[st.session_state.data.index >= cutoff_date]
@@ -2000,7 +2016,7 @@ with profit_prob_tab:
             
             # Filter data to match the prediction length and respect the time filter
             try:
-                if hasattr(st.session_state.data.index, 'max') and pd.api.types.is_datetime64_any_dtype(st.session_state.data.index):
+                if pd.api.types.is_datetime64_any_dtype(st.session_state.data.index):
                     # Datetime index - use Timedelta
                     if profit_filter == "Last 30 days":
                         cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=30)
@@ -2925,9 +2941,12 @@ with reversal_tab:
                     "High": recent_data["High"].round(2),
                     "Low": recent_data["Low"].round(2),
                     "Close": recent_data["Close"].round(2),
-                    "Volume": recent_data["Volume"].astype(int),
                     "Reversal_Signal": ["Reversal" if p == 1 else "No Reversal" for p in recent_predictions]
                 }
+                
+                # Add Volume column only if it exists
+                if "Volume" in recent_data.columns:
+                    display_data["Volume"] = recent_data["Volume"].astype(int)
 
                 if recent_probs is not None:
                     display_data["Confidence"] = [f"{np.max(prob):.3f}" for prob in recent_probs]
