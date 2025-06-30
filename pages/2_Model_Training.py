@@ -42,7 +42,7 @@ with col2:
 # Model Selection and Training
 st.header("🎯 Model Selection")
 
-tab1, tab2, tab3 = st.tabs(["Volatility Model", "Direction Model", "Profit Probability Model"])
+tab1, tab2, tab3, tab4 = st.tabs(["Volatility Model", "Direction Model", "Profit Probability Model", "Reversal Model"])
 
 # Volatility Model Tab
 with tab1:
@@ -516,11 +516,172 @@ with tab3:
                     with st.expander("Show error details"):
                         st.code(traceback.format_exc())
 
+# Reversal Model Tab
+with tab4:
+    st.subheader("🔄 Reversal Prediction Model")
+    st.markdown("Predicts market reversal points using specialized technical indicators.")
+    
+    # Reversal model features section
+    st.subheader("Reversal Model Features")
+    
+    if 'reversal_features' not in st.session_state or st.session_state.reversal_features is None:
+        st.warning("⚠️ Reversal features not calculated yet.")
+        
+        if st.button("🔧 Calculate Technical Indicators", type="primary", key="calc_reversal_features"):
+            with st.spinner("Calculating reversal-specific technical indicators..."):
+                try:
+                    from features.reversal_technical_indicators import add_reversal_technical_indicators
+                    from features.reversal_custom_engineered import add_custom_reversal_features
+                    from features.reversal_lagged_features import add_lagged_reversal_features
+                    from features.reversal_time_context import add_time_context_features_reversal
+                    
+                    # Calculate all reversal features
+                    st.info("Starting reversal feature calculation...")
+                    reversal_features = st.session_state.data.copy()
+                    
+                    # Add reversal technical indicators
+                    reversal_features = add_reversal_technical_indicators(reversal_features)
+                    
+                    # Add custom engineered features
+                    reversal_features = add_custom_reversal_features(reversal_features)
+                    
+                    # Add lagged features
+                    reversal_features = add_lagged_reversal_features(reversal_features)
+                    
+                    # Add time/context features
+                    reversal_features = add_time_context_features_reversal(reversal_features)
+                    
+                    st.session_state.reversal_features = reversal_features
+                    st.success("✅ Reversal features calculated successfully!")
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"❌ Error calculating reversal features: {str(e)}")
+                    import traceback
+                    with st.expander("Show error details"):
+                        st.code(traceback.format_exc())
+    else:
+        st.success("✅ Reversal features ready")
+        
+        # Show reversal feature summary
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Features", len(st.session_state.reversal_features.columns))
+        with col2:
+            st.metric("Data Points", len(st.session_state.reversal_features))
+        with col3:
+            # Count reversal-specific features
+            ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'timestamp']
+            reversal_feature_cols = [col for col in st.session_state.reversal_features.columns if col not in ohlc_cols]
+            st.metric("Engineered Features", len(reversal_feature_cols))
+        
+        # Show sample of reversal features
+        with st.expander("View Reversal Feature Sample"):
+            st.dataframe(st.session_state.reversal_features.head(10), use_container_width=True)
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.info("This model predicts potential market reversal points using specialized indicators like RSI, MACD, and momentum signals.")
+    
+    with col2:
+        if st.button("🔄 Train Reversal Model", type="primary", key="train_reversal"):
+            with st.spinner("Training reversal model..."):
+                try:
+                    # Initialize reversal model
+                    from models.reversal_model import ReversalModel
+                    
+                    reversal_model = ReversalModel()
+                    
+                    # Use pre-calculated reversal features if available, otherwise calculate them
+                    if 'reversal_features' in st.session_state and st.session_state.reversal_features is not None:
+                        reversal_features = st.session_state.reversal_features
+                    else:
+                        st.info("Calculating reversal-specific features...")
+                        reversal_features = reversal_model.prepare_features(st.session_state.data)
+                        st.session_state.reversal_features = reversal_features
+                    
+                    # Create reversal target
+                    reversal_target = reversal_model.create_target(st.session_state.data)
+                    
+                    # Validate data
+                    if len(reversal_features) < 100:
+                        st.error("❌ Insufficient data for training. Need at least 100 rows.")
+                        st.stop()
+                    
+                    st.info(f"📊 Reversal data: {len(reversal_features)} samples with {len(reversal_features.columns)} features")
+                    
+                    # Train reversal model with configuration parameters
+                    training_result = reversal_model.train(
+                        reversal_features, 
+                        reversal_target, 
+                        train_split,
+                        max_depth=max_depth,
+                        n_estimators=n_estimators
+                    )
+                    
+                    # Store results
+                    if 'trained_models' not in st.session_state:
+                        st.session_state.trained_models = {}
+                    st.session_state.trained_models['reversal'] = training_result
+                    
+                    # Store reversal models separately for predictions
+                    if 'reversal_trained_models' not in st.session_state:
+                        st.session_state.reversal_trained_models = {}
+                    st.session_state.reversal_trained_models['reversal'] = reversal_model
+                    
+                    # Display results
+                    if training_result is not None:
+                        metrics = training_result.get('metrics', {})
+                        
+                        st.success("✅ Reversal model trained successfully!")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            accuracy = metrics.get('accuracy', 0)
+                            st.metric("Accuracy", f"{accuracy:.2%}")
+                        with col2:
+                            precision = metrics.get('precision', 0)
+                            st.metric("Precision", f"{precision:.2%}")
+                        with col3:
+                            recall = metrics.get('recall', 0)
+                            st.metric("Recall", f"{recall:.2%}")
+                        
+                        # Feature importance for reversal model
+                        if 'feature_importance' in training_result and training_result['feature_importance']:
+                            with st.expander("📊 Reversal Feature Importance"):
+                                features = list(training_result['feature_importance'].keys())
+                                importances = list(training_result['feature_importance'].values())
+                                importance_df = pd.DataFrame({
+                                    'Feature': features,
+                                    'Importance': importances
+                                }).sort_values('Importance', ascending=False)
+                                
+                                st.dataframe(importance_df.head(10))
+                                
+                                fig = px.bar(
+                                    importance_df.head(10),
+                                    x='Importance',
+                                    y='Feature',
+                                    orientation='h',
+                                    title="Top 10 Reversal Features"
+                                )
+                                fig.update_layout(yaxis={'categoryorder':'total ascending'})
+                                st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.error("❌ Failed to train reversal model")
+                        
+                except Exception as e:
+                    st.error(f"❌ Reversal training failed: {str(e)}")
+                    import traceback
+                    with st.expander("Show error details"):
+                        st.code(traceback.format_exc())
+
 # Model Status Section
 st.header("📊 Model Status")
 
 if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.subheader("Volatility Model")
@@ -551,6 +712,16 @@ if hasattr(st.session_state, 'trained_models') and st.session_state.trained_mode
             st.success(f"✅ Trained - Accuracy: {accuracy:.2%}")
         else:
             st.warning("⚠️ Not trained")
+    
+    with col4:
+        st.subheader("Reversal Model")
+        if 'reversal' in st.session_state.trained_models and st.session_state.trained_models['reversal']:
+            result = st.session_state.trained_models['reversal']
+            metrics = result.get('metrics', {})
+            accuracy = metrics.get('accuracy', 0)
+            st.success(f"✅ Trained - Accuracy: {accuracy:.2%}")
+        else:
+            st.warning("⚠️ Not trained")
 else:
     st.info("ℹ️ No models trained yet")
 
@@ -558,45 +729,66 @@ else:
 if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
     st.header("💾 Export Models")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("📥 Save Volatility Model", disabled='volatility' not in st.session_state.trained_models):
-            try:
-                if hasattr(st.session_state, 'volatility_trainer'):
-                    st.session_state.volatility_trainer._save_models_to_database()
-                    st.success("✅ Volatility model saved to database!")
-                else:
-                    st.error("❌ Volatility trainer not available")
-            except Exception as e:
-                st.error(f"❌ Failed to save volatility model: {str(e)}")
+        subcol1, subcol2 = st.columns(2)
+        
+        with subcol1:
+            if st.button("📥 Save Volatility Model", disabled='volatility' not in st.session_state.trained_models):
+                try:
+                    if hasattr(st.session_state, 'volatility_trainer'):
+                        st.session_state.volatility_trainer._save_models_to_database()
+                        st.success("✅ Volatility model saved to database!")
+                    else:
+                        st.error("❌ Volatility trainer not available")
+                except Exception as e:
+                    st.error(f"❌ Failed to save volatility model: {str(e)}")
+        
+        with subcol2:
+            if st.button("📥 Save Direction Model", disabled='direction' not in st.session_state.trained_models):
+                try:
+                    from utils.database_adapter import get_trading_database
+                    db = get_trading_database()
+                    
+                    # Save direction model results
+                    if 'direction' in st.session_state.trained_models:
+                        db.save_model_results('direction', st.session_state.trained_models['direction'])
+                        st.success("✅ Direction model saved to database!")
+                    else:
+                        st.error("❌ Direction model not available")
+                except Exception as e:
+                    st.error(f"❌ Failed to save direction model: {str(e)}")
     
     with col2:
-        if st.button("📥 Save Direction Model", disabled='direction' not in st.session_state.trained_models):
-            try:
-                from utils.database_adapter import get_trading_database
-                db = get_trading_database()
-                
-                # Save direction model results
-                if 'direction' in st.session_state.trained_models:
-                    db.save_model_results('direction', st.session_state.trained_models['direction'])
-                    st.success("✅ Direction model saved to database!")
-                else:
-                    st.error("❌ Direction model not available")
-            except Exception as e:
-                st.error(f"❌ Failed to save direction model: {str(e)}")
-    
-    with col3:
-        if st.button("📥 Save Profit Probability Model", disabled='profit_probability' not in st.session_state.trained_models):
-            try:
-                from utils.database_adapter import get_trading_database
-                db = get_trading_database()
-                
-                # Save profit probability model results
-                if 'profit_probability' in st.session_state.trained_models:
-                    db.save_model_results('profit_probability', st.session_state.trained_models['profit_probability'])
-                    st.success("✅ Profit probability model saved to database!")
-                else:
-                    st.error("❌ Profit probability model not available")
-            except Exception as e:
-                st.error(f"❌ Failed to save profit probability model: {str(e)}")
+        subcol1, subcol2 = st.columns(2)
+        
+        with subcol1:
+            if st.button("📥 Save Profit Probability Model", disabled='profit_probability' not in st.session_state.trained_models):
+                try:
+                    from utils.database_adapter import get_trading_database
+                    db = get_trading_database()
+                    
+                    # Save profit probability model results
+                    if 'profit_probability' in st.session_state.trained_models:
+                        db.save_model_results('profit_probability', st.session_state.trained_models['profit_probability'])
+                        st.success("✅ Profit probability model saved to database!")
+                    else:
+                        st.error("❌ Profit probability model not available")
+                except Exception as e:
+                    st.error(f"❌ Failed to save profit probability model: {str(e)}")
+        
+        with subcol2:
+            if st.button("📥 Save Reversal Model", disabled='reversal' not in st.session_state.trained_models):
+                try:
+                    from utils.database_adapter import get_trading_database
+                    db = get_trading_database()
+                    
+                    # Save reversal model results
+                    if 'reversal' in st.session_state.trained_models:
+                        db.save_model_results('reversal', st.session_state.trained_models['reversal'])
+                        st.success("✅ Reversal model saved to database!")
+                    else:
+                        st.error("❌ Reversal model not available")
+                except Exception as e:
+                    st.error(f"❌ Failed to save reversal model: {str(e)}")
