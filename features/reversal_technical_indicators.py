@@ -17,104 +17,123 @@ class ReversalTechnicalIndicators:
         low_col = 'Low' if 'Low' in df.columns else 'low'
 
         try:
-            # RSI - key reversal indicator
+            # RSI_14 - 14-period RSI
             delta = df[close_col].diff()
             gain = delta.where(delta > 0, 0)
             loss = -delta.where(delta < 0, 0)
             avg_gain = gain.rolling(window=14).mean()
             avg_loss = loss.rolling(window=14).mean()
             rs = avg_gain / avg_loss
-            df['rsi'] = 100 - (100 / (1 + rs))
+            df['rsi_14'] = 100 - (100 / (1 + rs))
 
-            # Williams %R - momentum oscillator
+            # MACD Histogram
+            ema_12 = df[close_col].ewm(span=12).mean()
+            ema_26 = df[close_col].ewm(span=26).mean()
+            macd = ema_12 - ema_26
+            macd_signal = macd.ewm(span=9).mean()
+            df['macd_histogram'] = macd - macd_signal
+
+            # Stochastic K and D
+            lowest_low_k = df[low_col].rolling(14).min()
+            highest_high_k = df[high_col].rolling(14).max()
+            df['stochastic_k'] = ((df[close_col] - lowest_low_k) / (highest_high_k - lowest_low_k)) * 100
+            df['stochastic_d'] = df['stochastic_k'].rolling(3).mean()
+
+            # CCI - Commodity Channel Index
+            typical_price = (df[high_col] + df[low_col] + df[close_col]) / 3
+            sma_tp = typical_price.rolling(20).mean()
+            mean_deviation = typical_price.rolling(20).apply(lambda x: np.mean(np.abs(x - x.mean())))
+            df['cci'] = (typical_price - sma_tp) / (0.015 * mean_deviation)
+
+            # Williams %R
             highest_high = df[high_col].rolling(14).max()
             lowest_low = df[low_col].rolling(14).min()
             df['williams_r'] = ((highest_high - df[close_col]) / (highest_high - lowest_low)) * -100
 
-            # Stochastic Oscillator
-            lowest_low_k = df[low_col].rolling(14).min()
-            highest_high_k = df[high_col].rolling(14).max()
-            df['stoch_k'] = ((df[close_col] - lowest_low_k) / (highest_high_k - lowest_low_k)) * 100
-            df['stoch_d'] = df['stoch_k'].rolling(3).mean()
-
-            # Bollinger Bands for extremes
+            # Bollinger Bands Percent B
             bb_period = 20
             bb_std = 2
             bb_middle = df[close_col].rolling(bb_period).mean()
             bb_std_dev = df[close_col].rolling(bb_period).std()
-            df['bb_upper'] = bb_middle + (bb_std_dev * bb_std)
-            df['bb_lower'] = bb_middle - (bb_std_dev * bb_std)
-            df['bb_position'] = (df[close_col] - bb_lower) / (df['bb_upper'] - bb_lower)
-            
-            # Bollinger Band hits (reversal signals)
-            df['bb_upper_hit'] = (df[close_col] >= df['bb_upper']).astype(int)
-            df['bb_lower_hit'] = (df[close_col] <= df['bb_lower']).astype(int)
+            bb_upper = bb_middle + (bb_std_dev * bb_std)
+            bb_lower = bb_middle - (bb_std_dev * bb_std)
+            df['bb_percent_b'] = (df[close_col] - bb_lower) / (bb_upper - bb_lower)
 
-            # MACD for momentum divergence
-            ema_12 = df[close_col].ewm(span=12).mean()
-            ema_26 = df[close_col].ewm(span=26).mean()
-            df['macd'] = ema_12 - ema_26
-            df['macd_signal'] = df['macd'].ewm(span=9).mean()
-            df['macd_histogram'] = df['macd'] - df['macd_signal']
+            # ATR - Average True Range
+            tr1 = df[high_col] - df[low_col]
+            tr2 = abs(df[high_col] - df[close_col].shift(1))
+            tr3 = abs(df[low_col] - df[close_col].shift(1))
+            true_range = pd.DataFrame({'tr1': tr1, 'tr2': tr2, 'tr3': tr3}).max(axis=1)
+            df['atr'] = true_range.rolling(window=14).mean()
 
-            # Money Flow Index (MFI) - volume-weighted RSI
-            if 'Volume' in df.columns or 'volume' in df.columns:
-                volume_col = 'Volume' if 'Volume' in df.columns else 'volume'
-                typical_price = (df[high_col] + df[low_col] + df[close_col]) / 3
-                money_flow = typical_price * df[volume_col]
+            # Donchian Channel Width
+            donchian_high = df[high_col].rolling(20).max()
+            donchian_low = df[low_col].rolling(20).min()
+            df['donchian_channel_width'] = (donchian_high - donchian_low) / df[close_col]
+
+            # Parabolic SAR
+            def calculate_parabolic_sar(df, af_start=0.02, af_increment=0.02, af_max=0.2):
+                high = df[high_col].values
+                low = df[low_col].values
+                close = df[close_col].values
                 
-                positive_flow = money_flow.where(typical_price > typical_price.shift(1), 0).rolling(14).sum()
-                negative_flow = money_flow.where(typical_price < typical_price.shift(1), 0).rolling(14).sum()
-                money_ratio = positive_flow / negative_flow
-                df['mfi'] = 100 - (100 / (1 + money_ratio))
-            else:
-                df['mfi'] = 50.0  # Neutral value
+                length = len(df)
+                psar = np.zeros(length)
+                psarbull = np.zeros(length)
+                psarbear = np.zeros(length)
+                
+                # Initialize
+                psar[0] = close[0]
+                psarbull[0] = low[0]
+                psarbear[0] = high[0]
+                
+                bull = True
+                af = af_start
+                
+                for i in range(1, length):
+                    if bull:
+                        psar[i] = psar[i-1] + af * (psarbull[i-1] - psar[i-1])
+                        if high[i] > psarbull[i-1]:
+                            psarbull[i] = high[i]
+                            af = min(af + af_increment, af_max)
+                        else:
+                            psarbull[i] = psarbull[i-1]
+                        
+                        if low[i] <= psar[i]:
+                            bull = False
+                            psar[i] = psarbull[i-1]
+                            psarbear[i] = low[i]
+                            af = af_start
+                        else:
+                            psarbear[i] = psarbear[i-1]
+                    else:
+                        psar[i] = psar[i-1] + af * (psarbear[i-1] - psar[i-1])
+                        if low[i] < psarbear[i-1]:
+                            psarbear[i] = low[i]
+                            af = min(af + af_increment, af_max)
+                        else:
+                            psarbear[i] = psarbear[i-1]
+                        
+                        if high[i] >= psar[i]:
+                            bull = True
+                            psar[i] = psarbear[i-1]
+                            psarbull[i] = high[i]
+                            af = af_start
+                        else:
+                            psarbull[i] = psarbull[i-1]
+                
+                return psar
 
-            # CCI - Commodity Channel Index
-            typical_price_cci = (df[high_col] + df[low_col] + df[close_col]) / 3
-            sma_tp = typical_price_cci.rolling(20).mean()
-            mean_deviation = typical_price_cci.rolling(20).apply(lambda x: np.mean(np.abs(x - x.mean())))
-            df['cci'] = (typical_price_cci - sma_tp) / (0.015 * mean_deviation)
+            df['parabolic_sar'] = calculate_parabolic_sar(df)
 
-            # Ultimate Oscillator - multi-timeframe momentum
-            def true_range_uo(high, low, close_prev):
-                return np.maximum(high - low, np.maximum(abs(high - close_prev), abs(low - close_prev)))
-
-            def buying_pressure(close, low, close_prev):
-                return close - np.minimum(low, close_prev)
-
-            close_prev = df[close_col].shift(1)
-            tr = true_range_uo(df[high_col], df[low_col], close_prev)
-            bp = buying_pressure(df[close_col], df[low_col], close_prev)
-
-            avg7_bp = bp.rolling(7).sum()
-            avg7_tr = tr.rolling(7).sum()
-            avg14_bp = bp.rolling(14).sum()
-            avg14_tr = tr.rolling(14).sum()
-            avg28_bp = bp.rolling(28).sum()
-            avg28_tr = tr.rolling(28).sum()
-
-            uo_raw7 = avg7_bp / avg7_tr
-            uo_raw14 = avg14_bp / avg14_tr
-            uo_raw28 = avg28_bp / avg28_tr
-
-            df['ultimate_oscillator'] = 100 * ((4 * uo_raw7) + (2 * uo_raw14) + uo_raw28) / 7
-
-            # Price vs moving averages (trend strength)
-            df['sma_5'] = df[close_col].rolling(5).mean()
-            df['sma_10'] = df[close_col].rolling(10).mean()
-            df['sma_20'] = df[close_col].rolling(20).mean()
-            df['sma_50'] = df[close_col].rolling(50).mean()
-
-            df['price_vs_sma_5'] = (df[close_col] / df['sma_5'] - 1) * 100
-            df['price_vs_sma_10'] = (df[close_col] / df['sma_10'] - 1) * 100
-            df['price_vs_sma_20'] = (df[close_col] / df['sma_20'] - 1) * 100
-            df['price_vs_sma_50'] = (df[close_col] / df['sma_50'] - 1) * 100
+            # Momentum ROC (Rate of Change)
+            period = 10
+            df['momentum_roc'] = ((df[close_col] - df[close_col].shift(period)) / df[close_col].shift(period)) * 100
 
             # Replace inf and nan values
-            reversal_cols = ['rsi', 'williams_r', 'stoch_k', 'stoch_d', 'bb_position', 'bb_upper_hit', 'bb_lower_hit',
-                           'macd', 'macd_signal', 'macd_histogram', 'mfi', 'cci', 'ultimate_oscillator',
-                           'price_vs_sma_5', 'price_vs_sma_10', 'price_vs_sma_20', 'price_vs_sma_50']
+            reversal_cols = ['rsi_14', 'macd_histogram', 'stochastic_k', 'stochastic_d', 'cci', 
+                           'williams_r', 'bb_percent_b', 'atr', 'donchian_channel_width', 
+                           'parabolic_sar', 'momentum_roc']
             
             for col in reversal_cols:
                 if col in df.columns:
@@ -123,17 +142,17 @@ class ReversalTechnicalIndicators:
         except Exception as e:
             print(f"Error calculating reversal technical indicators: {e}")
             # Fallback calculations
-            df['rsi'] = 50.0
-            df['williams_r'] = -50.0
-            df['stoch_k'] = 50.0
-            df['stoch_d'] = 50.0
-            df['bb_position'] = 0.5
-            df['bb_upper_hit'] = 0
-            df['bb_lower_hit'] = 0
+            df['rsi_14'] = 50.0
             df['macd_histogram'] = 0.0
-            df['mfi'] = 50.0
+            df['stochastic_k'] = 50.0
+            df['stochastic_d'] = 50.0
             df['cci'] = 0.0
-            df['ultimate_oscillator'] = 50.0
+            df['williams_r'] = -50.0
+            df['bb_percent_b'] = 0.5
+            df['atr'] = 0.0
+            df['donchian_channel_width'] = 0.0
+            df['parabolic_sar'] = df[close_col] if close_col in df.columns else 0.0
+            df['momentum_roc'] = 0.0
 
         return df
 
