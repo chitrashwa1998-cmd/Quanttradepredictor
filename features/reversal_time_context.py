@@ -36,9 +36,11 @@ def add_time_context_features_reversal(df: pd.DataFrame) -> pd.DataFrame:
     df['minute_of_hour'] = timestamp_col.minute
     df['day_of_week'] = timestamp_col.dayofweek
 
-    # Opening and closing ranges
-    df['is_opening_range'] = timestamp_col.time.to_series().between(pd.to_datetime('09:15').time(), pd.to_datetime('10:00').time()).astype(int).values
-    df['is_closing_range'] = (timestamp_col.time.to_series() >= pd.to_datetime('15:00').time()).astype(int).values
+    # Opening and closing ranges (simplified using hour)
+    hour = timestamp_col.hour
+    minute = timestamp_col.minute
+    df['is_opening_range'] = ((hour == 9) & (minute >= 15) | (hour == 10) & (minute == 0)).astype(int)
+    df['is_closing_range'] = (hour >= 15).astype(int)
 
     # Session phase (simplified numeric encoding)
     hour = timestamp_col.hour
@@ -66,7 +68,8 @@ def add_time_context_features_reversal(df: pd.DataFrame) -> pd.DataFrame:
     df['price_momentum_5'] = df[close_col].diff(5)
 
     # Market volatility & heat context
-    df['log_return'] = np.log(df['close'] / df['close'].shift(1))
+    if 'log_return' not in df.columns:
+        df['log_return'] = np.log(df[close_col] / df[close_col].shift(1))
     df['recent_volatility'] = df['log_return'].rolling(5).std()
     df['market_heat'] = df['log_return'].rolling(5).mean()
 

@@ -59,9 +59,9 @@ def add_lagged_reversal_features(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df[f'lag_price_vs_ema_{period}'] = 0.0  # Use neutral value instead of NaN
 
-    # Rolling window stats
-    df['rolling_high_10'] = df['high'].rolling(10).max()
-    df['rolling_low_10'] = df['low'].rolling(10).min()
+    # Rolling window stats using proper column names
+    df['rolling_high_10'] = df[high_col].rolling(10).max()
+    df['rolling_low_10'] = df[low_col].rolling(10).min()
     df['rolling_std_body_5'] = df['body_size'].rolling(5).std()
     df['rolling_std_return_5'] = df['log_return'].rolling(5).std()
     df['rolling_max_wick_ratio_3'] = df['wick_ratio'].rolling(3).max()
