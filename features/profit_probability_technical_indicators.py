@@ -1,4 +1,5 @@
 
+
 import pandas as pd
 import numpy as np
 from typing import Dict, List
@@ -19,26 +20,26 @@ class ProfitProbabilityTechnicalIndicators:
         volume_col = 'Volume' if 'Volume' in df.columns else 'volume'
 
         try:
-            # MACD calculation
-            ema_12 = df[close_col].ewm(span=12).mean()
-            ema_26 = df[close_col].ewm(span=26).mean()
-            df['macd'] = ema_12 - ema_26
-            df['macd_signal'] = df['macd'].ewm(span=9).mean()
-            df['macd_histogram'] = df['macd'] - df['macd_signal']
+            # EMA calculations - 5, 10, 20
+            df['ema_5'] = df[close_col].ewm(span=5).mean()
+            df['ema_10'] = df[close_col].ewm(span=10).mean()
+            df['ema_20'] = df[close_col].ewm(span=20).mean()
 
-            # EMA fast and slow for crossover detection
-            df['ema_fast'] = df[close_col].ewm(span=8).mean()
-            df['ema_slow'] = df[close_col].ewm(span=21).mean()
-            df['ema_crossover'] = (df['ema_fast'] > df['ema_slow']).astype(int)
-
-            # RSI calculation
+            # RSI calculation (14 period)
             delta = df[close_col].diff()
             gain = delta.where(delta > 0, 0)
             loss = -delta.where(delta < 0, 0)
             avg_gain = gain.rolling(window=14).mean()
             avg_loss = loss.rolling(window=14).mean()
             rs = avg_gain / avg_loss
-            df['rsi'] = 100 - (100 / (1 + rs))
+            df['rsi_14'] = 100 - (100 / (1 + rs))
+
+            # MACD histogram calculation
+            ema_12 = df[close_col].ewm(span=12).mean()
+            ema_26 = df[close_col].ewm(span=26).mean()
+            macd = ema_12 - ema_26
+            macd_signal = macd.ewm(span=9).mean()
+            df['macd_histogram'] = macd - macd_signal
 
             # ATR calculation
             tr1 = df[high_col] - df[low_col]
@@ -52,32 +53,38 @@ class ProfitProbabilityTechnicalIndicators:
             bb_std = 2
             bb_middle = df[close_col].rolling(bb_period).mean()
             bb_std_dev = df[close_col].rolling(bb_period).std()
-            df['bb_upper'] = bb_middle + (bb_std_dev * bb_std)
-            df['bb_lower'] = bb_middle - (bb_std_dev * bb_std)
-            df['bb_position'] = (df[close_col] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'])
+            bb_upper = bb_middle + (bb_std_dev * bb_std)
+            bb_lower = bb_middle - (bb_std_dev * bb_std)
+            df['bb_width'] = (bb_upper - bb_lower) / bb_middle
+            df['bb_position'] = (df[close_col] - bb_lower) / (bb_upper - bb_lower)
 
-            # Stochastic Oscillator
-            lowest_low = df[low_col].rolling(window=14).min()
-            highest_high = df[high_col].rolling(window=14).max()
-            df['stoch_k'] = 100 * (df[close_col] - lowest_low) / (highest_high - lowest_low)
-            df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
+            # Donchian Channel
+            df['donchian_high_20'] = df[high_col].rolling(window=20).max()
+            df['donchian_low_20'] = df[low_col].rolling(window=20).min()
 
-            # Williams %R
-            df['williams_r'] = -100 * (highest_high - df[close_col]) / (highest_high - lowest_low)
-
-            # Momentum indicators
-            df['momentum_5'] = df[close_col] / df[close_col].shift(5) - 1
-            df['momentum_10'] = df[close_col] / df[close_col].shift(10) - 1
-
-            # Rate of Change
-            df['roc_5'] = df[close_col].pct_change(5) * 100
-            df['roc_10'] = df[close_col].pct_change(10) * 100
+            # ADX calculation
+            # Calculate directional movement
+            plus_dm = df[high_col].diff()
+            minus_dm = df[low_col].diff()
+            plus_dm = np.where((plus_dm > minus_dm) & (plus_dm > 0), plus_dm, 0.0)
+            minus_dm = np.where((minus_dm > plus_dm) & (minus_dm > 0), minus_dm, 0.0)
+            
+            # Smooth the directional movements
+            plus_dm_smooth = pd.Series(plus_dm, index=df.index).rolling(window=14).mean()
+            minus_dm_smooth = pd.Series(minus_dm, index=df.index).rolling(window=14).mean()
+            
+            # Calculate directional indicators
+            plus_di = 100 * (plus_dm_smooth / df['atr'])
+            minus_di = 100 * (minus_dm_smooth / df['atr'])
+            
+            # Calculate ADX
+            dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
+            df['adx'] = dx.rolling(window=14).mean()
 
             # Replace inf and nan values
-            numeric_cols = ['macd', 'macd_signal', 'macd_histogram', 'ema_fast', 'ema_slow', 
-                           'ema_crossover', 'rsi', 'atr', 'bb_upper', 'bb_lower', 'bb_position',
-                           'stoch_k', 'stoch_d', 'williams_r', 'momentum_5', 'momentum_10',
-                           'roc_5', 'roc_10']
+            numeric_cols = ['ema_5', 'ema_10', 'ema_20', 'rsi_14', 'macd_histogram', 
+                           'atr', 'bb_width', 'bb_position', 'donchian_high_20', 
+                           'donchian_low_20', 'adx']
             
             for col in numeric_cols:
                 if col in df.columns:
@@ -86,18 +93,17 @@ class ProfitProbabilityTechnicalIndicators:
         except Exception as e:
             print(f"Error calculating profit probability technical indicators: {e}")
             # Fallback calculations
-            df['macd'] = df[close_col].ewm(span=12).mean() - df[close_col].ewm(span=26).mean()
-            df['macd_signal'] = df['macd'].ewm(span=9).mean()
-            df['rsi'] = 50.0
+            df['ema_5'] = df[close_col].ewm(span=5).mean()
+            df['ema_10'] = df[close_col].ewm(span=10).mean()
+            df['ema_20'] = df[close_col].ewm(span=20).mean()
+            df['rsi_14'] = 50.0
+            df['macd_histogram'] = 0.0
             df['atr'] = (df[high_col] - df[low_col]).rolling(14).mean()
-            df['ema_fast'] = df[close_col].ewm(span=8).mean()
-            df['ema_slow'] = df[close_col].ewm(span=21).mean()
-            df['ema_crossover'] = 1
-            df['bb_upper'] = df[close_col] * 1.02
-            df['bb_lower'] = df[close_col] * 0.98
+            df['bb_width'] = df[close_col].rolling(20).std() / df[close_col].rolling(20).mean()
             df['bb_position'] = 0.5
-            df['stoch_k'] = 50.0
-            df['stoch_d'] = 50.0
+            df['donchian_high_20'] = df[high_col].rolling(20).max()
+            df['donchian_low_20'] = df[low_col].rolling(20).min()
+            df['adx'] = 25.0
 
         return df
 
@@ -177,3 +183,4 @@ class ProfitProbabilityTechnicalIndicators:
         print(f"Profit probability features: {feature_cols}")
 
         return result_df
+
