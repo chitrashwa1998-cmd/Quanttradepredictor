@@ -8,6 +8,24 @@ from plotly.subplots import make_subplots
 
 st.set_page_config(page_title="Predictions", page_icon="🔮", layout="wide")
 
+def safe_format_date_range(index):
+    """Safely format date range from index, handling both datetime and non-datetime indexes."""
+    try:
+        if pd.api.types.is_datetime64_any_dtype(index):
+            return f"{index[0].strftime('%Y-%m-%d')} to {index[-1].strftime('%Y-%m-%d')}"
+        elif pd.api.types.is_numeric_dtype(index):
+            # Try to convert numeric timestamps to datetime
+            start_date = pd.to_datetime(index[0], unit='s', errors='coerce')
+            end_date = pd.to_datetime(index[-1], unit='s', errors='coerce')
+            if pd.notna(start_date) and pd.notna(end_date):
+                return f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+            else:
+                return f"Row {index[0]} to Row {index[-1]}"
+        else:
+            return f"Row {index[0]} to Row {index[-1]}"
+    except Exception:
+        return f"Row {index[0]} to Row {index[-1]}"
+
 # Initialize session state variables if they don't exist
 if 'data' not in st.session_state:
     st.session_state.data = None
@@ -816,7 +834,7 @@ with volatility_tab:
                     'Total Predictions': f"{len(predictions):,}",
                     'Feature Count': f"{len(st.session_state.features.columns) if st.session_state.features is not None else 'N/A'}",
                     'Data Points Used': f"{len(st.session_state.data):,}",
-                    'Prediction Date Range': f"{st.session_state.data.index[0].strftime('%Y-%m-%d')} to {st.session_state.data.index[-1].strftime('%Y-%m-%d')}"
+                    'Prediction Date Range': safe_format_date_range(st.session_state.data.index)
                 }
 
                 config_df = pd.DataFrame(
