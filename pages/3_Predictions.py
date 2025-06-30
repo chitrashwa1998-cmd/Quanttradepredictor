@@ -1812,20 +1812,39 @@ with profit_prob_tab:
                     profit_prob_model = st.session_state.profit_prob_trained_models['profit_probability']
                     profit_prob_features = st.session_state.profit_prob_features.copy()
 
-                    # Apply time filter to prevent system hang
-                    if profit_filter == "Last 30 days":
-                        cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=30)
-                    elif profit_filter == "Last 90 days":
-                        cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=90)
-                    elif profit_filter == "Last 6 months":
-                        cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=180)
-                    elif profit_filter == "Last year":
-                        cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=365)
-                    else:  # All data
-                        cutoff_date = profit_prob_features.index.min()
-
-                    # Filter profit probability features based on selected time period
-                    profit_prob_features_filtered = profit_prob_features[profit_prob_features.index >= cutoff_date]
+                    # Apply time filter to prevent system hang - handle different index types
+                    try:
+                        # Check if index is datetime-like
+                        if hasattr(profit_prob_features.index, 'max') and pd.api.types.is_datetime64_any_dtype(profit_prob_features.index):
+                            # Datetime index - use Timedelta
+                            if profit_filter == "Last 30 days":
+                                cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=30)
+                            elif profit_filter == "Last 90 days":
+                                cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=90)
+                            elif profit_filter == "Last 6 months":
+                                cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=180)
+                            elif profit_filter == "Last year":
+                                cutoff_date = profit_prob_features.index.max() - pd.Timedelta(days=365)
+                            else:  # All data
+                                cutoff_date = profit_prob_features.index.min()
+                            profit_prob_features_filtered = profit_prob_features[profit_prob_features.index >= cutoff_date]
+                        else:
+                            # Non-datetime index - use row count filtering
+                            total_rows = len(profit_prob_features)
+                            if profit_filter == "Last 30 days":
+                                start_idx = max(0, total_rows - 8640)  # ~30 days of 5-min data
+                            elif profit_filter == "Last 90 days":
+                                start_idx = max(0, total_rows - 25920)  # ~90 days of 5-min data
+                            elif profit_filter == "Last 6 months":
+                                start_idx = max(0, total_rows - 51840)  # ~6 months of 5-min data
+                            elif profit_filter == "Last year":
+                                start_idx = max(0, total_rows - 103680)  # ~1 year of 5-min data
+                            else:  # All data
+                                start_idx = 0
+                            profit_prob_features_filtered = profit_prob_features.iloc[start_idx:]
+                    except Exception as filter_error:
+                        st.warning(f"Time filtering failed, using all data: {str(filter_error)}")
+                        profit_prob_features_filtered = profit_prob_features
 
                     st.info(f"Processing {len(profit_prob_features_filtered)} data points for {profit_filter}")
 
@@ -1857,20 +1876,39 @@ with profit_prob_tab:
             predictions = st.session_state.profit_prob_predictions
             probabilities = st.session_state.profit_prob_probabilities
 
-            # Apply same time filter to data for display consistency
-            if profit_filter == "Last 30 days":
-                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=30)
-            elif profit_filter == "Last 90 days":
-                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=90)
-            elif profit_filter == "Last 6 months":
-                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=180)
-            elif profit_filter == "Last year":
-                cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=365)
-            else:  # All data
-                cutoff_date = st.session_state.data.index.min()
-
-            # Filter data for display
-            filtered_data = st.session_state.data[st.session_state.data.index >= cutoff_date]
+            # Apply same time filter to data for display consistency - handle different index types
+            try:
+                # Check if index is datetime-like
+                if hasattr(st.session_state.data.index, 'max') and pd.api.types.is_datetime64_any_dtype(st.session_state.data.index):
+                    # Datetime index - use Timedelta
+                    if profit_filter == "Last 30 days":
+                        cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=30)
+                    elif profit_filter == "Last 90 days":
+                        cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=90)
+                    elif profit_filter == "Last 6 months":
+                        cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=180)
+                    elif profit_filter == "Last year":
+                        cutoff_date = st.session_state.data.index.max() - pd.Timedelta(days=365)
+                    else:  # All data
+                        cutoff_date = st.session_state.data.index.min()
+                    filtered_data = st.session_state.data[st.session_state.data.index >= cutoff_date]
+                else:
+                    # Non-datetime index - use row count filtering
+                    total_rows = len(st.session_state.data)
+                    if profit_filter == "Last 30 days":
+                        start_idx = max(0, total_rows - 8640)  # ~30 days of 5-min data
+                    elif profit_filter == "Last 90 days":
+                        start_idx = max(0, total_rows - 25920)  # ~90 days of 5-min data
+                    elif profit_filter == "Last 6 months":
+                        start_idx = max(0, total_rows - 51840)  # ~6 months of 5-min data
+                    elif profit_filter == "Last year":
+                        start_idx = max(0, total_rows - 103680)  # ~1 year of 5-min data
+                    else:  # All data
+                        start_idx = 0
+                    filtered_data = st.session_state.data.iloc[start_idx:]
+            except Exception as filter_error:
+                st.warning(f"Display filtering failed, using all data: {str(filter_error)}")
+                filtered_data = st.session_state.data
 
             # Enhanced statistics
             profitable_count = np.sum(predictions == 1)
