@@ -53,29 +53,26 @@ class ProfitProbabilityModel:
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
-        from features.technical_indicators import TechnicalIndicators
+        from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
         
-        # Calculate profit probability-specific indicators
-        result_df = TechnicalIndicators.calculate_profit_probability_indicators(df)
+        # Calculate all profit probability-specific indicators
+        result_df = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(df)
         
-        # Define profit probability-specific features
-        profit_features = ['macd', 'macd_signal', 'rsi', 'atr', 'ema_fast', 'ema_slow', 'ema_crossover', 'bb_upper', 'bb_lower', 'bb_position', 'stoch_k', 'stoch_d']
+        # Get all non-OHLC features
+        feature_columns = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
         
-        # Check which features are available
-        available_features = [col for col in profit_features if col in result_df.columns]
-        
-        if len(available_features) == 0:
+        if len(feature_columns) == 0:
             raise ValueError(f"No profit probability features found. Available columns: {list(result_df.columns)}")
         
         # Select only profit probability features and remove NaN
-        result_df = result_df[available_features].dropna()
+        result_df = result_df[feature_columns].dropna()
         
         if result_df.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
         
-        print(f"Profit probability model using {len(available_features)} features: {available_features}")
+        print(f"Profit probability model using {len(feature_columns)} features: {feature_columns}")
         
-        self.feature_names = available_features
+        self.feature_names = feature_columns
         return result_df
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:
