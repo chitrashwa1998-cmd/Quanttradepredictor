@@ -17,6 +17,9 @@ def add_time_context_features_profit_prob(df: pd.DataFrame) -> pd.DataFrame:
         df['timestamp'] = df.index
     
     df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    # Store timestamp for processing but will remove it later
+    temp_timestamp = df['timestamp'].copy()
 
     # Basic time breakdown
     df['hour_of_day'] = df['timestamp'].dt.hour
@@ -70,5 +73,9 @@ def add_time_context_features_profit_prob(df: pd.DataFrame) -> pd.DataFrame:
     # Simple rolling sum instead of complex groupby
     df['green_candles_last_5'] = df['green_candle'].rolling(5).sum()
     df['red_candles_last_5'] = df['red_candle'].rolling(5).sum()
+
+    # Remove timestamp column to prevent it from being used as a feature
+    if 'timestamp' in df.columns:
+        df = df.drop('timestamp', axis=1)
 
     return df

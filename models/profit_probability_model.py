@@ -59,16 +59,17 @@ class ProfitProbabilityModel:
         result_df = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(df)
         
         # Get all non-OHLC features, but exclude non-numeric columns
-        excluded_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'timestamp', 'session_phase', 'date']
+        excluded_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'timestamp', 'session_phase', 'date', 'Timestamp', 'Date', 'DateTime']
         feature_columns = [col for col in result_df.columns if col not in excluded_cols]
         
         # Further filter to only numeric columns
         numeric_columns = []
         for col in feature_columns:
-            if pd.api.types.is_numeric_dtype(result_df[col]):
+            # Check if column is numeric and not a datetime type
+            if pd.api.types.is_numeric_dtype(result_df[col]) and not pd.api.types.is_datetime64_any_dtype(result_df[col]):
                 numeric_columns.append(col)
             else:
-                print(f"Excluding non-numeric column: {col}")
+                print(f"Excluding non-numeric or datetime column: {col}")
         
         feature_columns = numeric_columns
         
@@ -117,6 +118,19 @@ class ProfitProbabilityModel:
         X_test = X_clean.iloc[split_idx:]
         y_train = y_clean.iloc[:split_idx]
         y_test = y_clean.iloc[split_idx:]
+
+        # Final safety check: remove any datetime columns that might have slipped through
+        datetime_cols = []
+        for col in X_train.columns:
+            if pd.api.types.is_datetime64_any_dtype(X_train[col]) or 'timestamp' in col.lower() or 'date' in col.lower():
+                datetime_cols.append(col)
+        
+        if datetime_cols:
+            print(f"Removing datetime columns before scaling: {datetime_cols}")
+            X_train = X_train.drop(datetime_cols, axis=1)
+            X_test = X_test.drop(datetime_cols, axis=1)
+            # Update feature names
+            self.feature_names = [fn for fn in self.feature_names if fn not in datetime_cols]
 
         # Scale features
         self.scaler = StandardScaler()
