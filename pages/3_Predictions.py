@@ -2734,8 +2734,21 @@ with reversal_tab:
                     if reversal_filter != "All data":
                         days_map = {"Last 30 days": 30, "Last 90 days": 90, "Last 6 months": 180, "Last year": 365}
                         days = days_map[reversal_filter]
-                        cutoff_date = filtered_data.index[-1] - pd.Timedelta(days=days)
-                        filtered_data = filtered_data[filtered_data.index >= cutoff_date]
+                        
+                        # Get the last date from the index, handling both datetime and integer indexes
+                        if hasattr(filtered_data.index, 'max'):
+                            last_date = filtered_data.index.max()
+                        else:
+                            last_date = filtered_data.index[-1]
+                        
+                        # Ensure we have a datetime for proper timedelta calculation
+                        if pd.api.types.is_datetime64_any_dtype(filtered_data.index):
+                            cutoff_date = last_date - pd.Timedelta(days=days)
+                            filtered_data = filtered_data[filtered_data.index >= cutoff_date]
+                        else:
+                            # For non-datetime index, use the last N rows instead
+                            num_rows = min(days * 24 * 4, len(filtered_data))  # Assuming 15-min data
+                            filtered_data = filtered_data.tail(num_rows)
 
                     # Get reversal model and features
                     reversal_model = st.session_state.reversal_trained_models["reversal"]
@@ -2779,8 +2792,21 @@ with reversal_tab:
             if reversal_filter != "All data":
                 days_map = {"Last 30 days": 30, "Last 90 days": 90, "Last 6 months": 180, "Last year": 365}
                 days = days_map[reversal_filter]
-                cutoff_date = filtered_data.index[-1] - pd.Timedelta(days=days)
-                filtered_data = filtered_data[filtered_data.index >= cutoff_date]
+                
+                # Get the last date from the index, handling both datetime and integer indexes
+                if hasattr(filtered_data.index, 'max'):
+                    last_date = filtered_data.index.max()
+                else:
+                    last_date = filtered_data.index[-1]
+                
+                # Ensure we have a datetime for proper timedelta calculation
+                if pd.api.types.is_datetime64_any_dtype(filtered_data.index):
+                    cutoff_date = last_date - pd.Timedelta(days=days)
+                    filtered_data = filtered_data[filtered_data.index >= cutoff_date]
+                else:
+                    # For non-datetime index, use the last N rows instead
+                    num_rows = min(days * 24 * 4, len(filtered_data))  # Assuming 15-min data
+                    filtered_data = filtered_data.tail(num_rows)
 
             # Align data with predictions
             reversal_features_clean = st.session_state.reversal_trained_models["reversal"].prepare_features(filtered_data).dropna()
