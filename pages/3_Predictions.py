@@ -412,13 +412,27 @@ with volatility_tab:
                             return "🔵 Very Low"
 
                     # Create the main predictions dataframe with proper data types
-                    # Handle different index types (datetime vs range)
-                    if hasattr(recent_prices.index, 'strftime'):
-                        # DateTime index
-                        date_col = recent_prices.index.strftime('%Y-%m-%d')
-                        time_col = recent_prices.index.strftime('%H:%M:%S')
-                    else:
-                        # Range index or other - create sequential dates
+                    # Handle different index types safely
+                    try:
+                        if pd.api.types.is_datetime64_any_dtype(recent_prices.index):
+                            # DateTime index
+                            date_col = recent_prices.index.strftime('%Y-%m-%d')
+                            time_col = recent_prices.index.strftime('%H:%M:%S')
+                        elif pd.api.types.is_numeric_dtype(recent_prices.index):
+                            # Try to convert numeric timestamps to datetime
+                            datetime_index = pd.to_datetime(recent_prices.index, unit='s', errors='coerce')
+                            if not datetime_index.isna().all():
+                                date_col = datetime_index.strftime('%Y-%m-%d')
+                                time_col = datetime_index.strftime('%H:%M:%S')
+                            else:
+                                date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
+                                time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices))]
+                        else:
+                            # Range index or other - create sequential dates
+                            date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
+                            time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices))]
+                    except Exception:
+                        # Fallback for any errors
                         date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
                         time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices))]
 
@@ -1285,11 +1299,25 @@ with direction_tab:
                     else:
                         return "🟡 Weak"
 
-                # Create the main predictions dataframe
-                if hasattr(recent_prices_aligned.index, 'strftime'):
-                    date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
-                    time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
-                else:
+                # Create the main predictions dataframe with safe datetime handling
+                try:
+                    if pd.api.types.is_datetime64_any_dtype(recent_prices_aligned.index):
+                        date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
+                        time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
+                    elif pd.api.types.is_numeric_dtype(recent_prices_aligned.index):
+                        # Try to convert numeric timestamps to datetime
+                        datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='s', errors='coerce')
+                        if not datetime_index.isna().all():
+                            date_col = datetime_index.strftime('%Y-%m-%d')
+                            time_col = datetime_index.strftime('%H:%M:%S')
+                        else:
+                            date_col = [f"Point_{i+1}" for i in range(len(recent_prices_aligned))]
+                            time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices_aligned))]
+                    else:
+                        date_col = [f"Point_{i+1}" for i in range(len(recent_prices_aligned))]
+                        time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices_aligned))]
+                except Exception:
+                    # Fallback for any errors
                     date_col = [f"Point_{i+1}" for i in range(len(recent_prices_aligned))]
                     time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices_aligned))]
 
@@ -1754,7 +1782,7 @@ with direction_tab:
                     'Total Predictions': f"{len(predictions):,}",
                     'Feature Count': f"{len(st.session_state.direction_features.columns) if st.session_state.direction_features is not None else 'N/A'}",
                     'Data Points Used': f"{len(st.session_state.data):,}",
-                    'Prediction Date Range': f"{st.session_state.data.index[0].strftime('%Y-%m-%d')} to {st.session_state.data.index[-1].strftime('%Y-%m-%d')}"
+                    'Prediction Date Range': safe_format_date_range(st.session_state.data.index)
                 }
 
                 config_df = pd.DataFrame(
@@ -2252,11 +2280,25 @@ with profit_prob_tab:
                     else:
                         return "🟡 Uncertain"
 
-                # Create the main predictions dataframe
-                if hasattr(recent_prices_aligned.index, 'strftime'):
-                    date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
-                    time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
-                else:
+                # Create the main predictions dataframe with safe datetime handling
+                try:
+                    if pd.api.types.is_datetime64_any_dtype(recent_prices_aligned.index):
+                        date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
+                        time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
+                    elif pd.api.types.is_numeric_dtype(recent_prices_aligned.index):
+                        # Try to convert numeric timestamps to datetime
+                        datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='s', errors='coerce')
+                        if not datetime_index.isna().all():
+                            date_col = datetime_index.strftime('%Y-%m-%d')
+                            time_col = datetime_index.strftime('%H:%M:%S')
+                        else:
+                            date_col = [f"Point_{i+1}" for i in range(len(recent_prices_aligned))]
+                            time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices_aligned))]
+                    else:
+                        date_col = [f"Point_{i+1}" for i in range(len(recent_prices_aligned))]
+                        time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices_aligned))]
+                except Exception:
+                    # Fallback for any errors
                     date_col = [f"Point_{i+1}" for i in range(len(recent_prices_aligned))]
                     time_col = [f"{i:02d}:00:00" for i in range(len(recent_prices_aligned))]
 
@@ -2519,7 +2561,7 @@ with profit_prob_tab:
                     'Total Predictions': f"{len(predictions):,}",
                     'Feature Count': f"{len(st.session_state.profit_prob_features.columns) if st.session_state.profit_prob_features is not None else 'N/A'}",
                     'Data Points Used': f"{len(st.session_state.data):,}",
-                    'Prediction Date Range': f"{st.session_state.data.index[0].strftime('%Y-%m-%d')} to {st.session_state.data.index[-1].strftime('%Y-%m-%d')}"
+                    'Prediction Date Range': safe_format_date_range(st.session_state.data.index)
                 }
 
                 config_df = pd.DataFrame(
