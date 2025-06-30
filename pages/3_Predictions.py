@@ -714,8 +714,7 @@ with volatility_tab:
                             r_squared = float(correlation ** 2)
 
                             # Display performance metrics
-                            col1, col2```python
-, col3, col4, col5 = st.columns(5)
+                            col1, col2, col3, col4, col5 = st.columns(5)
                             with col1:
                                 st.metric("MAE", f"{mae:.6f}")
                             with col2:
