@@ -63,9 +63,12 @@ def add_time_context_features_profit_prob(df: pd.DataFrame) -> pd.DataFrame:
         df['gap_pct'] = 0.0
         df['is_large_gap'] = 0
 
-    # Number of consecutive green or red candles
-    df['green_candle'] = (df['close'] > df['open']).astype(int)
-    df['red_candle'] = (df['close'] < df['open']).astype(int)
-    df['num_consecutive_green_red'] = df['green_candle'].groupby((df['green_candle'] != df['green_candle'].shift()).cumsum()).cumcount() + 1
+    # Simple candle direction features (much faster)
+    df['green_candle'] = (df[close_col] > df[open_col]).astype(int)
+    df['red_candle'] = (df[close_col] < df[open_col]).astype(int)
+    
+    # Simple rolling sum instead of complex groupby
+    df['green_candles_last_5'] = df['green_candle'].rolling(5).sum()
+    df['red_candles_last_5'] = df['red_candle'].rolling(5).sum()
 
     return df

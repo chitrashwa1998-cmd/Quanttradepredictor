@@ -149,13 +149,23 @@ class ProfitProbabilityTechnicalIndicators:
 
         # Add time context features for profit probability
         print("Step 4: Adding time context features...")
-        from features.profit_probability_time_context import add_time_context_features_profit_prob
         try:
+            from features.profit_probability_time_context import add_time_context_features_profit_prob
             result_df = add_time_context_features_profit_prob(result_df)
             time_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
             print(f"After time features: {len(time_features)} features")
         except Exception as e:
             print(f"Error in time features: {e}")
+            # Add minimal time features as fallback
+            if 'timestamp' in result_df.columns:
+                result_df['hour'] = pd.to_datetime(result_df['timestamp']).dt.hour
+                result_df['minute'] = pd.to_datetime(result_df['timestamp']).dt.minute
+                result_df['day_of_week'] = pd.to_datetime(result_df['timestamp']).dt.dayofweek
+            else:
+                result_df['hour'] = 12  # Default mid-day
+                result_df['minute'] = 30
+                result_df['day_of_week'] = 2  # Tuesday
+            print("Added fallback time features")
 
         # Final cleanup
         print("Step 5: Final cleanup...")
