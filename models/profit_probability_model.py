@@ -58,13 +58,24 @@ class ProfitProbabilityModel:
         # Calculate all profit probability-specific indicators
         result_df = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(df)
         
-        # Get all non-OHLC features
-        feature_columns = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
+        # Get all non-OHLC features, but exclude non-numeric columns
+        excluded_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'timestamp', 'session_phase', 'date']
+        feature_columns = [col for col in result_df.columns if col not in excluded_cols]
+        
+        # Further filter to only numeric columns
+        numeric_columns = []
+        for col in feature_columns:
+            if pd.api.types.is_numeric_dtype(result_df[col]):
+                numeric_columns.append(col)
+            else:
+                print(f"Excluding non-numeric column: {col}")
+        
+        feature_columns = numeric_columns
         
         if len(feature_columns) == 0:
-            raise ValueError(f"No profit probability features found. Available columns: {list(result_df.columns)}")
+            raise ValueError(f"No numeric features found. Available columns: {list(result_df.columns)}")
         
-        # Select only profit probability features and remove NaN
+        # Select only numeric features and remove NaN
         result_df = result_df[feature_columns].dropna()
         
         if result_df.empty:
