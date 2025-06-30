@@ -10,11 +10,25 @@ class ReversalTechnicalIndicators:
         """Calculate indicators specifically for reversal model"""
         df = df.copy()
 
-        # Ensure we have the right column names
-        close_col = 'Close' if 'Close' in df.columns else 'close'
-        open_col = 'Open' if 'Open' in df.columns else 'open'
-        high_col = 'High' if 'High' in df.columns else 'high'
-        low_col = 'Low' if 'Low' in df.columns else 'low'
+        # Ensure we have the right column names - check all variations
+        close_col = None
+        open_col = None
+        high_col = None
+        low_col = None
+        
+        for col in df.columns:
+            if col.lower() == 'close':
+                close_col = col
+            elif col.lower() == 'open':
+                open_col = col
+            elif col.lower() == 'high':
+                high_col = col
+            elif col.lower() == 'low':
+                low_col = col
+                
+        if not all([close_col, open_col, high_col, low_col]):
+            missing = [name for name, col in [('Close', close_col), ('Open', open_col), ('High', high_col), ('Low', low_col)] if col is None]
+            raise ValueError(f"Missing required OHLC columns: {missing}. Available columns: {list(df.columns)}")
 
         try:
             # RSI_14 - 14-period RSI

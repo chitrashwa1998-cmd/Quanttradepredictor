@@ -128,129 +128,90 @@ class ReversalModel:
         return reversal_signal
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Prepare features for reversal model."""
+        """Prepare comprehensive reversal features including technical indicators, custom features, lagged features, and time context."""
         if df.empty:
-            print("⚠️ Input DataFrame is empty, creating dummy features")
-            # Create dummy features as fallback
-            dummy_df = pd.DataFrame(index=range(100))
-            for feature in ['rsi_14', 'williams_r', 'stochastic_k', 'stochastic_d', 'macd_histogram', 'cci', 'bb_percent_b', 'atr', 'donchian_channel_width', 'parabolic_sar', 'momentum_roc', 'bb_upper_hit', 'bb_lower_hit']:
-                dummy_df[feature] = np.random.randn(100) * 10 + 50
-            self.feature_names = list(dummy_df.columns)
-            return dummy_df
+            raise ValueError("Input DataFrame is empty")
 
-        try:
-            from features.reversal_technical_indicators import ReversalTechnicalIndicators
-            
-            # Calculate reversal-specific indicators
-            result_df = ReversalTechnicalIndicators.calculate_reversal_indicators(df)
-            
-            # Define reversal-specific features (matching what's actually calculated)
-            reversal_features = ['rsi_14', 'williams_r', 'stochastic_k', 'stochastic_d', 'macd_histogram', 'cci', 'bb_percent_b', 'atr', 'donchian_channel_width', 'parabolic_sar', 'momentum_roc']
-            
-            # Add Bollinger Band hit flags if we can calculate them
-            try:
-                # Calculate Bollinger Bands
-                close_col = 'Close' if 'Close' in df.columns else 'close'
-                bb_period = 20
-                bb_std = 2
-                bb_middle = df[close_col].rolling(bb_period).mean()
-                bb_std_dev = df[close_col].rolling(bb_period).std()
-                bb_upper = bb_middle + (bb_std_dev * bb_std)
-                bb_lower = bb_middle - (bb_std_dev * bb_std)
-                
-                # Add BB hit flags
-                result_df['bb_upper_hit'] = (df[close_col] >= bb_upper).astype(int)
-                result_df['bb_lower_hit'] = (df[close_col] <= bb_lower).astype(int)
-                reversal_features.extend(['bb_upper_hit', 'bb_lower_hit'])
-            except Exception as e:
-                print(f"Could not calculate Bollinger Band flags: {e}")
-            
-            # Check which features are available
-            available_features = [col for col in reversal_features if col in result_df.columns]
-            
-            if len(available_features) == 0:
-                print(f"⚠️ No reversal features found. Available columns: {list(result_df.columns)}")
-                print("Creating dummy features as fallback...")
-                # Create dummy features as fallback
-                dummy_df = pd.DataFrame(index=df.index)
-                for feature in reversal_features:
-                    dummy_df[feature] = np.random.randn(len(df)) * 10 + 50
-                self.feature_names = reversal_features
-                return dummy_df.dropna()
-            
-            # Select only reversal features and remove NaN
-            result_df = result_df[available_features].copy()
-            
-            # Handle NaN values by forward filling then backward filling
-            result_df = result_df.ffill().bfill()
-            
-            # If still have NaN, fill with neutral values
-            for col in result_df.columns:
-                if result_df[col].isna().any():
-                    if 'rsi' in col or 'stochastic' in col:
-                        result_df[col] = result_df[col].fillna(50)  # Neutral RSI/Stochastic
-                    elif 'williams' in col:
-                        result_df[col] = result_df[col].fillna(-50)  # Neutral Williams %R
-                    elif 'cci' in col:
-                        result_df[col] = result_df[col].fillna(0)  # Neutral CCI
-                    elif 'macd' in col:
-                        result_df[col] = result_df[col].fillna(0)  # Neutral MACD
-                    elif 'hit' in col:
-                        result_df[col] = result_df[col].fillna(0)  # No hits by default
-                    else:
-                        result_df[col] = result_df[col].fillna(0)
-            
-            # Final dropna to remove any remaining NaN
-            result_df = result_df.dropna()
-            
-            if result_df.empty:
-                print("⚠️ DataFrame is empty after cleaning, creating dummy features")
-                # Create dummy features as final fallback
-                dummy_df = pd.DataFrame(index=df.index[:100] if len(df) >= 100 else df.index)
-                for feature in available_features:
-                    if 'rsi' in feature or 'stochastic' in feature:
-                        dummy_df[feature] = np.random.uniform(20, 80, len(dummy_df))
-                    elif 'williams' in feature:
-                        dummy_df[feature] = np.random.uniform(-80, -20, len(dummy_df))
-                    elif 'cci' in feature:
-                        dummy_df[feature] = np.random.uniform(-100, 100, len(dummy_df))
-                    elif 'macd' in feature:
-                        dummy_df[feature] = np.random.uniform(-1, 1, len(dummy_df))
-                    elif 'hit' in feature:
-                        dummy_df[feature] = np.random.choice([0, 1], len(dummy_df), p=[0.9, 0.1])
-                    else:
-                        dummy_df[feature] = np.random.randn(len(dummy_df))
-                result_df = dummy_df
-            
-            print(f"✅ Reversal model using {len(available_features)} features: {available_features}")
-            
-            self.feature_names = available_features
-            return result_df
-            
-        except Exception as e:
-            print(f"⚠️ Error calculating reversal features: {e}")
-            print("Creating dummy features as fallback...")
-            
-            # Create dummy features as complete fallback
-            dummy_features = ['rsi_14', 'williams_r', 'stochastic_k', 'stochastic_d', 'macd_histogram', 'cci', 'bb_percent_b', 'atr', 'donchian_channel_width', 'parabolic_sar', 'momentum_roc', 'bb_upper_hit', 'bb_lower_hit']
-            dummy_df = pd.DataFrame(index=df.index[:100] if len(df) >= 100 else df.index)
-            
-            for feature in dummy_features:
-                if 'rsi' in feature or 'stochastic' in feature:
-                    dummy_df[feature] = np.random.uniform(20, 80, len(dummy_df))
-                elif 'williams' in feature:
-                    dummy_df[feature] = np.random.uniform(-80, -20, len(dummy_df))
-                elif 'cci' in feature:
-                    dummy_df[feature] = np.random.uniform(-100, 100, len(dummy_df))
-                elif 'macd' in feature:
-                    dummy_df[feature] = np.random.uniform(-1, 1, len(dummy_df))
-                elif 'hit' in feature:
-                    dummy_df[feature] = np.random.choice([0, 1], len(dummy_df), p=[0.9, 0.1])
+        print("🔧 Calculating comprehensive reversal features...")
+        
+        # Start with a copy of the input data
+        result_df = df.copy()
+        
+        # Step 1: Calculate reversal technical indicators
+        print("  - Computing reversal technical indicators...")
+        from features.reversal_technical_indicators import ReversalTechnicalIndicators
+        result_df = ReversalTechnicalIndicators.calculate_reversal_indicators(result_df)
+        
+        # Step 2: Add custom reversal features
+        print("  - Adding custom reversal features...")
+        from features.reversal_custom_engineered import add_custom_reversal_features
+        result_df = add_custom_reversal_features(result_df)
+        
+        # Step 3: Add lagged reversal features
+        print("  - Adding lagged reversal features...")
+        from features.reversal_lagged_features import add_lagged_reversal_features
+        result_df = add_lagged_reversal_features(result_df)
+        
+        # Step 4: Add time context features
+        print("  - Adding time context features...")
+        from features.reversal_time_context import add_time_context_features_reversal
+        result_df = add_time_context_features_reversal(result_df)
+        
+        # Step 5: Select only feature columns (exclude OHLC columns)
+        ohlc_columns = ['Open', 'High', 'Low', 'Close', 'Volume', 'open', 'high', 'low', 'close', 'volume']
+        feature_columns = [col for col in result_df.columns if col not in ohlc_columns]
+        
+        if len(feature_columns) == 0:
+            raise ValueError(f"No reversal features were generated. Available columns: {list(result_df.columns)}")
+        
+        # Select only feature columns
+        features_df = result_df[feature_columns].copy()
+        
+        # Step 6: Handle missing values
+        print(f"  - Cleaning {len(feature_columns)} features...")
+        
+        # Replace infinite values with NaN
+        features_df = features_df.replace([np.inf, -np.inf], np.nan)
+        
+        # Forward fill then backward fill
+        features_df = features_df.ffill().bfill()
+        
+        # Fill remaining NaN with appropriate neutral values
+        for col in features_df.columns:
+            if features_df[col].isna().any():
+                if any(term in col.lower() for term in ['rsi', 'stochastic']):
+                    features_df[col] = features_df[col].fillna(50)  # Neutral RSI/Stochastic
+                elif 'williams' in col.lower():
+                    features_df[col] = features_df[col].fillna(-50)  # Neutral Williams %R
+                elif 'cci' in col.lower():
+                    features_df[col] = features_df[col].fillna(0)  # Neutral CCI
+                elif 'macd' in col.lower():
+                    features_df[col] = features_df[col].fillna(0)  # Neutral MACD
+                elif any(term in col.lower() for term in ['hit', 'flag', 'signal']):
+                    features_df[col] = features_df[col].fillna(0)  # No signals by default
+                elif any(term in col.lower() for term in ['ratio', 'percent']):
+                    features_df[col] = features_df[col].fillna(0.5)  # Neutral ratio
                 else:
-                    dummy_df[feature] = np.random.randn(len(dummy_df))
-            
-            self.feature_names = dummy_features
-            return dummy_df
+                    features_df[col] = features_df[col].fillna(0)  # Default to 0
+        
+        # Final cleanup - remove any rows that still have NaN
+        initial_rows = len(features_df)
+        features_df = features_df.dropna()
+        final_rows = len(features_df)
+        
+        if final_rows < initial_rows:
+            print(f"  - Removed {initial_rows - final_rows} rows with missing values")
+        
+        if features_df.empty:
+            raise ValueError("All data was removed during cleaning. Check your input data quality.")
+        
+        # Store feature names for later use
+        self.feature_names = list(features_df.columns)
+        
+        print(f"✅ Generated {len(self.feature_names)} reversal features: {self.feature_names}")
+        print(f"✅ Final feature dataset: {features_df.shape[0]} samples × {features_df.shape[1]} features")
+        
+        return features_df
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8, max_depth: int = 8, n_estimators: int = 200) -> Dict[str, Any]:
         """Train reversal detection model."""
