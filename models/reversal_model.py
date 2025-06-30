@@ -133,7 +133,7 @@ class ReversalModel:
             print("⚠️ Input DataFrame is empty, creating dummy features")
             # Create dummy features as fallback
             dummy_df = pd.DataFrame(index=range(100))
-            for feature in ['rsi_14', 'williams_r', 'stochastic_k', 'stochastic_d', 'macd_histogram', 'cci', 'bb_upper_hit', 'bb_lower_hit']:
+            for feature in ['rsi_14', 'williams_r', 'stochastic_k', 'stochastic_d', 'macd_histogram', 'cci', 'bb_percent_b', 'atr', 'donchian_channel_width', 'parabolic_sar', 'momentum_roc', 'bb_upper_hit', 'bb_lower_hit']:
                 dummy_df[feature] = np.random.randn(100) * 10 + 50
             self.feature_names = list(dummy_df.columns)
             return dummy_df
@@ -232,7 +232,7 @@ class ReversalModel:
             print("Creating dummy features as fallback...")
             
             # Create dummy features as complete fallback
-            dummy_features = ['rsi_14', 'williams_r', 'stochastic_k', 'stochastic_d', 'macd_histogram', 'cci', 'bb_upper_hit', 'bb_lower_hit']
+            dummy_features = ['rsi_14', 'williams_r', 'stochastic_k', 'stochastic_d', 'macd_histogram', 'cci', 'bb_percent_b', 'atr', 'donchian_channel_width', 'parabolic_sar', 'momentum_roc', 'bb_upper_hit', 'bb_lower_hit']
             dummy_df = pd.DataFrame(index=df.index[:100] if len(df) >= 100 else df.index)
             
             for feature in dummy_features:
