@@ -59,17 +59,26 @@ class ProfitProbabilityModel:
         result_df = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(df)
         
         # Get all non-OHLC features, but exclude non-numeric columns
-        excluded_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'timestamp', 'session_phase', 'date', 'Timestamp', 'Date', 'DateTime']
+        excluded_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'timestamp', 'date', 'Timestamp', 'Date', 'DateTime']
+        
+        # First pass: exclude known non-numeric columns
         feature_columns = [col for col in result_df.columns if col not in excluded_cols]
         
-        # Further filter to only numeric columns
+        # Second pass: check each remaining column for actual numeric content
         numeric_columns = []
         for col in feature_columns:
-            # Check if column is numeric and not a datetime type
-            if pd.api.types.is_numeric_dtype(result_df[col]) and not pd.api.types.is_datetime64_any_dtype(result_df[col]):
-                numeric_columns.append(col)
-            else:
-                print(f"Excluding non-numeric or datetime column: {col}")
+            try:
+                # Check if column is numeric and not a datetime type
+                if pd.api.types.is_numeric_dtype(result_df[col]) and not pd.api.types.is_datetime64_any_dtype(result_df[col]):
+                    # Additional check: ensure all values can be converted to float
+                    test_values = result_df[col].dropna().head(10)
+                    if len(test_values) > 0:
+                        pd.to_numeric(test_values, errors='raise')
+                    numeric_columns.append(col)
+                else:
+                    print(f"Excluding non-numeric or datetime column: {col}")
+            except (ValueError, TypeError) as e:
+                print(f"Excluding column {col} due to conversion error: {e}")
         
         feature_columns = numeric_columns
         

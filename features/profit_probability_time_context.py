@@ -31,14 +31,14 @@ def add_time_context_features_profit_prob(df: pd.DataFrame) -> pd.DataFrame:
     df['is_closing_range'] = df['timestamp'].dt.time >= pd.to_datetime('15:00').time()
     df['is_closing_range'] = df['is_closing_range'].astype(int)
 
-    # Session phase
+    # Session phase (numeric encoding instead of strings)
     def session_phase(t):
         if t < pd.to_datetime('10:00').time():
-            return 'open'
+            return 0  # open
         elif t < pd.to_datetime('14:30').time():
-            return 'mid'
+            return 1  # mid
         else:
-            return 'close'
+            return 2  # close
 
     df['session_phase'] = df['timestamp'].dt.time.apply(session_phase)
 
