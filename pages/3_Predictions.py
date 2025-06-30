@@ -2649,7 +2649,7 @@ with profit_prob_tab:
                     list(config_info.items()),
                     columns=['Configuration', 'Value']
                 )
-                st.dataframe(config_df, use_container_width=True, hide_index=True)                st.dataframe(config_df, use_container_width=True, hide_index=True)
+                st.dataframe(config_df, use_container_width=True, hide_index=True)
 
 # Reversal Predictions Tab
 with reversal_tab:
