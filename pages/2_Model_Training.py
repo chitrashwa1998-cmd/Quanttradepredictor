@@ -42,7 +42,7 @@ with col2:
 # Model Selection and Training
 st.header("🎯 Model Selection")
 
-tab1, tab2 = st.tabs(["Volatility Model", "Direction Model"])
+tab1, tab2, tab3 = st.tabs(["Volatility Model", "Direction Model", "Profit Probability Model"])
 
 # Volatility Model Tab
 with tab1:
@@ -359,11 +359,168 @@ with tab2:
                     with st.expander("Show error details"):
                         st.code(traceback.format_exc())
 
+# Profit Probability Model Tab
+with tab3:
+    st.subheader("💰 Profit Probability Prediction Model")
+    st.markdown("Predicts the likelihood of profitable trades within the next 5 periods.")
+    
+    # Profit probability model features section
+    st.subheader("Profit Probability Model Features")
+    
+    if 'profit_prob_features' not in st.session_state or st.session_state.profit_prob_features is None:
+        st.warning("⚠️ Profit probability features not calculated yet.")
+        
+        if st.button("🔧 Calculate Technical Indicators", type="primary", key="calc_profit_prob_features"):
+            with st.spinner("Calculating profit probability-specific technical indicators..."):
+                try:
+                    from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
+                    from features.profit_probability_custom_engineered import add_custom_profit_features
+                    from features.profit_probability_lagged_features import add_lagged_features_profit_prob
+                    from features.profit_probability_time_context import add_time_context_features_profit_prob
+                    
+                    # Calculate all profit probability features
+                    st.info("Starting profit probability feature calculation...")
+                    profit_prob_features = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(st.session_state.data)
+                    
+                    # Add custom engineered features
+                    profit_prob_features = add_custom_profit_features(profit_prob_features)
+                    
+                    # Add lagged features
+                    profit_prob_features = add_lagged_features_profit_prob(profit_prob_features)
+                    
+                    # Add time/context features
+                    profit_prob_features = add_time_context_features_profit_prob(profit_prob_features)
+                    
+                    st.session_state.profit_prob_features = profit_prob_features
+                    st.success("✅ Profit probability features calculated successfully!")
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"❌ Error calculating profit probability features: {str(e)}")
+                    import traceback
+                    with st.expander("Show error details"):
+                        st.code(traceback.format_exc())
+    else:
+        st.success("✅ Profit probability features ready")
+        
+        # Show profit probability feature summary
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Features", len(st.session_state.profit_prob_features.columns))
+        with col2:
+            st.metric("Data Points", len(st.session_state.profit_prob_features))
+        with col3:
+            # Count profit probability-specific features
+            ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'timestamp']
+            profit_prob_feature_cols = [col for col in st.session_state.profit_prob_features.columns if col not in ohlc_cols]
+            st.metric("Engineered Features", len(profit_prob_feature_cols))
+        
+        # Show sample of profit probability features
+        with st.expander("View Profit Probability Feature Sample"):
+            st.dataframe(st.session_state.profit_prob_features.head(10), use_container_width=True)
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.info("This model predicts the probability of making a profit within the next 5 trading periods.")
+    
+    with col2:
+        if st.button("💰 Train Profit Probability Model", type="primary", key="train_profit_prob"):
+            with st.spinner("Training profit probability model..."):
+                try:
+                    # Initialize profit probability model
+                    from models.profit_probability_model import ProfitProbabilityModel
+                    
+                    profit_prob_model = ProfitProbabilityModel()
+                    
+                    # Use pre-calculated profit probability features if available, otherwise calculate them
+                    if 'profit_prob_features' in st.session_state and st.session_state.profit_prob_features is not None:
+                        profit_prob_features = st.session_state.profit_prob_features
+                    else:
+                        st.info("Calculating profit probability-specific features...")
+                        profit_prob_features = profit_prob_model.prepare_features(st.session_state.data)
+                        st.session_state.profit_prob_features = profit_prob_features
+                    
+                    # Create profit probability target
+                    profit_prob_target = profit_prob_model.create_target(st.session_state.data)
+                    
+                    # Validate data
+                    if len(profit_prob_features) < 100:
+                        st.error("❌ Insufficient data for training. Need at least 100 rows.")
+                        st.stop()
+                    
+                    st.info(f"📊 Profit probability data: {len(profit_prob_features)} samples with {len(profit_prob_features.columns)} features")
+                    
+                    # Train profit probability model with configuration parameters
+                    training_result = profit_prob_model.train(
+                        profit_prob_features, 
+                        profit_prob_target, 
+                        train_split
+                    )
+                    
+                    # Store results
+                    if 'trained_models' not in st.session_state:
+                        st.session_state.trained_models = {}
+                    st.session_state.trained_models['profit_probability'] = training_result
+                    
+                    # Store profit probability models separately for predictions
+                    if 'profit_prob_trained_models' not in st.session_state:
+                        st.session_state.profit_prob_trained_models = {}
+                    st.session_state.profit_prob_trained_models['profit_probability'] = profit_prob_model
+                    
+                    # Display results
+                    if training_result is not None:
+                        metrics = training_result.get('metrics', {})
+                        
+                        st.success("✅ Profit probability model trained successfully!")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            accuracy = metrics.get('accuracy', 0)
+                            st.metric("Accuracy", f"{accuracy:.2%}")
+                        with col2:
+                            classification_metrics = metrics.get('classification_report', {})
+                            precision = classification_metrics.get('weighted avg', {}).get('precision', 0)
+                            st.metric("Precision", f"{precision:.2%}")
+                        with col3:
+                            recall = classification_metrics.get('weighted avg', {}).get('recall', 0)
+                            st.metric("Recall", f"{recall:.2%}")
+                        
+                        # Feature importance for profit probability model
+                        if 'feature_importance' in training_result and training_result['feature_importance']:
+                            with st.expander("📊 Profit Probability Feature Importance"):
+                                features = list(training_result['feature_importance'].keys())
+                                importances = list(training_result['feature_importance'].values())
+                                importance_df = pd.DataFrame({
+                                    'Feature': features,
+                                    'Importance': importances
+                                }).sort_values('Importance', ascending=False)
+                                
+                                st.dataframe(importance_df.head(10))
+                                
+                                fig = px.bar(
+                                    importance_df.head(10),
+                                    x='Importance',
+                                    y='Feature',
+                                    orientation='h',
+                                    title="Top 10 Profit Probability Features"
+                                )
+                                fig.update_layout(yaxis={'categoryorder':'total ascending'})
+                                st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.error("❌ Failed to train profit probability model")
+                        
+                except Exception as e:
+                    st.error(f"❌ Profit probability training failed: {str(e)}")
+                    import traceback
+                    with st.expander("Show error details"):
+                        st.code(traceback.format_exc())
+
 # Model Status Section
 st.header("📊 Model Status")
 
 if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         st.subheader("Volatility Model")
@@ -384,6 +541,16 @@ if hasattr(st.session_state, 'trained_models') and st.session_state.trained_mode
             st.success(f"✅ Trained - Accuracy: {accuracy:.2%}")
         else:
             st.warning("⚠️ Not trained")
+    
+    with col3:
+        st.subheader("Profit Probability Model")
+        if 'profit_probability' in st.session_state.trained_models and st.session_state.trained_models['profit_probability']:
+            result = st.session_state.trained_models['profit_probability']
+            metrics = result.get('metrics', {})
+            accuracy = metrics.get('accuracy', 0)
+            st.success(f"✅ Trained - Accuracy: {accuracy:.2%}")
+        else:
+            st.warning("⚠️ Not trained")
 else:
     st.info("ℹ️ No models trained yet")
 
@@ -391,7 +558,7 @@ else:
 if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
     st.header("💾 Export Models")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         if st.button("📥 Save Volatility Model", disabled='volatility' not in st.session_state.trained_models):
@@ -418,3 +585,18 @@ if hasattr(st.session_state, 'trained_models') and st.session_state.trained_mode
                     st.error("❌ Direction model not available")
             except Exception as e:
                 st.error(f"❌ Failed to save direction model: {str(e)}")
+    
+    with col3:
+        if st.button("📥 Save Profit Probability Model", disabled='profit_probability' not in st.session_state.trained_models):
+            try:
+                from utils.database_adapter import get_trading_database
+                db = get_trading_database()
+                
+                # Save profit probability model results
+                if 'profit_probability' in st.session_state.trained_models:
+                    db.save_model_results('profit_probability', st.session_state.trained_models['profit_probability'])
+                    st.success("✅ Profit probability model saved to database!")
+                else:
+                    st.error("❌ Profit probability model not available")
+            except Exception as e:
+                st.error(f"❌ Failed to save profit probability model: {str(e)}")
