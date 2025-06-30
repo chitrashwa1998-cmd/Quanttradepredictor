@@ -20,9 +20,10 @@ TribexAlpha is a comprehensive trading analytics platform built with Streamlit t
 
 ### Machine Learning Pipeline
 - **Primary Model**: Volatility prediction (regression)
-- **Feature Engineering**: Technical indicators, lagged features, custom volatility metrics
+- **Secondary Models**: Reversal detection (classification) with comprehensive feature integration
+- **Feature Engineering**: Technical indicators, lagged features, custom metrics, and time context features
 - **Model Training**: Ensemble approach with multiple algorithms
-- **Prediction Engine**: Real-time volatility forecasting
+- **Prediction Engine**: Real-time volatility forecasting and reversal detection
 
 ## Key Components
 

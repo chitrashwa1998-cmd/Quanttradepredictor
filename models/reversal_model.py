@@ -157,9 +157,10 @@ class ReversalModel:
         from features.reversal_time_context import add_time_context_features_reversal
         result_df = add_time_context_features_reversal(result_df)
         
-        # Step 5: Select only feature columns (exclude OHLC columns)
+        # Step 5: Select only feature columns (exclude OHLC columns and non-numeric columns)
         ohlc_columns = ['Open', 'High', 'Low', 'Close', 'Volume', 'open', 'high', 'low', 'close', 'volume']
-        feature_columns = [col for col in result_df.columns if col not in ohlc_columns]
+        exclude_columns = ohlc_columns + ['date']  # Exclude datetime columns
+        feature_columns = [col for col in result_df.columns if col not in exclude_columns]
         
         if len(feature_columns) == 0:
             raise ValueError(f"No reversal features were generated. Available columns: {list(result_df.columns)}")

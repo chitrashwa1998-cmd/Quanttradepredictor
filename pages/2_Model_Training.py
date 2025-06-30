@@ -527,23 +527,18 @@ with tab4:
     if 'reversal_features' not in st.session_state or st.session_state.reversal_features is None:
         st.warning("⚠️ Reversal features not calculated yet.")
         
-        if st.button("🔧 Calculate Technical Indicators", type="primary", key="calc_reversal_features"):
-            with st.spinner("Calculating reversal-specific technical indicators..."):
+        if st.button("🔧 Calculate Comprehensive Reversal Features", type="primary", key="calc_reversal_features"):
+            with st.spinner("Calculating comprehensive reversal features..."):
                 try:
-                    from features.reversal_technical_indicators import ReversalTechnicalIndicators
-                    from features.reversal_custom_engineered import add_custom_reversal_features
-                    from features.reversal_lagged_features import add_lagged_reversal_features
-                    from features.reversal_time_context import add_time_context_features_reversal
+                    from models.reversal_model import ReversalModel
                     
-                    # Calculate all reversal features
-                    st.info("Starting reversal feature calculation...")
-                    reversal_features = st.session_state.data.copy()
-                    
-                    # Add reversal technical indicators
-                    reversal_features = ReversalTechnicalIndicators.calculate_all_reversal_indicators(reversal_features)
+                    # Use comprehensive feature preparation
+                    st.info("Starting comprehensive reversal feature calculation...")
+                    reversal_model = ReversalModel()
+                    reversal_features = reversal_model.prepare_features(st.session_state.data)
                     
                     st.session_state.reversal_features = reversal_features
-                    st.success("✅ Reversal features calculated successfully!")
+                    st.success(f"✅ Comprehensive reversal features calculated successfully! Generated {len(reversal_features.columns)} features.")
                     st.rerun()
                     
                 except Exception as e:
