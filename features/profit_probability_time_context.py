@@ -3,6 +3,19 @@ import numpy as np
 
 def add_time_context_features_profit_prob(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
+    
+    # Handle column name compatibility
+    close_col = 'Close' if 'Close' in df.columns else 'close'
+    open_col = 'Open' if 'Open' in df.columns else 'open'
+    
+    # Handle timestamp column
+    timestamp_col = 'timestamp'
+    if 'timestamp' not in df.columns and df.index.name == 'timestamp':
+        df = df.reset_index()
+    elif 'timestamp' not in df.columns:
+        # If no timestamp column, create one from index
+        df['timestamp'] = df.index
+    
     df['timestamp'] = pd.to_datetime(df['timestamp'])
 
     # Basic time breakdown
@@ -27,14 +40,14 @@ def add_time_context_features_profit_prob(df: pd.DataFrame) -> pd.DataFrame:
     df['session_phase'] = df['timestamp'].dt.time.apply(session_phase)
 
     # Overnight gap (requires previous day close)
-    df['prev_close'] = df['close'].shift(1)
-    df['overnight_gap'] = df['open'] - df['prev_close']
+    df['prev_close'] = df[close_col].shift(1)
+    df['overnight_gap'] = df[open_col] - df['prev_close']
 
     # Previous day range and return
     df['date'] = df['timestamp'].dt.date
-    prev_day_high = df.groupby('date')['high'].transform('max').shift(1)
-    prev_day_low = df.groupby('date')['low'].transform('min').shift(1)
-    prev_day_close = df.groupby('date')['close'].transform('last').shift(1)
+    prev_day_high = df.groupby('date')[df.columns[df.columns.str.contains('igh', case=False)][0]].transform('max').shift(1) if any(df.columns.str.contains('igh', case=False)) else df.groupby('date')['High'].transform('max').shift(1)
+    prev_day_low = df.groupby('date')[df.columns[df.columns.str.contains('ow', case=False)][0]].transform('min').shift(1) if any(df.columns.str.contains('ow', case=False)) else df.groupby('date')['Low'].transform('min').shift(1)
+    prev_day_close = df.groupby('date')[close_col].transform('last').shift(1)
     prev_prev_day_close = prev_day_close.shift(1)
 
     df['prev_day_range'] = prev_day_high - prev_day_low
