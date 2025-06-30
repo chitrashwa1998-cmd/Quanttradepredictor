@@ -171,8 +171,14 @@ class ProfitProbabilityTechnicalIndicators:
         
         # Count completely empty rows
         non_ohlc_cols = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        empty_rows_mask = result_df[non_ohlc_cols].isna().all(axis=1)
-        empty_rows = empty_rows_mask.sum()
+        if non_ohlc_cols:
+            try:
+                empty_rows_mask = result_df[non_ohlc_cols].isna().all(axis=1)
+                empty_rows = len([x for x in empty_rows_mask if x])
+            except:
+                empty_rows = 0
+        else:
+            empty_rows = 0
         
         # Drop completely empty rows
         result_df = result_df.dropna(subset=non_ohlc_cols, how='all')

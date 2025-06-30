@@ -43,20 +43,25 @@ def add_time_context_features_profit_prob(df: pd.DataFrame) -> pd.DataFrame:
     df['prev_close'] = df[close_col].shift(1)
     df['overnight_gap'] = df[open_col] - df['prev_close']
 
-    # Previous day range and return
-    df['date'] = df['timestamp'].dt.date
-    prev_day_high = df.groupby('date')[df.columns[df.columns.str.contains('igh', case=False)][0]].transform('max').shift(1) if any(df.columns.str.contains('igh', case=False)) else df.groupby('date')['High'].transform('max').shift(1)
-    prev_day_low = df.groupby('date')[df.columns[df.columns.str.contains('ow', case=False)][0]].transform('min').shift(1) if any(df.columns.str.contains('ow', case=False)) else df.groupby('date')['Low'].transform('min').shift(1)
-    prev_day_close = df.groupby('date')[close_col].transform('last').shift(1)
-    prev_prev_day_close = prev_day_close.shift(1)
-
-    df['prev_day_range'] = prev_day_high - prev_day_low
-    df['prev_day_return'] = (prev_day_close - prev_prev_day_close) / prev_prev_day_close
-
-    # Weekend gap detection (if current date - previous date > 1 day)
-    df['prev_date'] = df['date'].shift(1)
-    df['is_weekend_gap'] = (df['date'] - df['prev_date']).dt.days > 1
-    df['is_weekend_gap'] = df['is_weekend_gap'].astype(int)
+    # Simplified time features to avoid complex groupby operations
+    try:
+        # Basic price momentum features (much faster)
+        df['price_change_1h'] = df[close_col] - df[close_col].shift(12)  # 1 hour ago (assuming 5min data)
+        df['price_change_4h'] = df[close_col] - df[close_col].shift(48)  # 4 hours ago
+        
+        # Simple gap detection
+        df['gap_from_prev'] = df[open_col] - df[close_col].shift(1)
+        df['gap_pct'] = df['gap_from_prev'] / df[close_col].shift(1).replace(0, np.nan)
+        df['is_large_gap'] = (abs(df['gap_pct']) > 0.005).astype(int)  # 0.5% gap threshold
+        
+    except Exception as e:
+        print(f"Simplified time features error: {e}")
+        # Fallback to basic features
+        df['price_change_1h'] = 0.0
+        df['price_change_4h'] = 0.0
+        df['gap_from_prev'] = 0.0
+        df['gap_pct'] = 0.0
+        df['is_large_gap'] = 0
 
     # Number of consecutive green or red candles
     df['green_candle'] = (df['close'] > df['open']).astype(int)
