@@ -36,28 +36,25 @@ class VolatilityModel:
         ]
 
     def create_target(self, df: pd.DataFrame) -> pd.Series:
-        """Create volatility target from raw data with minimal data loss."""
+        """Create volatility target from raw data only."""
         # Use Close column from raw data - no modifications
         close_col = 'Close' if 'Close' in df.columns else 'close'
 
         if close_col not in df.columns:
             raise ValueError(f"Required column '{close_col}' not found in data")
 
-        # Reduced volatility window from 10 to 5 for less data loss
-        volatility_window = 5
+        volatility_window = 10
 
         # Calculate rolling volatility using percentage returns from raw data
         returns = df[close_col].pct_change()
         current_vol = returns.rolling(volatility_window).std()
-        
-        # Use current volatility instead of shifted future volatility to preserve data
-        future_vol = current_vol.copy()
+        future_vol = current_vol.shift(-1)
 
-        # More efficient cleaning - forward fill only, preserve more data
-        future_vol = future_vol.ffill()
+        # Clean volatility data - forward fill then backward fill only
+        future_vol = future_vol.ffill().bfill()
         future_vol = future_vol.clip(lower=0.0001)  # Minimum volatility threshold
 
-        # Keep all finite values - no filtering
+        # Filter out infinite values and ensure it's a Series
         future_vol = future_vol[np.isfinite(future_vol)]
         
         # Ensure return type is Series
@@ -66,7 +63,7 @@ class VolatilityModel:
         
         future_vol = pd.Series(future_vol, name='volatility_target')
 
-        print(f"Optimized volatility target statistics: Count={len(future_vol)}, Mean={future_vol.mean():.6f}")
+        print(f"Volatility target statistics: Count={len(future_vol)}, Mean={future_vol.mean():.6f}")
         return future_vol
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -122,17 +119,13 @@ class VolatilityModel:
         else:
             raise ValueError("No features found matching the required 27 features")
 
-        # Use forward fill instead of dropping NaN values to preserve data
-        result_df = result_df.ffill()
-        
-        # Only drop rows where ALL features are NaN (extremely rare)
-        result_df = result_df.dropna(how='all')
+        # Remove rows with any NaN values
+        result_df = result_df.dropna()
 
         if result_df.empty:
-            raise ValueError("DataFrame is empty after removing completely empty rows")
+            raise ValueError("DataFrame is empty after removing NaN values")
 
-        print(f"Optimized volatility model using exactly {len(feature_columns)} features (target: 27)")
-        print(f"Data preserved: {len(result_df)} rows (minimal loss from original data)")
+        print(f"Volatility model using exactly {len(feature_columns)} features (target: 27)")
         
         # Ensure return type is DataFrame
         if isinstance(result_df, pd.Series):
@@ -145,19 +138,21 @@ class VolatilityModel:
         return result_df
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:
-        """Train volatility prediction model with optimized data usage."""
-        # Efficient data alignment - preserve maximum data
+        """Train volatility prediction model."""
+        # Align data
         common_index = X.index.intersection(y.index)
         X_aligned = X.loc[common_index]
         y_aligned = y.loc[common_index]
 
-        # Streamlined cleaning - only remove rows with invalid targets
-        valid_targets = np.isfinite(y_aligned) & (y_aligned > 0)
-        X_clean = X_aligned[valid_targets]
-        y_clean = y_aligned[valid_targets]
-        
-        # Forward fill any remaining NaN values in features
-        X_clean = X_clean.ffill().bfill()
+        # Clean data
+        mask = ~(X_aligned.isna().any(axis=1) | y_aligned.isna())
+        X_clean = X_aligned[mask]
+        y_clean = y_aligned[mask]
+
+        # Remove invalid targets
+        valid_targets = np.isfinite(y_clean) & (y_clean > 0)
+        X_clean = X_clean[valid_targets]
+        y_clean = y_clean[valid_targets]
 
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training. Need at least 100 samples, got {len(X_clean)}")
@@ -169,8 +164,7 @@ class VolatilityModel:
         y_train = y_clean.iloc[:split_idx]
         y_test = y_clean.iloc[split_idx:]
 
-        print(f"Optimized volatility model training on {len(X_train)} samples with {X_train.shape[1]} features")
-        print(f"Total data usage: {len(X_clean)}/{len(X_aligned)} ({len(X_clean)/len(X_aligned)*100:.1f}% of aligned data)")
+        print(f"Volatility model training on {len(X_train)} samples with {X_train.shape[1]} features")
 
         # Scale features
         self.scaler = StandardScaler()
