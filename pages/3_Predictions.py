@@ -56,8 +56,12 @@ def show_volatility_predictions(db):
     
     st.header("📊 Volatility Forecasting")
     
-    # Check if volatility model exists
-    if 'volatility_model' not in st.session_state or st.session_state.volatility_model is None:
+    # Initialize model manager and check for trained models
+    from models.model_manager import ModelManager
+    model_manager = ModelManager()
+    
+    # Check if volatility model exists in session state or database
+    if not model_manager.is_model_trained('volatility'):
         st.warning("⚠️ Volatility model not trained. Please train the model first.")
         return
     
@@ -69,8 +73,7 @@ def show_volatility_predictions(db):
     
     # Make predictions using trained model
     try:
-        model = st.session_state.volatility_model
-        predictions, _ = model.predict(features)
+        predictions, _ = model_manager.predict('volatility', features)
         
         if predictions is None or len(predictions) == 0:
             st.error("Model prediction failed")
@@ -120,8 +123,8 @@ def show_direction_predictions(db):
     
     st.header("📈 Direction Predictions")
     
-    # Check if direction model exists
-    if 'direction_model' not in st.session_state or st.session_state.direction_model is None:
+    # Check if direction model exists in trained models
+    if 'direction_trained_models' not in st.session_state or 'direction' not in st.session_state.direction_trained_models:
         st.warning("⚠️ Direction model not trained. Please train the model first.")
         return
     
@@ -133,7 +136,7 @@ def show_direction_predictions(db):
     features = st.session_state.direction_features
     
     try:
-        model = st.session_state.direction_model
+        model = st.session_state.direction_trained_models['direction']
         predictions, probabilities = model.predict(features)
         
         if predictions is None or len(predictions) == 0:
@@ -203,8 +206,8 @@ def show_profit_predictions(db):
     
     st.header("💰 Profit Probability Predictions")
     
-    # Check if profit model exists
-    if 'profit_prob_model' not in st.session_state or st.session_state.profit_prob_model is None:
+    # Check if profit model exists in trained models
+    if 'profit_prob_trained_models' not in st.session_state or 'profit_probability' not in st.session_state.profit_prob_trained_models:
         st.warning("⚠️ Profit probability model not trained. Please train the model first.")
         return
     
@@ -216,7 +219,7 @@ def show_profit_predictions(db):
     features = st.session_state.profit_prob_features
     
     try:
-        model = st.session_state.profit_prob_model
+        model = st.session_state.profit_prob_trained_models['profit_probability']
         predictions, probabilities = model.predict(features)
         
         if predictions is None or len(predictions) == 0:
@@ -285,8 +288,8 @@ def show_reversal_predictions(db):
     
     st.header("🔄 Reversal Detection")
     
-    # Check if reversal model exists
-    if 'reversal_model' not in st.session_state or st.session_state.reversal_model is None:
+    # Check if reversal model exists in trained models
+    if 'reversal_trained_models' not in st.session_state or 'reversal' not in st.session_state.reversal_trained_models:
         st.warning("⚠️ Reversal model not trained. Please train the model first.")
         return
     
@@ -298,7 +301,7 @@ def show_reversal_predictions(db):
     features = st.session_state.reversal_features
     
     try:
-        model = st.session_state.reversal_model
+        model = st.session_state.reversal_trained_models['reversal']
         predictions, probabilities = model.predict(features)
         
         if predictions is None or len(predictions) == 0:
