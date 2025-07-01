@@ -129,13 +129,18 @@ def show_volatility_predictions(db, fresh_data):
             st.error("Model prediction failed")
             return
 
-        # Use only authentic datetime index from fresh database data
+        # Ensure arrays are same length - align predictions with features index
+        if len(predictions) != len(features):
+            st.error(f"Array length mismatch: predictions={len(predictions)}, features={len(features)}")
+            return
+
+        # Use only authentic datetime index from features (after dropna)
         authentic_datetime_index = features.index
 
         # Validate no synthetic values in the datetime index
         for i, dt in enumerate(authentic_datetime_index[:5]):
             dt_str = str(dt)
-            if any(pattern in dt_str for pattern in ['Data_', 'Point_', '09:15:00']):
+            if any(pattern in dt_str for pattern in ['Data_', 'Point_']) or (dt_str == '09:15:00'):
                 st.error(f"Detected synthetic datetime value: {dt_str}. Please clear session and re-upload data.")
                 return
 
@@ -143,7 +148,7 @@ def show_volatility_predictions(db, fresh_data):
         pred_df = pd.DataFrame({
             'DateTime': authentic_datetime_index,
             'Predicted_Volatility': predictions
-        })
+        }, index=authentic_datetime_index)
 
         # Add readable date/time columns
         pred_df['Date'] = pred_df['DateTime'].dt.strftime('%Y-%m-%d')
@@ -213,6 +218,11 @@ def show_direction_predictions(db, fresh_data):
             st.error("Model prediction failed")
             return
 
+        # Ensure arrays are same length
+        if len(predictions) != len(features):
+            st.error(f"Array length mismatch: predictions={len(predictions)}, features={len(features)}")
+            return
+
         # Use authentic datetime index
         datetime_index = features.index
 
@@ -223,7 +233,7 @@ def show_direction_predictions(db, fresh_data):
             'Confidence': [np.max(prob) for prob in probabilities] if probabilities is not None else None,
             'Date': datetime_index.strftime('%Y-%m-%d'),
             'Time': datetime_index.strftime('%H:%M:%S')
-        })
+        }, index=datetime_index)
 
         # Display recent predictions
         recent_predictions = pred_df.tail(100)
@@ -307,6 +317,11 @@ def show_profit_predictions(db, fresh_data):
             st.error("Model prediction failed")
             return
 
+        # Ensure arrays are same length
+        if len(predictions) != len(features):
+            st.error(f"Array length mismatch: predictions={len(predictions)}, features={len(features)}")
+            return
+
         # Use authentic datetime index
         datetime_index = features.index
 
@@ -317,7 +332,7 @@ def show_profit_predictions(db, fresh_data):
             'Confidence': [np.max(prob) for prob in probabilities] if probabilities is not None else None,
             'Date': datetime_index.strftime('%Y-%m-%d'),
             'Time': datetime_index.strftime('%H:%M:%S')
-        })
+        }, index=datetime_index)
 
         # Display recent predictions
         recent_predictions = pred_df.tail(100)
@@ -400,6 +415,11 @@ def show_reversal_predictions(db, fresh_data):
             st.error("Model prediction failed")
             return
 
+        # Ensure arrays are same length
+        if len(predictions) != len(features):
+            st.error(f"Array length mismatch: predictions={len(predictions)}, features={len(features)}")
+            return
+
         # Use authentic datetime index
         datetime_index = features.index
 
@@ -410,7 +430,7 @@ def show_reversal_predictions(db, fresh_data):
             'Confidence': [np.max(prob) for prob in probabilities] if probabilities is not None else None,
             'Date': datetime_index.strftime('%Y-%m-%d'),
             'Time': datetime_index.strftime('%H:%M:%S')
-        })
+        }, index=datetime_index)
 
         # Display recent predictions
         recent_predictions = pred_df.tail(100)
