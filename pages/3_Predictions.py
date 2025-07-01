@@ -46,10 +46,22 @@ def show_predictions_page():
     sample_datetime_str = str(fresh_data.index[0])
     if any(pattern in sample_datetime_str for pattern in ['Data_', 'Point_', '09:15:00']):
         st.error("⚠️ Database contains synthetic datetime values. Please clear database and re-upload your data.")
-        if st.button("🗑️ Clear Database"):
-            db.clear_all_data()
-            st.success("Database cleared. Please re-upload your data.")
-            st.stop()
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🗑️ Clear Database", type="primary"):
+                with st.spinner("Clearing all database data..."):
+                    success = db.clear_all_data()
+                if success:
+                    st.success("✅ Database cleared successfully!")
+                    st.info("👆 Please go to 'Data Upload' page to upload your original data file.")
+                else:
+                    st.error("❌ Failed to clear database")
+                st.stop()
+        
+        with col2:
+            if st.button("🔍 View Database Manager"):
+                st.switch_page("pages/5_Database_Manager.py")
         st.stop()
         
     st.success(f"✅ Using authentic data with {len(fresh_data):,} records")
