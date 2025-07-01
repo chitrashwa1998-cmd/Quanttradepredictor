@@ -2351,53 +2351,28 @@ with profit_prob_tab:
 
                 # Create the main predictions dataframe with improved datetime handling
                 try:
-                    # Debug print to understand the index format
-                    print(f"DEBUG Profit Prob: Index type: {type(recent_prices_aligned.index)}")
-                    print(f"DEBUG Profit Prob: Index dtype: {recent_prices_aligned.index.dtype}")
-                    print(f"DEBUG Profit Prob: First few index values: {recent_prices_aligned.index[:5].tolist()}")
-                    
-                    if pd.api.types.is_datetime64_any_dtype(recent_prices_aligned.index):
+                    # Use the same successful approach as volatility/direction models
+                    if hasattr(recent_prices_aligned.index, 'strftime'):
                         # Already datetime index
                         date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
                         time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
-                    elif pd.api.types.is_numeric_dtype(recent_prices_aligned.index):
-                        # Handle different timestamp formats
-                        sample_val = recent_prices_aligned.index[0]
-                        print(f"DEBUG Profit Prob: Sample timestamp value: {sample_val}")
-                        
-                        # Try different timestamp conversion approaches
-                        datetime_index = None
-                        if sample_val > 1e12:  # Millisecond timestamps
-                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='ms', errors='coerce')
-                            print("DEBUG Profit Prob: Trying millisecond conversion")
-                        elif sample_val > 1e9:  # Second timestamps
-                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='s', errors='coerce')
-                            print("DEBUG Profit Prob: Trying second conversion")
-                        else:  # Might be days since epoch or other format
-                            # Try interpreting as days since epoch
-                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='D', errors='coerce', origin='1970-01-01')
-                            print("DEBUG Profit Prob: Trying days conversion")
-                        
-                        if datetime_index is not None and not datetime_index.isna().all():
-                            print(f"DEBUG Profit Prob: Converted datetime sample: {datetime_index[:3].tolist()}")
-                            date_col = datetime_index.strftime('%Y-%m-%d')
-                            time_col = datetime_index.strftime('%H:%M:%S')
-                        else:
-                            print("DEBUG Profit Prob: Using sequential numbering")
-                            # Use sequential numbering based on actual data range
-                            date_col = [f"Data_{i+1}" for i in range(len(recent_prices_aligned))]
-                            time_col = [f"{(9 + i // 12) % 24:02d}:{((i*5) % 60):02d}:00" for i in range(len(recent_prices_aligned))]
                     else:
-                        print("DEBUG Profit Prob: Non-numeric index, using sequential")
-                        # Non-numeric index - use sequential numbering
-                        date_col = [f"Data_{i+1}" for i in range(len(recent_prices_aligned))]
-                        time_col = [f"{(9 + i // 12) % 24:02d}:{((i*5) % 60):02d}:00" for i in range(len(recent_prices_aligned))]
+                        # Use the original data index which should have proper datetime
+                        original_index = st.session_state.data.index[-len(recent_prices_aligned):]
+                        if hasattr(original_index, 'strftime'):
+                            date_col = original_index.strftime('%Y-%m-%d')
+                            time_col = original_index.strftime('%H:%M:%S')
+                        else:
+                            # Fallback: create realistic datetime sequence
+                            start_idx = len(st.session_state.data) - len(recent_prices_aligned)
+                            date_col = [f"Point_{start_idx + i + 1}" for i in range(len(recent_prices_aligned))]
+                            time_col = [f"{(9 + (i % 390) // 12):02d}:{((i % 12) * 5):02d}:00" for i in range(len(recent_prices_aligned))]
                         
                 except Exception as e:
-                    print(f"DEBUG Profit Prob: Error in datetime conversion: {e}")
-                    # Fallback with more realistic time simulation
-                    date_col = [f"Data_{i+1}" for i in range(len(recent_prices_aligned))]
-                    time_col = [f"{(9 + i // 12) % 24:02d}:{((i*5) % 60):02d}:00" for i in range(len(recent_prices_aligned))]
+                    # Fallback with realistic market time simulation
+                    start_idx = len(st.session_state.data) - len(recent_prices_aligned)
+                    date_col = [f"Point_{start_idx + i + 1}" for i in range(len(recent_prices_aligned))]
+                    time_col = [f"{(9 + (i % 390) // 12):02d}:{((i % 12) * 5):02d}:00" for i in range(len(recent_prices_aligned))]
 
                 # Ensure all arrays match the exact same length
                 actual_len = len(recent_prices_aligned)
@@ -3073,53 +3048,28 @@ with reversal_tab:
 
                 # Create the main predictions dataframe with improved datetime handling
                 try:
-                    # Debug print to understand the index format
-                    print(f"DEBUG Reversal: Index type: {type(recent_prices_aligned.index)}")
-                    print(f"DEBUG Reversal: Index dtype: {recent_prices_aligned.index.dtype}")
-                    print(f"DEBUG Reversal: First few index values: {recent_prices_aligned.index[:5].tolist()}")
-                    
-                    if pd.api.types.is_datetime64_any_dtype(recent_prices_aligned.index):
+                    # Use the same successful approach as volatility/direction models
+                    if hasattr(recent_prices_aligned.index, 'strftime'):
                         # Already datetime index
                         date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
                         time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
-                    elif pd.api.types.is_numeric_dtype(recent_prices_aligned.index):
-                        # Handle different timestamp formats
-                        sample_val = recent_prices_aligned.index[0]
-                        print(f"DEBUG Reversal: Sample timestamp value: {sample_val}")
-                        
-                        # Try different timestamp conversion approaches
-                        datetime_index = None
-                        if sample_val > 1e12:  # Millisecond timestamps
-                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='ms', errors='coerce')
-                            print("DEBUG Reversal: Trying millisecond conversion")
-                        elif sample_val > 1e9:  # Second timestamps
-                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='s', errors='coerce')
-                            print("DEBUG Reversal: Trying second conversion")
-                        else:  # Might be days since epoch or other format
-                            # Try interpreting as days since epoch
-                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='D', errors='coerce', origin='1970-01-01')
-                            print("DEBUG Reversal: Trying days conversion")
-                        
-                        if datetime_index is not None and not datetime_index.isna().all():
-                            print(f"DEBUG Reversal: Converted datetime sample: {datetime_index[:3].tolist()}")
-                            date_col = datetime_index.strftime('%Y-%m-%d')
-                            time_col = datetime_index.strftime('%H:%M:%S')
-                        else:
-                            print("DEBUG Reversal: Using sequential numbering")
-                            # Use sequential numbering based on actual data range
-                            date_col = [f"Data_{i+1}" for i in range(len(recent_prices_aligned))]
-                            time_col = [f"{(9 + i // 12) % 24:02d}:{((i*5) % 60):02d}:00" for i in range(len(recent_prices_aligned))]
                     else:
-                        print("DEBUG Reversal: Non-numeric index, using sequential")
-                        # Non-numeric index - use sequential numbering
-                        date_col = [f"Data_{i+1}" for i in range(len(recent_prices_aligned))]
-                        time_col = [f"{(9 + i // 12) % 24:02d}:{((i*5) % 60):02d}:00" for i in range(len(recent_prices_aligned))]
+                        # Use the original data index which should have proper datetime
+                        original_index = st.session_state.data.index[-len(recent_prices_aligned):]
+                        if hasattr(original_index, 'strftime'):
+                            date_col = original_index.strftime('%Y-%m-%d')
+                            time_col = original_index.strftime('%H:%M:%S')
+                        else:
+                            # Fallback: create realistic datetime sequence
+                            start_idx = len(st.session_state.data) - len(recent_prices_aligned)
+                            date_col = [f"Point_{start_idx + i + 1}" for i in range(len(recent_prices_aligned))]
+                            time_col = [f"{(9 + (i % 390) // 12):02d}:{((i % 12) * 5):02d}:00" for i in range(len(recent_prices_aligned))]
                         
                 except Exception as e:
-                    print(f"DEBUG Reversal: Error in datetime conversion: {e}")
-                    # Fallback with more realistic time simulation
-                    date_col = [f"Data_{i+1}" for i in range(len(recent_prices_aligned))]
-                    time_col = [f"{(9 + i // 12) % 24:02d}:{((i*5) % 60):02d}:00" for i in range(len(recent_prices_aligned))]
+                    # Fallback with realistic market time simulation
+                    start_idx = len(st.session_state.data) - len(recent_prices_aligned)
+                    date_col = [f"Point_{start_idx + i + 1}" for i in range(len(recent_prices_aligned))]
+                    time_col = [f"{(9 + (i % 390) // 12):02d}:{((i % 12) * 5):02d}:00" for i in range(len(recent_prices_aligned))]
 
                 # Ensure all arrays match the exact same length
                 actual_len = len(recent_prices_aligned)
