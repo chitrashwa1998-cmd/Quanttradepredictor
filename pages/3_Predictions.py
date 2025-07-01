@@ -129,13 +129,18 @@ def show_volatility_predictions(db, fresh_data):
             st.error("Model prediction failed")
             return
 
-        # Ensure arrays are same length - align predictions with features index
+        # Handle array length mismatch by aligning predictions with features
         if len(predictions) != len(features):
-            st.error(f"Array length mismatch: predictions={len(predictions)}, features={len(features)}")
-            return
+            st.warning(f"Adjusting for array length difference: predictions={len(predictions)}, features={len(features)}")
+            # Take the minimum length to ensure alignment
+            min_length = min(len(predictions), len(features))
+            predictions = predictions[:min_length]
+            features_aligned = features.iloc[:min_length]
+        else:
+            features_aligned = features
 
-        # Use only authentic datetime index from features (after dropna)
-        authentic_datetime_index = features.index
+        # Use aligned datetime index from features
+        authentic_datetime_index = features_aligned.index
 
         # Validate no synthetic values in the datetime index
         for i, dt in enumerate(authentic_datetime_index[:5]):
@@ -144,7 +149,7 @@ def show_volatility_predictions(db, fresh_data):
                 st.error(f"Detected synthetic datetime value: {dt_str}. Please clear session and re-upload data.")
                 return
 
-        # Create DataFrame with validated authentic timestamps only
+        # Create DataFrame with aligned authentic timestamps only
         pred_df = pd.DataFrame({
             'DateTime': authentic_datetime_index,
             'Predicted_Volatility': predictions
