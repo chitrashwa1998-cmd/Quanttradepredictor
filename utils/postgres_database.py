@@ -30,9 +30,15 @@ class PostgresTradingDatabase:
         """Create necessary tables if they don't exist."""
         try:
             with self.conn.cursor() as cursor:
+                # Drop and recreate tables to ensure proper schema
+                cursor.execute("DROP TABLE IF EXISTS ohlc_datasets CASCADE")
+                cursor.execute("DROP TABLE IF EXISTS model_results CASCADE")
+                cursor.execute("DROP TABLE IF EXISTS trained_models CASCADE")
+                cursor.execute("DROP TABLE IF EXISTS predictions CASCADE")
+                
                 # OHLC datasets table
                 cursor.execute("""
-                CREATE TABLE IF NOT EXISTS ohlc_datasets (
+                CREATE TABLE ohlc_datasets (
                     name VARCHAR(255) PRIMARY KEY,
                     data BYTEA NOT NULL,
                     rows INTEGER,
@@ -45,7 +51,7 @@ class PostgresTradingDatabase:
                 
                 # Model results table
                 cursor.execute("""
-                CREATE TABLE IF NOT EXISTS model_results (
+                CREATE TABLE model_results (
                     model_name VARCHAR(255) PRIMARY KEY,
                     results JSONB NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -55,7 +61,7 @@ class PostgresTradingDatabase:
                 
                 # Trained models table
                 cursor.execute("""
-                CREATE TABLE IF NOT EXISTS trained_models (
+                CREATE TABLE trained_models (
                     id SERIAL PRIMARY KEY,
                     models_data BYTEA NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -65,13 +71,15 @@ class PostgresTradingDatabase:
                 
                 # Predictions table
                 cursor.execute("""
-                CREATE TABLE IF NOT EXISTS predictions (
+                CREATE TABLE predictions (
                     model_name VARCHAR(255) PRIMARY KEY,
                     predictions_data BYTEA NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """)
+                
+                print("✅ Database tables recreated successfully")
                 
         except Exception as e:
             print(f"Table creation failed: {str(e)}")
