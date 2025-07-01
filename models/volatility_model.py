@@ -258,12 +258,30 @@ class VolatilityModel:
         if not available_features:
             raise ValueError("No volatility features found in input data")
 
-        X_features = X[available_features]
+        X_features = X[available_features].copy()
+        
+        # Store original index for alignment
+        original_index = X_features.index
+        original_length = len(X_features)
+        
+        # Remove rows with NaN values but keep track of which rows
+        valid_mask = ~X_features.isna().any(axis=1)
+        X_clean = X_features[valid_mask]
+        
+        if len(X_clean) == 0:
+            raise ValueError("No valid rows for prediction after removing NaN values")
 
         if self.scaler is None:
             raise ValueError("Scaler not fitted. Model training failed.")
 
-        X_scaled = self.scaler.transform(X_features)
-        predictions = self.model.predict(X_scaled)
-
-        return predictions, None
+        # Make predictions on clean data
+        X_scaled = self.scaler.transform(X_clean)
+        predictions_clean = self.model.predict(X_scaled)
+        
+        # Create full-length predictions array with NaN for invalid rows
+        predictions_full = np.full(original_length, np.nan)
+        predictions_full[valid_mask] = predictions_clean
+        
+        print(f"Adjusting for array length difference: predictions={len(predictions_clean)}, features={original_length}.")
+        
+        return predictions_full, None

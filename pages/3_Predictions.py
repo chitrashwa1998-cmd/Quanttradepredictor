@@ -156,36 +156,35 @@ def show_volatility_predictions(db, fresh_data):
         predictions, _ = model_manager.predict('volatility', features)
 
         if predictions is None or len(predictions) == 0:
-            st.error("Model prediction failed")
+            st.error("Failed to generate predictions")
             return
 
-        # Handle array length mismatch by aligning predictions with features
+        # Handle array length mismatch
         if len(predictions) != len(features):
-            st.warning(f"Adjusting for array length difference: predictions={len(predictions)}, features={len(features)}")
-            # Take the minimum length to ensure alignment
-            min_length = min(len(predictions), len(features))
-            predictions = predictions[:min_length]
-            features_aligned = features.iloc[:min_length]
-        else:
-            features_aligned = features
+            # Ensure predictions array matches features length
+            if len(predictions) < len(features):
+                # Pad with NaN values
+                padded_predictions = np.full(len(features), np.nan)
+                padded_predictions[:len(predictions)] = predictions
+                predictions = padded_predictions
+            else:
+                # Truncate to match features length
+                predictions = predictions[:len(features)]
 
-        # Use aligned datetime index from features
-        authentic_datetime_index = features_aligned.index
-
-        # Validate no synthetic values in the datetime index
-        for i, dt in enumerate(authentic_datetime_index[:5]):
-            dt_str = str(dt)
-            if any(pattern in dt_str for pattern in ['Data_', 'Point_']) or (dt_str == '09:15:00'):
-                st.error(f"Detected synthetic datetime value: {dt_str}. Please clear session and re-upload data.")
-                return
-
-        # Create DataFrame with aligned authentic timestamps only
+        # Create predictions dataframe
         pred_df = pd.DataFrame({
-            'DateTime': authentic_datetime_index,
+            'DateTime': features.index,
             'Predicted_Volatility': predictions
-        }, index=authentic_datetime_index)
+        })
 
-        # Add readable date/time columns
+        # Remove rows with NaN predictions for display
+        pred_df = pred_df.dropna(subset=['Predicted_Volatility'])
+
+        if len(pred_df) == 0:
+            st.error("No valid predictions generated")
+            return
+
+        # Format datetime for display
         pred_df['Date'] = pred_df['DateTime'].dt.strftime('%Y-%m-%d')
         pred_df['Time'] = pred_df['DateTime'].dt.strftime('%H:%M:%S')
 
