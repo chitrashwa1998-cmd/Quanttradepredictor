@@ -108,13 +108,19 @@ class PostgresTradingDatabase:
     def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset", preserve_full_data: bool = False) -> bool:
         """Save OHLC dataframe to PostgreSQL database."""
         try:
+            # Preserve the index by resetting it to a column before JSON conversion
+            data_with_index = data.reset_index()
+            
             # Convert DataFrame to JSON for storage
-            data_json = data.to_json(orient='records', date_format='iso')
+            data_json = data_with_index.to_json(orient='records', date_format='iso')
 
-            # Create metadata
+            # Create metadata with index information
             metadata = {
                 'rows': len(data),
                 'columns': list(data.columns),
+                'index_name': data.index.name or 'index',
+                'index_dtype': str(data.index.dtype),
+                'has_datetime_index': pd.api.types.is_datetime64_any_dtype(data.index),
                 'start_date': str(data.index[0]) if not data.empty else None,
                 'end_date': str(data.index[-1]) if not data.empty else None,
                 'saved_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -154,21 +160,34 @@ class PostgresTradingDatabase:
         try:
             with self._get_connection() as conn:
                 with conn.cursor(row_factory=dict_row) as cursor:
-                    cursor.execute("SELECT data_json FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
+                    cursor.execute("SELECT data_json, metadata_json FROM ohlc_datasets WHERE dataset_name = %s;", (dataset_name,))
                     result = cursor.fetchone()
                     
                     if result:
                         df = pd.read_json(result['data_json'], orient='records')
+                        
+                        # Get metadata to restore index properly
+                        metadata = json.loads(result['metadata_json']) if result['metadata_json'] else {}
+                        index_name = metadata.get('index_name', 'index')
+                        has_datetime_index = metadata.get('has_datetime_index', False)
 
-                        # Set datetime index if present
-                        if 'timestamp' in df.columns:
-                            df['timestamp'] = pd.to_datetime(df['timestamp'])
-                            df.set_index('timestamp', inplace=True)
-                        elif 'Datetime' in df.columns:
-                            df['Datetime'] = pd.to_datetime(df['Datetime'])
-                            df.set_index('Datetime', inplace=True)
+                        # Restore the original index
+                        if index_name in df.columns:
+                            if has_datetime_index:
+                                df[index_name] = pd.to_datetime(df[index_name])
+                            df.set_index(index_name, inplace=True)
+                            print(f"✅ Restored datetime index: {index_name}")
+                        else:
+                            # Fallback: try common datetime column names
+                            datetime_cols = ['timestamp', 'Datetime', 'Date', 'date', 'time']
+                            for col in datetime_cols:
+                                if col in df.columns:
+                                    df[col] = pd.to_datetime(df[col])
+                                    df.set_index(col, inplace=True)
+                                    print(f"✅ Set datetime index from column: {col}")
+                                    break
 
-                        print(f"✅ Loaded {len(df)} rows from PostgreSQL")
+                        print(f"✅ Loaded {len(df)} rows from PostgreSQL with proper datetime index")
                         return df
 
             return None
