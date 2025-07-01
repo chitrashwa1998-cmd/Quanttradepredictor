@@ -1070,7 +1070,7 @@ with direction_tab:
                     colors = ['rgba(0, 255, 0, ' + str(conf) + ')' for conf in confidences]
                     sizes = [6 + 6 * conf for conf in confidences]  # Size based on confidence
                 else:
-                    confidences = recent_probs_aligned if recent_probs_aligned is not None else np.ones(len(pred_data)) * 0.5
+                    confidences = recent_probs_aligned
                     colors = ['green'] * len(pred_data)
                     sizes = [8] * len(pred_data)
 
@@ -1287,8 +1287,8 @@ with direction_tab:
                 time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
 
                 # Debug: ensure all arrays have the same length
-                      f"recent_predictions_aligned={len(recent_predictions_aligned)}, "
-                      f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
+                st.write(f"recent_predictions_aligned={len(recent_predictions_aligned)}, "
+                        f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
 
                 # Ensure all arrays match the exact same length
                 actual_len = len(recent_prices_aligned)
@@ -1323,8 +1323,7 @@ with direction_tab:
                 # Convert all other arrays to simple lists
                 pred_dict = {
                     'Predicted_Dir': ['🟢 Bullish' if p == 1 else '🔴 Bearish' for p in recent_predictions_aligned],
-                    'Confidence': ([f"{np.max(prob):.3f}" for prob in recent_probs_aligned] 
-                                  if recent_probs_aligned is not None else ['N/A'] * actual_len),
+                    'Confidence': [f"{np.max(prob):.3f}" for prob in recent_probs_aligned],
                     'Next_Change_%': [f"{change:.2f}%" if not pd.isna(change) else 'N/A' for change in price_changes],
                     'Actual_Dir': ['🟢 Up' if actual == 1 and not pd.isna(actual) 
                                   else '🔴 Down' if actual == 0 and not pd.isna(actual) 
@@ -1415,7 +1414,7 @@ with direction_tab:
                         'Timestamp': recent_prices_aligned.index,
                         'Predicted_Direction': recent_predictions_aligned,
                         'Direction_Label': ['Bullish' if p == 1 else 'Bearish' for p in recent_predictions_aligned],
-                        'Confidence': [np.max(prob) if prob is not None else 0.5 for prob in recent_probs_aligned] if recent_probs_aligned is not None else [0.5] * len(recent_predictions_aligned)
+                        'Confidence': [np.max(prob) for prob in recent_probs_aligned]
                     })
                     summary_csv = summary_df.to_csv(index=False)
                     st.download_button(
@@ -2024,7 +2023,7 @@ with profit_prob_tab:
                     colors = ['rgba(0, 255, 0, ' + str(conf) + ')' for conf in confidences]
                     sizes = [6 + 6 * conf for conf in confidences]  # Size based on confidence
                 else:
-                    confidences = recent_probs_aligned if recent_probs_aligned is not None else np.ones(len(pred_data)) * 0.5
+                    confidences = recent_probs_aligned
                     colors = ['green'] * len(pred_data)
                     sizes = [8] * len(pred_data)
 
@@ -2271,8 +2270,7 @@ with profit_prob_tab:
 
                 pred_dict = {
                     'Predicted_Profit': ['🟢 High Profit' if p == 1 else '🔴 Low Profit' for p in recent_predictions_aligned],
-                    'Confidence': ([f"{np.max(prob):.3f}" for prob in recent_probs_aligned] 
-                                  if recent_probs_aligned is not None else ['N/A'] * actual_len),
+                    'Confidence': [f"{np.max(prob):.3f}" for prob in recent_probs_aligned],
                     'Max_Return_5P_%': [f"{ret:.2f}%" if not pd.isna(ret) else '⏳ Pending' for ret in future_returns],
                     'Actual_Profit': ['✅ Profitable' if profit is True else '❌ Not Profitable' if profit is False else '⏳ Pending' 
                                      for profit in actual_profit],
@@ -2364,7 +2362,7 @@ with profit_prob_tab:
                         'Timestamp': recent_prices_aligned.index,
                         'Predicted_Profit_Probability': recent_predictions_aligned,
                         'Profit_Label': ['High Profit' if p == 1 else 'Low Profit' for p in recent_predictions_aligned],
-                        'Confidence': [np.max(prob) if prob is not None else 0.5 for prob in recent_probs_aligned] if recent_probs_aligned is not None else [0.5] * len(recent_predictions_aligned)
+                        'Confidence': [np.max(prob) for prob in recent_probs_aligned]
                     })
                     summary_csv = summary_df.to_csv(index=False)
                     st.download_button(
@@ -2946,8 +2944,7 @@ with reversal_tab:
 
                 pred_dict = {
                     'Predicted_Reversal': ['🔴 Reversal' if p == 1 else '🟢 No Reversal' for p in recent_predictions_aligned],
-                    'Confidence': ([f"{np.max(prob):.3f}" for prob in recent_probs_aligned] 
-                                  if recent_probs_aligned is not None else ['N/A'] * actual_len),
+                    'Confidence': [f"{np.max(prob):.3f}" for prob in recent_probs_aligned],
                     'Actual_Reversal': ['✅ Reversal' if rev is True else '❌ No Reversal' if rev is False else '⏳ Pending' 
                                         for rev in future_reversals],
                     'Correct': ['✅' if (pred == 1 and rev is True) or (pred == 0 and rev is False) 
@@ -3037,7 +3034,7 @@ with reversal_tab:
                         'Timestamp': recent_prices_aligned.index,
                         'Predicted_Reversal': recent_predictions_aligned,
                         'Reversal_Label': ['Reversal' if p == 1 else 'No Reversal' for p in recent_predictions_aligned],
-                        'Confidence': [np.max(prob) if prob is not None else 0.5 for prob in recent_probs_aligned] if recent_probs_aligned is not None else [0.5] * len(recent_predictions_aligned)
+                        'Confidence': [np.max(prob) for prob in recent_probs_aligned]
                     })
                     summary_csv = summary_df.to_csv(index=False)
                     st.download_button(
