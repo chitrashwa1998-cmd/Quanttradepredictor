@@ -1516,12 +1516,12 @@ with direction_tab:
                         st.info("Full download not available")
 
                 with col2:
-                    # Simple summary download
+                    # Simple summary download using aligned data
                     summary_df = pd.DataFrame({
-                        'Timestamp': recent_prices.index,
-                        'Predicted_Direction': recent_predictions,
-                        'Direction_Label': ['Bullish' if p == 1 else 'Bearish' for p in recent_predictions],
-                        'Confidence': [np.max(prob) if prob is not None else 0.5 for prob in recent_probs] if recent_probs is not None else [0.5] * len(recent_predictions)
+                        'Timestamp': recent_prices_aligned.index,
+                        'Predicted_Direction': recent_predictions_aligned,
+                        'Direction_Label': ['Bullish' if p == 1 else 'Bearish' for p in recent_predictions_aligned],
+                        'Confidence': [np.max(prob) if prob is not None else 0.5 for prob in recent_probs_aligned] if recent_probs_aligned is not None else [0.5] * len(recent_predictions_aligned)
                     })
                     summary_csv = summary_df.to_csv(index=False)
                     st.download_button(
@@ -2509,12 +2509,12 @@ with profit_prob_tab:
                         st.info("Full download not available")
 
                 with col2:
-                    # Simple summary download
+                    # Simple summary download using aligned data
                     summary_df = pd.DataFrame({
-                        'Timestamp': recent_prices.index,
-                        'Predicted_Profit_Probability': recent_predictions,
-                        'Profit_Label': ['High Profit' if p == 1 else 'Low Profit' for p in recent_predictions],
-                        'Confidence': [np.max(prob) if prob is not None else 0.5 for prob in recent_probs] if recent_probs is not None else [0.5] * len(recent_predictions)
+                        'Timestamp': recent_prices_aligned.index,
+                        'Predicted_Profit_Probability': recent_predictions_aligned,
+                        'Profit_Label': ['High Profit' if p == 1 else 'Low Profit' for p in recent_predictions_aligned],
+                        'Confidence': [np.max(prob) if prob is not None else 0.5 for prob in recent_probs_aligned] if recent_probs_aligned is not None else [0.5] * len(recent_predictions_aligned)
                     })
                     summary_csv = summary_df.to_csv(index=False)
                     st.download_button(
