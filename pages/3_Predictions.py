@@ -9,22 +9,11 @@ from plotly.subplots import make_subplots
 st.set_page_config(page_title="Predictions", page_icon="🔮", layout="wide")
 
 def safe_format_date_range(index):
-    """Safely format date range from index, handling both datetime and non-datetime indexes."""
+    """Format date range from datetime index."""
     try:
-        if pd.api.types.is_datetime64_any_dtype(index):
-            return f"{index[0].strftime('%Y-%m-%d')} to {index[-1].strftime('%Y-%m-%d')}"
-        elif pd.api.types.is_numeric_dtype(index):
-            # Try to convert numeric timestamps to datetime
-            start_date = pd.to_datetime(index[0], unit='s', errors='coerce')
-            end_date = pd.to_datetime(index[-1], unit='s', errors='coerce')
-            if pd.notna(start_date) and pd.notna(end_date):
-                return f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
-            else:
-                return f"Row {index[0]} to Row {index[-1]}"
-        else:
-            return f"Row {index[0]} to Row {index[-1]}"
+        return f"{index[0].strftime('%Y-%m-%d')} to {index[-1].strftime('%Y-%m-%d')}"
     except Exception:
-        return f"Row {index[0]} to Row {index[-1]}"
+        return f"Index range: {len(index)} entries"
 
 # Initialize session state variables if they don't exist
 if 'data' not in st.session_state:
@@ -472,11 +461,8 @@ with volatility_tab:
                 except Exception as df_error:
                     st.warning("Creating simplified data table due to data processing issue")
                     # Fallback simplified table
-                    # Handle different index types safely
-                    if hasattr(recent_prices.index, 'strftime'):
-                        date_col = recent_prices.index.strftime('%Y-%m-%d %H:%M:%S')
-                    else:
-                        date_col = [f"Point_{i+1}" for i in range(len(recent_prices))]
+                    # Use authentic datetime from database
+                    date_col = recent_prices.index.strftime('%Y-%m-%d %H:%M:%S')
 
                     simple_df = pd.DataFrame({
                         'Date': date_col,
@@ -1084,7 +1070,7 @@ with direction_tab:
                     colors = ['rgba(0, 255, 0, ' + str(conf) + ')' for conf in confidences]
                     sizes = [6 + 6 * conf for conf in confidences]  # Size based on confidence
                 else:
-                    confidences = np.ones(len(pred_data)) * 0.5  # Default confidence for fallback
+                    confidences = recent_probs_aligned if recent_probs_aligned is not None else np.ones(len(pred_data)) * 0.5
                     colors = ['green'] * len(pred_data)
                     sizes = [8] * len(pred_data)
 
@@ -1301,7 +1287,6 @@ with direction_tab:
                 time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
 
                 # Debug: ensure all arrays have the same length
-                print(f"DEBUG: data_len={data_len}, recent_prices_aligned={len(recent_prices_aligned)}, "
                       f"recent_predictions_aligned={len(recent_predictions_aligned)}, "
                       f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
 
@@ -1320,7 +1305,6 @@ with direction_tab:
                 time_col = time_col[:actual_len]
 
                 # Debug: Print lengths after alignment
-                print(f"DEBUG FINAL: actual_len={actual_len}, date_col={len(date_col)}, time_col={len(time_col)}, "
                       f"recent_predictions_aligned={len(recent_predictions_aligned)}, "
                       f"recent_probs_aligned={len(recent_probs_aligned) if recent_probs_aligned is not None else 'None'}, "
                       f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
@@ -2040,7 +2024,7 @@ with profit_prob_tab:
                     colors = ['rgba(0, 255, 0, ' + str(conf) + ')' for conf in confidences]
                     sizes = [6 + 6 * conf for conf in confidences]  # Size based on confidence
                 else:
-                    confidences = np.ones(len(pred_data)) * 0.5  # Default confidence for fallback
+                    confidences = recent_probs_aligned if recent_probs_aligned is not None else np.ones(len(pred_data)) * 0.5
                     colors = ['green'] * len(pred_data)
                     sizes = [8] * len(pred_data)
 
