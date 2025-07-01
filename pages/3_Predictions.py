@@ -2350,8 +2350,53 @@ with profit_prob_tab:
                         return "🟡 Uncertain"
 
                 # Create the main predictions dataframe using actual timestamps
-                date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
-                time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
+                try:
+                    print(f"DEBUG Profit: Index type: {type(recent_prices_aligned.index)}")
+                    print(f"DEBUG Profit: Index dtype: {recent_prices_aligned.index.dtype}")
+                    print(f"DEBUG Profit: First few index values: {recent_prices_aligned.index[:5].tolist()}")
+                    
+                    if pd.api.types.is_datetime64_any_dtype(recent_prices_aligned.index):
+                        # Already datetime index
+                        date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
+                        time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
+                    elif pd.api.types.is_numeric_dtype(recent_prices_aligned.index):
+                        # Try to convert numeric index to datetime
+                        sample_val = recent_prices_aligned.index[0]
+                        print(f"DEBUG Profit: Sample numeric value: {sample_val}")
+                        
+                        # Try different timestamp formats
+                        if sample_val > 1e12:  # Milliseconds since epoch
+                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='ms', errors='coerce')
+                        elif sample_val > 1e9:  # Seconds since epoch
+                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='s', errors='coerce')
+                        else:
+                            # Try as days since epoch
+                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='D', errors='coerce', origin='1970-01-01')
+                        
+                        # Check if conversion was successful
+                        if datetime_index.notna().any():
+                            print(f"DEBUG Profit: Successfully converted to datetime, first values: {datetime_index[:5]}")
+                            date_col = datetime_index.strftime('%Y-%m-%d')
+                            time_col = datetime_index.strftime('%H:%M:%S')
+                        else:
+                            print("DEBUG Profit: Failed to convert numeric index to datetime, using original data index")
+                            # Use the original data index which should have proper datetime
+                            original_index = st.session_state.data.index[-len(recent_prices_aligned):]
+                            date_col = original_index.strftime('%Y-%m-%d')
+                            time_col = original_index.strftime('%H:%M:%S')
+                    else:
+                        print("DEBUG Profit: Index is neither datetime nor numeric, using original data index")
+                        # Use the original data index which should have proper datetime
+                        original_index = st.session_state.data.index[-len(recent_prices_aligned):]
+                        date_col = original_index.strftime('%Y-%m-%d')
+                        time_col = original_index.strftime('%H:%M:%S')
+                        
+                except Exception as e:
+                    print(f"DEBUG Profit: Exception in datetime handling: {e}")
+                    # Use the original data index which should have proper datetime
+                    original_index = st.session_state.data.index[-len(recent_prices_aligned):]
+                    date_col = original_index.strftime('%Y-%m-%d')
+                    time_col = original_index.strftime('%H:%M:%S')
 
                 # Ensure all arrays match the exact same length
                 actual_len = len(recent_prices_aligned)
