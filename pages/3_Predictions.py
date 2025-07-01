@@ -2922,100 +2922,429 @@ with reversal_tab:
             # Show detailed analysis section
             st.subheader("📊 Detailed Reversal Analysis")
 
-            # Create comprehensive tabbed analysis
-            rev_tab1, rev_tab2, rev_tab3 = st.tabs([
-                "📋 Recent Predictions", "📊 Performance Metrics", "🎯 Signal Quality"
+            # Create comprehensive tabbed analysis for reversal predictions (5 tabs like other models)
+            rev_tab1, rev_tab2, rev_tab3, rev_tab4, rev_tab5 = st.tabs([
+                "📊 Interactive Chart", 
+                "📋 Detailed Data Table", 
+                "📈 Distribution Analysis", 
+                "🔍 Statistical Analysis",
+                "📈 Performance Metrics"
             ])
 
             with rev_tab1:
-                st.markdown("**Recent Reversal Predictions with OHLC Data**")
-                
-                # Create display dataframe
-                recent_data = aligned_data.iloc[-min(50, len(predictions)):]
-                recent_predictions = predictions[-min(50, len(predictions)):]
-                recent_probs = probabilities[-min(50, len(predictions)):] if probabilities is not None else None
+                st.markdown("**Enhanced Price vs Reversal Signals Analysis**")
 
-                display_data = {
-                    "Date": recent_data.index.strftime("%Y-%m-%d %H:%M") if hasattr(recent_data.index, "strftime") else recent_data.index,
-                    "Open": recent_data["Open"].round(2),
-                    "High": recent_data["High"].round(2),
-                    "Low": recent_data["Low"].round(2),
-                    "Close": recent_data["Close"].round(2),
-                    "Reversal_Signal": ["Reversal" if p == 1 else "No Reversal" for p in recent_predictions]
-                }
-                
-                # Add Volume column only if it exists
-                if "Volume" in recent_data.columns:
-                    display_data["Volume"] = recent_data["Volume"].astype(int)
-
-                if recent_probs is not None:
-                    display_data["Confidence"] = [f"{np.max(prob):.3f}" for prob in recent_probs]
-
-                display_df = pd.DataFrame(display_data)
-                
-                # Show recent predictions in reverse chronological order
-                st.dataframe(
-                    display_df.iloc[::-1],  # Reverse order to show most recent first
-                    use_container_width=True,
-                    hide_index=True
+                # Enhanced reversal prediction chart with additional analysis
+                fig = make_subplots(
+                    rows=3, cols=1,
+                    shared_xaxes=True,
+                    vertical_spacing=0.08,
+                    subplot_titles=('Price Chart with Reversal Signals', 'Signal Confidence', 'Reversal Pattern'),
+                    row_heights=[0.5, 0.3, 0.2]
                 )
+
+                # Use aligned data for chart
+                data_len = min(len(aligned_data), len(predictions))
+                recent_data = aligned_data.tail(data_len)
+                pred_data = predictions[-data_len:]
+                prob_data = probabilities[-data_len:] if probabilities is not None else None
+
+                # Add candlestick chart for price
+                fig.add_trace(go.Candlestick(
+                    x=recent_data.index,
+                    open=recent_data['Open'],
+                    high=recent_data['High'],
+                    low=recent_data['Low'],
+                    close=recent_data['Close'],
+                    name='Price',
+                    increasing_line_color='green',
+                    decreasing_line_color='red'
+                ), row=1, col=1)
+
+                # Add reversal signals on price chart
+                for i, (idx, pred) in enumerate(zip(recent_data.index, pred_data)):
+                    if i % 5 == 0:  # Show every 5th prediction to avoid clutter
+                        if pred == 1:  # Reversal
+                            fig.add_annotation(
+                                x=idx, y=recent_data.iloc[i]['High'],
+                                text="🔄", showarrow=False,
+                                font=dict(color="red", size=12),
+                                row=1, col=1
+                            )
+
+                # Add confidence line chart
+                if prob_data is not None:
+                    confidences = np.max(prob_data, axis=1)
+                    fig.add_trace(go.Scatter(
+                        x=recent_data.index,
+                        y=confidences,
+                        mode='lines+markers',
+                        name='Prediction Confidence',
+                        line=dict(color='purple', width=2),
+                        marker=dict(size=4),
+                        hovertemplate='Confidence: %{y:.1%}<extra></extra>'
+                    ), row=2, col=1)
+
+                    # Add confidence threshold lines
+                    fig.add_hline(y=0.8, line_dash="dash", line_color="green", 
+                                 annotation_text="High Confidence", row=2, col=1)
+                    fig.add_hline(y=0.6, line_dash="dot", line_color="orange", 
+                                 annotation_text="Medium Confidence", row=2, col=1)
+
+                # Add reversal pattern visualization
+                reversal_y = [1 if p == 1 else 0 for p in pred_data]
+                colors = ['red' if p == 1 else 'green' for p in pred_data]
+
+                fig.add_trace(go.Scatter(
+                    x=recent_data.index,
+                    y=reversal_y,
+                    mode='markers',
+                    name='Reversal Pattern',
+                    marker=dict(color=colors, size=6),
+                    showlegend=False,
+                    hovertemplate='Signal: %{text}<extra></extra>',
+                    text=['Reversal' if p == 1 else 'No Reversal' for p in pred_data]
+                ), row=3, col=1)
+
+                # Update layout
+                fig.update_layout(
+                    title="Comprehensive Reversal Analysis Dashboard",
+                    height=800,
+                    showlegend=True,
+                    hovermode='x unified'
+                )
+
+                fig.update_xaxes(title_text="Time", row=3, col=1)
+                fig.update_yaxes(title_text="Price", row=1, col=1)
+                fig.update_yaxes(title_text="Confidence", row=2, col=1, range=[0, 1])
+                fig.update_yaxes(title_text="Reversal", row=3, col=1, range=[-0.1, 1.1])
+
+                st.plotly_chart(fig, use_container_width=True)
 
             with rev_tab2:
-                st.markdown("**Reversal Model Performance Metrics**")
-                
-                # Signal distribution
-                st.markdown("**Signal Distribution**")
-                signal_counts = pd.Series(predictions).value_counts().sort_index()
-                
-                fig_dist = px.pie(
-                    values=signal_counts.values,
-                    names=["No Reversal", "Reversal"],
-                    title="Reversal Signal Distribution",
-                    color_discrete_map={"No Reversal": "lightgreen", "Reversal": "lightcoral"}
-                )
-                st.plotly_chart(fig_dist, use_container_width=True)
+                st.markdown("**Comprehensive Reversal Predictions Data Table**")
 
-                # Confidence analysis
-                if probabilities is not None:
-                    st.markdown("**Confidence Distribution**")
-                    conf_scores = np.max(probabilities, axis=1)
+                # Create comprehensive predictions dataframe
+                num_recent = len(predictions)
+                recent_predictions = predictions
+                recent_probs = probabilities if probabilities is not None else None
+                recent_prices = aligned_data.tail(num_recent)
+
+                # Ensure data alignment
+                data_len = min(len(recent_prices), len(recent_predictions))
+                if recent_probs is not None and len(recent_probs) > 0:
+                    data_len = min(data_len, len(recent_probs))
+
+                # Trim all arrays to the same length
+                recent_prices_aligned = recent_prices.tail(data_len)
+                recent_predictions_aligned = recent_predictions[-data_len:]
+                recent_probs_aligned = recent_probs[-data_len:] if recent_probs is not None else None
+
+                # Calculate future price changes for validation (check reversals 3 periods ahead)
+                future_reversals = []
+                for i in range(len(recent_prices_aligned)):
+                    if i < len(recent_prices_aligned) - 3:
+                        # Look ahead 3 periods for reversal validation
+                        current_trend = (recent_prices_aligned.iloc[i]['Close'] - recent_prices_aligned.iloc[max(0, i-2)]['Close'])
+                        future_trend = (recent_prices_aligned.iloc[i+3]['Close'] - recent_prices_aligned.iloc[i]['Close'])
+                        
+                        # Check if trend reversed (signs are opposite and magnitude is significant)
+                        reversal_threshold = 0.002  # 0.2% threshold
+                        if abs(current_trend) > reversal_threshold and abs(future_trend) > reversal_threshold:
+                            is_reversal = (current_trend > 0 and future_trend < 0) or (current_trend < 0 and future_trend > 0)
+                            future_reversals.append(is_reversal)
+                        else:
+                            future_reversals.append(None)
+                    else:
+                        future_reversals.append(None)
+
+                # Create signal classification
+                def classify_reversal_strength(pred, conf):
+                    if conf is None:
+                        return "🟡 Medium"
+                    if conf > 0.8:
+                        return "🔴 Very Strong" if pred == 1 else "🟢 Very Weak"
+                    elif conf > 0.7:
+                        return "🔴 Strong" if pred == 1 else "🟢 Weak"
+                    elif conf > 0.6:
+                        return "🔴 Medium" if pred == 1 else "🟢 Medium"
+                    else:
+                        return "🟡 Uncertain"
+
+                # Create the main predictions dataframe with improved datetime handling
+                try:
+                    # Debug print to understand the index format
+                    print(f"DEBUG Reversal: Index type: {type(recent_prices_aligned.index)}")
+                    print(f"DEBUG Reversal: Index dtype: {recent_prices_aligned.index.dtype}")
+                    print(f"DEBUG Reversal: First few index values: {recent_prices_aligned.index[:5].tolist()}")
                     
-                    fig_conf = px.histogram(
-                        x=conf_scores,
-                        nbins=20,
-                        title="Prediction Confidence Distribution",
-                        labels={"x": "Confidence Score", "y": "Frequency"}
+                    if pd.api.types.is_datetime64_any_dtype(recent_prices_aligned.index):
+                        # Already datetime index
+                        date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
+                        time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
+                    elif pd.api.types.is_numeric_dtype(recent_prices_aligned.index):
+                        # Handle different timestamp formats
+                        sample_val = recent_prices_aligned.index[0]
+                        print(f"DEBUG Reversal: Sample timestamp value: {sample_val}")
+                        
+                        # Try different timestamp conversion approaches
+                        datetime_index = None
+                        if sample_val > 1e12:  # Millisecond timestamps
+                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='ms', errors='coerce')
+                            print("DEBUG Reversal: Trying millisecond conversion")
+                        elif sample_val > 1e9:  # Second timestamps
+                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='s', errors='coerce')
+                            print("DEBUG Reversal: Trying second conversion")
+                        else:  # Might be days since epoch or other format
+                            # Try interpreting as days since epoch
+                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='D', errors='coerce', origin='1970-01-01')
+                            print("DEBUG Reversal: Trying days conversion")
+                        
+                        if datetime_index is not None and not datetime_index.isna().all():
+                            print(f"DEBUG Reversal: Converted datetime sample: {datetime_index[:3].tolist()}")
+                            date_col = datetime_index.strftime('%Y-%m-%d')
+                            time_col = datetime_index.strftime('%H:%M:%S')
+                        else:
+                            print("DEBUG Reversal: Using sequential numbering")
+                            # Use sequential numbering based on actual data range
+                            date_col = [f"Data_{i+1}" for i in range(len(recent_prices_aligned))]
+                            time_col = [f"{(9 + i // 12) % 24:02d}:{((i*5) % 60):02d}:00" for i in range(len(recent_prices_aligned))]
+                    else:
+                        print("DEBUG Reversal: Non-numeric index, using sequential")
+                        # Non-numeric index - use sequential numbering
+                        date_col = [f"Data_{i+1}" for i in range(len(recent_prices_aligned))]
+                        time_col = [f"{(9 + i // 12) % 24:02d}:{((i*5) % 60):02d}:00" for i in range(len(recent_prices_aligned))]
+                        
+                except Exception as e:
+                    print(f"DEBUG Reversal: Error in datetime conversion: {e}")
+                    # Fallback with more realistic time simulation
+                    date_col = [f"Data_{i+1}" for i in range(len(recent_prices_aligned))]
+                    time_col = [f"{(9 + i // 12) % 24:02d}:{((i*5) % 60):02d}:00" for i in range(len(recent_prices_aligned))]
+
+                # Ensure all arrays match the exact same length
+                actual_len = len(recent_prices_aligned)
+                recent_predictions_aligned = recent_predictions_aligned[:actual_len]
+                if recent_probs_aligned is not None:
+                    recent_probs_aligned = recent_probs_aligned[:actual_len]
+                future_reversals = future_reversals[:actual_len]
+                date_col = date_col[:actual_len]
+                time_col = time_col[:actual_len]
+
+                # Build DataFrame
+                ohlc_dict = {
+                    'Date': date_col,
+                    'Time': time_col,
+                    'Open': recent_prices_aligned['Open'].values.round(4).tolist(),
+                    'High': recent_prices_aligned['High'].values.round(4).tolist(),
+                    'Low': recent_prices_aligned['Low'].values.round(4).tolist(),
+                    'Close': recent_prices_aligned['Close'].values.round(4).tolist(),
+                }
+
+                pred_dict = {
+                    'Predicted_Reversal': ['🔴 Reversal' if p == 1 else '🟢 No Reversal' for p in recent_predictions_aligned],
+                    'Confidence': ([f"{np.max(prob):.3f}" for prob in recent_probs_aligned] 
+                                  if recent_probs_aligned is not None else ['N/A'] * actual_len),
+                    'Actual_Reversal': ['✅ Reversal' if rev is True else '❌ No Reversal' if rev is False else '⏳ Pending' 
+                                        for rev in future_reversals],
+                    'Correct': ['✅' if (pred == 1 and rev is True) or (pred == 0 and rev is False) 
+                               else '❌' if rev is not None else '⏳' 
+                               for pred, rev in zip(recent_predictions_aligned, future_reversals)],
+                }
+
+                # Add signal strength and derived columns
+                signal_strength = [classify_reversal_strength(pred, np.max(prob) if prob is not None else None) 
+                                  for pred, prob in zip(recent_predictions_aligned, 
+                                                       recent_probs_aligned if recent_probs_aligned is not None 
+                                                       else [None]*len(recent_predictions_aligned))]
+
+                price_change_list = recent_prices_aligned['Close'].pct_change().round(4).fillna(0).tolist()
+                reversal_streak_list = (pd.Series(recent_predictions_aligned)
+                                       .rolling(3).apply(lambda x: (x == x.iloc[-1]).sum())
+                                       .fillna(1).astype(int).tolist())
+
+                # Combine all dictionaries
+                all_data = {**ohlc_dict, **pred_dict, 
+                           'Signal_Strength': signal_strength,
+                           'Price_Change': price_change_list,
+                           'Reversal_Streak': reversal_streak_list}
+
+                predictions_df = pd.DataFrame(all_data)
+
+                # Display the dataframe with enhanced formatting
+                st.dataframe(
+                    predictions_df, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Date": st.column_config.DateColumn("Date"),
+                        "Time": st.column_config.TimeColumn("Time"),
+                        "Open": st.column_config.NumberColumn("Open", format="%.4f"),
+                        "High": st.column_config.NumberColumn("High", format="%.4f"),
+                        "Low": st.column_config.NumberColumn("Low", format="%.4f"),
+                        "Close": st.column_config.NumberColumn("Close", format="%.4f"),
+                        "Confidence": st.column_config.TextColumn("Confidence"),
+                        "Price_Change": st.column_config.NumberColumn("Price Δ", format="%.4f"),
+                        "Reversal_Streak": st.column_config.NumberColumn("Streak", format="%d"),
+                    }
+                )
+
+                # Show summary statistics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    correct_predictions = [pred for pred in predictions_df['Correct'] if pred in ['✅', '❌']]
+                    accuracy = correct_predictions.count('✅') / len(correct_predictions) if correct_predictions else 0
+                    st.metric("Prediction Accuracy", f"{accuracy:.1%}")
+                with col2:
+                    if recent_probs_aligned is not None:
+                        avg_confidence = np.mean([np.max(prob) for prob in recent_probs_aligned])
+                        st.metric("Avg Confidence", f"{avg_confidence:.1%}")
+                    else:
+                        st.metric("Avg Confidence", "N/A")
+                with col3:
+                    reversal_correct = sum(1 for i, (pred, actual) in enumerate(zip(recent_predictions_aligned, future_reversals)) 
+                                          if pred == 1 and actual is True)
+                    reversal_total = sum(1 for pred in recent_predictions_aligned if pred == 1)
+                    reversal_acc = reversal_correct / reversal_total if reversal_total > 0 else 0
+                    st.metric("Reversal Accuracy", f"{reversal_acc:.1%}")
+                with col4:
+                    no_reversal_correct = sum(1 for i, (pred, actual) in enumerate(zip(recent_predictions_aligned, future_reversals)) 
+                                             if pred == 0 and actual is False)
+                    no_reversal_total = sum(1 for pred in recent_predictions_aligned if pred == 0)
+                    no_reversal_acc = no_reversal_correct / no_reversal_total if no_reversal_total > 0 else 0
+                    st.metric("No Reversal Accuracy", f"{no_reversal_acc:.1%}")
+
+                # Enhanced download options
+                col1, col2 = st.columns(2)
+                with col1:
+                    try:
+                        csv_data = predictions_df.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download Full Data CSV",
+                            data=csv_data,
+                            file_name=f"reversal_predictions_full_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+                    except:
+                        st.info("Full download not available")
+
+                with col2:
+                    # Simple summary download using aligned data
+                    summary_df = pd.DataFrame({
+                        'Timestamp': recent_prices_aligned.index,
+                        'Predicted_Reversal': recent_predictions_aligned,
+                        'Reversal_Label': ['Reversal' if p == 1 else 'No Reversal' for p in recent_predictions_aligned],
+                        'Confidence': [np.max(prob) if prob is not None else 0.5 for prob in recent_probs_aligned] if recent_probs_aligned is not None else [0.5] * len(recent_predictions_aligned)
+                    })
+                    summary_csv = summary_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Summary CSV",
+                        data=summary_csv,
+                        file_name=f"reversal_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
                     )
-                    st.plotly_chart(fig_conf, use_container_width=True)
-                else:
-                    st.info("Confidence distribution not available")
 
             with rev_tab3:
-                st.markdown("**Signal Quality Assessment**")
-                
-                # Calculate detailed statistics
+                st.markdown("**Reversal Distribution and Pattern Analysis**")
+
+                # Enhanced distribution analysis with multiple charts
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    # Reversal distribution pie chart
+                    reversal_count = (predictions == 1).sum()
+                    no_reversal_count = (predictions == 0).sum()
+
+                    fig_pie = go.Figure(data=[go.Pie(
+                        labels=['Reversal', 'No Reversal'],
+                        values=[reversal_count, no_reversal_count],
+                        marker_colors=['red', 'green'],
+                        textinfo='label+percent+value'
+                    )])
+                    fig_pie.update_layout(
+                        title="Reversal Signal Distribution",
+                        height=400
+                    )
+                    st.plotly_chart(fig_pie, use_container_width=True)
+
+                with col2:
+                    # Confidence distribution if available
+                    if probabilities is not None:
+                        conf_scores = np.max(probabilities, axis=1)
+                        fig_conf = go.Figure()
+                        fig_conf.add_trace(go.Histogram(
+                            x=conf_scores,
+                            nbinsx=30,
+                            name='Confidence Distribution',
+                            marker_color='lightblue',
+                            opacity=0.7
+                        ))
+                        fig_conf.update_layout(
+                            title="Confidence Score Distribution",
+                            xaxis_title="Confidence Level",
+                            yaxis_title="Frequency",
+                            height=400
+                        )
+                        st.plotly_chart(fig_conf, use_container_width=True)
+                    else:
+                        st.info("Confidence distribution not available (no probabilities)")
+
+                # Reversal patterns over time
+                st.markdown("**Reversal Patterns Over Time**")
+
+                # Create rolling reversal analysis
+                reversal_series = pd.Series(predictions, index=aligned_data.index[-len(predictions):])
+                rolling_reversal = reversal_series.rolling(20).mean()
+
+                fig_pattern = go.Figure()
+                fig_pattern.add_trace(go.Scatter(
+                    x=reversal_series.index,
+                    y=rolling_reversal,
+                    mode='lines',
+                    name='20-Period Reversal Ratio',
+                    line=dict(color='blue', width=2)
+                ))
+
+                # Add horizontal reference lines
+                fig_pattern.add_hline(y=0.3, line_dash="dash", line_color="red", 
+                                     annotation_text="High Reversal Period")
+                fig_pattern.add_hline(y=0.15, line_dash="solid", line_color="gray", 
+                                     annotation_text="Normal")
+                fig_pattern.add_hline(y=0.05, line_dash="dash", line_color="green", 
+                                     annotation_text="Low Reversal Period")
+
+                fig_pattern.update_layout(
+                    title="Reversal Activity Over Time (20-Period Rolling Average)",
+                    xaxis_title="Time",
+                    yaxis_title="Reversal Ratio",
+                    height=400,
+                    yaxis=dict(range=[0, 0.5])
+                )
+                st.plotly_chart(fig_pattern, use_container_width=True)
+
+            with rev_tab4:
+                st.markdown("**Advanced Statistical Analysis**")
+
+                # Comprehensive statistics table
+                reversal_pct = (predictions == 1).mean() * 100
+                no_reversal_pct = (predictions == 0).mean() * 100
+
                 if probabilities is not None:
                     conf_scores = np.max(probabilities, axis=1)
-                    high_confidence = (conf_scores > 0.8).sum()
-                    medium_confidence = ((conf_scores >= 0.6) & (conf_scores <= 0.8)).sum()
-                    low_confidence = (conf_scores < 0.6).sum()
-                    
                     avg_conf = np.mean(conf_scores)
                     std_conf = np.std(conf_scores)
                     min_conf = np.min(conf_scores)
                     max_conf = np.max(conf_scores)
                     median_conf = np.median(conf_scores)
                 else:
-                    high_confidence = medium_confidence = low_confidence = 0
                     avg_conf = std_conf = min_conf = max_conf = median_conf = 0
 
                 stats_data = {
-                    "Statistic": [
-                        "Total Predictions", "Reversal Signals", "No Reversal Signals", "Reversal %", "No Reversal %",
-                        "Avg Confidence", "Std Confidence", "Min Confidence", "Max Confidence", "Median Confidence",
-                        "High Confidence (>80%)", "Medium Confidence (60-80%)", "Low Confidence (<60%)"
+                    'Statistic': [
+                        'Total Predictions', 'Reversal Signals', 'No Reversal Signals', 'Reversal %', 'No Reversal %',
+                        'Avg Confidence', 'Std Confidence', 'Min Confidence', 'Max Confidence', 'Median Confidence',
+                        'High Confidence (>80%)', 'Medium Confidence (60-80%)', 'Low Confidence (<60%)'
                     ],
-                    "Value": [
+                    'Value': [
                         f"{len(predictions):,}",
                         f"{(predictions == 1).sum():,}",
                         f"{(predictions == 0).sum():,}",
@@ -3026,11 +3355,218 @@ with reversal_tab:
                         f"{min_conf:.3f}" if probabilities is not None else "N/A",
                         f"{max_conf:.3f}" if probabilities is not None else "N/A",
                         f"{median_conf:.3f}" if probabilities is not None else "N/A",
-                        f"{high_confidence:,}" if probabilities is not None else "N/A",
-                        f"{medium_confidence:,}" if probabilities is not None else "N/A",
-                        f"{low_confidence:,}" if probabilities is not None else "N/A"
+                        f"{(conf_scores > 0.8).sum():,}" if probabilities is not None else "N/A",
+                        f"{((conf_scores >= 0.6) & (conf_scores <= 0.8)).sum():,}" if probabilities is not None else "N/A",
+                        f"{(conf_scores < 0.6).sum():,}" if probabilities is not None else "N/A"
                     ]
                 }
 
                 stats_df = pd.DataFrame(stats_data)
                 st.dataframe(stats_df, use_container_width=True, hide_index=True)
+
+                # Reversal regime analysis
+                st.markdown("**Reversal Regime Classification**")
+
+                if probabilities is not None:
+                    # Classify signals by confidence and reversal type
+                    high_conf_reversal = ((conf_scores > 0.7) & (predictions == 1)).sum()
+                    high_conf_no_reversal = ((conf_scores > 0.7) & (predictions == 0)).sum()
+                    med_conf_reversal = ((conf_scores >= 0.5) & (conf_scores <= 0.7) & (predictions == 1)).sum()
+                    med_conf_no_reversal = ((conf_scores >= 0.5) & (conf_scores <= 0.7) & (predictions == 0)).sum()
+                    low_conf_reversal = ((conf_scores < 0.5) & (predictions == 1)).sum()
+                    low_conf_no_reversal = ((conf_scores < 0.5) & (predictions == 0)).sum()
+
+                    total_signals = len(predictions)
+
+                    regime_df = pd.DataFrame({
+                        'Signal_Category': [
+                            'High Conf Reversal', 'High Conf No Reversal', 
+                            'Med Conf Reversal', 'Med Conf No Reversal',
+                            'Low Conf Reversal', 'Low Conf No Reversal'
+                        ],
+                        'Count': [
+                            high_conf_reversal, high_conf_no_reversal,
+                            med_conf_reversal, med_conf_no_reversal,
+                            low_conf_reversal, low_conf_no_reversal
+                        ],
+                        'Percentage': [
+                            f"{(high_conf_reversal/total_signals*100):.1f}%",
+                            f"{(high_conf_no_reversal/total_signals*100):.1f}%",
+                            f"{(med_conf_reversal/total_signals*100):.1f}%",
+                            f"{(med_conf_no_reversal/total_signals*100):.1f}%",
+                            f"{(low_conf_reversal/total_signals*100):.1f}%",
+                            f"{(low_conf_no_reversal/total_signals*100):.1f}%"
+                        ],
+                        'Confidence_Range': [
+                            ">70%", ">70%", "50-70%", "50-70%", "<50%", "<50%"
+                        ]
+                    })
+
+                    st.dataframe(regime_df, use_container_width=True, hide_index=True)
+
+                # Reversal trend analysis
+                st.markdown("**Recent Reversal Trend Analysis**")
+                if len(predictions) >= 40:
+                    recent_40 = predictions[-40:]
+                    recent_20 = recent_40[-20:]
+                    previous_20 = recent_40[:20]
+
+                    recent_reversal = (recent_20 == 1).mean()
+                    previous_reversal = (previous_20 == 1).mean()
+                    trend_direction = "📈 More Reversals" if recent_reversal > previous_reversal else "📉 Fewer Reversals"
+                    trend_change = (recent_reversal - previous_reversal) * 100
+
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Recent Reversal % (Last 20)", f"{recent_reversal:.1%}")
+                    with col2:
+                        st.metric("Previous Reversal % (20 before)", f"{previous_reversal:.1%}")
+                    with col3:
+                        st.metric("Trend Direction", trend_direction)
+                    with col4:
+                        st.metric("Trend Change", f"{trend_change:+.1f}%")
+
+            with rev_tab5:
+                st.markdown("**Model Performance and Validation Metrics**")
+
+                # Model performance analysis
+                if len(predictions) >= 20:
+                    try:
+                        # Calculate performance metrics where we have actual data
+                        # For reversal validation, check if trend actually reverses in next 3 periods
+                        recent_data = aligned_data.tail(len(predictions))
+                        
+                        # Calculate actual reversals for validation
+                        actual_reversals = []
+                        for i in range(len(recent_data) - 3):
+                            current_trend = (recent_data.iloc[i]['Close'] - recent_data.iloc[max(0, i-2)]['Close'])
+                            future_trend = (recent_data.iloc[i+3]['Close'] - recent_data.iloc[i]['Close'])
+                            
+                            # Check if trend reversed
+                            reversal_threshold = 0.002
+                            if abs(current_trend) > reversal_threshold and abs(future_trend) > reversal_threshold:
+                                is_reversal = (current_trend > 0 and future_trend < 0) or (current_trend < 0 and future_trend > 0)
+                                actual_reversals.append(1 if is_reversal else 0)
+                            else:
+                                actual_reversals.append(0)
+
+                        # Performance metrics where we have actual data
+                        valid_predictions = predictions[:len(actual_reversals)]
+                        if len(actual_reversals) > 10:
+                            # Calculate comprehensive metrics
+                            accuracy = (valid_predictions == actual_reversals).mean()
+                            precision_rev = ((valid_predictions == 1) & (np.array(actual_reversals) == 1)).sum() / ((valid_predictions == 1).sum() + 1e-8)
+                            recall_rev = ((valid_predictions == 1) & (np.array(actual_reversals) == 1)).sum() / ((np.array(actual_reversals) == 1).sum() + 1e-8)
+                            precision_no_rev = ((valid_predictions == 0) & (np.array(actual_reversals) == 0)).sum() / ((valid_predictions == 0).sum() + 1e-8)
+                            recall_no_rev = ((valid_predictions == 0) & (np.array(actual_reversals) == 0)).sum() / ((np.array(actual_reversals) == 0).sum() + 1e-8)
+
+                            # Display performance metrics
+                            col1, col2, col3, col4, col5 = st.columns(5)
+                            with col1:
+                                st.metric("Overall Accuracy", f"{accuracy:.1%}")
+                            with col2:
+                                st.metric("Reversal Precision", f"{precision_rev:.1%}")
+                            with col3:
+                                st.metric("Reversal Recall", f"{recall_rev:.1%}")
+                            with col4:
+                                st.metric("No Reversal Precision", f"{precision_no_rev:.1%}")
+                            with col5:
+                                st.metric("No Reversal Recall", f"{recall_no_rev:.1%}")
+
+                            # Confusion matrix visualization
+                            from sklearn.metrics import confusion_matrix
+                            cm = confusion_matrix(actual_reversals, valid_predictions)
+
+                            fig_cm = go.Figure(data=go.Heatmap(
+                                z=cm,
+                                x=['Predicted No Reversal', 'Predicted Reversal'],
+                                y=['Actual No Reversal', 'Actual Reversal'],
+                                colorscale='Blues',
+                                text=cm,
+                                texttemplate="%{text}",
+                                textfont={"size": 20}
+                            ))
+                            fig_cm.update_layout(
+                                title="Reversal Prediction Confusion Matrix",
+                                height=400
+                            )
+                            st.plotly_chart(fig_cm, use_container_width=True)
+
+                        else:
+                            st.info("Insufficient actual reversal data for validation")
+
+                    except Exception as perf_error:
+                        st.warning("Performance metrics calculation not available")
+
+                # Feature importance (if available from model)
+                st.markdown("**Model Feature Analysis**")
+                try:
+                    if hasattr(st.session_state, 'reversal_trained_models') and st.session_state.reversal_trained_models:
+                        reversal_model_data = st.session_state.reversal_trained_models.get('reversal', {})
+                        
+                        # Check if it's a trained model object with feature importance
+                        if hasattr(reversal_model_data, 'model') and hasattr(reversal_model_data.model, 'named_estimators_'):
+                            try:
+                                xgb_estimator = reversal_model_data.model.named_estimators_['xgboost']
+                                if hasattr(xgb_estimator, 'feature_importances_') and hasattr(reversal_model_data, 'feature_names'):
+                                    feature_importance = dict(zip(reversal_model_data.feature_names, xgb_estimator.feature_importances_))
+                                else:
+                                    feature_importance = {}
+                            except:
+                                feature_importance = {}
+                        else:
+                            # Try to get from stored results
+                            feature_importance = reversal_model_data.get('feature_importance', {})
+
+                        if feature_importance:
+                            # Convert to sorted dataframe
+                            importance_df = pd.DataFrame(
+                                list(feature_importance.items()),
+                                columns=['Feature', 'Importance']
+                            ).sort_values('Importance', ascending=False)
+
+                            # Show top features
+                            st.markdown("**Top 15 Most Important Features**")
+                            top_features = importance_df.head(15)
+                            st.dataframe(top_features, use_container_width=True, hide_index=True)
+
+                            # Feature importance chart
+                            fig_importance = go.Figure()
+                            fig_importance.add_trace(go.Bar(
+                                x=top_features['Importance'],
+                                y=top_features['Feature'],
+                                orientation='h',
+                                name='Feature Importance',
+                                marker_color='lightcoral'
+                            ))
+                            fig_importance.update_layout(
+                                title="Top Feature Importance",
+                                xaxis_title="Importance Score",
+                                yaxis_title="Features",
+                                height=500
+                            )
+                            st.plotly_chart(fig_importance, use_container_width=True)
+                        else:
+                            st.info("Feature importance data not available")
+
+                except Exception as feature_error:
+                    st.info("Feature importance analysis not available")
+
+                # Model configuration summary
+                st.markdown("**Model Configuration Summary**")
+                config_info = {
+                    'Model Type': 'Ensemble (Reversal Detection)',
+                    'Task Type': 'Classification',
+                    'Classes': 'Reversal (1), No Reversal (0)',
+                    'Prediction Window': 'Next 3 Periods',
+                    'Total Predictions': f"{len(predictions):,}",
+                    'Feature Count': f"{len(st.session_state.reversal_features.columns) if st.session_state.reversal_features is not None else 'N/A'}",
+                    'Data Points Used': f"{len(st.session_state.data):,}",
+                    'Prediction Date Range': safe_format_date_range(st.session_state.data.index)
+                }
+
+                config_df = pd.DataFrame(
+                    list(config_info.items()),
+                    columns=['Configuration', 'Value']
+                )
+                st.dataframe(config_df, use_container_width=True, hide_index=True)
