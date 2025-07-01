@@ -105,6 +105,22 @@ if uploaded_file is not None:
                 st.error("❌ Uploaded file contains no valid data rows.")
                 st.stop()
 
+            # Validate datetime index
+            if not pd.api.types.is_datetime64_any_dtype(df.index):
+                st.error("❌ Data must have a valid datetime index. Please ensure your CSV has a proper Date/DateTime column.")
+                st.stop()
+
+            # Check for synthetic datetime patterns
+            sample_datetime_str = str(df.index[0])
+            is_synthetic = (
+                any(pattern in sample_datetime_str for pattern in ['Data_', 'Point_']) or
+                (sample_datetime_str == '09:15:00')  # Time only without date
+            )
+            
+            if is_synthetic:
+                st.error("❌ Invalid datetime values detected. Please upload data with proper datetime format (YYYY-MM-DD HH:MM:SS).")
+                st.stop()
+
             # Clear existing session data properly
             st.session_state.data = df
             st.session_state.features = None
@@ -119,17 +135,39 @@ if uploaded_file is not None:
                 from utils.database_adapter import DatabaseAdapter
                 trading_db = DatabaseAdapter()
                 
-                if trading_db.save_ohlc_data(df, "main_dataset", preserve_full_data):
-                    if preserve_full_data:
-                        st.success(f"✅ {message} & Full dataset saved to database!")
+                # Test database connection first
+                if not trading_db._test_connection():
+                    st.error("❌ Database connection failed. Please check your PostgreSQL setup.")
+                    st.stop()
+                
+                save_success = trading_db.save_ohlc_data(df, "main_dataset", preserve_full_data)
+                
+                if save_success:
+                    # Verify data was actually saved by trying to load it back
+                    verification_data = trading_db.load_ohlc_data("main_dataset")
+                    if verification_data is not None and len(verification_data) > 0:
+                        if preserve_full_data:
+                            st.success(f"✅ {message} & Full dataset saved to database!")
+                        else:
+                            st.success(f"✅ {message} & Auto-saved to database!")
+                        
+                        # Show database info
+                        db_info = trading_db.get_database_info()
+                        st.info(f"📊 Database now contains {db_info['total_datasets']} dataset(s)")
                     else:
-                        st.success(f"✅ {message} & Auto-saved to database!")
+                        st.error("❌ Data save verification failed. Data was not properly stored.")
+                        st.stop()
                 else:
-                    st.success(f"✅ {message}")
-                    st.warning("⚠️ Data loaded but failed to save to database")
+                    st.error("❌ Failed to save data to database. Please try again.")
+                    st.stop()
+                    
             except Exception as db_error:
-                st.success(f"✅ {message}")
-                st.warning(f"⚠️ Database save failed: {str(db_error)}")
+                st.error(f"❌ Database error: {str(db_error)}")
+                st.error("💡 **Try these solutions:**")
+                st.error("• Check if PostgreSQL database is properly configured")
+                st.error("• Verify DATABASE_URL environment variable is set")
+                st.error("• Try refreshing the page and uploading again")
+                st.stop()
             
             st.rerun()
     except Exception as upload_error:
