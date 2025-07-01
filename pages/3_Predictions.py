@@ -163,7 +163,7 @@ def show_volatility_predictions(db, fresh_data):
     except Exception as e:
         st.error(f"Error generating volatility predictions: {str(e)}")
 
-def show_direction_predictions(db):
+def show_direction_predictions(db, fresh_data):
     """Direction predictions with authentic data only"""
     
     st.header("📈 Direction Predictions")
@@ -246,7 +246,7 @@ def show_direction_predictions(db):
     except Exception as e:
         st.error(f"Error generating direction predictions: {str(e)}")
 
-def show_profit_predictions(db):
+def show_profit_predictions(db, fresh_data):
     """Profit probability predictions with authentic data only"""
     
     st.header("💰 Profit Probability Predictions")
@@ -328,7 +328,7 @@ def show_profit_predictions(db):
     except Exception as e:
         st.error(f"Error generating profit probability predictions: {str(e)}")
 
-def show_reversal_predictions(db):
+def show_reversal_predictions(db, fresh_data):
     """Reversal detection predictions with authentic data only"""
     
     st.header("🔄 Reversal Detection")
