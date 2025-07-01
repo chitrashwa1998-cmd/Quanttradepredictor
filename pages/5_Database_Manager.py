@@ -272,7 +272,10 @@ with col2:
             'data', 'features', 'models', 'predictions', 'model_trainer',
             'trained_models', 'direction_features', 'direction_trained_models',
             'direction_predictions', 'direction_probabilities', 'volatility_predictions',
-            'auto_recovery_done', 'backtest_results', 'backtest_signals'
+            'auto_recovery_done', 'backtest_results', 'backtest_signals',
+            'profit_prob_features', 'profit_prob_trained_models', 'profit_prob_predictions',
+            'profit_prob_probabilities', 'reversal_features', 'reversal_trained_models',
+            'reversal_predictions', 'reversal_probabilities'
         ]
         for key in keys_to_clear:
             if key in st.session_state:
@@ -280,8 +283,12 @@ with col2:
         
         # Also clear any other prediction-related keys
         for key in list(st.session_state.keys()):
-            if any(term in key.lower() for term in ['prediction', 'model', 'feature', 'train']):
+            if any(term in key.lower() for term in ['prediction', 'model', 'feature', 'train', 'prob']):
                 del st.session_state[key]
+        
+        # Reset core session state
+        st.session_state.models = {}
+        st.session_state.auto_recovery_done = False
         
         st.success("✅ Session data cleared successfully!")
         st.rerun()
