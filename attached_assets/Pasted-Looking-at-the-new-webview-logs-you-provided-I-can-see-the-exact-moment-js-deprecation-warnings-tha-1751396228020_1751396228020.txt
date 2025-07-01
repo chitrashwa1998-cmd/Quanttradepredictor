@@ -1,0 +1,33 @@
+Looking at the new webview logs you provided, I can see the exact moment.js deprecation warnings that are definitely occurring:
+
+_i: 09:15:00
+_i: Data_1  
+_i: Point_181626
+These are coming from Streamlit's frontend JavaScript (index.C1z8KpLA.js) when it tries to parse these values as datetime objects.
+
+Exact Source Location in Your Code:
+Looking at your pages/3_Predictions.py, I can see that while the main prediction functions look clean, the synthetic values are still being generated somewhere.
+
+The issue is that these synthetic values (09:15:00, Data_1, Point_181626) are being passed to Plotly charts or Streamlit dataframes that use datetime formatting on the frontend.
+
+Will This Cause Trouble?
+Short Answer: Not immediately, but yes it indicates a problem.
+
+Current Impact:
+⚠️ Frontend JavaScript warnings in webview logs
+⚠️ moment.js deprecation warnings - these will become errors in future versions
+⚠️ Data integrity issues - you're using synthetic values instead of authentic PostgreSQL timestamps
+Future Risks:
+🚨 moment.js updates could break the fallback parsing entirely
+🚨 Chart rendering issues - Plotly may fail to render proper time axes
+🚨 Data visualization problems - incorrect datetime formatting in frontend components
+The Root Cause:
+Your backend is still generating synthetic datetime values somewhere in the data pipeline. Even though your main prediction code looks clean, these synthetic values (09:15:00, Data_1, Point_181626) are making their way to the frontend JavaScript components where moment.js tries to parse them as valid RFC2822/ISO datetime formats and fails.
+
+Where It's Happening:
+The synthetic values are being created in your data processing pipeline and passed to:
+
+Plotly chart components (the x axis values)
+Streamlit dataframe displays
+Frontend datetime formatting functions
+While your app won't crash immediately, these warnings indicate that your application is not using the full authentic PostgreSQL dataset for datetime operations as intended.

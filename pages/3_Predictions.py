@@ -20,40 +20,36 @@ def show_predictions_page():
     st.markdown("### Advanced ML Model Predictions - Authentic Data Only")
     
     # Add cache clearing button to remove synthetic values
-    if st.button("🗑️ Clear Cached Synthetic Values", help="Click if you see synthetic datetime warnings"):
-        # Clear all session state that might contain synthetic datetime values
-        cache_keys = [
-            'features', 'direction_features', 'profit_prob_features', 'reversal_features',
-            'data', 'uploaded_data', 'prices', 'recent_prices'
-        ]
-        for key in cache_keys:
-            if key in st.session_state:
-                del st.session_state[key]
-        st.success("✅ Cleared cached data. Page will reload with fresh database data.")
+    if st.button("🗑️ Clear All Cached Data", help="Click if you see synthetic datetime warnings"):
+        # Clear ALL session state to remove any synthetic datetime values
+        st.session_state.clear()
+        st.success("✅ Cleared all cached data. Page will reload with fresh database data.")
         st.rerun()
     
     # Initialize database
     db = DatabaseAdapter()
     
-    # Check session state for uploaded data
-    if 'data' not in st.session_state or st.session_state.data is None:
-        st.error("⚠️ No data available. Please upload data first in the Data Upload page.")
-        st.stop()
+    # Get fresh data from database instead of session state
+    fresh_data = db.load_ohlc_data()
     
-    fresh_data = st.session_state.data
+    # Check if database has data
+    if fresh_data is None or len(fresh_data) == 0:
+        st.error("⚠️ No data available in database. Please upload data first in the Data Upload page.")
+        st.stop()
     
     # Validate that data contains authentic datetime data
     if not pd.api.types.is_datetime64_any_dtype(fresh_data.index):
         st.error("⚠️ Data contains invalid datetime index. Please re-upload your data.")
         st.stop()
         
-    # Check for synthetic datetime patterns
+    # Check for synthetic datetime patterns in the database data
     sample_datetime_str = str(fresh_data.index[0])
     if any(pattern in sample_datetime_str for pattern in ['Data_', 'Point_', '09:15:00']):
-        st.error("⚠️ Data contains synthetic datetime values. Please clear cache and re-upload your data.")
-        if st.button("🗑️ Clear Session State"):
-            st.session_state.clear()
-            st.rerun()
+        st.error("⚠️ Database contains synthetic datetime values. Please clear database and re-upload your data.")
+        if st.button("🗑️ Clear Database"):
+            db.clear_all_data()
+            st.success("Database cleared. Please re-upload your data.")
+            st.stop()
         st.stop()
         
     st.success(f"✅ Using authentic data with {len(fresh_data):,} records")
