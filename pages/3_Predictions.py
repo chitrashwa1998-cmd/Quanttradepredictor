@@ -176,21 +176,32 @@ def show_direction_predictions(db, fresh_data):
     
     st.header("📈 Direction Predictions")
     
-    # Check if direction model exists in trained models
-    if 'direction_trained_models' not in st.session_state or 'direction' not in st.session_state.direction_trained_models:
+    # Use the fresh data passed from main function
+    if fresh_data is None or len(fresh_data) == 0:
+        st.error("No fresh data available")
+        return
+    
+    # Initialize model manager and check for trained models
+    from models.model_manager import ModelManager
+    model_manager = ModelManager()
+    
+    # Check if direction model exists
+    if not model_manager.is_model_trained('direction'):
         st.warning("⚠️ Direction model not trained. Please train the model first.")
         return
     
-    # Get authentic data
-    if 'direction_features' not in st.session_state or st.session_state.direction_features is None:
-        st.error("No direction features available")
-        return
-    
-    features = st.session_state.direction_features
-    
+    # Prepare features from fresh data
     try:
-        model = st.session_state.direction_trained_models['direction']
-        predictions, probabilities = model.predict(features)
+        from features.technical_indicators import TechnicalIndicators
+        ti = TechnicalIndicators()
+        features = ti.calculate_all_indicators(fresh_data)
+        
+        if features is None or len(features) == 0:
+            st.error("Failed to calculate features")
+            return
+    
+    # Make predictions using trained model
+        predictions, probabilities = model_manager.predict('direction', features)
         
         if predictions is None or len(predictions) == 0:
             st.error("Model prediction failed")
@@ -259,21 +270,32 @@ def show_profit_predictions(db, fresh_data):
     
     st.header("💰 Profit Probability Predictions")
     
-    # Check if profit model exists in trained models
-    if 'profit_prob_trained_models' not in st.session_state or 'profit_probability' not in st.session_state.profit_prob_trained_models:
+    # Use the fresh data passed from main function
+    if fresh_data is None or len(fresh_data) == 0:
+        st.error("No fresh data available")
+        return
+    
+    # Initialize model manager and check for trained models
+    from models.model_manager import ModelManager
+    model_manager = ModelManager()
+    
+    # Check if profit probability model exists
+    if not model_manager.is_model_trained('profit_probability'):
         st.warning("⚠️ Profit probability model not trained. Please train the model first.")
         return
     
-    # Get authentic data
-    if 'profit_prob_features' not in st.session_state or st.session_state.profit_prob_features is None:
-        st.error("No profit probability features available")
-        return
-    
-    features = st.session_state.profit_prob_features
-    
+    # Prepare features from fresh data
     try:
-        model = st.session_state.profit_prob_trained_models['profit_probability']
-        predictions, probabilities = model.predict(features)
+        from features.technical_indicators import TechnicalIndicators
+        ti = TechnicalIndicators()
+        features = ti.calculate_all_indicators(fresh_data)
+        
+        if features is None or len(features) == 0:
+            st.error("Failed to calculate features")
+            return
+    
+    # Make predictions using trained model
+        predictions, probabilities = model_manager.predict('profit_probability', features)
         
         if predictions is None or len(predictions) == 0:
             st.error("Model prediction failed")
@@ -341,21 +363,32 @@ def show_reversal_predictions(db, fresh_data):
     
     st.header("🔄 Reversal Detection")
     
-    # Check if reversal model exists in trained models
-    if 'reversal_trained_models' not in st.session_state or 'reversal' not in st.session_state.reversal_trained_models:
+    # Use the fresh data passed from main function
+    if fresh_data is None or len(fresh_data) == 0:
+        st.error("No fresh data available")
+        return
+    
+    # Initialize model manager and check for trained models
+    from models.model_manager import ModelManager
+    model_manager = ModelManager()
+    
+    # Check if reversal model exists
+    if not model_manager.is_model_trained('reversal'):
         st.warning("⚠️ Reversal model not trained. Please train the model first.")
         return
     
-    # Get authentic data
-    if 'reversal_features' not in st.session_state or st.session_state.reversal_features is None:
-        st.error("No reversal features available")
-        return
-    
-    features = st.session_state.reversal_features
-    
+    # Prepare features from fresh data
     try:
-        model = st.session_state.reversal_trained_models['reversal']
-        predictions, probabilities = model.predict(features)
+        from features.technical_indicators import TechnicalIndicators
+        ti = TechnicalIndicators()
+        features = ti.calculate_all_indicators(fresh_data)
+        
+        if features is None or len(features) == 0:
+            st.error("Failed to calculate features")
+            return
+    
+    # Make predictions using trained model
+        predictions, probabilities = model_manager.predict('reversal', features)
         
         if predictions is None or len(predictions) == 0:
             st.error("Model prediction failed")
