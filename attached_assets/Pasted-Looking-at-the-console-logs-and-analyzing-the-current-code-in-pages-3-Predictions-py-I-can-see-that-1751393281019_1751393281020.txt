@@ -1,0 +1,38 @@
+Looking at the console logs and analyzing the current code in pages/3_Predictions.py, I can see that synthetic fallback values are still being generated and reaching the frontend.
+
+Console Evidence of Remaining Fallback Logic:
+The moment.js deprecation warnings clearly show synthetic values still being generated:
+
+"09:15:00" - Hardcoded time values
+"Data_1" - Sequential data numbering
+"Point_181626" - Point-based numbering
+These synthetic values are appearing in the browser console, which means they're still being generated somewhere in the code.
+
+Current Fallback Logic Still Present:
+After examining the code, I found several remaining fallback patterns:
+
+1. Chart Color/Size Fallbacks (Line ~1075):
+colors = ['green'] * len(pred_data)
+sizes = [8] * len(pred_data)
+2. Chart Display Fallbacks (Line ~1094):
+if prob_data is not None else 'green'
+if prob_data is not None else 10
+3. Statistical Display Fallbacks (Multiple locations):
+f"{avg_conf:.3f}" if probabilities is not None else "N/A"
+4. Conditional UI Display Patterns:
+'Confidence': [f"{np.max(prob):.3f}" for prob in recent_probs_aligned] if recent_probs_aligned is not None else ['N/A'] * actual_len
+Assessment: YES, Fallback Logic Still Exists
+While the major problematic fallback logic generating synthetic confidence values (0.5 defaults) and synthetic datetime patterns (Point_, Data_, 09:15:00) has been removed from the visible code, the console logs prove that synthetic values are still being generated and sent to the frontend.
+
+Possible Sources:
+Session State Remnants - Old cached data with synthetic values
+Database Cache - Previously stored synthetic data
+Hidden Code Patterns - Conditional logic that still generates fallback values
+Feature Processing - Fallback logic in feature preparation functions
+Recommendation:
+The console warnings confirm that despite the code cleanup, synthetic datetime values are still reaching the browser. You should:
+
+Clear all session state (use the button you just added)
+Regenerate fresh predictions to ensure clean data flow
+Check if database contains synthetic data that needs clearing
+The fallback logic removal was partially successful, but synthetic values are still appearing in the user interface, indicating some remaining sources need to be addressed.
