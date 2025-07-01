@@ -19,13 +19,44 @@ def show_predictions_page():
     st.title("🔮 Real-Time Predictions")
     st.markdown("### Advanced ML Model Predictions - Authentic Data Only")
     
+    # Add cache clearing button to remove synthetic values
+    if st.button("🗑️ Clear Cached Synthetic Values", help="Click if you see synthetic datetime warnings"):
+        # Clear all session state that might contain synthetic datetime values
+        cache_keys = [
+            'features', 'direction_features', 'profit_prob_features', 'reversal_features',
+            'data', 'uploaded_data', 'prices', 'recent_prices'
+        ]
+        for key in cache_keys:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.success("✅ Cleared cached data. Page will reload with fresh database data.")
+        st.rerun()
+    
     # Initialize database
     db = DatabaseAdapter()
     
-    # Check if data exists
-    if 'features' not in st.session_state or st.session_state.features is None:
+    # Check session state for uploaded data
+    if 'data' not in st.session_state or st.session_state.data is None:
         st.error("⚠️ No data available. Please upload data first in the Data Upload page.")
         st.stop()
+    
+    fresh_data = st.session_state.data
+    
+    # Validate that data contains authentic datetime data
+    if not pd.api.types.is_datetime64_any_dtype(fresh_data.index):
+        st.error("⚠️ Data contains invalid datetime index. Please re-upload your data.")
+        st.stop()
+        
+    # Check for synthetic datetime patterns
+    sample_datetime_str = str(fresh_data.index[0])
+    if any(pattern in sample_datetime_str for pattern in ['Data_', 'Point_', '09:15:00']):
+        st.error("⚠️ Data contains synthetic datetime values. Please clear cache and re-upload your data.")
+        if st.button("🗑️ Clear Session State"):
+            st.session_state.clear()
+            st.rerun()
+        st.stop()
+        
+    st.success(f"✅ Using authentic data with {len(fresh_data):,} records")
     
     # Create tabs for all 4 models
     vol_tab, dir_tab, profit_tab, reversal_tab = st.tabs([
@@ -35,68 +66,82 @@ def show_predictions_page():
         "🔄 Reversal Detection"
     ])
     
-    # Volatility Predictions Tab
+    # Pass fresh database data to all prediction functions
     with vol_tab:
-        show_volatility_predictions(db)
+        show_volatility_predictions(db, fresh_data)
     
-    # Direction Predictions Tab
     with dir_tab:
-        show_direction_predictions(db)
+        show_direction_predictions(db, fresh_data)
     
-    # Profit Probability Tab  
     with profit_tab:
-        show_profit_predictions(db)
+        show_profit_predictions(db, fresh_data)
     
-    # Reversal Detection Tab
     with reversal_tab:
-        show_reversal_predictions(db)
+        show_reversal_predictions(db, fresh_data)
 
-def show_volatility_predictions(db):
+def show_volatility_predictions(db, fresh_data):
     """Volatility predictions with authentic data only"""
     
     st.header("📊 Volatility Forecasting")
+    
+    # Use the fresh data passed from main function
+    if fresh_data is None or len(fresh_data) == 0:
+        st.error("No fresh data available")
+        return
     
     # Initialize model manager and check for trained models
     from models.model_manager import ModelManager
     model_manager = ModelManager()
     
-    # Check if volatility model exists in session state or database
+    # Check if volatility model exists
     if not model_manager.is_model_trained('volatility'):
         st.warning("⚠️ Volatility model not trained. Please train the model first.")
         return
     
-    # Get authentic data
-    features = st.session_state.features
-    if features is None or len(features) == 0:
-        st.error("No feature data available")
-        return
-    
-    # Make predictions using trained model
+    # Prepare features from fresh data
     try:
+        from features.technical_indicators import TechnicalIndicators
+        ti = TechnicalIndicators()
+        features = ti.calculate_all_indicators(fresh_data)
+        
+        if features is None or len(features) == 0:
+            st.error("Failed to calculate features")
+            return
+        
+        # Make predictions using trained model
         predictions, _ = model_manager.predict('volatility', features)
         
         if predictions is None or len(predictions) == 0:
             st.error("Model prediction failed")
             return
         
-        # Use authentic datetime index from original data
-        datetime_index = features.index
+        # Use only authentic datetime index from fresh database data
+        authentic_datetime_index = features.index
         
-        # Create DataFrame with authentic timestamps
+        # Validate no synthetic values in the datetime index
+        for i, dt in enumerate(authentic_datetime_index[:5]):
+            dt_str = str(dt)
+            if any(pattern in dt_str for pattern in ['Data_', 'Point_', '09:15:00']):
+                st.error(f"Detected synthetic datetime value: {dt_str}. Please clear session and re-upload data.")
+                return
+        
+        # Create DataFrame with validated authentic timestamps only
         pred_df = pd.DataFrame({
-            'DateTime': datetime_index,
-            'Predicted_Volatility': predictions,
-            'Date': datetime_index.strftime('%Y-%m-%d'),
-            'Time': datetime_index.strftime('%H:%M:%S')
+            'DateTime': authentic_datetime_index,
+            'Predicted_Volatility': predictions
         })
+        
+        # Add readable date/time columns
+        pred_df['Date'] = pred_df['DateTime'].dt.strftime('%Y-%m-%d')
+        pred_df['Time'] = pred_df['DateTime'].dt.strftime('%H:%M:%S')
         
         # Display recent predictions (last 100 rows)
         recent_predictions = pred_df.tail(100)
         
         st.subheader("Recent Volatility Predictions")
-        st.dataframe(recent_predictions, use_container_width=True)
+        st.dataframe(recent_predictions[['Date', 'Time', 'Predicted_Volatility']], use_container_width=True)
         
-        # Create chart
+        # Create chart with authentic datetime values only
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=recent_predictions['DateTime'],
