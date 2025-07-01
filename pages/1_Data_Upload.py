@@ -130,17 +130,40 @@ if uploaded_file is not None:
             st.session_state.direction_predictions = None
             st.session_state.direction_probabilities = None
 
-            # Automatically save to database with error handling
+            # Automatically save to database with error handling and retry logic
             try:
                 from utils.database_adapter import DatabaseAdapter
-                trading_db = DatabaseAdapter()
+                import time
                 
-                # Test database connection first
-                if not trading_db._test_connection():
-                    st.error("❌ Database connection failed. Please check your PostgreSQL setup.")
-                    st.stop()
+                # Retry logic for database save (handles table creation timing issues)
+                max_retries = 3
+                save_success = False
                 
-                save_success = trading_db.save_ohlc_data(df, "main_dataset", preserve_full_data)
+                for attempt in range(max_retries):
+                    try:
+                        trading_db = DatabaseAdapter()
+                        
+                        # Test database connection first
+                        if not trading_db._test_connection():
+                            if attempt == max_retries - 1:
+                                st.error("❌ Database connection failed. Please check your PostgreSQL setup.")
+                                st.stop()
+                            time.sleep(1)
+                            continue
+                        
+                        save_success = trading_db.save_ohlc_data(df, "main_dataset", preserve_full_data)
+                        if save_success:
+                            break
+                        elif attempt < max_retries - 1:
+                            st.info(f"Database save attempt {attempt + 1} failed, retrying...")
+                            time.sleep(1)
+                    except Exception as retry_error:
+                        if "does not exist" in str(retry_error) and attempt < max_retries - 1:
+                            st.info(f"Database initializing, retrying save attempt {attempt + 1}...")
+                            time.sleep(2)
+                            continue
+                        elif attempt == max_retries - 1:
+                            raise retry_error
                 
                 if save_success:
                     # Verify data was actually saved by trying to load it back
