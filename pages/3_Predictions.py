@@ -26,8 +26,38 @@ def show_predictions_page():
         st.success("✅ Cleared all cached data. Page will reload with fresh database data.")
         st.rerun()
 
-    # Initialize database
-    db = DatabaseAdapter()
+    # Initialize database with error handling
+    try:
+        db = DatabaseAdapter()
+    except Exception as e:
+        if "AdminShutdown" in str(e) or "terminating connection" in str(e):
+            st.error("🔌 Database connection was terminated. This can happen if the database was idle.")
+            st.info("💡 **Solution**: Wait a few seconds and refresh the page. PostgreSQL databases automatically reconnect.")
+            if st.button("🔄 Retry Connection"):
+                st.rerun()
+            st.stop()
+        elif "synthetic datetime" in str(e).lower():
+            st.error("⚠️ Database contains synthetic datetime values that need to be cleared.")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🗑️ Clear Database", type="primary"):
+                    try:
+                        temp_db = DatabaseAdapter()
+                        success = temp_db.clear_all_data()
+                        if success:
+                            st.success("✅ Database cleared successfully!")
+                            st.info("👆 Please go to 'Data Upload' page to upload your original data file.")
+                        else:
+                            st.error("❌ Failed to clear database")
+                    except:
+                        st.error("❌ Unable to clear database due to connection issues")
+            with col2:
+                if st.button("🔍 View Database Manager"):
+                    st.switch_page("pages/5_Database_Manager.py")
+            st.stop()
+        else:
+            st.error(f"❌ Database initialization failed: {str(e)}")
+            st.stop()
 
     # Get fresh data from database instead of session state
     fresh_data = db.load_ohlc_data()
