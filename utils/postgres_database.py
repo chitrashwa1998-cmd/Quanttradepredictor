@@ -7,6 +7,8 @@ import psycopg
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Union
 
+__all__ = ['PostgresTradingDatabase']
+
 class PostgresTradingDatabase:
     """PostgreSQL implementation for trading database operations."""
     
