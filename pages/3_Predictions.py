@@ -39,8 +39,6 @@ if 'direction_predictions' not in st.session_state:
 if 'direction_probabilities' not in st.session_state:
     st.session_state.direction_probabilities = None
 
-
-
 st.title("🔮 Model Predictions")
 st.markdown("Generate and analyze predictions using the trained models.")
 
@@ -627,7 +625,7 @@ with volatility_tab:
                         f"{np.percentile(predictions, 99):.6f}",
                         f"{float(pd.Series(predictions).skew()):.4f}",
                         f"{float(pd.Series(predictions).kurtosis()):.4f}",
-                        f"{(std_vol/mean_vol):.4f}"
+
                     ]
                 }
 
@@ -659,14 +657,14 @@ with volatility_tab:
                         f"{(low_count/total_count*100):.1f}%",
                         f"{(medium_count/total_count*100):.1f}%",
                         f"{(high_count/total_count*100):.1f}%",
-                        f"{(very_high_count/total_count*100):.1f}%"
+
                     ],
                     'Threshold_Range': [
                         f"≤ {low_vol_threshold:.6f}",
                         f"{low_vol_threshold:.6f} - {med_low_threshold:.6f}",
                         f"{med_low_threshold:.6f} - {med_high_threshold:.6f}",
                         f"{med_high_threshold:.6f} - {high_vol_threshold:.6f}",
-                        f"> {high_vol_threshold:.6f}"
+
                     ]
                 })
 
@@ -860,8 +858,6 @@ with direction_tab:
         4. Return here to generate predictions
         """)
 
-
-
         # Show preview of what will be available
         st.subheader("🔮 Preview: Direction Prediction Features")
         st.markdown("""
@@ -947,8 +943,6 @@ with direction_tab:
                     st.error("Model training data is incomplete. Please retrain the model.")
                 else:
                     st.error(f"Technical error: {str(e)[:100]}...")
-
-
 
         # Display direction predictions if available
         if hasattr(st.session_state, 'direction_predictions') and st.session_state.direction_predictions is not None:
@@ -1287,8 +1281,6 @@ with direction_tab:
                 time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
 
                 # Debug: ensure all arrays have the same length
-                st.write(f"recent_predictions_aligned={len(recent_predictions_aligned)}, "
-                        f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
 
                 # Ensure all arrays match the exact same length
                 actual_len = len(recent_prices_aligned)
@@ -1305,9 +1297,6 @@ with direction_tab:
                 time_col = time_col[:actual_len]
 
                 # Debug: Print lengths after alignment
-                      f"recent_predictions_aligned={len(recent_predictions_aligned)}, "
-                      f"recent_probs_aligned={len(recent_probs_aligned) if recent_probs_aligned is not None else 'None'}, "
-                      f"price_changes={len(price_changes)}, actual_direction={len(actual_direction)}")
 
                 # Build DataFrame step by step to avoid index mismatch
                 # Convert pandas series to plain lists to avoid index conflicts
@@ -1603,7 +1592,7 @@ with direction_tab:
                             f"{(med_conf_bullish/total_signals*100):.1f}%",
                             f"{(med_conf_bearish/total_signals*100):.1f}%",
                             f"{(low_conf_bullish/total_signals*100):.1f}%",
-                            f"{(low_conf_bearish/total_signals*100):.1f}%"
+
                         ],
                         'Confidence_Range': [
                             ">70%", ">70%", "50-70%", "50-70%", "<50%", "<50%"
@@ -3196,7 +3185,7 @@ with reversal_tab:
                             f"{(med_conf_reversal/total_signals*100):.1f}%",
                             f"{(med_conf_no_reversal/total_signals*100):.1f}%",
                             f"{(low_conf_reversal/total_signals*100):.1f}%",
-                            f"{(low_conf_no_reversal/total_signals*100):.1f}%"
+
                         ],
                         'Confidence_Range': [
                             ">70%", ">70%", "50-70%", "50-70%", "<50%", "<50%"
