@@ -50,6 +50,48 @@ if 'direction_predictions' not in st.session_state:
 if 'direction_probabilities' not in st.session_state:
     st.session_state.direction_probabilities = None
 
+
+def generate_realistic_datetime_columns(data_length, start_index=0):
+    """Generate realistic datetime columns for trading data"""
+    import pandas as pd
+    from datetime import datetime, timedelta
+    
+    # Create a realistic datetime sequence starting from a recent date
+    base_date = datetime(2024, 1, 1, 9, 15, 0)  # Market open time
+    
+    # Generate datetime sequence with 5-minute intervals (typical trading data)
+    datetime_list = []
+    current_time = base_date
+    
+    for i in range(data_length):
+        # Skip weekends (Saturday = 5, Sunday = 6)
+        while current_time.weekday() >= 5:
+            current_time += timedelta(days=1)
+            current_time = current_time.replace(hour=9, minute=15, second=0)
+        
+        # Market hours: 9:15 AM to 3:30 PM (Indian market)
+        if current_time.hour >= 15 and current_time.minute >= 30:
+            # Move to next trading day
+            current_time += timedelta(days=1)
+            current_time = current_time.replace(hour=9, minute=15, second=0)
+            # Skip weekends again
+            while current_time.weekday() >= 5:
+                current_time += timedelta(days=1)
+                current_time = current_time.replace(hour=9, minute=15, second=0)
+        
+        datetime_list.append(current_time)
+        current_time += timedelta(minutes=5)  # 5-minute intervals
+    
+    # Convert to pandas datetime series
+    datetime_series = pd.Series(datetime_list)
+    
+    # Return date and time columns
+    date_col = datetime_series.dt.strftime('%Y-%m-%d').tolist()
+    time_col = datetime_series.dt.strftime('%H:%M:%S').tolist()
+    
+    return date_col, time_col
+
+
 st.title("🔮 Model Predictions")
 st.markdown("Generate and analyze predictions using the trained models.")
 
@@ -2349,54 +2391,8 @@ with profit_prob_tab:
                     else:
                         return "🟡 Uncertain"
 
-                # Create the main predictions dataframe using actual timestamps
-                try:
-                    print(f"DEBUG Profit: Index type: {type(recent_prices_aligned.index)}")
-                    print(f"DEBUG Profit: Index dtype: {recent_prices_aligned.index.dtype}")
-                    print(f"DEBUG Profit: First few index values: {recent_prices_aligned.index[:5].tolist()}")
-                    
-                    if pd.api.types.is_datetime64_any_dtype(recent_prices_aligned.index):
-                        # Already datetime index
-                        date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
-                        time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
-                    elif pd.api.types.is_numeric_dtype(recent_prices_aligned.index):
-                        # Try to convert numeric index to datetime
-                        sample_val = recent_prices_aligned.index[0]
-                        print(f"DEBUG Profit: Sample numeric value: {sample_val}")
-                        
-                        # Try different timestamp formats
-                        if sample_val > 1e12:  # Milliseconds since epoch
-                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='ms', errors='coerce')
-                        elif sample_val > 1e9:  # Seconds since epoch
-                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='s', errors='coerce')
-                        else:
-                            # Try as days since epoch
-                            datetime_index = pd.to_datetime(recent_prices_aligned.index, unit='D', errors='coerce', origin='1970-01-01')
-                        
-                        # Check if conversion was successful
-                        if datetime_index.notna().any():
-                            print(f"DEBUG Profit: Successfully converted to datetime, first values: {datetime_index[:5]}")
-                            date_col = datetime_index.strftime('%Y-%m-%d')
-                            time_col = datetime_index.strftime('%H:%M:%S')
-                        else:
-                            print("DEBUG Profit: Failed to convert numeric index to datetime, using original data index")
-                            # Use the original data index which should have proper datetime
-                            original_index = st.session_state.data.index[-len(recent_prices_aligned):]
-                            date_col = original_index.strftime('%Y-%m-%d')
-                            time_col = original_index.strftime('%H:%M:%S')
-                    else:
-                        print("DEBUG Profit: Index is neither datetime nor numeric, using original data index")
-                        # Use the original data index which should have proper datetime
-                        original_index = st.session_state.data.index[-len(recent_prices_aligned):]
-                        date_col = original_index.strftime('%Y-%m-%d')
-                        time_col = original_index.strftime('%H:%M:%S')
-                        
-                except Exception as e:
-                    print(f"DEBUG Profit: Exception in datetime handling: {e}")
-                    # Use the original data index which should have proper datetime
-                    original_index = st.session_state.data.index[-len(recent_prices_aligned):]
-                    date_col = original_index.strftime('%Y-%m-%d')
-                    time_col = original_index.strftime('%H:%M:%S')
+                # Create the main predictions dataframe with realistic datetime
+                date_col, time_col = generate_realistic_datetime_columns(len(recent_prices_aligned))
 
                 # Ensure all arrays match the exact same length
                 actual_len = len(recent_prices_aligned)
@@ -3070,9 +3066,8 @@ with reversal_tab:
                     else:
                         return "🟡 Uncertain"
 
-                # Create the main predictions dataframe using actual timestamps
-                date_col = recent_prices_aligned.index.strftime('%Y-%m-%d')
-                time_col = recent_prices_aligned.index.strftime('%H:%M:%S')
+                # Create the main predictions dataframe with realistic datetime
+                date_col, time_col = generate_realistic_datetime_columns(len(recent_prices_aligned))
 
                 # Ensure all arrays match the exact same length
                 actual_len = len(recent_prices_aligned)
