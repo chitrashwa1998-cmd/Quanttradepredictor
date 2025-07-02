@@ -359,9 +359,11 @@ class ModelManager:
                 if 'model' in model_data:
                     models_to_save[model_name] = {
                         'ensemble': model_data['model'],
-                        'scaler': model_data.get('scaler'),  # Include the scaler!
+                        'scaler': model_data.get('scaler'),
                         'feature_names': model_data.get('feature_names', []),
-                        'task_type': model_data.get('task_type', 'regression')
+                        'task_type': model_data.get('task_type', 'regression'),
+                        'metrics': model_data.get('metrics', {}),  # Include metrics!
+                        'feature_importance': model_data.get('feature_importance', {})  # Include feature importance!
                     }
 
             if models_to_save:

@@ -226,6 +226,18 @@ class VolatilityModel:
         print(f"Training RMSE: {train_rmse:.6f}, R²: {train_r2:.4f}")
         print(f"Testing RMSE: {test_rmse:.6f}, R²: {test_r2:.4f}")
 
+        # Extract feature importance from ensemble
+        feature_importance = {}
+        try:
+            # Get feature importance from XGBoost (first estimator)
+            if hasattr(ensemble_model.named_estimators_['xgboost'], 'feature_importances_'):
+                importances = ensemble_model.named_estimators_['xgboost'].feature_importances_
+                for i, importance in enumerate(importances):
+                    if i < len(self.feature_names):
+                        feature_importance[self.feature_names[i]] = float(importance)
+        except Exception as e:
+            print(f"Could not extract feature importance: {e}")
+
         return {
             'model': ensemble_model,
             'scaler': self.scaler,
@@ -235,8 +247,11 @@ class VolatilityModel:
                 'test_rmse': test_rmse,
                 'train_r2': train_r2,
                 'test_r2': test_r2,
-                'rmse': test_rmse
+                'rmse': test_rmse,
+                'mae': np.mean(np.abs(y_test - y_pred_test)),
+                'mse': np.mean((y_test - y_pred_test) ** 2)
             },
+            'feature_importance': feature_importance,
             'predictions': {
                 'train': y_pred_train,
                 'test': y_pred_test,
