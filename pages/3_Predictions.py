@@ -305,6 +305,17 @@ def show_volatility_predictions(db, fresh_data):
                 }
             )
             
+            # Download button for detailed data
+            st.subheader("💾 Download Data")
+            csv_data = detailed_df[display_columns].to_csv(index=False)
+            st.download_button(
+                label="📥 Download Detailed Volatility Data (CSV)",
+                data=csv_data,
+                file_name=f"volatility_predictions_{len(detailed_df)}_records.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+            
             # Data summary
             st.subheader("📊 Data Summary")
             col1, col2, col3 = st.columns(3)
@@ -986,6 +997,17 @@ def show_direction_predictions(db, fresh_data):
                     "Streak_Length": st.column_config.NumberColumn("Streak", format="%d"),
                     "Confidence_Change": st.column_config.NumberColumn("Δ Confidence", format="%.3f")
                 }
+            )
+            
+            # Download button for detailed data
+            st.subheader("💾 Download Data")
+            csv_data = detailed_df[display_columns].to_csv(index=False)
+            st.download_button(
+                label="📥 Download Detailed Direction Data (CSV)",
+                data=csv_data,
+                file_name=f"direction_predictions_{len(detailed_df)}_records.csv",
+                mime="text/csv",
+                use_container_width=True
             )
             
             # Data summary
@@ -1697,6 +1719,17 @@ def show_profit_predictions(db, fresh_data):
                     "Streak_Length": st.column_config.NumberColumn("Streak", format="%d"),
                     "Confidence_Change": st.column_config.NumberColumn("Δ Confidence", format="%.3f")
                 }
+            )
+            
+            # Download button for detailed data
+            st.subheader("💾 Download Data")
+            csv_data = detailed_df[display_columns].to_csv(index=False)
+            st.download_button(
+                label="📥 Download Detailed Profit Probability Data (CSV)",
+                data=csv_data,
+                file_name=f"profit_probability_predictions_{len(detailed_df)}_records.csv",
+                mime="text/csv",
+                use_container_width=True
             )
             
             # Data summary
@@ -2412,6 +2445,17 @@ def show_reversal_predictions(db, fresh_data):
                     "Streak_Length": st.column_config.NumberColumn("Streak", format="%d"),
                     "Confidence_Change": st.column_config.NumberColumn("Δ Confidence", format="%.3f")
                 }
+            )
+            
+            # Download button for detailed data
+            st.subheader("💾 Download Data")
+            csv_data = detailed_df[display_columns].to_csv(index=False)
+            st.download_button(
+                label="📥 Download Detailed Reversal Data (CSV)",
+                data=csv_data,
+                file_name=f"reversal_predictions_{len(detailed_df)}_records.csv",
+                mime="text/csv",
+                use_container_width=True
             )
             
             # Data summary
