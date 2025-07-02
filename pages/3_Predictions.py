@@ -2224,7 +2224,7 @@ def show_reversal_predictions(db, fresh_data):
             st.error("Failed to calculate reversal features")
             return
 
-    # Make predictions using trained model
+        # Make predictions using trained model
         predictions, probabilities = model_manager.predict('reversal', features)
 
         if predictions is None or len(predictions) == 0:
@@ -2243,19 +2243,43 @@ def show_reversal_predictions(db, fresh_data):
         pred_df = pd.DataFrame({
             'DateTime': datetime_index,
             'Reversal_Signal': ['Reversal' if p == 1 else 'No Reversal' for p in predictions],
-            'Confidence': [np.max(prob) for prob in probabilities] if probabilities is not None else None
+            'Confidence': [np.max(prob) for prob in probabilities] if probabilities is not None else [0.5] * len(predictions),
+            'Date': datetime_index.strftime('%Y-%m-%d'),
+            'Time': datetime_index.strftime('%H:%M:%S')
         }, index=datetime_index)
 
-        # Display recent predictions
-        recent_predictions = pred_df.tail(100)
+        # Remove rows with NaN predictions for display
+        pred_df = pred_df.dropna(subset=['Reversal_Signal'])
 
-        st.subheader("Recent Reversal Predictions")
+        if len(pred_df) == 0:
+            st.error("No valid predictions generated")
+            return
 
-        if len(recent_predictions) > 0:
-            st.dataframe(recent_predictions, use_container_width=True)
+        # Create 5 comprehensive sub-tabs for detailed analysis
+        chart_tab, data_tab, dist_tab, stats_tab, metrics_tab = st.tabs([
+            "📈 Interactive Chart", 
+            "📋 Detailed Data", 
+            "📊 Distribution Analysis", 
+            "🔍 Statistical Analysis", 
+            "⚡ Performance Metrics"
+        ])
 
-            # Create chart
-            fig = go.Figure()
+        with chart_tab:
+            st.subheader("📈 Reversal Detection Chart")
+            
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                chart_points = st.selectbox("Data Points", [50, 100, 200, 500], index=1, key="reversal_chart_points")
+            
+            recent_predictions = pred_df.tail(chart_points)
+
+            # Create subplot with multiple views
+            fig = make_subplots(
+                rows=2, cols=1,
+                subplot_titles=('Reversal Signals Over Time', 'Confidence Distribution'),
+                vertical_spacing=0.1,
+                row_heights=[0.7, 0.3]
+            )
 
             # Add reversal signals
             reversals = recent_predictions[recent_predictions['Reversal_Signal'] == 'Reversal']
@@ -2265,8 +2289,10 @@ def show_reversal_predictions(db, fresh_data):
                     y=[1] * len(reversals),
                     mode='markers',
                     name='Reversal',
-                    marker=dict(color='orange', size=12)
-                ))
+                    marker=dict(color='orange', size=10, symbol='star'),
+                    text=reversals['Confidence'].round(3),
+                    textposition="top center"
+                ), row=1, col=1)
 
             # Add no reversal signals
             no_reversals = recent_predictions[recent_predictions['Reversal_Signal'] == 'No Reversal']
@@ -2276,17 +2302,565 @@ def show_reversal_predictions(db, fresh_data):
                     y=[0] * len(no_reversals),
                     mode='markers',
                     name='No Reversal',
-                    marker=dict(color='blue', size=8)
-                ))
+                    marker=dict(color='blue', size=6, symbol='circle'),
+                    text=no_reversals['Confidence'].round(3),
+                    textposition="bottom center"
+                ), row=1, col=1)
+
+            # Add confidence trend line if enough data
+            if len(recent_predictions) >= 10:
+                group_size = 10
+                num_groups = len(recent_predictions) // group_size
+                confidence_trend = []
+                trend_times = []
+                
+                for i in range(num_groups):
+                    start_idx = i * group_size
+                    end_idx = min((i + 1) * group_size, len(recent_predictions))
+                    group_data = recent_predictions.iloc[start_idx:end_idx]
+                    
+                    if len(group_data) > 0:
+                        confidence_trend.append(group_data['Confidence'].mean())
+                        trend_times.append(group_data['DateTime'].iloc[0])
+                
+                if len(trend_times) > 0 and len(confidence_trend) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=trend_times,
+                        y=confidence_trend,
+                        mode='lines',
+                        name='Confidence Trend',
+                        line=dict(color='purple', width=2),
+                        yaxis='y2'
+                    ), row=1, col=1)
+
+            # Confidence histogram
+            fig.add_trace(go.Histogram(
+                x=recent_predictions['Confidence'],
+                nbinsx=20,
+                name='Confidence Distribution',
+                marker_color='rgba(255, 140, 0, 0.6)'
+            ), row=2, col=1)
 
             fig.update_layout(
-                title="Reversal Detection - Last 100 Data Points",
-                xaxis_title="DateTime",
-                yaxis_title="Reversal Signal (1=Reversal, 0=No Reversal)",
-                height=500
+                title=f"Reversal Analysis - Last {chart_points} Data Points",
+                height=700,
+                showlegend=True,
+                template="plotly_dark"
             )
+            
+            fig.update_xaxes(title_text="DateTime", row=1, col=1)
+            fig.update_yaxes(title_text="Reversal Signal (1=Reversal, 0=No Reversal)", row=1, col=1)
+            fig.update_yaxes(title_text="Confidence", side='right', row=1, col=1, secondary_y=True)
+            fig.update_xaxes(title_text="Confidence Level", row=2, col=1)
+            fig.update_yaxes(title_text="Frequency", row=2, col=1)
 
             st.plotly_chart(fig, use_container_width=True)
+
+            # Quick stats
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                current_signal = recent_predictions['Reversal_Signal'].iloc[-1]
+                st.metric("Current Signal", current_signal)
+            with col2:
+                current_confidence = recent_predictions['Confidence'].iloc[-1]
+                st.metric("Current Confidence", f"{current_confidence:.3f}")
+            with col3:
+                reversal_pct = len(reversals) / len(recent_predictions) * 100
+                st.metric("Reversal %", f"{reversal_pct:.1f}%")
+            with col4:
+                avg_confidence = recent_predictions['Confidence'].mean()
+                st.metric("Avg Confidence", f"{avg_confidence:.3f}")
+
+        with data_tab:
+            st.subheader("📋 Detailed Reversal Data")
+            
+            col1, col2 = st.columns([2, 1])
+            with col2:
+                data_points = st.selectbox("Show Records", [100, 200, 500, 1000], index=1, key="reversal_data_points")
+            
+            recent_predictions = pred_df.tail(data_points)
+            
+            # Enhanced data table with additional calculated columns
+            detailed_df = recent_predictions.copy()
+            detailed_df['Signal_Score'] = detailed_df['Reversal_Signal'].map({'Reversal': 1, 'No Reversal': 0})
+            detailed_df['Confidence_Level'] = pd.cut(detailed_df['Confidence'], 
+                                                   bins=[0, 0.6, 0.8, 1.0], 
+                                                   labels=['Low', 'Medium', 'High'])
+            
+            # Calculate streaks
+            signal_changes = detailed_df['Signal_Score'].diff().fillna(0)
+            streak_groups = (signal_changes != 0).cumsum()
+            detailed_df['Streak_Length'] = detailed_df.groupby(streak_groups).cumcount() + 1
+            
+            # Add momentum indicators
+            detailed_df['Confidence_Change'] = detailed_df['Confidence'].diff()
+            detailed_df['Signal_Momentum'] = detailed_df['Confidence_Change'].apply(
+                lambda x: '📈' if x > 0.1 else '📉' if x < -0.1 else '➡️'
+            )
+            
+            # Display enhanced table
+            display_columns = [
+                'Date', 'Time', 'Reversal_Signal', 'Confidence', 'Signal_Momentum',
+                'Confidence_Level', 'Streak_Length', 'Confidence_Change'
+            ]
+            
+            st.dataframe(
+                detailed_df[display_columns].round(3), 
+                use_container_width=True,
+                column_config={
+                    "Confidence": st.column_config.NumberColumn("Confidence", format="%.3f"),
+                    "Streak_Length": st.column_config.NumberColumn("Streak", format="%d"),
+                    "Confidence_Change": st.column_config.NumberColumn("Δ Confidence", format="%.3f")
+                }
+            )
+            
+            # Data summary
+            st.subheader("📊 Reversal Summary")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write("**Signal Distribution:**")
+                signal_counts = detailed_df['Reversal_Signal'].value_counts()
+                for signal, count in signal_counts.items():
+                    st.write(f"• {signal}: {count} ({count/len(detailed_df)*100:.1f}%)")
+            
+            with col2:
+                st.write("**Confidence Levels:**")
+                confidence_counts = detailed_df['Confidence_Level'].value_counts()
+                for level, count in confidence_counts.items():
+                    st.write(f"• {level}: {count} ({count/len(detailed_df)*100:.1f}%)")
+            
+            with col3:
+                st.write("**Statistics:**")
+                st.write(f"• Avg Confidence: {detailed_df['Confidence'].mean():.3f}")
+                st.write(f"• Max Streak: {detailed_df['Streak_Length'].max()}")
+                st.write(f"• Confidence Std: {detailed_df['Confidence'].std():.3f}")
+
+        with dist_tab:
+            st.subheader("📊 Distribution Analysis")
+            
+            # Distribution plots
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Reversal signal distribution pie chart
+                signal_counts = pred_df['Reversal_Signal'].value_counts()
+                
+                fig = go.Figure()
+                fig.add_trace(go.Pie(
+                    labels=signal_counts.index,
+                    values=signal_counts.values,
+                    hole=0.4,
+                    marker_colors=['orange', 'blue'],
+                    textinfo='label+percent',
+                    textposition='outside'
+                ))
+                
+                fig.update_layout(
+                    title="Reversal Signal Distribution",
+                    height=400,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                # Confidence distribution histogram
+                fig = go.Figure()
+                fig.add_trace(go.Histogram(
+                    x=pred_df['Confidence'],
+                    nbinsx=30,
+                    histnorm='probability density',
+                    name='Confidence Distribution',
+                    marker_color='rgba(255, 140, 0, 0.7)'
+                ))
+                
+                fig.update_layout(
+                    title="Confidence Distribution",
+                    xaxis_title="Confidence Level",
+                    yaxis_title="Density",
+                    height=400,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Confidence by reversal signal
+            st.subheader("📈 Confidence by Reversal Signal")
+            
+            fig = go.Figure()
+            
+            for signal in ['Reversal', 'No Reversal']:
+                signal_data = pred_df[pred_df['Reversal_Signal'] == signal]
+                if len(signal_data) > 0:
+                    fig.add_trace(go.Box(
+                        y=signal_data['Confidence'],
+                        name=signal,
+                        marker_color='orange' if signal == 'Reversal' else 'blue',
+                        boxpoints='outliers'
+                    ))
+            
+            fig.update_layout(
+                title="Confidence Distribution by Reversal Signal",
+                yaxis_title="Confidence Level",
+                height=400,
+                template="plotly_dark"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Statistical distribution analysis
+            st.subheader("📈 Distribution Statistics")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Reversal Count", len(pred_df[pred_df['Reversal_Signal'] == 'Reversal']))
+                st.metric("No Reversal Count", len(pred_df[pred_df['Reversal_Signal'] == 'No Reversal']))
+            with col2:
+                reversal_conf = pred_df[pred_df['Reversal_Signal'] == 'Reversal']['Confidence']
+                st.metric("Reversal Avg Conf", f"{reversal_conf.mean():.3f}" if len(reversal_conf) > 0 else "N/A")
+                st.metric("Reversal Conf Std", f"{reversal_conf.std():.3f}" if len(reversal_conf) > 0 else "N/A")
+            with col3:
+                no_reversal_conf = pred_df[pred_df['Reversal_Signal'] == 'No Reversal']['Confidence']
+                st.metric("No Reversal Avg Conf", f"{no_reversal_conf.mean():.3f}" if len(no_reversal_conf) > 0 else "N/A")
+                st.metric("No Reversal Conf Std", f"{no_reversal_conf.std():.3f}" if len(no_reversal_conf) > 0 else "N/A")
+            with col4:
+                high_conf = len(pred_df[pred_df['Confidence'] > 0.8])
+                st.metric("High Confidence", f"{high_conf} ({high_conf/len(pred_df)*100:.1f}%)")
+                low_conf = len(pred_df[pred_df['Confidence'] < 0.6])
+                st.metric("Low Confidence", f"{low_conf} ({low_conf/len(pred_df)*100:.1f}%)")
+
+        with stats_tab:
+            st.subheader("🔍 Statistical Analysis")
+            
+            # Time series analysis
+            recent_data = pred_df.tail(500)  # Use recent data
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Reversal signal streak analysis
+                st.write("**📊 Reversal Signal Streak Analysis**")
+                
+                # Calculate streaks
+                signal_numeric = recent_data['Reversal_Signal'].map({'Reversal': 1, 'No Reversal': 0})
+                streaks = []
+                current_streak = 1
+                current_signal = signal_numeric.iloc[0]
+                
+                for i in range(1, len(signal_numeric)):
+                    if signal_numeric.iloc[i] == current_signal:
+                        current_streak += 1
+                    else:
+                        streaks.append(current_streak)
+                        current_streak = 1
+                        current_signal = signal_numeric.iloc[i]
+                streaks.append(current_streak)
+                
+                if streaks:
+                    avg_streak = np.mean(streaks)
+                    max_streak = max(streaks)
+                    
+                    streak_df = pd.DataFrame({
+                        'Average Streak': [f"{avg_streak:.1f}"],
+                        'Max Streak': [max_streak],
+                        'Total Streaks': [len(streaks)],
+                        'Streak Consistency': [f"{(avg_streak/max_streak)*100:.1f}%"]
+                    })
+                    
+                    st.dataframe(streak_df, use_container_width=True)
+                    
+                    # Streak distribution
+                    fig = go.Figure()
+                    fig.add_trace(go.Histogram(
+                        x=streaks,
+                        nbinsx=15,
+                        name='Streak Length Distribution',
+                        marker_color='lightsalmon'
+                    ))
+                    
+                    fig.update_layout(
+                        title="Reversal Signal Streak Distribution",
+                        xaxis_title="Streak Length",
+                        yaxis_title="Frequency",
+                        height=300,
+                        template="plotly_dark"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Confidence trend analysis
+                st.write("**📈 Confidence Trend Analysis**")
+                rolling_conf = recent_data['Confidence'].rolling(20).mean()
+                conf_trend = rolling_conf.iloc[-1] - rolling_conf.iloc[-20] if len(rolling_conf) >= 20 else 0
+                
+                trend_df = pd.DataFrame({
+                    'Current Avg': f"{rolling_conf.iloc[-1]:.3f}" if len(rolling_conf) > 0 else "N/A",
+                    'Trend': f"{conf_trend:+.3f}" if abs(conf_trend) > 0.001 else "Stable",
+                    'Volatility': f"{recent_data['Confidence'].std():.3f}",
+                    'Range': f"{recent_data['Confidence'].max() - recent_data['Confidence'].min():.3f}"
+                }, index=[0])
+                
+                st.dataframe(trend_df, use_container_width=True)
+            
+            with col2:
+                # Signal transition analysis
+                st.write("**🔗 Signal Transition Analysis**")
+                
+                # Calculate transition probabilities
+                transitions = {'Rev→NoRev': 0, 'NoRev→Rev': 0, 'Rev→Rev': 0, 'NoRev→NoRev': 0}
+                for i in range(1, len(recent_data)):
+                    prev_signal = recent_data['Reversal_Signal'].iloc[i-1]
+                    curr_signal = recent_data['Reversal_Signal'].iloc[i]
+                    
+                    if prev_signal == 'Reversal' and curr_signal == 'No Reversal':
+                        transitions['Rev→NoRev'] += 1
+                    elif prev_signal == 'No Reversal' and curr_signal == 'Reversal':
+                        transitions['NoRev→Rev'] += 1
+                    elif prev_signal == 'Reversal' and curr_signal == 'Reversal':
+                        transitions['Rev→Rev'] += 1
+                    elif prev_signal == 'No Reversal' and curr_signal == 'No Reversal':
+                        transitions['NoRev→NoRev'] += 1
+                
+                total_transitions = sum(transitions.values())
+                if total_transitions > 0:
+                    transition_probs = {k: v/total_transitions for k, v in transitions.items()}
+                    
+                    st.write("**Transition Probabilities:**")
+                    for transition, prob in transition_probs.items():
+                        st.write(f"• {transition}: {prob:.1%}")
+                    
+                    # Persistence analysis
+                    persistence = (transitions['Rev→Rev'] + transitions['NoRev→NoRev']) / total_transitions
+                    st.metric("Signal Persistence", f"{persistence:.1%}")
+                
+                # Confidence autocorrelation
+                st.write("**📊 Confidence Autocorrelation**")
+                
+                conf_data = recent_data['Confidence'].tail(200)  # Use recent data for performance
+                lags = range(1, min(11, len(conf_data)//4))
+                autocorr = [conf_data.autocorr(lag=lag) for lag in lags]
+                
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=list(lags),
+                    y=autocorr,
+                    name='Autocorrelation',
+                    marker_color='lightcoral'
+                ))
+                
+                fig.add_hline(y=0.1, line_dash="dash", line_color="red")
+                fig.add_hline(y=-0.1, line_dash="dash", line_color="red")
+                
+                fig.update_layout(
+                    title="Confidence Autocorrelation",
+                    xaxis_title="Lag",
+                    yaxis_title="Correlation",
+                    height=300,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Signal quality analysis
+            st.subheader("🎯 Signal Quality Analysis")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                # High confidence signals
+                high_conf_signals = recent_data[recent_data['Confidence'] > 0.8]
+                st.write(f"**High Confidence Signals (>80%): {len(high_conf_signals)}**")
+                if len(high_conf_signals) > 0:
+                    high_conf_reversals = len(high_conf_signals[high_conf_signals['Reversal_Signal'] == 'Reversal'])
+                    st.write(f"• Reversals: {high_conf_reversals} ({high_conf_reversals/len(high_conf_signals)*100:.1f}%)")
+                    st.write(f"• No Reversals: {len(high_conf_signals) - high_conf_reversals} ({(len(high_conf_signals) - high_conf_reversals)/len(high_conf_signals)*100:.1f}%)")
+            
+            with col2:
+                # Medium confidence signals
+                med_conf_signals = recent_data[(recent_data['Confidence'] >= 0.6) & (recent_data['Confidence'] <= 0.8)]
+                st.write(f"**Medium Confidence Signals (60-80%): {len(med_conf_signals)}**")
+                if len(med_conf_signals) > 0:
+                    med_conf_reversals = len(med_conf_signals[med_conf_signals['Reversal_Signal'] == 'Reversal'])
+                    st.write(f"• Reversals: {med_conf_reversals} ({med_conf_reversals/len(med_conf_signals)*100:.1f}%)")
+                    st.write(f"• No Reversals: {len(med_conf_signals) - med_conf_reversals} ({(len(med_conf_signals) - med_conf_reversals)/len(med_conf_signals)*100:.1f}%)")
+            
+            with col3:
+                # Low confidence signals
+                low_conf_signals = recent_data[recent_data['Confidence'] < 0.6]
+                st.write(f"**Low Confidence Signals (<60%): {len(low_conf_signals)}**")
+                if len(low_conf_signals) > 0:
+                    low_conf_reversals = len(low_conf_signals[low_conf_signals['Reversal_Signal'] == 'Reversal'])
+                    st.write(f"• Reversals: {low_conf_reversals} ({low_conf_reversals/len(low_conf_signals)*100:.1f}%)")
+                    st.write(f"• No Reversals: {len(low_conf_signals) - low_conf_reversals} ({(len(low_conf_signals) - low_conf_reversals)/len(low_conf_signals)*100:.1f}%)")
+
+        with metrics_tab:
+            st.subheader("⚡ Model Performance Metrics")
+
+            # Get model info with debug information
+            model_info = model_manager.get_model_info('reversal')
+            
+            if model_info:
+                st.write("**Debug: Available model info keys:**", list(model_info.keys()))
+                
+                # Try to find metrics in various possible locations
+                metrics = None
+                if 'metrics' in model_info:
+                    metrics = model_info['metrics']
+                    st.success("✅ Found metrics in 'metrics' key")
+                elif 'training_metrics' in model_info:
+                    metrics = model_info['training_metrics']
+                    st.success("✅ Found metrics in 'training_metrics' key")
+                elif 'performance' in model_info:
+                    metrics = model_info['performance']
+                    st.success("✅ Found metrics in 'performance' key")
+                else:
+                    st.info("🔍 Metrics not found in standard locations, checking alternative sources...")
+                    
+                    for key, value in model_info.items():
+                        if isinstance(value, dict):
+                            if any(metric_key in value for metric_key in ['accuracy', 'precision', 'recall', 'f1']):
+                                metrics = value
+                                st.success(f"✅ Found metrics in '{key}' key")
+                                break
+
+                if metrics:
+                    # Main performance metrics
+                    st.subheader("🎯 Core Performance Metrics")
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        accuracy = metrics.get('accuracy', 0)
+                        st.metric("Accuracy", f"{accuracy:.2%}")
+                    with col2:
+                        classification_metrics = metrics.get('classification_report', {})
+                        precision = classification_metrics.get('weighted avg', {}).get('precision', 0)
+                        st.metric("Precision", f"{precision:.2%}")
+                    with col3:
+                        recall = classification_metrics.get('weighted avg', {}).get('recall', 0)
+                        st.metric("Recall", f"{recall:.2%}")
+                    with col4:
+                        f1_score = classification_metrics.get('weighted avg', {}).get('f1-score', 0)
+                        st.metric("F1 Score", f"{f1_score:.2%}")
+
+                    # Detailed classification report
+                    if 'classification_report' in metrics:
+                        st.subheader("📊 Detailed Classification Report")
+                        
+                        class_report = metrics['classification_report']
+                        if isinstance(class_report, dict):
+                            # Create a formatted table
+                            report_data = []
+                            for class_name, class_metrics in class_report.items():
+                                if isinstance(class_metrics, dict) and class_name not in ['accuracy', 'macro avg', 'weighted avg']:
+                                    report_data.append({
+                                        'Class': 'Reversal' if class_name == '1' else 'No Reversal' if class_name == '0' else class_name,
+                                        'Precision': f"{class_metrics.get('precision', 0):.3f}",
+                                        'Recall': f"{class_metrics.get('recall', 0):.3f}",
+                                        'F1-Score': f"{class_metrics.get('f1-score', 0):.3f}",
+                                        'Support': class_metrics.get('support', 0)
+                                    })
+                            
+                            if report_data:
+                                report_df = pd.DataFrame(report_data)
+                                st.dataframe(report_df, use_container_width=True)
+
+                    # Feature importance analysis
+                    feature_importance = model_manager.get_feature_importance('reversal')
+                    if feature_importance:
+                        st.subheader("🔍 Feature Importance Analysis")
+                        
+                        importance_df = pd.DataFrame(
+                            list(feature_importance.items()), 
+                            columns=['Feature', 'Importance']
+                        ).sort_values('Importance', ascending=False)
+                        
+                        col1, col2 = st.columns([1, 2])
+                        
+                        with col1:
+                            st.write("**Top 15 Features:**")
+                            st.dataframe(
+                                importance_df.head(15).round(4), 
+                                use_container_width=True,
+                                column_config={
+                                    "Importance": st.column_config.ProgressColumn("Importance", min_value=0, max_value=1)
+                                }
+                            )
+                        
+                        with col2:
+                            # Feature importance chart
+                            top_features = importance_df.head(10)
+                            
+                            fig = go.Figure()
+                            fig.add_trace(go.Bar(
+                                x=top_features['Importance'],
+                                y=top_features['Feature'],
+                                orientation='h',
+                                marker_color='lightsalmon',
+                                text=top_features['Importance'].round(3),
+                                textposition='inside'
+                            ))
+                            
+                            fig.update_layout(
+                                title="Top 10 Most Important Features",
+                                xaxis_title="Importance Score",
+                                yaxis_title="Features",
+                                height=400,
+                                template="plotly_dark"
+                            )
+                            fig.update_yaxes(categoryorder='total ascending')
+                            st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Model complexity and training info
+                    st.subheader("🏗️ Model Architecture & Training")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write("**Model Type:** Classification Ensemble")
+                        st.write("**Task:** Binary Classification (Reversal/No Reversal)")
+                        st.write("**Training Split:** 80% train / 20% test")
+                    
+                    with col2:
+                        train_accuracy = metrics.get('train_accuracy', 0)
+                        test_accuracy = metrics.get('test_accuracy', metrics.get('accuracy', 0))
+                        overfit_ratio = (train_accuracy - test_accuracy) if train_accuracy > 0 else 0
+                        
+                        st.metric("Training Accuracy", f"{train_accuracy:.2%}")
+                        st.metric("Test Accuracy", f"{test_accuracy:.2%}")
+                        st.metric("Overfitting", f"{overfit_ratio:.1%}")
+                    
+                    with col3:
+                        if 'confusion_matrix' in metrics:
+                            cm = metrics['confusion_matrix']
+                            if isinstance(cm, list) and len(cm) == 2 and len(cm[0]) == 2:
+                                tn, fp, fn, tp = cm[0][0], cm[0][1], cm[1][0], cm[1][1]
+                                specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+                                sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+                                
+                                st.metric("Specificity", f"{specificity:.2%}")
+                                st.metric("Sensitivity", f"{sensitivity:.2%}")
+                                st.metric("Total Predictions", f"{tp + tn + fp + fn:,}")
+                    
+                    # Confusion matrix visualization
+                    if 'confusion_matrix' in metrics:
+                        st.subheader("📊 Confusion Matrix")
+                        
+                        cm = metrics['confusion_matrix']
+                        if isinstance(cm, list) and len(cm) == 2:
+                            fig = go.Figure(data=go.Heatmap(
+                                z=cm,
+                                x=['Predicted No Reversal', 'Predicted Reversal'],
+                                y=['Actual No Reversal', 'Actual Reversal'],
+                                colorscale='Oranges',
+                                text=cm,
+                                texttemplate="%{text}",
+                                textfont={"size": 16}
+                            ))
+                            
+                            fig.update_layout(
+                                title="Confusion Matrix",
+                                height=400,
+                                template="plotly_dark"
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("⚠️ Model is trained but performance metrics are not accessible in the expected format.")
+                    st.info("💡 This can happen if the model was trained but metrics weren't properly saved. Please retrain the reversal model to generate fresh metrics.")
+            else:
+                st.warning("⚠️ No model performance metrics available. Please train the reversal model first.")
 
     except Exception as e:
         st.error(f"Error generating reversal predictions: {str(e)}")
