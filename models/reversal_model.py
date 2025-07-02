@@ -246,6 +246,26 @@ class ReversalModel:
         y_train = y_clean.iloc[:split_idx]
         y_test = y_clean.iloc[split_idx:]
 
+        # Remove OHLC columns if they exist (they shouldn't be in features for reversal prediction)
+        ohlc_columns = ['Open', 'High', 'Low', 'Close', 'Volume', 'open', 'high', 'low', 'close', 'volume']
+        datetime_cols = [col for col in X_train.columns if X_train[col].dtype == 'datetime64[ns]' or 'date' in col.lower()]
+        exclude_cols = [col for col in X_train.columns if col in ohlc_columns or col in datetime_cols]
+        
+        if exclude_cols:
+            print(f"Removing OHLC/datetime columns before training: {exclude_cols}")
+            X_train = X_train.drop(exclude_cols, axis=1)
+            X_test = X_test.drop(exclude_cols, axis=1)
+            # Update feature names to match what will be available during prediction
+            self.feature_names = [fn for fn in self.feature_names if fn not in exclude_cols]
+
+        # Ensure feature names match the final training columns
+        if len(self.feature_names) == 0 or set(self.feature_names) != set(X_train.columns):
+            self.feature_names = list(X_train.columns)
+            print(f"Updated feature names to match training columns: {len(self.feature_names)} features")
+
+        print(f"Final training features: {len(X_train.columns)} features")
+        print(f"Stored feature names: {len(self.feature_names)} features")
+
         # Scale features
         self.scaler = StandardScaler()
         X_train_scaled = self.scaler.fit_transform(X_train)
