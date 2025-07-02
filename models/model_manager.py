@@ -1,23 +1,16 @@
-
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Any
 import streamlit as st
 
 from .volatility_model import VolatilityModel
-from .direction_model import DirectionModel
-from .profit_probability_model import ProfitProbabilityModel
-from .reversal_model import ReversalModel
 
 class ModelManager:
-    """Centralized manager for all prediction models."""
+    """Centralized manager for prediction models - Volatility only."""
 
     def __init__(self):
         self.models = {
             'volatility': VolatilityModel(),
-            'direction': DirectionModel(),
-            'profit_probability': ProfitProbabilityModel(),
-            'reversal': ReversalModel()
         }
         self.trained_models = {}
         self._load_existing_models()
@@ -30,17 +23,17 @@ class ModelManager:
             loaded_models = db.load_trained_models()
 
             if loaded_models:
-                for model_name in ['volatility', 'direction', 'profit_probability', 'reversal']:
-                    if model_name in loaded_models:
-                        model_data = loaded_models[model_name]
-                        if 'task_type' not in model_data:
-                            # Set default task types
-                            if model_name == 'volatility':
-                                model_data['task_type'] = 'regression'
-                            else:
-                                model_data['task_type'] = 'classification'
-                        self.trained_models[model_name] = model_data
-                        print(f"Loaded {model_name} model from database")
+                # Only load volatility model
+                if 'volatility' in loaded_models:
+                    model_data = loaded_models['volatility']
+                    if 'task_type' not in model_data:
+                        model_data['task_type'] = 'regression'
+                    self.trained_models['volatility'] = model_data
+                    print(f"Loaded volatility model from database")
+                else:
+                    print("No volatility model found in database")
+            else:
+                print("No existing models found in database")
 
         except Exception as e:
             print(f"Could not load existing models: {str(e)}")
@@ -52,150 +45,113 @@ class ModelManager:
             db = get_trading_database()
 
             models_to_save = {}
-            for model_name in self.trained_models:
-                model_data = self.trained_models[model_name]
+            if 'volatility' in self.trained_models:
+                model_data = self.trained_models['volatility']
                 if 'model' in model_data:
-                    models_to_save[model_name] = {
+                    models_to_save['volatility'] = {
                         'ensemble': model_data['model'],
-                        'scaler': model_data.get('scaler'),
+                        'scaler': model_data.get('scaler'),  # Include the scaler!
                         'feature_names': model_data.get('feature_names', []),
-                        'task_type': model_data.get('task_type', 'classification')
+                        'task_type': model_data.get('task_type', 'regression')
                     }
 
             if models_to_save:
                 success = db.save_trained_models(models_to_save)
                 if success:
-                    print(f"Saved {len(models_to_save)} models to database")
+                    print(f"Saved volatility model to database")
                 else:
-                    print("Failed to save models to database")
+                    print("Failed to save volatility model to database")
 
         except Exception as e:
             print(f"Error saving models to database: {str(e)}")
 
     def prepare_all_features_and_targets(self, df: pd.DataFrame) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.Series]]:
-        """Prepare features and targets for all models."""
+        """Prepare features and targets for volatility model."""
         features = {}
         targets = {}
 
-        # Volatility Model
         try:
             from features.technical_indicators import TechnicalIndicators
             from features.custom_engineered import compute_custom_volatility_features
             from features.lagged_features import add_volatility_lagged_features
             from features.time_context_features import add_time_context_features
 
+            # Calculate all features
             df_with_features = df.copy()
             df_with_features = TechnicalIndicators.calculate_volatility_indicators(df_with_features)
             df_with_features = compute_custom_volatility_features(df_with_features)
             df_with_features = add_volatility_lagged_features(df_with_features)
             df_with_features = add_time_context_features(df_with_features)
 
+            # Prepare features for volatility model
             X_volatility = self.models['volatility'].prepare_features(df_with_features)
+
+            # Create targets for volatility model
             y_volatility = self.models['volatility'].create_target(df)
 
             features['volatility'] = X_volatility
             targets['volatility'] = y_volatility
-            print(f"✅ Prepared volatility features: {X_volatility.shape}")
+
+            print(f"✅ Prepared volatility features: {X_volatility.shape} with all feature types")
         except Exception as e:
             print(f"❌ Error preparing volatility model: {str(e)}")
             features['volatility'] = None
             targets['volatility'] = None
 
-        # Direction Model
-        try:
-            X_direction = self.models['direction'].prepare_features(df)
-            y_direction = self.models['direction'].create_target(df)
-
-            features['direction'] = X_direction
-            targets['direction'] = y_direction
-            print(f"✅ Prepared direction features: {X_direction.shape}")
-        except Exception as e:
-            print(f"❌ Error preparing direction model: {str(e)}")
-            features['direction'] = None
-            targets['direction'] = None
-
-        # Profit Probability Model
-        try:
-            X_profit = self.models['profit_probability'].prepare_features(df)
-            y_profit = self.models['profit_probability'].create_target(df)
-
-            features['profit_probability'] = X_profit
-            targets['profit_probability'] = y_profit
-            print(f"✅ Prepared profit probability features: {X_profit.shape}")
-        except Exception as e:
-            print(f"❌ Error preparing profit probability model: {str(e)}")
-            features['profit_probability'] = None
-            targets['profit_probability'] = None
-
-        # Reversal Model
-        try:
-            X_reversal = self.models['reversal'].prepare_features(df)
-            y_reversal = self.models['reversal'].create_target(df)
-
-            features['reversal'] = X_reversal
-            targets['reversal'] = y_reversal
-            print(f"✅ Prepared reversal features: {X_reversal.shape}")
-        except Exception as e:
-            print(f"❌ Error preparing reversal model: {str(e)}")
-            features['reversal'] = None
-            targets['reversal'] = None
-
         return features, targets
 
     def train_all_models(self, df: pd.DataFrame, train_split: float = 0.8) -> Dict[str, Any]:
-        """Train all models."""
+        """Train volatility model."""
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        # Prepare features and targets for all models
-        status_text.text("Preparing features and targets for all models...")
+        # Prepare features and targets for volatility model
+        status_text.text("Preparing features and targets for volatility model...")
         features, targets = self.prepare_all_features_and_targets(df)
 
         results = {}
-        model_names = ['volatility', 'direction', 'profit_probability', 'reversal']
 
-        for i, model_name in enumerate(model_names):
-            status_text.text(f"Training {model_name} model...")
-            progress_bar.progress((i + 0.5) / len(model_names))
+        status_text.text("Training volatility model...")
 
-            try:
-                if features[model_name] is not None and targets[model_name] is not None:
-                    # Train the model
-                    result = self.models[model_name].train(features[model_name], targets[model_name], train_split)
+        try:
+            if features['volatility'] is not None and targets['volatility'] is not None:
+                # Train the volatility model
+                result = self.models['volatility'].train(features['volatility'], targets['volatility'], train_split)
 
-                    # Store the result
-                    self.trained_models[model_name] = result
-                    results[model_name] = result
+                # Store the result
+                self.trained_models['volatility'] = result
+                results['volatility'] = result
 
-                    st.success(f"✅ {model_name} model trained successfully")
-                else:
-                    st.warning(f"⚠️ Could not prepare data for {model_name} model")
-                    results[model_name] = None
+                st.success(f"✅ Volatility model trained successfully")
+            else:
+                st.warning(f"⚠️ Could not prepare data for volatility model")
+                results['volatility'] = None
 
-            except Exception as e:
-                st.error(f"❌ Error training {model_name} model: {str(e)}")
-                results[model_name] = None
+        except Exception as e:
+            st.error(f"❌ Error training volatility model: {str(e)}")
+            results['volatility'] = None
 
-            progress_bar.progress((i + 1) / len(model_names))
+        progress_bar.progress(1.0)
 
-        # Save trained models
-        status_text.text("Saving trained models to database...")
+        # Save trained model
+        status_text.text("Saving trained model to database...")
         self._save_models_to_database()
 
-        status_text.text("All models trained and saved!")
+        status_text.text("Volatility model trained and saved!")
         progress_bar.empty()
         status_text.empty()
 
         return results
 
     def train_selected_models(self, df: pd.DataFrame, selected_models: List[str], train_split: float = 0.8) -> Dict[str, Any]:
-        """Train selected models."""
-        if not selected_models:
-            st.warning("No models selected for training")
-            return {}
-
+        """Train volatility model if selected."""
         progress_bar = st.progress(0)
         status_text = st.empty()
+
+        # Only process if volatility is selected
+        if 'volatility' not in selected_models:
+            st.warning("Only volatility model is available")
+            return {}
 
         # Prepare features and targets
         status_text.text("Preparing features and targets...")
@@ -203,56 +159,50 @@ class ModelManager:
 
         results = {}
 
-        for i, model_name in enumerate(selected_models):
-            status_text.text(f"Training {model_name} model...")
-            progress_bar.progress((i + 0.5) / len(selected_models))
+        status_text.text("Training volatility model...")
 
-            try:
-                if features[model_name] is not None and targets[model_name] is not None:
-                    # Show target distribution for classification models
-                    if model_name != 'volatility':
-                        target_counts = targets[model_name].value_counts()
-                        st.info(f"📊 {model_name} target distribution: {dict(target_counts)}")
-                    else:
-                        target_stats = targets[model_name].describe()
-                        st.info(f"📊 Volatility target range: {target_stats['min']:.4f} to {target_stats['max']:.4f}")
+        try:
+            if features['volatility'] is not None and targets['volatility'] is not None:
+                # Show target distribution
+                target_series = targets['volatility']
+                target_stats = target_series.describe()
+                st.info(f"📊 Volatility target range: {target_stats['min']:.4f} to {target_stats['max']:.4f}")
 
-                    # Train the model
-                    result = self.models[model_name].train(features[model_name], targets[model_name], train_split)
+                # Train the model
+                result = self.models['volatility'].train(features['volatility'], targets['volatility'], train_split)
 
-                    # Store the result
-                    self.trained_models[model_name] = result
-                    results[model_name] = result
+                # Store the result
+                self.trained_models['volatility'] = result
+                results['volatility'] = result
 
-                    # Show immediate results
-                    if result and 'metrics' in result:
-                        metrics = result['metrics']
-                        if model_name == 'volatility':
-                            rmse = metrics.get('rmse', 0)
-                            st.success(f"✅ {model_name} trained - RMSE: {rmse:.4f}")
-                        else:
-                            accuracy = metrics.get('accuracy', 0)
-                            st.success(f"✅ {model_name} trained - Accuracy: {accuracy:.2%}")
-                    else:
-                        st.success(f"✅ {model_name} model trained successfully")
+                # Show immediate results
+                if result and 'metrics' in result:
+                    metrics = result['metrics']
+                    rmse = metrics.get('rmse', 0)
+                    st.success(f"✅ Volatility trained - RMSE: {rmse:.4f}")
                 else:
-                    st.warning(f"⚠️ Could not prepare data for {model_name} model")
-                    results[model_name] = None
+                    st.success(f"✅ Volatility model trained successfully")
+            else:
+                st.warning(f"⚠️ Could not prepare data for volatility model")
+                results['volatility'] = None
 
-            except Exception as e:
-                st.error(f"❌ Error training {model_name} model: {str(e)}")
-                results[model_name] = None
+        except Exception as e:
+            st.error(f"❌ Error training volatility model: {str(e)}")
+            import traceback
+            error_details = traceback.format_exc()
+            st.error(f"Detailed error: {error_details}")
+            results['volatility'] = None
 
-            progress_bar.progress((i + 1) / len(selected_models))
+        progress_bar.progress(1.0)
 
         # Save trained models
-        status_text.text("Saving trained models to database...")
+        status_text.text("Saving trained model to database...")
         try:
             self._save_models_to_database()
-            status_text.text("✅ All selected models trained and saved!")
+            status_text.text("✅ Volatility model trained and saved!")
         except Exception as e:
-            st.warning(f"⚠️ Models trained but database save failed: {str(e)}")
-            status_text.text("✅ All selected models trained!")
+            st.warning(f"⚠️ Model trained but database save failed: {str(e)}")
+            status_text.text("✅ Volatility model trained!")
 
         progress_bar.empty()
         status_text.empty()
@@ -260,16 +210,16 @@ class ModelManager:
         return results
 
     def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-        """Make predictions using specified model."""
-        if model_name not in self.models:
-            raise ValueError(f"Model {model_name} not available")
+        """Make predictions using volatility model."""
+        if model_name != 'volatility':
+            raise ValueError(f"Only volatility model is available")
 
-        if model_name not in self.trained_models:
-            raise ValueError(f"Model {model_name} not trained")
+        if 'volatility' not in self.trained_models:
+            raise ValueError(f"Volatility model not trained")
 
         # Get the model instance and trained model data
-        model_instance = self.models[model_name]
-        trained_model_data = self.trained_models[model_name]
+        model_instance = self.models['volatility']
+        trained_model_data = self.trained_models['volatility']
 
         # Handle both 'model' and 'ensemble' keys for backward compatibility
         ensemble_model = trained_model_data.get('model') or trained_model_data.get('ensemble')
@@ -285,43 +235,43 @@ class ModelManager:
         if model_instance.scaler is None:
             raise ValueError("Scaler not found in trained model data. Please retrain the model.")
 
-        # Prepare features for the specific model
+        # Prepare features for volatility model
         X_features = model_instance.prepare_features(X)
 
         # Make predictions
         return model_instance.predict(X_features)
 
     def get_feature_importance(self, model_name: str) -> Dict[str, float]:
-        """Get feature importance for specified model."""
-        if model_name not in self.models:
-            print(f"Model {model_name} not available")
+        """Get feature importance for volatility model."""
+        if model_name != 'volatility':
+            print(f"Only volatility model is available")
             return {}
 
-        if model_name not in self.trained_models:
-            print(f"Model {model_name} not found in trained models")
+        if 'volatility' not in self.trained_models:
+            print(f"Volatility model not found in trained models")
             return {}
 
-        model_data = self.trained_models[model_name]
+        model_data = self.trained_models['volatility']
         feature_importance = model_data.get('feature_importance', {})
 
-        print(f"Getting feature importance for {model_name}: {len(feature_importance)} features")
+        print(f"Getting feature importance for volatility: {len(feature_importance)} features")
         return feature_importance
 
     def get_available_models(self) -> List[str]:
         """Get list of available model names."""
-        return ['volatility', 'direction', 'profit_probability', 'reversal']
+        return ['volatility']
 
     def get_trained_models(self) -> List[str]:
         """Get list of trained model names."""
         return list(self.trained_models.keys())
 
     def is_model_trained(self, model_name: str) -> bool:
-        """Check if specified model is trained."""
-        return model_name in self.trained_models
+        """Check if volatility model is trained."""
+        return model_name == 'volatility' and 'volatility' in self.trained_models
 
     def get_model_info(self, model_name: str) -> Dict[str, Any]:
-        """Get information about specified model."""
-        if model_name in self.trained_models:
-            return self.trained_models[model_name]
+        """Get information about volatility model."""
+        if model_name == 'volatility' and 'volatility' in self.trained_models:
+            return self.trained_models['volatility']
         else:
             return {}
