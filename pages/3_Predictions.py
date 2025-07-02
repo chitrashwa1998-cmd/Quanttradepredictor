@@ -613,9 +613,7 @@ def show_reversal_predictions(db, fresh_data):
         pred_df = pd.DataFrame({
             'DateTime': datetime_index,
             'Reversal_Signal': ['Reversal' if p == 1 else 'No Reversal' for p in predictions],
-            'Confidence': [np.max(prob) for prob in probabilities] if probabilities is not None else None,
-            'Date': datetime_index.strftime('%Y-%m-%d'),
-            'Time': datetime_index.strftime('%H:%M:%S')
+            'Confidence': [np.max(prob) for prob in probabilities] if probabilities is not None else None
         }, index=datetime_index)
 
         # Display recent predictions
