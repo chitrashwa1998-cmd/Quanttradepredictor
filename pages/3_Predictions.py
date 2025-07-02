@@ -425,28 +425,27 @@ def show_profit_predictions(db, fresh_data):
         profit_prob_model_instance = model_manager.trained_models.get('profit_probability', {})
         if 'feature_names' in profit_prob_model_instance:
             required_features = profit_prob_model_instance['feature_names']
-            st.info(f"Model expects {len(required_features)} features")
+            st.info(f"Using exactly {len(required_features)} features from training (no additional features)")
 
             # Calculate profit probability features to match training
             from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
-            features = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(fresh_data)
+            all_features = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(fresh_data)
 
-            # Select only the features that were used during training
-            available_features = [col for col in required_features if col in features.columns]
-            missing_features = [col for col in required_features if col not in features.columns]
-
+            # Use ONLY the exact features that were used during training
+            missing_features = [col for col in required_features if col not in all_features.columns]
+            
             if missing_features:
-                st.warning(f"Missing features: {missing_features[:5]}...")
-
-            if len(available_features) < len(required_features) * 0.8:  # Need at least 80% of features
-                st.error(f"Too many missing features. Available: {len(available_features)}, Required: {len(required_features)}")
+                st.error(f"Missing required features: {missing_features}")
+                st.error("Cannot make predictions without all required features")
                 return
 
-            features = features[available_features]
+            # Select ONLY the exact features from training - no additions
+            features = all_features[required_features].copy()
+            
+            st.success(f"✅ Using exactly {len(required_features)} features from training")
         else:
-            # Fallback to profit probability features
-            from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
-            features = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(fresh_data)
+            st.error("No feature names stored in model. Please retrain the model.")
+            return
 
         if features is None or len(features) == 0:
             st.error("Failed to calculate profit probability features")

@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 import xgboost as xgb
@@ -21,7 +20,7 @@ class ProfitProbabilityModel:
     def create_target(self, df: pd.DataFrame) -> pd.Series:
         """Create profit probability target based on next 5 periods."""
         returns = df['Close'].pct_change().dropna()
-        
+
         # More realistic profit threshold for 5-min scalping
         base_profit_threshold = 0.001  # 0.1% minimum profit target
 
@@ -54,16 +53,16 @@ class ProfitProbabilityModel:
             raise ValueError("Input DataFrame is empty")
 
         from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
-        
+
         # Calculate all profit probability-specific indicators
         result_df = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(df)
-        
+
         # Get all non-OHLC features, but exclude non-numeric columns
         excluded_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'timestamp', 'date', 'Timestamp', 'Date', 'DateTime']
-        
+
         # First pass: exclude known non-numeric columns
         feature_columns = [col for col in result_df.columns if col not in excluded_cols]
-        
+
         # Second pass: check each remaining column for actual numeric content
         numeric_columns = []
         for col in feature_columns:
@@ -79,20 +78,20 @@ class ProfitProbabilityModel:
                     print(f"Excluding non-numeric or datetime column: {col}")
             except (ValueError, TypeError) as e:
                 print(f"Excluding column {col} due to conversion error: {e}")
-        
+
         feature_columns = numeric_columns
-        
+
         if len(feature_columns) == 0:
             raise ValueError(f"No numeric features found. Available columns: {list(result_df.columns)}")
-        
+
         # Select only numeric features and remove NaN
         result_df = result_df[feature_columns].dropna()
-        
+
         if result_df.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
-        
+
         print(f"Profit probability model using {len(feature_columns)} features: {feature_columns}")
-        
+
         self.feature_names = feature_columns
         return result_df
 
@@ -133,7 +132,7 @@ class ProfitProbabilityModel:
         for col in X_train.columns:
             if pd.api.types.is_datetime64_any_dtype(X_train[col]) or 'timestamp' in col.lower() or 'date' in col.lower():
                 datetime_cols.append(col)
-        
+
         if datetime_cols:
             print(f"Removing datetime columns before scaling: {datetime_cols}")
             X_train = X_train.drop(datetime_cols, axis=1)
@@ -216,6 +215,14 @@ class ProfitProbabilityModel:
         except Exception as e:
             print(f"Could not extract feature importance: {e}")
 
+        # Store exact feature names for consistency - this locks in the 61 features
+        self.feature_names = feature_columns.copy()
+
+        print(f"✅ Profit probability model trained successfully")
+        print(f"Exact features locked in: {len(self.feature_names)}")
+        print(f"Feature names: {self.feature_names}")
+        print(f"Model performance - Accuracy: {accuracy:.3f}, F1: {f1:.3f}")
+
         return {
             'model': self.model,
             'metrics': metrics,
@@ -224,7 +231,8 @@ class ProfitProbabilityModel:
             'task_type': self.task_type,
             'predictions': y_pred,
             'probabilities': y_pred_proba,
-            'test_indices': X_test.index
+            'test_indices': X_test.index,
+            'feature_count': len(self.feature_names)
         }
 
     def predict(self, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
