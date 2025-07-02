@@ -191,7 +191,7 @@ def show_volatility_predictions(db, fresh_data):
         with chart_tab:
             st.subheader("Volatility Prediction Chart")
             recent_predictions = pred_df.tail(100)
-            
+
             fig = go.Figure()
             fig.add_trace(go.Scatter(
                 x=recent_predictions['DateTime'],
@@ -217,12 +217,12 @@ def show_volatility_predictions(db, fresh_data):
 
         with metrics_tab:
             st.subheader("Model Performance Metrics")
-            
+
             # Get model info
             model_info = model_manager.get_model_info('volatility')
             if model_info and 'metrics' in model_info:
                 metrics = model_info['metrics']
-                
+
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     rmse = metrics.get('rmse', 0)
@@ -233,7 +233,7 @@ def show_volatility_predictions(db, fresh_data):
                 with col3:
                     mse = metrics.get('mse', 0)
                     st.metric("MSE", f"{mse:.6f}")
-                
+
                 # Feature importance
                 feature_importance = model_manager.get_feature_importance('volatility')
                 if feature_importance:
@@ -242,7 +242,7 @@ def show_volatility_predictions(db, fresh_data):
                         list(feature_importance.items()), 
                         columns=['Feature', 'Importance']
                     ).sort_values('Importance', ascending=False)
-                    
+
                     st.dataframe(importance_df.head(10), use_container_width=True)
             else:
                 st.info("No performance metrics available")
@@ -293,7 +293,7 @@ def show_direction_predictions(db, fresh_data):
                 padded_predictions = np.full(len(features), np.nan)
                 padded_predictions[:len(predictions)] = predictions
                 predictions = padded_predictions
-                
+
                 if probabilities is not None:
                     padded_probs = np.full((len(features), probabilities.shape[1]), np.nan)
                     padded_probs[:len(probabilities)] = probabilities
@@ -324,7 +324,7 @@ def show_direction_predictions(db, fresh_data):
         with chart_tab:
             st.subheader("Direction Prediction Chart")
             recent_predictions = pred_df.tail(100)
-            
+
             if len(recent_predictions) > 0:
                 fig = go.Figure()
 
@@ -366,12 +366,12 @@ def show_direction_predictions(db, fresh_data):
 
         with metrics_tab:
             st.subheader("Model Performance Metrics")
-            
+
             # Get model info
             model_info = model_manager.get_model_info('direction')
             if model_info and 'metrics' in model_info:
                 metrics = model_info['metrics']
-                
+
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     accuracy = metrics.get('accuracy', 0)
@@ -383,7 +383,7 @@ def show_direction_predictions(db, fresh_data):
                 with col3:
                     recall = classification_metrics.get('weighted avg', {}).get('recall', 0)
                     st.metric("Recall", f"{recall:.2%}")
-                
+
                 # Feature importance
                 feature_importance = model_manager.get_feature_importance('direction')
                 if feature_importance:
@@ -392,7 +392,7 @@ def show_direction_predictions(db, fresh_data):
                         list(feature_importance.items()), 
                         columns=['Feature', 'Importance']
                     ).sort_values('Importance', ascending=False)
-                    
+
                     st.dataframe(importance_df.head(10), use_container_width=True)
             else:
                 st.info("No performance metrics available")
@@ -421,12 +421,35 @@ def show_profit_predictions(db, fresh_data):
 
     # Prepare features from fresh data
     try:
-        from features.technical_indicators import TechnicalIndicators
-        ti = TechnicalIndicators()
-        features = ti.calculate_all_indicators(fresh_data)
+        # Use profit probability-specific features
+        profit_prob_model_instance = model_manager.trained_models.get('profit_probability', {})
+        if 'feature_names' in profit_prob_model_instance:
+            required_features = profit_prob_model_instance['feature_names']
+            st.info(f"Model expects {len(required_features)} features")
+
+            # Calculate profit probability features to match training
+            from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
+            features = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(fresh_data)
+
+            # Select only the features that were used during training
+            available_features = [col for col in required_features if col in features.columns]
+            missing_features = [col for col in required_features if col not in features.columns]
+
+            if missing_features:
+                st.warning(f"Missing features: {missing_features[:5]}...")
+
+            if len(available_features) < len(required_features) * 0.8:  # Need at least 80% of features
+                st.error(f"Too many missing features. Available: {len(available_features)}, Required: {len(required_features)}")
+                return
+
+            features = features[available_features]
+        else:
+            # Fallback to profit probability features
+            from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
+            features = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(fresh_data)
 
         if features is None or len(features) == 0:
-            st.error("Failed to calculate features")
+            st.error("Failed to calculate profit probability features")
             return
 
     # Make predictions using trained model

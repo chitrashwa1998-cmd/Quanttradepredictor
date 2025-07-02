@@ -84,42 +84,54 @@ class ModelManager:
         except Exception as e:
             print(f"Could not load existing models: {str(e)}")
 
-    def predict(self, model_name: str, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-        """Make predictions using any trained model."""
-        if model_name not in self.models:
-            raise ValueError(f"Model '{model_name}' not available. Available models: {list(self.models.keys())}")
-
+    def predict(self, model_name: str, features: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+        """Make predictions using a trained model."""
         if model_name not in self.trained_models:
-            raise ValueError(f"{model_name.title()} model not trained")
+            raise ValueError(f"Model {model_name} not trained")
 
-        # Get the model instance and trained model data
-        model_instance = self.models[model_name]
-        trained_model_data = self.trained_models[model_name]
+        model_info = self.trained_models[model_name]
+        model = model_info['model']
+        scaler = model_info['scaler']
+        expected_features = model_info.get('feature_names', [])
 
-        # Handle both 'model' and 'ensemble' keys for backward compatibility
-        ensemble_model = trained_model_data.get('model') or trained_model_data.get('ensemble')
-        if ensemble_model is None:
-            raise ValueError("No trained model found in model data")
+        # Ensure features match what model expects
+        if expected_features:
+            # Check for feature alignment
+            available_features = [col for col in expected_features if col in features.columns]
+            missing_features = [col for col in expected_features if col not in features.columns]
 
-        # Set the trained model in the instance
-        model_instance.model = ensemble_model
-        model_instance.scaler = trained_model_data.get('scaler')
+            if missing_features:
+                print(f"Warning: Missing features for {model_name}: {missing_features[:5]}...")
 
-        # Handle feature names for different model types
-        if hasattr(model_instance, 'feature_names'):
-            model_instance.feature_names = trained_model_data.get('feature_names', [])
-        if hasattr(model_instance, 'selected_features'):
-            model_instance.selected_features = trained_model_data.get('feature_names', [])
+            if len(available_features) < len(expected_features) * 0.8:
+                raise ValueError(f"Too many missing features for {model_name}. Available: {len(available_features)}, Expected: {len(expected_features)}")
 
-        # Verify scaler is available
-        if model_instance.scaler is None:
-            raise ValueError("Scaler not found in trained model data. Please retrain the model.")
+            # Use only available features that match training
+            features = features[available_features]
 
-        # Prepare features for the specific model
-        X_features = model_instance.prepare_features(X)
+            # Update scaler features if needed
+            if hasattr(scaler, 'feature_names_in_') and scaler.feature_names_in_ is not None:
+                scaler_features = list(scaler.feature_names_in_)
+                if scaler_features != available_features:
+                    print(f"Feature mismatch detected for {model_name}")
+                    # Reorder features to match scaler expectations
+                    common_features = [f for f in scaler_features if f in features.columns]
+                    if len(common_features) >= len(scaler_features) * 0.8:
+                        features = features[common_features]
+                    else:
+                        raise ValueError(f"Cannot align features for {model_name}")
+
+        # Scale features
+        features_scaled = scaler.transform(features)
 
         # Make predictions
-        return model_instance.predict(X_features)
+        predictions = model.predict(features_scaled)
+        probabilities = None
+
+        if hasattr(model, 'predict_proba'):
+            probabilities = model.predict_proba(features_scaled)
+
+        return predictions, probabilities
 
     def is_model_trained(self, model_name: str) -> bool:
         """Check if a specific model is trained."""
@@ -151,12 +163,12 @@ class ModelManager:
 
         print(f"Getting feature importance for {model_name}: {len(feature_importance)} features")
         return feature_importance
-    
+
     def prepare_all_features_and_targets(self, df: pd.DataFrame) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.Series]]:
         """Prepare features and targets for all models."""
         features = {}
         targets = {}
-        
+
         # Volatility Model
         try:
             from features.technical_indicators import TechnicalIndicators
@@ -229,7 +241,7 @@ class ModelManager:
             print(f"❌ Error preparing reversal model: {str(e)}")
             features['reversal'] = None
             targets['reversal'] = None
-            
+
         return features, targets
 
     def train_all_models(self, df: pd.DataFrame, train_split: float = 0.8) -> Dict[str, Any]:
@@ -275,7 +287,7 @@ class ModelManager:
         status_text.empty()
 
         return results
-    
+
     def train_selected_models(self, df: pd.DataFrame, selected_models: List[str], train_split: float = 0.8) -> Dict[str, Any]:
         """Train selected models."""
         progress_bar = st.progress(0)
