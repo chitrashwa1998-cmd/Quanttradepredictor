@@ -216,12 +216,12 @@ class ProfitProbabilityModel:
             print(f"Could not extract feature importance: {e}")
 
         # Store exact feature names for consistency - this locks in the 61 features
-        self.feature_names = feature_columns.copy()
+        # self.feature_names was already set in prepare_features method
 
         print(f"✅ Profit probability model trained successfully")
         print(f"Exact features locked in: {len(self.feature_names)}")
         print(f"Feature names: {self.feature_names}")
-        print(f"Model performance - Accuracy: {accuracy:.3f}, F1: {f1:.3f}")
+        print(f"Model performance - Accuracy: {accuracy:.3f}")
 
         return {
             'model': self.model,
