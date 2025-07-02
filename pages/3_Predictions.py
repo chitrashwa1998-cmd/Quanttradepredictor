@@ -879,19 +879,32 @@ def show_direction_predictions(db, fresh_data):
                     textposition="bottom center"
                 ), row=1, col=1)
 
-            # Add trend line for confidence
-            confidence_trend = recent_predictions.groupby(recent_predictions.index // 10)['Confidence'].mean()
-            trend_times = [recent_predictions.iloc[i*10]['DateTime'] for i in range(len(confidence_trend)) if i*10 < len(recent_predictions)]
-            
-            if len(trend_times) == len(confidence_trend):
-                fig.add_trace(go.Scatter(
-                    x=trend_times,
-                    y=confidence_trend,
-                    mode='lines',
-                    name='Confidence Trend',
-                    line=dict(color='yellow', width=2),
-                    yaxis='y2'
-                ), row=1, col=1)
+            # Add trend line for confidence using iloc-based grouping
+            if len(recent_predictions) >= 10:
+                # Group by every 10 data points using iloc
+                group_size = 10
+                num_groups = len(recent_predictions) // group_size
+                confidence_trend = []
+                trend_times = []
+                
+                for i in range(num_groups):
+                    start_idx = i * group_size
+                    end_idx = min((i + 1) * group_size, len(recent_predictions))
+                    group_data = recent_predictions.iloc[start_idx:end_idx]
+                    
+                    if len(group_data) > 0:
+                        confidence_trend.append(group_data['Confidence'].mean())
+                        trend_times.append(group_data['DateTime'].iloc[0])
+                
+                if len(trend_times) > 0 and len(confidence_trend) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=trend_times,
+                        y=confidence_trend,
+                        mode='lines',
+                        name='Confidence Trend',
+                        line=dict(color='yellow', width=2),
+                        yaxis='y2'
+                    ), row=1, col=1)
 
             # Confidence histogram
             fig.add_trace(go.Histogram(
