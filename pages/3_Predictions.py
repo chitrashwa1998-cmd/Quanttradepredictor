@@ -161,14 +161,11 @@ def show_volatility_predictions(db, fresh_data):
 
         # Handle array length mismatch
         if len(predictions) != len(features):
-            # Ensure predictions array matches features length
             if len(predictions) < len(features):
-                # Pad with NaN values
                 padded_predictions = np.full(len(features), np.nan)
                 padded_predictions[:len(predictions)] = predictions
                 predictions = padded_predictions
             else:
-                # Truncate to match features length
                 predictions = predictions[:len(features)]
 
         # Create predictions dataframe
@@ -188,30 +185,67 @@ def show_volatility_predictions(db, fresh_data):
         pred_df['Date'] = pred_df['DateTime'].dt.strftime('%Y-%m-%d')
         pred_df['Time'] = pred_df['DateTime'].dt.strftime('%H:%M:%S')
 
-        # Display recent predictions (last 100 rows)
-        recent_predictions = pred_df.tail(100)
+        # Create sub-tabs for different views
+        chart_tab, data_tab, metrics_tab = st.tabs(["📈 Interactive Chart", "📋 Detailed Data", "📊 Performance Metrics"])
 
-        st.subheader("Recent Volatility Predictions")
-        st.dataframe(recent_predictions[['Date', 'Time', 'Predicted_Volatility']], use_container_width=True)
+        with chart_tab:
+            st.subheader("Volatility Prediction Chart")
+            recent_predictions = pred_df.tail(100)
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=recent_predictions['DateTime'],
+                y=recent_predictions['Predicted_Volatility'],
+                mode='lines+markers',
+                name='Predicted Volatility',
+                line=dict(color='blue')
+            ))
 
-        # Create chart with authentic datetime values only
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=recent_predictions['DateTime'],
-            y=recent_predictions['Predicted_Volatility'],
-            mode='lines+markers',
-            name='Predicted Volatility',
-            line=dict(color='blue')
-        ))
+            fig.update_layout(
+                title="Volatility Predictions - Last 100 Data Points",
+                xaxis_title="DateTime",
+                yaxis_title="Predicted Volatility",
+                height=500
+            )
 
-        fig.update_layout(
-            title="Volatility Predictions - Last 100 Data Points",
-            xaxis_title="DateTime",
-            yaxis_title="Predicted Volatility",
-            height=500
-        )
+            st.plotly_chart(fig, use_container_width=True)
 
-        st.plotly_chart(fig, use_container_width=True)
+        with data_tab:
+            st.subheader("Detailed Prediction Data")
+            recent_predictions = pred_df.tail(200)
+            st.dataframe(recent_predictions[['Date', 'Time', 'Predicted_Volatility']], use_container_width=True)
+
+        with metrics_tab:
+            st.subheader("Model Performance Metrics")
+            
+            # Get model info
+            model_info = model_manager.get_model_info('volatility')
+            if model_info and 'metrics' in model_info:
+                metrics = model_info['metrics']
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    rmse = metrics.get('rmse', 0)
+                    st.metric("RMSE", f"{rmse:.6f}")
+                with col2:
+                    mae = metrics.get('mae', 0)
+                    st.metric("MAE", f"{mae:.6f}")
+                with col3:
+                    mse = metrics.get('mse', 0)
+                    st.metric("MSE", f"{mse:.6f}")
+                
+                # Feature importance
+                feature_importance = model_manager.get_feature_importance('volatility')
+                if feature_importance:
+                    st.subheader("Feature Importance")
+                    importance_df = pd.DataFrame(
+                        list(feature_importance.items()), 
+                        columns=['Feature', 'Importance']
+                    ).sort_values('Importance', ascending=False)
+                    
+                    st.dataframe(importance_df.head(10), use_container_width=True)
+            else:
+                st.info("No performance metrics available")
 
     except Exception as e:
         st.error(f"Error generating volatility predictions: {str(e)}")
@@ -237,15 +271,16 @@ def show_direction_predictions(db, fresh_data):
 
     # Prepare features from fresh data
     try:
-        from features.technical_indicators import TechnicalIndicators
-        ti = TechnicalIndicators()
-        features = ti.calculate_all_indicators(fresh_data)
+        # Use direction-specific features
+        from features.direction_technical_indicators import DirectionTechnicalIndicators
+        dti = DirectionTechnicalIndicators()
+        features = dti.calculate_all_direction_indicators(fresh_data)
 
         if features is None or len(features) == 0:
-            st.error("Failed to calculate features")
+            st.error("Failed to calculate direction features")
             return
 
-    # Make predictions using trained model
+        # Make predictions using trained model
         predictions, probabilities = model_manager.predict('direction', features)
 
         if predictions is None or len(predictions) == 0:
@@ -254,8 +289,19 @@ def show_direction_predictions(db, fresh_data):
 
         # Ensure arrays are same length
         if len(predictions) != len(features):
-            st.error(f"Array length mismatch: predictions={len(predictions)}, features={len(features)}")
-            return
+            if len(predictions) < len(features):
+                padded_predictions = np.full(len(features), np.nan)
+                padded_predictions[:len(predictions)] = predictions
+                predictions = padded_predictions
+                
+                if probabilities is not None:
+                    padded_probs = np.full((len(features), probabilities.shape[1]), np.nan)
+                    padded_probs[:len(probabilities)] = probabilities
+                    probabilities = padded_probs
+            else:
+                predictions = predictions[:len(features)]
+                if probabilities is not None:
+                    probabilities = probabilities[:len(features)]
 
         # Use authentic datetime index
         datetime_index = features.index
@@ -264,53 +310,92 @@ def show_direction_predictions(db, fresh_data):
         pred_df = pd.DataFrame({
             'DateTime': datetime_index,
             'Direction': ['Bullish' if p == 1 else 'Bearish' for p in predictions],
-            'Confidence': [np.max(prob) for prob in probabilities] if probabilities is not None else None,
+            'Confidence': [np.max(prob) if not np.isnan(prob).all() else 0.5 for prob in probabilities] if probabilities is not None else [0.5] * len(predictions),
             'Date': datetime_index.strftime('%Y-%m-%d'),
             'Time': datetime_index.strftime('%H:%M:%S')
         }, index=datetime_index)
 
-        # Display recent predictions
-        recent_predictions = pred_df.tail(100)
+        # Remove NaN predictions
+        pred_df = pred_df.dropna(subset=['DateTime'])
 
-        st.subheader("Recent Direction Predictions")
+        # Create sub-tabs for different views
+        chart_tab, data_tab, metrics_tab = st.tabs(["📈 Interactive Chart", "📋 Detailed Data", "📊 Performance Metrics"])
 
-        # Only show data if we have valid predictions
-        if len(recent_predictions) > 0:
-            st.dataframe(recent_predictions, use_container_width=True)
+        with chart_tab:
+            st.subheader("Direction Prediction Chart")
+            recent_predictions = pred_df.tail(100)
+            
+            if len(recent_predictions) > 0:
+                fig = go.Figure()
 
-            # Create chart
-            fig = go.Figure()
+                # Add bullish signals
+                bullish_data = recent_predictions[recent_predictions['Direction'] == 'Bullish']
+                if len(bullish_data) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=bullish_data['DateTime'],
+                        y=[1] * len(bullish_data),
+                        mode='markers',
+                        name='Bullish',
+                        marker=dict(color='green', size=10)
+                    ))
 
-            # Add bullish signals
-            bullish_data = recent_predictions[recent_predictions['Direction'] == 'Bullish']
-            if len(bullish_data) > 0:
-                fig.add_trace(go.Scatter(
-                    x=bullish_data['DateTime'],
-                    y=[1] * len(bullish_data),
-                    mode='markers',
-                    name='Bullish',
-                    marker=dict(color='green', size=10)
-                ))
+                # Add bearish signals
+                bearish_data = recent_predictions[recent_predictions['Direction'] == 'Bearish']
+                if len(bearish_data) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=bearish_data['DateTime'],
+                        y=[0] * len(bearish_data),
+                        mode='markers',
+                        name='Bearish',
+                        marker=dict(color='red', size=10)
+                    ))
 
-            # Add bearish signals
-            bearish_data = recent_predictions[recent_predictions['Direction'] == 'Bearish']
-            if len(bearish_data) > 0:
-                fig.add_trace(go.Scatter(
-                    x=bearish_data['DateTime'],
-                    y=[0] * len(bearish_data),
-                    mode='markers',
-                    name='Bearish',
-                    marker=dict(color='red', size=10)
-                ))
+                fig.update_layout(
+                    title="Direction Predictions - Last 100 Data Points",
+                    xaxis_title="DateTime",
+                    yaxis_title="Direction (1=Bullish, 0=Bearish)",
+                    height=500
+                )
 
-            fig.update_layout(
-                title="Direction Predictions - Last 100 Data Points",
-                xaxis_title="DateTime",
-                yaxis_title="Direction (1=Bullish, 0=Bearish)",
-                height=500
-            )
+                st.plotly_chart(fig, use_container_width=True)
 
-            st.plotly_chart(fig, use_container_width=True)
+        with data_tab:
+            st.subheader("Detailed Direction Data")
+            recent_predictions = pred_df.tail(200)
+            st.dataframe(recent_predictions[['Date', 'Time', 'Direction', 'Confidence']], use_container_width=True)
+
+        with metrics_tab:
+            st.subheader("Model Performance Metrics")
+            
+            # Get model info
+            model_info = model_manager.get_model_info('direction')
+            if model_info and 'metrics' in model_info:
+                metrics = model_info['metrics']
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    accuracy = metrics.get('accuracy', 0)
+                    st.metric("Accuracy", f"{accuracy:.2%}")
+                with col2:
+                    classification_metrics = metrics.get('classification_report', {})
+                    precision = classification_metrics.get('weighted avg', {}).get('precision', 0)
+                    st.metric("Precision", f"{precision:.2%}")
+                with col3:
+                    recall = classification_metrics.get('weighted avg', {}).get('recall', 0)
+                    st.metric("Recall", f"{recall:.2%}")
+                
+                # Feature importance
+                feature_importance = model_manager.get_feature_importance('direction')
+                if feature_importance:
+                    st.subheader("Feature Importance")
+                    importance_df = pd.DataFrame(
+                        list(feature_importance.items()), 
+                        columns=['Feature', 'Importance']
+                    ).sort_values('Importance', ascending=False)
+                    
+                    st.dataframe(importance_df.head(10), use_container_width=True)
+            else:
+                st.info("No performance metrics available")
 
     except Exception as e:
         st.error(f"Error generating direction predictions: {str(e)}")
