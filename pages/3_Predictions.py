@@ -1521,84 +1521,675 @@ def show_profit_predictions(db, fresh_data):
             st.error("No valid predictions generated")
             return
 
-        # Create sub-tabs for different views
-        chart_tab, data_tab, metrics_tab = st.tabs(["📈 Interactive Chart", "📋 Detailed Data", "📊 Performance Metrics"])
+        # Create 5 comprehensive sub-tabs for detailed analysis
+        chart_tab, data_tab, dist_tab, stats_tab, metrics_tab = st.tabs([
+            "📈 Interactive Chart", 
+            "📋 Detailed Data", 
+            "📊 Distribution Analysis", 
+            "🔍 Statistical Analysis", 
+            "⚡ Performance Metrics"
+        ])
 
         with chart_tab:
-            st.subheader("Profit Probability Prediction Chart")
-            recent_predictions = pred_df.tail(100)
+            st.subheader("📈 Profit Probability Prediction Chart")
+            
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                chart_points = st.selectbox("Data Points", [50, 100, 200, 500], index=1, key="profit_chart_points")
+            
+            recent_predictions = pred_df.tail(chart_points)
 
-            if len(recent_predictions) > 0:
-                fig = go.Figure()
+            # Create subplot with multiple views
+            fig = make_subplots(
+                rows=2, cols=1,
+                subplot_titles=('Profit Probability Predictions Over Time', 'Confidence Distribution'),
+                vertical_spacing=0.1,
+                row_heights=[0.7, 0.3]
+            )
 
-                # Add high profit signals
-                high_profit = recent_predictions[recent_predictions['Profit_Probability'] == 'High Profit']
-                if len(high_profit) > 0:
-                    fig.add_trace(go.Scatter(
-                        x=high_profit['DateTime'],
-                        y=[1] * len(high_profit),
-                        mode='markers',
-                        name='High Profit',
-                        marker=dict(color='green', size=10)
-                    ))
+            # Add high profit signals
+            high_profit = recent_predictions[recent_predictions['Profit_Probability'] == 'High Profit']
+            if len(high_profit) > 0:
+                fig.add_trace(go.Scatter(
+                    x=high_profit['DateTime'],
+                    y=[1] * len(high_profit),
+                    mode='markers',
+                    name='High Profit',
+                    marker=dict(color='green', size=8, symbol='triangle-up'),
+                    text=high_profit['Confidence'].round(3) if 'Confidence' in high_profit.columns else None,
+                    textposition="top center"
+                ), row=1, col=1)
 
-                # Add low profit signals
-                low_profit = recent_predictions[recent_predictions['Profit_Probability'] == 'Low Profit']
-                if len(low_profit) > 0:
-                    fig.add_trace(go.Scatter(
-                        x=low_profit['DateTime'],
-                        y=[0] * len(low_profit),
-                        mode='markers',
-                        name='Low Profit',
-                        marker=dict(color='red', size=10)
-                    ))
+            # Add low profit signals
+            low_profit = recent_predictions[recent_predictions['Profit_Probability'] == 'Low Profit']
+            if len(low_profit) > 0:
+                fig.add_trace(go.Scatter(
+                    x=low_profit['DateTime'],
+                    y=[0] * len(low_profit),
+                    mode='markers',
+                    name='Low Profit',
+                    marker=dict(color='red', size=8, symbol='triangle-down'),
+                    text=low_profit['Confidence'].round(3) if 'Confidence' in low_profit.columns else None,
+                    textposition="bottom center"
+                ), row=1, col=1)
 
-                fig.update_layout(
-                    title="Profit Probability Predictions - Last 100 Data Points",
-                    xaxis_title="DateTime",
-                    yaxis_title="Profit Probability (1=High, 0=Low)",
-                    height=500
-                )
+            # Add confidence trend line if confidence data exists
+            if 'Confidence' in recent_predictions.columns and not recent_predictions['Confidence'].isna().all():
+                if len(recent_predictions) >= 10:
+                    # Group by every 10 data points using iloc
+                    group_size = 10
+                    num_groups = len(recent_predictions) // group_size
+                    confidence_trend = []
+                    trend_times = []
+                    
+                    for i in range(num_groups):
+                        start_idx = i * group_size
+                        end_idx = min((i + 1) * group_size, len(recent_predictions))
+                        group_data = recent_predictions.iloc[start_idx:end_idx]
+                        
+                        if len(group_data) > 0 and not group_data['Confidence'].isna().all():
+                            confidence_trend.append(group_data['Confidence'].mean())
+                            trend_times.append(group_data['DateTime'].iloc[0])
+                    
+                    if len(trend_times) > 0 and len(confidence_trend) > 0:
+                        fig.add_trace(go.Scatter(
+                            x=trend_times,
+                            y=confidence_trend,
+                            mode='lines',
+                            name='Confidence Trend',
+                            line=dict(color='yellow', width=2),
+                            yaxis='y2'
+                        ), row=1, col=1)
 
-                st.plotly_chart(fig, use_container_width=True)
+            # Confidence histogram
+            if 'Confidence' in recent_predictions.columns and not recent_predictions['Confidence'].isna().all():
+                fig.add_trace(go.Histogram(
+                    x=recent_predictions['Confidence'],
+                    nbinsx=20,
+                    name='Confidence Distribution',
+                    marker_color='rgba(255, 165, 0, 0.6)'
+                ), row=2, col=1)
+
+            fig.update_layout(
+                title=f"Profit Probability Analysis - Last {chart_points} Data Points",
+                height=700,
+                showlegend=True,
+                template="plotly_dark"
+            )
+            
+            fig.update_xaxes(title_text="DateTime", row=1, col=1)
+            fig.update_yaxes(title_text="Profit Probability (1=High, 0=Low)", row=1, col=1)
+            fig.update_yaxes(title_text="Confidence", side='right', row=1, col=1, secondary_y=True)
+            fig.update_xaxes(title_text="Confidence Level", row=2, col=1)
+            fig.update_yaxes(title_text="Frequency", row=2, col=1)
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Quick stats
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                current_prob = recent_predictions['Profit_Probability'].iloc[-1]
+                st.metric("Current Prediction", current_prob)
+            with col2:
+                if 'Confidence' in recent_predictions.columns and not recent_predictions['Confidence'].isna().all():
+                    current_confidence = recent_predictions['Confidence'].iloc[-1]
+                    st.metric("Current Confidence", f"{current_confidence:.3f}")
+                else:
+                    st.metric("Current Confidence", "N/A")
+            with col3:
+                high_profit_pct = len(high_profit) / len(recent_predictions) * 100
+                st.metric("High Profit %", f"{high_profit_pct:.1f}%")
+            with col4:
+                if 'Confidence' in recent_predictions.columns and not recent_predictions['Confidence'].isna().all():
+                    avg_confidence = recent_predictions['Confidence'].mean()
+                    st.metric("Avg Confidence", f"{avg_confidence:.3f}")
+                else:
+                    st.metric("Avg Confidence", "N/A")
 
         with data_tab:
-            st.subheader("Detailed Prediction Data")
-            recent_predictions = pred_df.tail(200)
-            st.dataframe(recent_predictions[['Date', 'Time', 'Profit_Probability', 'Confidence']], use_container_width=True)
+            st.subheader("📋 Detailed Profit Probability Data")
+            
+            col1, col2 = st.columns([2, 1])
+            with col2:
+                data_points = st.selectbox("Show Records", [100, 200, 500, 1000], index=1, key="profit_data_points")
+            
+            recent_predictions = pred_df.tail(data_points)
+            
+            # Enhanced data table with additional calculated columns
+            detailed_df = recent_predictions.copy()
+            detailed_df['Profit_Score'] = detailed_df['Profit_Probability'].map({'High Profit': 1, 'Low Profit': 0})
+            
+            if 'Confidence' in detailed_df.columns and not detailed_df['Confidence'].isna().all():
+                detailed_df['Confidence_Level'] = pd.cut(detailed_df['Confidence'], 
+                                                       bins=[0, 0.6, 0.8, 1.0], 
+                                                       labels=['Low', 'Medium', 'High'])
+                # Calculate streaks
+                profit_changes = detailed_df['Profit_Score'].diff().fillna(0)
+                streak_groups = (profit_changes != 0).cumsum()
+                detailed_df['Streak_Length'] = detailed_df.groupby(streak_groups).cumcount() + 1
+                
+                # Add momentum indicators
+                detailed_df['Confidence_Change'] = detailed_df['Confidence'].diff()
+                detailed_df['Profit_Momentum'] = detailed_df['Confidence_Change'].apply(
+                    lambda x: '📈' if x > 0.1 else '📉' if x < -0.1 else '➡️'
+                )
+                
+                display_columns = [
+                    'Date', 'Time', 'Profit_Probability', 'Confidence', 'Profit_Momentum',
+                    'Confidence_Level', 'Streak_Length', 'Confidence_Change'
+                ]
+            else:
+                # Calculate streaks without confidence
+                profit_changes = detailed_df['Profit_Score'].diff().fillna(0)
+                streak_groups = (profit_changes != 0).cumsum()
+                detailed_df['Streak_Length'] = detailed_df.groupby(streak_groups).cumcount() + 1
+                
+                display_columns = [
+                    'Date', 'Time', 'Profit_Probability', 'Streak_Length'
+                ]
+            
+            # Display enhanced table
+            st.dataframe(
+                detailed_df[display_columns].round(3), 
+                use_container_width=True,
+                column_config={
+                    "Confidence": st.column_config.NumberColumn("Confidence", format="%.3f"),
+                    "Streak_Length": st.column_config.NumberColumn("Streak", format="%d"),
+                    "Confidence_Change": st.column_config.NumberColumn("Δ Confidence", format="%.3f")
+                }
+            )
+            
+            # Data summary
+            st.subheader("📊 Profit Probability Summary")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write("**Profit Distribution:**")
+                profit_counts = detailed_df['Profit_Probability'].value_counts()
+                for profit_type, count in profit_counts.items():
+                    st.write(f"• {profit_type}: {count} ({count/len(detailed_df)*100:.1f}%)")
+            
+            with col2:
+                if 'Confidence_Level' in detailed_df.columns:
+                    st.write("**Confidence Levels:**")
+                    confidence_counts = detailed_df['Confidence_Level'].value_counts()
+                    for level, count in confidence_counts.items():
+                        st.write(f"• {level}: {count} ({count/len(detailed_df)*100:.1f}%)")
+                else:
+                    st.write("**Confidence Levels:**")
+                    st.write("• N/A (No confidence data)")
+            
+            with col3:
+                st.write("**Statistics:**")
+                if 'Confidence' in detailed_df.columns and not detailed_df['Confidence'].isna().all():
+                    st.write(f"• Avg Confidence: {detailed_df['Confidence'].mean():.3f}")
+                    st.write(f"• Confidence Std: {detailed_df['Confidence'].std():.3f}")
+                else:
+                    st.write("• Avg Confidence: N/A")
+                    st.write("• Confidence Std: N/A")
+                st.write(f"• Max Streak: {detailed_df['Streak_Length'].max()}")
+
+        with dist_tab:
+            st.subheader("📊 Distribution Analysis")
+            
+            # Distribution plots
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Profit probability distribution pie chart
+                profit_counts = pred_df['Profit_Probability'].value_counts()
+                
+                fig = go.Figure()
+                fig.add_trace(go.Pie(
+                    labels=profit_counts.index,
+                    values=profit_counts.values,
+                    hole=0.4,
+                    marker_colors=['green', 'red'],
+                    textinfo='label+percent',
+                    textposition='outside'
+                ))
+                
+                fig.update_layout(
+                    title="Profit Probability Distribution",
+                    height=400,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                # Confidence distribution histogram
+                if 'Confidence' in pred_df.columns and not pred_df['Confidence'].isna().all():
+                    fig = go.Figure()
+                    fig.add_trace(go.Histogram(
+                        x=pred_df['Confidence'],
+                        nbinsx=30,
+                        histnorm='probability density',
+                        name='Confidence Distribution',
+                        marker_color='rgba(255, 165, 0, 0.7)'
+                    ))
+                    
+                    fig.update_layout(
+                        title="Confidence Distribution",
+                        xaxis_title="Confidence Level",
+                        yaxis_title="Density",
+                        height=400,
+                        template="plotly_dark"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No confidence data available for distribution analysis")
+            
+            # Confidence by profit probability
+            if 'Confidence' in pred_df.columns and not pred_df['Confidence'].isna().all():
+                st.subheader("📈 Confidence by Profit Probability")
+                
+                fig = go.Figure()
+                
+                for profit_type in ['High Profit', 'Low Profit']:
+                    profit_data = pred_df[pred_df['Profit_Probability'] == profit_type]
+                    if len(profit_data) > 0:
+                        fig.add_trace(go.Box(
+                            y=profit_data['Confidence'],
+                            name=profit_type,
+                            marker_color='green' if profit_type == 'High Profit' else 'red',
+                            boxpoints='outliers'
+                        ))
+                
+                fig.update_layout(
+                    title="Confidence Distribution by Profit Probability",
+                    yaxis_title="Confidence Level",
+                    height=400,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Statistical distribution analysis
+            st.subheader("📈 Distribution Statistics")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("High Profit Count", len(pred_df[pred_df['Profit_Probability'] == 'High Profit']))
+                st.metric("Low Profit Count", len(pred_df[pred_df['Profit_Probability'] == 'Low Profit']))
+            with col2:
+                if 'Confidence' in pred_df.columns and not pred_df['Confidence'].isna().all():
+                    high_profit_conf = pred_df[pred_df['Profit_Probability'] == 'High Profit']['Confidence']
+                    st.metric("High Profit Avg Conf", f"{high_profit_conf.mean():.3f}" if len(high_profit_conf) > 0 else "N/A")
+                    st.metric("High Profit Conf Std", f"{high_profit_conf.std():.3f}" if len(high_profit_conf) > 0 else "N/A")
+                else:
+                    st.metric("High Profit Avg Conf", "N/A")
+                    st.metric("High Profit Conf Std", "N/A")
+            with col3:
+                if 'Confidence' in pred_df.columns and not pred_df['Confidence'].isna().all():
+                    low_profit_conf = pred_df[pred_df['Profit_Probability'] == 'Low Profit']['Confidence']
+                    st.metric("Low Profit Avg Conf", f"{low_profit_conf.mean():.3f}" if len(low_profit_conf) > 0 else "N/A")
+                    st.metric("Low Profit Conf Std", f"{low_profit_conf.std():.3f}" if len(low_profit_conf) > 0 else "N/A")
+                else:
+                    st.metric("Low Profit Avg Conf", "N/A")
+                    st.metric("Low Profit Conf Std", "N/A")
+            with col4:
+                if 'Confidence' in pred_df.columns and not pred_df['Confidence'].isna().all():
+                    high_conf = len(pred_df[pred_df['Confidence'] > 0.8])
+                    st.metric("High Confidence", f"{high_conf} ({high_conf/len(pred_df)*100:.1f}%)")
+                    low_conf = len(pred_df[pred_df['Confidence'] < 0.6])
+                    st.metric("Low Confidence", f"{low_conf} ({low_conf/len(pred_df)*100:.1f}%)")
+                else:
+                    st.metric("High Confidence", "N/A")
+                    st.metric("Low Confidence", "N/A")
+
+        with stats_tab:
+            st.subheader("🔍 Statistical Analysis")
+            
+            # Time series analysis
+            recent_data = pred_df.tail(500)  # Use recent data
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Profit probability streak analysis
+                st.write("**📊 Profit Probability Streak Analysis**")
+                
+                # Calculate streaks
+                profit_numeric = recent_data['Profit_Probability'].map({'High Profit': 1, 'Low Profit': 0})
+                streaks = []
+                current_streak = 1
+                current_profit = profit_numeric.iloc[0]
+                
+                for i in range(1, len(profit_numeric)):
+                    if profit_numeric.iloc[i] == current_profit:
+                        current_streak += 1
+                    else:
+                        streaks.append(current_streak)
+                        current_streak = 1
+                        current_profit = profit_numeric.iloc[i]
+                streaks.append(current_streak)
+                
+                if streaks:
+                    avg_streak = np.mean(streaks)
+                    max_streak = max(streaks)
+                    
+                    streak_df = pd.DataFrame({
+                        'Average Streak': [f"{avg_streak:.1f}"],
+                        'Max Streak': [max_streak],
+                        'Total Streaks': [len(streaks)],
+                        'Streak Consistency': [f"{(avg_streak/max_streak)*100:.1f}%"]
+                    })
+                    
+                    st.dataframe(streak_df, use_container_width=True)
+                    
+                    # Streak distribution
+                    fig = go.Figure()
+                    fig.add_trace(go.Histogram(
+                        x=streaks,
+                        nbinsx=15,
+                        name='Streak Length Distribution',
+                        marker_color='lightcoral'
+                    ))
+                    
+                    fig.update_layout(
+                        title="Profit Probability Streak Distribution",
+                        xaxis_title="Streak Length",
+                        yaxis_title="Frequency",
+                        height=300,
+                        template="plotly_dark"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Confidence trend analysis
+                if 'Confidence' in recent_data.columns and not recent_data['Confidence'].isna().all():
+                    st.write("**📈 Confidence Trend Analysis**")
+                    rolling_conf = recent_data['Confidence'].rolling(20).mean()
+                    conf_trend = rolling_conf.iloc[-1] - rolling_conf.iloc[-20] if len(rolling_conf) >= 20 else 0
+                    
+                    trend_df = pd.DataFrame({
+                        'Current Avg': f"{rolling_conf.iloc[-1]:.3f}" if len(rolling_conf) > 0 else "N/A",
+                        'Trend': f"{conf_trend:+.3f}" if abs(conf_trend) > 0.001 else "Stable",
+                        'Volatility': f"{recent_data['Confidence'].std():.3f}",
+                        'Range': f"{recent_data['Confidence'].max() - recent_data['Confidence'].min():.3f}"
+                    }, index=[0])
+                    
+                    st.dataframe(trend_df, use_container_width=True)
+                else:
+                    st.write("**📈 Confidence Trend Analysis**")
+                    st.info("No confidence data available for trend analysis")
+            
+            with col2:
+                # Profit probability transition analysis
+                st.write("**🔗 Profit Transition Analysis**")
+                
+                # Calculate transition probabilities
+                transitions = {'High→Low': 0, 'Low→High': 0, 'High→High': 0, 'Low→Low': 0}
+                for i in range(1, len(recent_data)):
+                    prev_profit = recent_data['Profit_Probability'].iloc[i-1]
+                    curr_profit = recent_data['Profit_Probability'].iloc[i]
+                    
+                    if prev_profit == 'High Profit' and curr_profit == 'Low Profit':
+                        transitions['High→Low'] += 1
+                    elif prev_profit == 'Low Profit' and curr_profit == 'High Profit':
+                        transitions['Low→High'] += 1
+                    elif prev_profit == 'High Profit' and curr_profit == 'High Profit':
+                        transitions['High→High'] += 1
+                    elif prev_profit == 'Low Profit' and curr_profit == 'Low Profit':
+                        transitions['Low→Low'] += 1
+                
+                total_transitions = sum(transitions.values())
+                if total_transitions > 0:
+                    transition_probs = {k: v/total_transitions for k, v in transitions.items()}
+                    
+                    st.write("**Transition Probabilities:**")
+                    for transition, prob in transition_probs.items():
+                        st.write(f"• {transition}: {prob:.1%}")
+                    
+                    # Persistence analysis
+                    persistence = (transitions['High→High'] + transitions['Low→Low']) / total_transitions
+                    st.metric("Profit Persistence", f"{persistence:.1%}")
+                
+                # Confidence autocorrelation
+                if 'Confidence' in recent_data.columns and not recent_data['Confidence'].isna().all():
+                    st.write("**📊 Confidence Autocorrelation**")
+                    
+                    conf_data = recent_data['Confidence'].tail(200)  # Use recent data for performance
+                    lags = range(1, min(11, len(conf_data)//4))
+                    autocorr = [conf_data.autocorr(lag=lag) for lag in lags]
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Bar(
+                        x=list(lags),
+                        y=autocorr,
+                        name='Autocorrelation',
+                        marker_color='lightsalmon'
+                    ))
+                    
+                    fig.add_hline(y=0.1, line_dash="dash", line_color="red")
+                    fig.add_hline(y=-0.1, line_dash="dash", line_color="red")
+                    
+                    fig.update_layout(
+                        title="Confidence Autocorrelation",
+                        xaxis_title="Lag",
+                        yaxis_title="Correlation",
+                        height=300,
+                        template="plotly_dark"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.write("**📊 Confidence Autocorrelation**")
+                    st.info("No confidence data available for autocorrelation analysis")
+            
+            # Signal quality analysis
+            st.subheader("🎯 Signal Quality Analysis")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                # High confidence signals
+                if 'Confidence' in recent_data.columns and not recent_data['Confidence'].isna().all():
+                    high_conf_signals = recent_data[recent_data['Confidence'] > 0.8]
+                    st.write(f"**High Confidence Signals (>80%): {len(high_conf_signals)}**")
+                    if len(high_conf_signals) > 0:
+                        high_conf_profit = len(high_conf_signals[high_conf_signals['Profit_Probability'] == 'High Profit'])
+                        st.write(f"• High Profit: {high_conf_profit} ({high_conf_profit/len(high_conf_signals)*100:.1f}%)")
+                        st.write(f"• Low Profit: {len(high_conf_signals) - high_conf_profit} ({(len(high_conf_signals) - high_conf_profit)/len(high_conf_signals)*100:.1f}%)")
+                else:
+                    st.write("**High Confidence Signals (>80%): N/A**")
+                    st.info("No confidence data available")
+            
+            with col2:
+                # Medium confidence signals
+                if 'Confidence' in recent_data.columns and not recent_data['Confidence'].isna().all():
+                    med_conf_signals = recent_data[(recent_data['Confidence'] >= 0.6) & (recent_data['Confidence'] <= 0.8)]
+                    st.write(f"**Medium Confidence Signals (60-80%): {len(med_conf_signals)}**")
+                    if len(med_conf_signals) > 0:
+                        med_conf_profit = len(med_conf_signals[med_conf_signals['Profit_Probability'] == 'High Profit'])
+                        st.write(f"• High Profit: {med_conf_profit} ({med_conf_profit/len(med_conf_signals)*100:.1f}%)")
+                        st.write(f"• Low Profit: {len(med_conf_signals) - med_conf_profit} ({(len(med_conf_signals) - med_conf_profit)/len(med_conf_signals)*100:.1f}%)")
+                else:
+                    st.write("**Medium Confidence Signals (60-80%): N/A**")
+                    st.info("No confidence data available")
+            
+            with col3:
+                # Low confidence signals
+                if 'Confidence' in recent_data.columns and not recent_data['Confidence'].isna().all():
+                    low_conf_signals = recent_data[recent_data['Confidence'] < 0.6]
+                    st.write(f"**Low Confidence Signals (<60%): {len(low_conf_signals)}**")
+                    if len(low_conf_signals) > 0:
+                        low_conf_profit = len(low_conf_signals[low_conf_signals['Profit_Probability'] == 'High Profit'])
+                        st.write(f"• High Profit: {low_conf_profit} ({low_conf_profit/len(low_conf_signals)*100:.1f}%)")
+                        st.write(f"• Low Profit: {len(low_conf_signals) - low_conf_profit} ({(len(low_conf_signals) - low_conf_profit)/len(low_conf_signals)*100:.1f}%)")
+                else:
+                    st.write("**Low Confidence Signals (<60%): N/A**")
+                    st.info("No confidence data available")
 
         with metrics_tab:
-            st.subheader("Model Performance Metrics")
+            st.subheader("⚡ Model Performance Metrics")
 
-            # Get model info
+            # Get model info with debug information
             model_info = model_manager.get_model_info('profit_probability')
-            if model_info and 'metrics' in model_info:
-                metrics = model_info['metrics']
+            
+            if model_info:
+                st.write("**Debug: Available model info keys:**", list(model_info.keys()))
+                
+                # Try to find metrics in various possible locations
+                metrics = None
+                if 'metrics' in model_info:
+                    metrics = model_info['metrics']
+                    st.success("✅ Found metrics in 'metrics' key")
+                elif 'training_metrics' in model_info:
+                    metrics = model_info['training_metrics']
+                    st.success("✅ Found metrics in 'training_metrics' key")
+                elif 'performance' in model_info:
+                    metrics = model_info['performance']
+                    st.success("✅ Found metrics in 'performance' key")
+                else:
+                    st.info("🔍 Metrics not found in standard locations, checking alternative sources...")
+                    
+                    for key, value in model_info.items():
+                        if isinstance(value, dict):
+                            if any(metric_key in value for metric_key in ['accuracy', 'precision', 'recall', 'f1']):
+                                metrics = value
+                                st.success(f"✅ Found metrics in '{key}' key")
+                                break
 
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    accuracy = metrics.get('accuracy', 0)
-                    st.metric("Accuracy", f"{accuracy:.2%}")
-                with col2:
-                    classification_metrics = metrics.get('classification_report', {})
-                    precision = classification_metrics.get('weighted avg', {}).get('precision', 0)
-                    st.metric("Precision", f"{precision:.2%}")
-                with col3:
-                    recall = classification_metrics.get('weighted avg', {}).get('recall', 0)
-                    st.metric("Recall", f"{recall:.2%}")
+                if metrics:
+                    # Main performance metrics
+                    st.subheader("🎯 Core Performance Metrics")
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        accuracy = metrics.get('accuracy', 0)
+                        st.metric("Accuracy", f"{accuracy:.2%}")
+                    with col2:
+                        classification_metrics = metrics.get('classification_report', {})
+                        precision = classification_metrics.get('weighted avg', {}).get('precision', 0)
+                        st.metric("Precision", f"{precision:.2%}")
+                    with col3:
+                        recall = classification_metrics.get('weighted avg', {}).get('recall', 0)
+                        st.metric("Recall", f"{recall:.2%}")
+                    with col4:
+                        f1_score = classification_metrics.get('weighted avg', {}).get('f1-score', 0)
+                        st.metric("F1 Score", f"{f1_score:.2%}")
 
-                # Feature importance
-                feature_importance = model_manager.get_feature_importance('profit_probability')
-                if feature_importance:
-                    st.subheader("Feature Importance")
-                    importance_df = pd.DataFrame(
-                        list(feature_importance.items()), 
-                        columns=['Feature', 'Importance']
-                    ).sort_values('Importance', ascending=False)
+                    # Detailed classification report
+                    if 'classification_report' in metrics:
+                        st.subheader("📊 Detailed Classification Report")
+                        
+                        class_report = metrics['classification_report']
+                        if isinstance(class_report, dict):
+                            # Create a formatted table
+                            report_data = []
+                            for class_name, class_metrics in class_report.items():
+                                if isinstance(class_metrics, dict) and class_name not in ['accuracy', 'macro avg', 'weighted avg']:
+                                    report_data.append({
+                                        'Class': 'High Profit' if class_name == '1' else 'Low Profit' if class_name == '0' else class_name,
+                                        'Precision': f"{class_metrics.get('precision', 0):.3f}",
+                                        'Recall': f"{class_metrics.get('recall', 0):.3f}",
+                                        'F1-Score': f"{class_metrics.get('f1-score', 0):.3f}",
+                                        'Support': class_metrics.get('support', 0)
+                                    })
+                            
+                            if report_data:
+                                report_df = pd.DataFrame(report_data)
+                                st.dataframe(report_df, use_container_width=True)
 
-                    st.dataframe(importance_df.head(10), use_container_width=True)
+                    # Feature importance analysis
+                    feature_importance = model_manager.get_feature_importance('profit_probability')
+                    if feature_importance:
+                        st.subheader("🔍 Feature Importance Analysis")
+                        
+                        importance_df = pd.DataFrame(
+                            list(feature_importance.items()), 
+                            columns=['Feature', 'Importance']
+                        ).sort_values('Importance', ascending=False)
+                        
+                        col1, col2 = st.columns([1, 2])
+                        
+                        with col1:
+                            st.write("**Top 15 Features:**")
+                            st.dataframe(
+                                importance_df.head(15).round(4), 
+                                use_container_width=True,
+                                column_config={
+                                    "Importance": st.column_config.ProgressColumn("Importance", min_value=0, max_value=1)
+                                }
+                            )
+                        
+                        with col2:
+                            # Feature importance chart
+                            top_features = importance_df.head(10)
+                            
+                            fig = go.Figure()
+                            fig.add_trace(go.Bar(
+                                x=top_features['Importance'],
+                                y=top_features['Feature'],
+                                orientation='h',
+                                marker_color='lightcoral',
+                                text=top_features['Importance'].round(3),
+                                textposition='inside'
+                            ))
+                            
+                            fig.update_layout(
+                                title="Top 10 Most Important Features",
+                                xaxis_title="Importance Score",
+                                yaxis_title="Features",
+                                height=400,
+                                template="plotly_dark"
+                            )
+                            fig.update_yaxes(categoryorder='total ascending')
+                            st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Model complexity and training info
+                    st.subheader("🏗️ Model Architecture & Training")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write("**Model Type:** Classification Ensemble")
+                        st.write("**Task:** Binary Classification (High/Low Profit)")
+                        st.write("**Training Split:** 80% train / 20% test")
+                    
+                    with col2:
+                        train_accuracy = metrics.get('train_accuracy', 0)
+                        test_accuracy = metrics.get('test_accuracy', metrics.get('accuracy', 0))
+                        overfit_ratio = (train_accuracy - test_accuracy) if train_accuracy > 0 else 0
+                        
+                        st.metric("Training Accuracy", f"{train_accuracy:.2%}")
+                        st.metric("Test Accuracy", f"{test_accuracy:.2%}")
+                        st.metric("Overfitting", f"{overfit_ratio:.1%}")
+                    
+                    with col3:
+                        if 'confusion_matrix' in metrics:
+                            cm = metrics['confusion_matrix']
+                            if isinstance(cm, list) and len(cm) == 2 and len(cm[0]) == 2:
+                                tn, fp, fn, tp = cm[0][0], cm[0][1], cm[1][0], cm[1][1]
+                                specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+                                sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+                                
+                                st.metric("Specificity", f"{specificity:.2%}")
+                                st.metric("Sensitivity", f"{sensitivity:.2%}")
+                                st.metric("Total Predictions", f"{tp + tn + fp + fn:,}")
+                    
+                    # Confusion matrix visualization
+                    if 'confusion_matrix' in metrics:
+                        st.subheader("📊 Confusion Matrix")
+                        
+                        cm = metrics['confusion_matrix']
+                        if isinstance(cm, list) and len(cm) == 2:
+                            fig = go.Figure(data=go.Heatmap(
+                                z=cm,
+                                x=['Predicted Low Profit', 'Predicted High Profit'],
+                                y=['Actual Low Profit', 'Actual High Profit'],
+                                colorscale='Oranges',
+                                text=cm,
+                                texttemplate="%{text}",
+                                textfont={"size": 16}
+                            ))
+                            
+                            fig.update_layout(
+                                title="Confusion Matrix",
+                                height=400,
+                                template="plotly_dark"
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("⚠️ Model is trained but performance metrics are not accessible in the expected format.")
+                    st.info("💡 This can happen if the model was trained but metrics weren't properly saved. Please retrain the profit probability model to generate fresh metrics.")
             else:
-                st.info("No performance metrics available")
+                st.warning("⚠️ No model performance metrics available. Please train the profit probability model first.")
 
     except Exception as e:
         st.error(f"Error generating profit probability predictions: {str(e)}")
