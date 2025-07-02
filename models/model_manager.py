@@ -90,7 +90,10 @@ class ModelManager:
             raise ValueError(f"Model {model_name} not trained")
 
         model_info = self.trained_models[model_name]
-        model = model_info['model']
+        # Handle both 'model' and 'ensemble' keys for compatibility
+        model = model_info.get('model') or model_info.get('ensemble')
+        if model is None:
+            raise ValueError(f"No trained model found for {model_name}")
         scaler = model_info['scaler']
         expected_features = model_info.get('feature_names', [])
 
