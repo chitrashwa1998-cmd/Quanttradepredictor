@@ -137,8 +137,13 @@ class ProfitProbabilityModel:
             print(f"Removing datetime columns before scaling: {datetime_cols}")
             X_train = X_train.drop(datetime_cols, axis=1)
             X_test = X_test.drop(datetime_cols, axis=1)
-            # Update feature names
+            # Update feature names - preserve the existing feature names from prepare_features
             self.feature_names = [fn for fn in self.feature_names if fn not in datetime_cols]
+        
+        # Ensure feature names match the final training columns
+        if len(self.feature_names) == 0:
+            self.feature_names = list(X_train.columns)
+            print(f"Feature names were empty, setting to training columns: {len(self.feature_names)} features")
 
         # Scale features
         self.scaler = StandardScaler()
