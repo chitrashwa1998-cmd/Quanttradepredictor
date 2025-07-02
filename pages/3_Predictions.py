@@ -433,7 +433,7 @@ def show_profit_predictions(db, fresh_data):
 
             # Use ONLY the exact features that were used during training
             missing_features = [col for col in required_features if col not in all_features.columns]
-            
+
             if missing_features:
                 st.error(f"Missing required features: {missing_features}")
                 st.error("Cannot make predictions without all required features")
@@ -441,7 +441,7 @@ def show_profit_predictions(db, fresh_data):
 
             # Select ONLY the exact features from training - no additions
             features = all_features[required_features].copy()
-            
+
             st.success(f"✅ Using exactly {len(required_features)} features from training")
         else:
             st.error("No feature names stored in model. Please retrain the model.")
@@ -585,12 +585,13 @@ def show_reversal_predictions(db, fresh_data):
 
     # Prepare features from fresh data
     try:
-        from features.technical_indicators import TechnicalIndicators
-        ti = TechnicalIndicators()
-        features = ti.calculate_all_indicators(fresh_data)
+        # Use comprehensive reversal features like the model was trained on
+        from models.reversal_model import ReversalModel
+        reversal_model_instance = ReversalModel()
+        features = reversal_model_instance.prepare_features(fresh_data)
 
         if features is None or len(features) == 0:
-            st.error("Failed to calculate features")
+            st.error("Failed to calculate reversal features")
             return
 
     # Make predictions using trained model
