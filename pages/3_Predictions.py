@@ -594,13 +594,44 @@ def show_volatility_predictions(db, fresh_data):
                 st.subheader("🎯 Core Performance Metrics")
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    rmse = metrics.get('rmse', 0)
+                    rmse = metrics.get('rmse', metrics.get('test_rmse', 0))
                     st.metric("RMSE", f"{rmse:.6f}")
                 with col2:
-                    mae = metrics.get('mae', 0)
+                    mae = metrics.get('mae', metrics.get('test_mae', 0))
                     st.metric("MAE", f"{mae:.6f}")
                 with col3:
-                    mse = metrics.get('mse', 0)
+                    mse = metrics.get('mse', metrics.get('test_mse', 0))
+                    st.metric("MSE", f"{mse:.6f}")
+                with col4:
+                    r2 = metrics.get('r2', metrics.get('test_r2', 0))
+                    st.metric("R² Score", f"{r2:.4f}")
+                
+                # Training vs Testing Performance
+                st.subheader("📊 Training vs Testing Performance")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write("**Training Metrics:**")
+                    train_rmse = metrics.get('train_rmse', 0)
+                    train_r2 = metrics.get('train_r2', 0)
+                    st.write(f"• RMSE: {train_rmse:.6f}")
+                    st.write(f"• R²: {train_r2:.4f}")
+                
+                with col2:
+                    st.write("**Testing Metrics:**")
+                    test_rmse = metrics.get('test_rmse', 0)
+                    test_r2 = metrics.get('test_r2', 0)
+                    st.write(f"• RMSE: {test_rmse:.6f}")
+                    st.write(f"• R²: {test_r2:.4f}")
+                
+                # Model overfitting check
+                if train_rmse > 0 and test_rmse > 0:
+                    overfitting_ratio = test_rmse / train_rmse
+                    if overfitting_ratio > 1.2:
+                        st.warning(f"⚠️ Potential overfitting detected (Test/Train RMSE ratio: {overfitting_ratio:.2f})")
+                    else:
+                        st.success(f"✅ Good generalization (Test/Train RMSE ratio: {overfitting_ratio:.2f})")
+            else:
+                st.warning("⚠️ No model performance metrics available. Please train the volatility model first.")s.get('mse', 0)
                     st.metric("MSE", f"{mse:.8f}")
                 with col4:
                     r2 = metrics.get('test_r2', 0)
@@ -664,6 +695,55 @@ def show_volatility_predictions(db, fresh_data):
                 with col2:
                     train_rmse = metrics.get('train_rmse', 0)
                     test_rmse = metrics.get('test_rmse', 0)
+                    st.write(f"**Training RMSE:** {train_rmse:.6f}")
+                    st.write(f"**Testing RMSE:** {test_rmse:.6f}")
+                    
+                with col3:
+                    train_r2 = metrics.get('train_r2', 0)
+                    test_r2 = metrics.get('test_r2', 0)
+                    st.write(f"**Training R²:** {train_r2:.4f}")
+                    st.write(f"**Testing R²:** {test_r2:.4f}")
+                
+                # Feature importance display
+                feature_importance = model_manager.get_feature_importance('volatility')
+                if feature_importance:
+                    st.subheader("📈 Feature Importance Analysis")
+                    
+                    # Convert to DataFrame and sort
+                    importance_df = pd.DataFrame(
+                        list(feature_importance.items()), 
+                        columns=['Feature', 'Importance']
+                    ).sort_values('Importance', ascending=False)
+                    
+                    # Show top 10 features
+                    top_features = importance_df.head(10)
+                    
+                    col1, col2 = st.columns([1, 1])
+                    with col1:
+                        st.write("**Top 10 Most Important Features:**")
+                        st.dataframe(top_features, use_container_width=True)
+                    
+                    with col2:
+                        import plotly.graph_objects as go
+                        fig = go.Figure()
+                        fig.add_trace(go.Bar(
+                            x=top_features['Importance'],
+                            y=top_features['Feature'],
+                            orientation='h',
+                            marker_color='lightblue',
+                            text=top_features['Importance'].round(3),
+                            textposition='inside'
+                        ))
+                        
+                        fig.update_layout(
+                            title="Top 10 Most Important Features",
+                            xaxis_title="Importance Score",
+                            yaxis_title="Features",
+                            height=400,
+                            template="plotly_dark"
+                        )
+                        fig.update_yaxes(categoryorder='total ascending')
+                        st.plotly_chart(fig, use_container_width=True)t_rmse = metrics.get('test_rmse', 0)
                     overfit_ratio = train_rmse / test_rmse if test_rmse > 0 else 0
                     
                     st.metric("Training RMSE", f"{train_rmse:.6f}")
