@@ -585,144 +585,176 @@ def show_volatility_predictions(db, fresh_data):
         with metrics_tab:
             st.subheader("⚡ Model Performance Metrics")
 
-            # Get model info
+            # Get model info with debug information
             model_info = model_manager.get_model_info('volatility')
-            if model_info and 'metrics' in model_info:
-                metrics = model_info['metrics']
+            
+            # Debug: Show what's actually in model_info
+            if model_info:
+                st.write("**Debug: Available model info keys:**", list(model_info.keys()))
+                
+                # Try to find metrics in various possible locations
+                metrics = None
+                if 'metrics' in model_info:
+                    metrics = model_info['metrics']
+                    st.success("✅ Found metrics in 'metrics' key")
+                elif 'training_metrics' in model_info:
+                    metrics = model_info['training_metrics']
+                    st.success("✅ Found metrics in 'training_metrics' key")
+                elif 'performance' in model_info:
+                    metrics = model_info['performance']
+                    st.success("✅ Found metrics in 'performance' key")
+                else:
+                    # Try to extract from console logs or other sources
+                    st.info("🔍 Metrics not found in standard locations, checking alternative sources...")
+                    
+                    # Check if we can find any numerical performance data
+                    for key, value in model_info.items():
+                        if isinstance(value, dict):
+                            st.write(f"**Found nested data in '{key}':**", list(value.keys()) if value else "Empty")
+                            if any(metric_key in value for metric_key in ['rmse', 'r2', 'mae', 'mse']):
+                                metrics = value
+                                st.success(f"✅ Found metrics in '{key}' key")
+                                break
 
-                # Main performance metrics
-                st.subheader("🎯 Core Performance Metrics")
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    rmse = metrics.get('rmse', 0)
-                    st.metric("RMSE", f"{rmse:.6f}")
-                with col2:
-                    mae = metrics.get('mae', 0)
-                    st.metric("MAE", f"{mae:.6f}")
-                with col3:
-                    mse = metrics.get('mse', 0)
-                    st.metric("MSE", f"{mse:.8f}")
-                with col4:
-                    r2 = metrics.get('test_r2', 0)
-                    st.metric("R² Score", f"{r2:.4f}")
-
-                # Feature importance analysis
-                feature_importance = model_manager.get_feature_importance('volatility')
-                if feature_importance:
-                    st.subheader("🔍 Feature Importance Analysis")
+                if metrics:
+                    st.write("**Available metric keys:**", list(metrics.keys()) if isinstance(metrics, dict) else "Not a dictionary")
                     
-                    importance_df = pd.DataFrame(
-                        list(feature_importance.items()), 
-                        columns=['Feature', 'Importance']
-                    ).sort_values('Importance', ascending=False)
-                    
-                    col1, col2 = st.columns([1, 2])
-                    
+                    # Main performance metrics
+                    st.subheader("🎯 Core Performance Metrics")
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.write("**Top 15 Features:**")
-                        st.dataframe(
-                            importance_df.head(15).round(4), 
-                            use_container_width=True,
-                            column_config={
-                                "Importance": st.column_config.ProgressColumn("Importance", min_value=0, max_value=1)
-                            }
-                        )
+                        rmse = metrics.get('rmse', metrics.get('test_rmse', 0))
+                        st.metric("RMSE", f"{rmse:.6f}")
+                    with col2:
+                        mae = metrics.get('mae', 0)
+                        st.metric("MAE", f"{mae:.6f}")
+                    with col3:
+                        mse = metrics.get('mse', 0)
+                        st.metric("MSE", f"{mse:.8f}")
+                    with col4:
+                        r2 = metrics.get('test_r2', metrics.get('r2', 0))
+                        st.metric("R² Score", f"{r2:.4f}")
+
+                    # Feature importance analysis
+                    feature_importance = model_manager.get_feature_importance('volatility')
+                    if feature_importance:
+                        st.subheader("🔍 Feature Importance Analysis")
+                        
+                        importance_df = pd.DataFrame(
+                            list(feature_importance.items()), 
+                            columns=['Feature', 'Importance']
+                        ).sort_values('Importance', ascending=False)
+                        
+                        col1, col2 = st.columns([1, 2])
+                        
+                        with col1:
+                            st.write("**Top 15 Features:**")
+                            st.dataframe(
+                                importance_df.head(15).round(4), 
+                                use_container_width=True,
+                                column_config={
+                                    "Importance": st.column_config.ProgressColumn("Importance", min_value=0, max_value=1)
+                                }
+                            )
+                        
+                        with col2:
+                            # Feature importance chart
+                            top_features = importance_df.head(10)
+                            
+                            fig = go.Figure()
+                            fig.add_trace(go.Bar(
+                                x=top_features['Importance'],
+                                y=top_features['Feature'],
+                                orientation='h',
+                                marker_color='lightblue',
+                                text=top_features['Importance'].round(3),
+                                textposition='inside'
+                            ))
+                            
+                            fig.update_layout(
+                                title="Top 10 Most Important Features",
+                                xaxis_title="Importance Score",
+                                yaxis_title="Features",
+                                height=400,
+                                template="plotly_dark"
+                            )
+                            fig.update_yaxes(categoryorder='total ascending')
+                            st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Model complexity and training info
+                    st.subheader("🏗️ Model Architecture & Training")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write("**Model Type:** Ensemble (XGBoost + CatBoost + Random Forest)")
+                        st.write("**Features Used:** 27 technical indicators")
+                        st.write("**Training Split:** 80% train / 20% test")
                     
                     with col2:
-                        # Feature importance chart
-                        top_features = importance_df.head(10)
+                        train_rmse = metrics.get('train_rmse', 0)
+                        test_rmse = metrics.get('test_rmse', metrics.get('rmse', 0))
+                        overfit_ratio = train_rmse / test_rmse if test_rmse > 0 else 0
+                        
+                        st.metric("Training RMSE", f"{train_rmse:.6f}")
+                        st.metric("Test RMSE", f"{test_rmse:.6f}")
+                        st.metric("Overfitting Ratio", f"{overfit_ratio:.3f}")
+                    
+                    with col3:
+                        train_r2 = metrics.get('train_r2', 0)
+                        test_r2 = metrics.get('test_r2', metrics.get('r2', 0))
+                        generalization = test_r2 / train_r2 if train_r2 > 0 else 0
+                        
+                        st.metric("Training R²", f"{train_r2:.4f}")
+                        st.metric("Test R²", f"{test_r2:.4f}")
+                        st.metric("Generalization", f"{generalization:.3f}")
+                    
+                    # Feature categories breakdown
+                    st.subheader("📊 Feature Categories")
+                    
+                    if feature_importance:
+                        # Categorize features
+                        tech_indicators = ['atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width']
+                        custom_features = ['log_return', 'realized_volatility', 'parkinson_volatility', 
+                                         'high_low_ratio', 'gap_pct', 'price_vs_vwap', 'volatility_spike_flag', 'candle_body_ratio']
+                        lagged_features = ['lag_volatility_1', 'lag_volatility_3', 'lag_volatility_5',
+                                         'lag_atr_1', 'lag_atr_3', 'lag_bb_width', 'volatility_regime']
+                        time_features = ['hour', 'minute', 'day_of_week', 'is_post_10am', 
+                                       'is_opening_range', 'is_closing_phase', 'is_weekend']
+                        
+                        category_importance = {}
+                        for category, features in [
+                            ('Technical Indicators', tech_indicators),
+                            ('Custom Engineered', custom_features),
+                            ('Lagged Features', lagged_features),
+                            ('Time Context', time_features)
+                        ]:
+                            total_importance = sum(feature_importance.get(f, 0) for f in features)
+                            category_importance[category] = total_importance
+                        
+                        # Category importance chart
+                        categories = list(category_importance.keys())
+                        importances = list(category_importance.values())
                         
                         fig = go.Figure()
-                        fig.add_trace(go.Bar(
-                            x=top_features['Importance'],
-                            y=top_features['Feature'],
-                            orientation='h',
-                            marker_color='lightblue',
-                            text=top_features['Importance'].round(3),
-                            textposition='inside'
+                        fig.add_trace(go.Pie(
+                            labels=categories,
+                            values=importances,
+                            hole=0.4,
+                            textinfo='label+percent',
+                            textposition='outside'
                         ))
                         
                         fig.update_layout(
-                            title="Top 10 Most Important Features",
-                            xaxis_title="Importance Score",
-                            yaxis_title="Features",
+                            title="Feature Importance by Category",
                             height=400,
                             template="plotly_dark"
                         )
-                        fig.update_yaxes(categoryorder='total ascending')
                         st.plotly_chart(fig, use_container_width=True)
-                
-                # Model complexity and training info
-                st.subheader("🏗️ Model Architecture & Training")
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.write("**Model Type:** Ensemble (XGBoost + CatBoost + Random Forest)")
-                    st.write("**Features Used:** 27 technical indicators")
-                    st.write("**Training Split:** 80% train / 20% test")
-                
-                with col2:
-                    train_rmse = metrics.get('train_rmse', 0)
-                    test_rmse = metrics.get('test_rmse', 0)
-                    overfit_ratio = train_rmse / test_rmse if test_rmse > 0 else 0
-                    
-                    st.metric("Training RMSE", f"{train_rmse:.6f}")
-                    st.metric("Test RMSE", f"{test_rmse:.6f}")
-                    st.metric("Overfitting Ratio", f"{overfit_ratio:.3f}")
-                
-                with col3:
-                    train_r2 = metrics.get('train_r2', 0)
-                    test_r2 = metrics.get('test_r2', 0)
-                    generalization = test_r2 / train_r2 if train_r2 > 0 else 0
-                    
-                    st.metric("Training R²", f"{train_r2:.4f}")
-                    st.metric("Test R²", f"{test_r2:.4f}")
-                    st.metric("Generalization", f"{generalization:.3f}")
-                
-                # Feature categories breakdown
-                st.subheader("📊 Feature Categories")
-                
-                # Categorize features
-                tech_indicators = ['atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width']
-                custom_features = ['log_return', 'realized_volatility', 'parkinson_volatility', 
-                                 'high_low_ratio', 'gap_pct', 'price_vs_vwap', 'volatility_spike_flag', 'candle_body_ratio']
-                lagged_features = ['lag_volatility_1', 'lag_volatility_3', 'lag_volatility_5',
-                                 'lag_atr_1', 'lag_atr_3', 'lag_bb_width', 'volatility_regime']
-                time_features = ['hour', 'minute', 'day_of_week', 'is_post_10am', 
-                               'is_opening_range', 'is_closing_phase', 'is_weekend']
-                
-                category_importance = {}
-                for category, features in [
-                    ('Technical Indicators', tech_indicators),
-                    ('Custom Engineered', custom_features),
-                    ('Lagged Features', lagged_features),
-                    ('Time Context', time_features)
-                ]:
-                    total_importance = sum(feature_importance.get(f, 0) for f in features)
-                    category_importance[category] = total_importance
-                
-                # Category importance chart
-                categories = list(category_importance.keys())
-                importances = list(category_importance.values())
-                
-                fig = go.Figure()
-                fig.add_trace(go.Pie(
-                    labels=categories,
-                    values=importances,
-                    hole=0.4,
-                    textinfo='label+percent',
-                    textposition='outside'
-                ))
-                
-                fig.update_layout(
-                    title="Feature Importance by Category",
-                    height=400,
-                    template="plotly_dark"
-                )
-                st.plotly_chart(fig, use_container_width=True)
-                
+                else:
+                    st.warning("⚠️ Model is trained but performance metrics are not accessible in the expected format.")
+                    st.info("💡 This can happen if the model was trained but metrics weren't properly saved. Please retrain the volatility model to generate fresh metrics.")
             else:
-                st.info("No performance metrics available. Please train the volatility model first.")
+                st.warning("⚠️ No model performance metrics available. Please train the volatility model first.")
 
     except Exception as e:
         st.error(f"Error generating volatility predictions: {str(e)}")
