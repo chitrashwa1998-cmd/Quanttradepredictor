@@ -185,45 +185,414 @@ def show_volatility_predictions(db, fresh_data):
         pred_df['Date'] = pred_df['DateTime'].dt.strftime('%Y-%m-%d')
         pred_df['Time'] = pred_df['DateTime'].dt.strftime('%H:%M:%S')
 
-        # Create sub-tabs for different views
-        chart_tab, data_tab, metrics_tab = st.tabs(["📈 Interactive Chart", "📋 Detailed Data", "📊 Performance Metrics"])
+        # Create 5 comprehensive sub-tabs for detailed analysis
+        chart_tab, data_tab, dist_tab, stats_tab, metrics_tab = st.tabs([
+            "📈 Interactive Chart", 
+            "📋 Detailed Data", 
+            "📊 Distribution Analysis", 
+            "🔍 Statistical Analysis", 
+            "⚡ Performance Metrics"
+        ])
 
         with chart_tab:
-            st.subheader("Volatility Prediction Chart")
-            recent_predictions = pred_df.tail(100)
+            st.subheader("📈 Volatility Prediction Chart")
+            
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                chart_points = st.selectbox("Data Points", [50, 100, 200, 500], index=1, key="vol_chart_points")
+            
+            recent_predictions = pred_df.tail(chart_points)
 
-            fig = go.Figure()
+            # Create subplot with multiple views
+            fig = make_subplots(
+                rows=2, cols=1,
+                subplot_titles=('Volatility Predictions Over Time', 'Volatility Distribution'),
+                vertical_spacing=0.1,
+                row_heights=[0.7, 0.3]
+            )
+
+            # Main volatility line chart
             fig.add_trace(go.Scatter(
                 x=recent_predictions['DateTime'],
                 y=recent_predictions['Predicted_Volatility'],
                 mode='lines+markers',
                 name='Predicted Volatility',
-                line=dict(color='blue')
-            ))
+                line=dict(color='#00ffff', width=2),
+                marker=dict(size=4)
+            ), row=1, col=1)
+
+            # Add volatility bands
+            vol_mean = recent_predictions['Predicted_Volatility'].mean()
+            vol_std = recent_predictions['Predicted_Volatility'].std()
+            
+            fig.add_hline(y=vol_mean, line_dash="dash", line_color="yellow", 
+                         annotation_text="Mean", row=1, col=1)
+            fig.add_hline(y=vol_mean + vol_std, line_dash="dot", line_color="red", 
+                         annotation_text="+1σ", row=1, col=1)
+            fig.add_hline(y=vol_mean - vol_std, line_dash="dot", line_color="green", 
+                         annotation_text="-1σ", row=1, col=1)
+
+            # Histogram of volatility predictions
+            fig.add_trace(go.Histogram(
+                x=recent_predictions['Predicted_Volatility'],
+                nbinsx=30,
+                name='Volatility Distribution',
+                marker_color='rgba(0, 255, 255, 0.6)'
+            ), row=2, col=1)
 
             fig.update_layout(
-                title="Volatility Predictions - Last 100 Data Points",
-                xaxis_title="DateTime",
-                yaxis_title="Predicted Volatility",
-                height=500
+                title=f"Volatility Analysis - Last {chart_points} Data Points",
+                height=700,
+                showlegend=True,
+                template="plotly_dark"
             )
+            
+            fig.update_xaxes(title_text="DateTime", row=1, col=1)
+            fig.update_yaxes(title_text="Predicted Volatility", row=1, col=1)
+            fig.update_xaxes(title_text="Volatility Value", row=2, col=1)
+            fig.update_yaxes(title_text="Frequency", row=2, col=1)
 
             st.plotly_chart(fig, use_container_width=True)
 
+            # Quick stats
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Current Volatility", f"{recent_predictions['Predicted_Volatility'].iloc[-1]:.6f}")
+            with col2:
+                st.metric("Average", f"{vol_mean:.6f}")
+            with col3:
+                st.metric("Min", f"{recent_predictions['Predicted_Volatility'].min():.6f}")
+            with col4:
+                st.metric("Max", f"{recent_predictions['Predicted_Volatility'].max():.6f}")
+
         with data_tab:
-            st.subheader("Detailed Prediction Data")
-            recent_predictions = pred_df.tail(200)
-            st.dataframe(recent_predictions[['Date', 'Time', 'Predicted_Volatility']], use_container_width=True)
+            st.subheader("📋 Detailed Prediction Data")
+            
+            col1, col2 = st.columns([2, 1])
+            with col2:
+                data_points = st.selectbox("Show Records", [100, 200, 500, 1000], index=1, key="vol_data_points")
+            
+            recent_predictions = pred_df.tail(data_points)
+            
+            # Enhanced data table with additional calculated columns
+            detailed_df = recent_predictions.copy()
+            detailed_df['Prediction_Error'] = np.abs(detailed_df['Predicted_Volatility'] - detailed_df['Predicted_Volatility'].mean())
+            detailed_df['Volatility_Percentile'] = detailed_df['Predicted_Volatility'].rank(pct=True) * 100
+            detailed_df['Volatility_Regime'] = pd.cut(detailed_df['Predicted_Volatility'], 
+                                                    bins=3, labels=['Low', 'Medium', 'High'])
+            detailed_df['Moving_Avg_5'] = detailed_df['Predicted_Volatility'].rolling(5).mean()
+            detailed_df['Volatility_Change'] = detailed_df['Predicted_Volatility'].diff()
+            detailed_df['Volatility_Direction'] = detailed_df['Volatility_Change'].apply(
+                lambda x: '📈' if x > 0 else '📉' if x < 0 else '➡️'
+            )
+            
+            # Display enhanced table
+            display_columns = [
+                'Date', 'Time', 'Predicted_Volatility', 'Volatility_Direction',
+                'Moving_Avg_5', 'Volatility_Change', 'Volatility_Regime', 
+                'Volatility_Percentile', 'Prediction_Error'
+            ]
+            
+            st.dataframe(
+                detailed_df[display_columns].round(6), 
+                use_container_width=True,
+                column_config={
+                    "Predicted_Volatility": st.column_config.NumberColumn("Predicted Vol", format="%.6f"),
+                    "Moving_Avg_5": st.column_config.NumberColumn("5-Period MA", format="%.6f"),
+                    "Volatility_Change": st.column_config.NumberColumn("Change", format="%.6f"),
+                    "Volatility_Percentile": st.column_config.NumberColumn("Percentile", format="%.1f%%"),
+                    "Prediction_Error": st.column_config.NumberColumn("Error", format="%.6f")
+                }
+            )
+            
+            # Data summary
+            st.subheader("📊 Data Summary")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write("**Volatility Regimes:**")
+                regime_counts = detailed_df['Volatility_Regime'].value_counts()
+                for regime, count in regime_counts.items():
+                    st.write(f"• {regime}: {count} ({count/len(detailed_df)*100:.1f}%)")
+            
+            with col2:
+                st.write("**Trend Analysis:**")
+                direction_counts = detailed_df['Volatility_Direction'].value_counts()
+                for direction, count in direction_counts.items():
+                    st.write(f"• {direction}: {count}")
+            
+            with col3:
+                st.write("**Statistics:**")
+                st.write(f"• Mean: {detailed_df['Predicted_Volatility'].mean():.6f}")
+                st.write(f"• Std Dev: {detailed_df['Predicted_Volatility'].std():.6f}")
+                st.write(f"• Skewness: {detailed_df['Predicted_Volatility'].skew():.3f}")
+
+        with dist_tab:
+            st.subheader("📊 Distribution Analysis")
+            
+            # Distribution plots
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Histogram with KDE
+                fig = go.Figure()
+                fig.add_trace(go.Histogram(
+                    x=pred_df['Predicted_Volatility'],
+                    nbinsx=50,
+                    histnorm='probability density',
+                    name='Volatility Distribution',
+                    marker_color='rgba(0, 255, 255, 0.7)'
+                ))
+                
+                fig.update_layout(
+                    title="Volatility Distribution",
+                    xaxis_title="Predicted Volatility",
+                    yaxis_title="Density",
+                    height=400,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                # Box plot by hour
+                pred_df_sample = pred_df.tail(1000)  # Use sample for performance
+                pred_df_sample['Hour'] = pred_df_sample['DateTime'].dt.hour
+                
+                fig = go.Figure()
+                fig.add_trace(go.Box(
+                    x=pred_df_sample['Hour'],
+                    y=pred_df_sample['Predicted_Volatility'],
+                    name='Volatility by Hour',
+                    marker_color='cyan'
+                ))
+                
+                fig.update_layout(
+                    title="Volatility Distribution by Hour",
+                    xaxis_title="Hour of Day",
+                    yaxis_title="Predicted Volatility",
+                    height=400,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Statistical distribution analysis
+            st.subheader("📈 Distribution Statistics")
+            
+            vol_data = pred_df['Predicted_Volatility']
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Mean", f"{vol_data.mean():.6f}")
+                st.metric("Median", f"{vol_data.median():.6f}")
+            with col2:
+                st.metric("Std Dev", f"{vol_data.std():.6f}")
+                st.metric("Variance", f"{vol_data.var():.8f}")
+            with col3:
+                st.metric("Skewness", f"{vol_data.skew():.3f}")
+                st.metric("Kurtosis", f"{vol_data.kurtosis():.3f}")
+            with col4:
+                st.metric("Min", f"{vol_data.min():.6f}")
+                st.metric("Max", f"{vol_data.max():.6f}")
+            
+            # Percentile analysis
+            st.subheader("🎯 Percentile Analysis")
+            percentiles = [1, 5, 10, 25, 50, 75, 90, 95, 99]
+            perc_values = [np.percentile(vol_data, p) for p in percentiles]
+            
+            perc_df = pd.DataFrame({
+                'Percentile': [f"{p}%" for p in percentiles],
+                'Value': [f"{v:.6f}" for v in perc_values]
+            })
+            
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                st.dataframe(perc_df, use_container_width=True)
+            
+            with col2:
+                # Percentile plot
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=percentiles,
+                    y=perc_values,
+                    mode='lines+markers',
+                    name='Percentiles',
+                    line=dict(color='yellow', width=3),
+                    marker=dict(size=8)
+                ))
+                
+                fig.update_layout(
+                    title="Volatility Percentiles",
+                    xaxis_title="Percentile",
+                    yaxis_title="Volatility Value",
+                    height=300,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+        with stats_tab:
+            st.subheader("🔍 Statistical Analysis")
+            
+            # Time series analysis
+            vol_data = pred_df['Predicted_Volatility'].tail(500)  # Use recent data
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Autocorrelation analysis
+                st.write("**📊 Autocorrelation Analysis**")
+                
+                lags = range(1, min(21, len(vol_data)//4))
+                autocorr = [vol_data.autocorr(lag=lag) for lag in lags]
+                
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=list(lags),
+                    y=autocorr,
+                    name='Autocorrelation',
+                    marker_color='lightblue'
+                ))
+                
+                fig.add_hline(y=0.05, line_dash="dash", line_color="red")
+                fig.add_hline(y=-0.05, line_dash="dash", line_color="red")
+                
+                fig.update_layout(
+                    title="Autocorrelation Function",
+                    xaxis_title="Lag",
+                    yaxis_title="Correlation",
+                    height=300,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Rolling statistics
+                st.write("**📈 Rolling Statistics (20-period)**")
+                rolling_mean = vol_data.rolling(20).mean()
+                rolling_std = vol_data.rolling(20).std()
+                
+                stats_df = pd.DataFrame({
+                    'Current Mean': f"{rolling_mean.iloc[-1]:.6f}",
+                    'Current Std': f"{rolling_std.iloc[-1]:.6f}",
+                    'Mean Change': f"{(rolling_mean.iloc[-1] - rolling_mean.iloc[-20]):.6f}",
+                    'Std Change': f"{(rolling_std.iloc[-1] - rolling_std.iloc[-20]):.6f}"
+                }, index=[0])
+                
+                st.dataframe(stats_df, use_container_width=True)
+            
+            with col2:
+                # Volatility clustering analysis
+                st.write("**🔗 Volatility Clustering**")
+                
+                # Calculate volatility changes
+                vol_changes = vol_data.diff().abs()
+                high_vol_threshold = vol_changes.quantile(0.8)
+                
+                clusters = []
+                cluster_start = None
+                
+                for i, change in enumerate(vol_changes):
+                    if change > high_vol_threshold:
+                        if cluster_start is None:
+                            cluster_start = i
+                    else:
+                        if cluster_start is not None:
+                            clusters.append(i - cluster_start)
+                            cluster_start = None
+                
+                if clusters:
+                    avg_cluster_length = np.mean(clusters)
+                    max_cluster_length = max(clusters)
+                    total_clusters = len(clusters)
+                else:
+                    avg_cluster_length = 0
+                    max_cluster_length = 0
+                    total_clusters = 0
+                
+                cluster_df = pd.DataFrame({
+                    'Total Clusters': [total_clusters],
+                    'Avg Length': [f"{avg_cluster_length:.1f}"],
+                    'Max Length': [max_cluster_length],
+                    'Clustering %': [f"{(sum(clusters)/len(vol_data)*100):.1f}%"]
+                })
+                
+                st.dataframe(cluster_df, use_container_width=True)
+                
+                # Stationarity test (simplified)
+                st.write("**📏 Stationarity Analysis**")
+                
+                # ADF test approximation
+                vol_diff = vol_data.diff().dropna()
+                mean_reversion = abs(vol_diff.mean()) < 0.01
+                variance_stable = vol_diff.std() < vol_data.std() * 0.5
+                
+                stationarity_df = pd.DataFrame({
+                    'Mean Reversion': ['✅' if mean_reversion else '❌'],
+                    'Variance Stable': ['✅' if variance_stable else '❌'],
+                    'Likely Stationary': ['✅' if mean_reversion and variance_stable else '❌']
+                }, index=[0])
+                
+                st.dataframe(stationarity_df, use_container_width=True)
+            
+            # Regime detection
+            st.subheader("🎭 Volatility Regime Detection")
+            
+            # Simple regime detection based on rolling statistics
+            window = 50
+            vol_data_full = pred_df['Predicted_Volatility'].tail(200)
+            rolling_mean = vol_data_full.rolling(window).mean()
+            rolling_std = vol_data_full.rolling(window).std()
+            
+            regimes = []
+            for i in range(len(vol_data_full)):
+                if i < window:
+                    regimes.append('Insufficient Data')
+                else:
+                    current_vol = vol_data_full.iloc[i]
+                    mean_val = rolling_mean.iloc[i]
+                    std_val = rolling_std.iloc[i]
+                    
+                    if current_vol > mean_val + std_val:
+                        regimes.append('High Volatility')
+                    elif current_vol < mean_val - std_val:
+                        regimes.append('Low Volatility')
+                    else:
+                        regimes.append('Normal Volatility')
+            
+            regime_counts = pd.Series(regimes).value_counts()
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Current Regime Distribution:**")
+                for regime, count in regime_counts.items():
+                    if regime != 'Insufficient Data':
+                        st.write(f"• {regime}: {count} ({count/len([r for r in regimes if r != 'Insufficient Data'])*100:.1f}%)")
+            
+            with col2:
+                # Regime transition matrix (simplified)
+                transitions = {'High→Normal': 0, 'Normal→High': 0, 'Low→Normal': 0, 'Normal→Low': 0}
+                for i in range(1, len(regimes)):
+                    if regimes[i-1] == 'High Volatility' and regimes[i] == 'Normal Volatility':
+                        transitions['High→Normal'] += 1
+                    elif regimes[i-1] == 'Normal Volatility' and regimes[i] == 'High Volatility':
+                        transitions['Normal→High'] += 1
+                    elif regimes[i-1] == 'Low Volatility' and regimes[i] == 'Normal Volatility':
+                        transitions['Low→Normal'] += 1
+                    elif regimes[i-1] == 'Normal Volatility' and regimes[i] == 'Low Volatility':
+                        transitions['Normal→Low'] += 1
+                
+                st.write("**Regime Transitions:**")
+                for transition, count in transitions.items():
+                    st.write(f"• {transition}: {count}")
 
         with metrics_tab:
-            st.subheader("Model Performance Metrics")
+            st.subheader("⚡ Model Performance Metrics")
 
             # Get model info
             model_info = model_manager.get_model_info('volatility')
             if model_info and 'metrics' in model_info:
                 metrics = model_info['metrics']
 
-                col1, col2, col3 = st.columns(3)
+                # Main performance metrics
+                st.subheader("🎯 Core Performance Metrics")
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     rmse = metrics.get('rmse', 0)
                     st.metric("RMSE", f"{rmse:.6f}")
@@ -232,20 +601,128 @@ def show_volatility_predictions(db, fresh_data):
                     st.metric("MAE", f"{mae:.6f}")
                 with col3:
                     mse = metrics.get('mse', 0)
-                    st.metric("MSE", f"{mse:.6f}")
+                    st.metric("MSE", f"{mse:.8f}")
+                with col4:
+                    r2 = metrics.get('test_r2', 0)
+                    st.metric("R² Score", f"{r2:.4f}")
 
-                # Feature importance
+                # Feature importance analysis
                 feature_importance = model_manager.get_feature_importance('volatility')
                 if feature_importance:
-                    st.subheader("Feature Importance")
+                    st.subheader("🔍 Feature Importance Analysis")
+                    
                     importance_df = pd.DataFrame(
                         list(feature_importance.items()), 
                         columns=['Feature', 'Importance']
                     ).sort_values('Importance', ascending=False)
-
-                    st.dataframe(importance_df.head(10), use_container_width=True)
+                    
+                    col1, col2 = st.columns([1, 2])
+                    
+                    with col1:
+                        st.write("**Top 15 Features:**")
+                        st.dataframe(
+                            importance_df.head(15).round(4), 
+                            use_container_width=True,
+                            column_config={
+                                "Importance": st.column_config.ProgressColumn("Importance", min_value=0, max_value=1)
+                            }
+                        )
+                    
+                    with col2:
+                        # Feature importance chart
+                        top_features = importance_df.head(10)
+                        
+                        fig = go.Figure()
+                        fig.add_trace(go.Bar(
+                            x=top_features['Importance'],
+                            y=top_features['Feature'],
+                            orientation='h',
+                            marker_color='lightblue',
+                            text=top_features['Importance'].round(3),
+                            textposition='inside'
+                        ))
+                        
+                        fig.update_layout(
+                            title="Top 10 Most Important Features",
+                            xaxis_title="Importance Score",
+                            yaxis_title="Features",
+                            height=400,
+                            template="plotly_dark"
+                        )
+                        fig.update_yaxes(categoryorder='total ascending')
+                        st.plotly_chart(fig, use_container_width=True)
+                
+                # Model complexity and training info
+                st.subheader("🏗️ Model Architecture & Training")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.write("**Model Type:** Ensemble (XGBoost + CatBoost + Random Forest)")
+                    st.write("**Features Used:** 27 technical indicators")
+                    st.write("**Training Split:** 80% train / 20% test")
+                
+                with col2:
+                    train_rmse = metrics.get('train_rmse', 0)
+                    test_rmse = metrics.get('test_rmse', 0)
+                    overfit_ratio = train_rmse / test_rmse if test_rmse > 0 else 0
+                    
+                    st.metric("Training RMSE", f"{train_rmse:.6f}")
+                    st.metric("Test RMSE", f"{test_rmse:.6f}")
+                    st.metric("Overfitting Ratio", f"{overfit_ratio:.3f}")
+                
+                with col3:
+                    train_r2 = metrics.get('train_r2', 0)
+                    test_r2 = metrics.get('test_r2', 0)
+                    generalization = test_r2 / train_r2 if train_r2 > 0 else 0
+                    
+                    st.metric("Training R²", f"{train_r2:.4f}")
+                    st.metric("Test R²", f"{test_r2:.4f}")
+                    st.metric("Generalization", f"{generalization:.3f}")
+                
+                # Feature categories breakdown
+                st.subheader("📊 Feature Categories")
+                
+                # Categorize features
+                tech_indicators = ['atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width']
+                custom_features = ['log_return', 'realized_volatility', 'parkinson_volatility', 
+                                 'high_low_ratio', 'gap_pct', 'price_vs_vwap', 'volatility_spike_flag', 'candle_body_ratio']
+                lagged_features = ['lag_volatility_1', 'lag_volatility_3', 'lag_volatility_5',
+                                 'lag_atr_1', 'lag_atr_3', 'lag_bb_width', 'volatility_regime']
+                time_features = ['hour', 'minute', 'day_of_week', 'is_post_10am', 
+                               'is_opening_range', 'is_closing_phase', 'is_weekend']
+                
+                category_importance = {}
+                for category, features in [
+                    ('Technical Indicators', tech_indicators),
+                    ('Custom Engineered', custom_features),
+                    ('Lagged Features', lagged_features),
+                    ('Time Context', time_features)
+                ]:
+                    total_importance = sum(feature_importance.get(f, 0) for f in features)
+                    category_importance[category] = total_importance
+                
+                # Category importance chart
+                categories = list(category_importance.keys())
+                importances = list(category_importance.values())
+                
+                fig = go.Figure()
+                fig.add_trace(go.Pie(
+                    labels=categories,
+                    values=importances,
+                    hole=0.4,
+                    textinfo='label+percent',
+                    textposition='outside'
+                ))
+                
+                fig.update_layout(
+                    title="Feature Importance by Category",
+                    height=400,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
             else:
-                st.info("No performance metrics available")
+                st.info("No performance metrics available. Please train the volatility model first.")
 
     except Exception as e:
         st.error(f"Error generating volatility predictions: {str(e)}")
