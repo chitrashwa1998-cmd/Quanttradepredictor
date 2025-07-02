@@ -53,21 +53,33 @@ class ModelManager:
                             }
                             print("Loaded direction model from session state")
 
-                # Check for other models in session state
-                for model_name in ['profit_probability', 'reversal']:
-                    session_key = f'{model_name.replace("_", "_")}_trained_models'
-                    if hasattr(st.session_state, session_key):
-                        session_models = getattr(st.session_state, session_key)
-                        if model_name in session_models:
-                            model_instance = session_models[model_name]
-                            if hasattr(model_instance, 'model') and model_instance.model is not None:
-                                self.trained_models[model_name] = {
-                                    'model': model_instance.model,
-                                    'scaler': model_instance.scaler,
-                                    'feature_names': getattr(model_instance, 'selected_features', []),
-                                    'task_type': 'classification'
-                                }
-                                print(f"Loaded {model_name} model from session state")
+                # Check for profit probability model in session state
+                if hasattr(st.session_state, 'profit_prob_trained_models'):
+                    profit_models = st.session_state.profit_prob_trained_models
+                    if 'profit_probability' in profit_models:
+                        profit_model_instance = profit_models['profit_probability']
+                        if hasattr(profit_model_instance, 'model') and profit_model_instance.model is not None:
+                            self.trained_models['profit_probability'] = {
+                                'model': profit_model_instance.model,
+                                'scaler': profit_model_instance.scaler,
+                                'feature_names': getattr(profit_model_instance, 'feature_names', []),
+                                'task_type': 'classification'
+                            }
+                            print("Loaded profit_probability model from session state")
+
+                # Check for reversal model in session state
+                if hasattr(st.session_state, 'reversal_trained_models'):
+                    reversal_models = st.session_state.reversal_trained_models
+                    if 'reversal' in reversal_models:
+                        reversal_model_instance = reversal_models['reversal']
+                        if hasattr(reversal_model_instance, 'model') and reversal_model_instance.model is not None:
+                            self.trained_models['reversal'] = {
+                                'model': reversal_model_instance.model,
+                                'scaler': reversal_model_instance.scaler,
+                                'feature_names': getattr(reversal_model_instance, 'feature_names', []),
+                                'task_type': 'classification'
+                            }
+                            print("Loaded reversal model from session state")
 
         except Exception as e:
             print(f"Could not load existing models: {str(e)}")
