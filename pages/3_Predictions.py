@@ -585,51 +585,26 @@ def show_volatility_predictions(db, fresh_data):
         with metrics_tab:
             st.subheader("⚡ Model Performance Metrics")
 
-            # Get model info with proper fallback handling
+            # Get model info
             model_info = model_manager.get_model_info('volatility')
             if model_info and 'metrics' in model_info:
                 metrics = model_info['metrics']
 
-                # Main performance metrics with fallback key names
+                # Main performance metrics
                 st.subheader("🎯 Core Performance Metrics")
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    rmse = metrics.get('rmse', metrics.get('test_rmse', metrics.get('RMSE', 0)))
+                    rmse = metrics.get('rmse', 0)
                     st.metric("RMSE", f"{rmse:.6f}")
                 with col2:
-                    mae = metrics.get('mae', metrics.get('test_mae', metrics.get('MAE', 0)))
+                    mae = metrics.get('mae', 0)
                     st.metric("MAE", f"{mae:.6f}")
                 with col3:
-                    mse = metrics.get('mse', metrics.get('test_mse', metrics.get('MSE', 0)))
-                    st.metric("MSE", f"{mse:.6f}")
+                    mse = metrics.get('mse', 0)
+                    st.metric("MSE", f"{mse:.8f}")
                 with col4:
-                    r2 = metrics.get('r2', metrics.get('test_r2', metrics.get('R2', 0)))
+                    r2 = metrics.get('test_r2', 0)
                     st.metric("R² Score", f"{r2:.4f}")
-                
-                # Training vs Testing Performance
-                st.subheader("📊 Training vs Testing Performance")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write("**Training Metrics:**")
-                    train_rmse = metrics.get('train_rmse', metrics.get('training_rmse', 0))
-                    train_r2 = metrics.get('train_r2', metrics.get('training_r2', 0))
-                    st.write(f"• RMSE: {train_rmse:.6f}")
-                    st.write(f"• R²: {train_r2:.4f}")
-                
-                with col2:
-                    st.write("**Testing Metrics:**")
-                    test_rmse = metrics.get('test_rmse', metrics.get('testing_rmse', rmse))
-                    test_r2 = metrics.get('test_r2', metrics.get('testing_r2', r2))
-                    st.write(f"• RMSE: {test_rmse:.6f}")
-                    st.write(f"• R²: {test_r2:.4f}")
-                
-                # Model overfitting check
-                if train_rmse > 0 and test_rmse > 0:
-                    overfitting_ratio = test_rmse / train_rmse
-                    if overfitting_ratio > 1.2:
-                        st.warning(f"⚠️ Potential overfitting detected (Test/Train RMSE ratio: {overfitting_ratio:.2f})")
-                    else:
-                        st.success(f"✅ Good generalization (Test/Train RMSE ratio: {overfitting_ratio:.2f})")
 
                 # Feature importance analysis
                 feature_importance = model_manager.get_feature_importance('volatility')
@@ -677,7 +652,7 @@ def show_volatility_predictions(db, fresh_data):
                         fig.update_yaxes(categoryorder='total ascending')
                         st.plotly_chart(fig, use_container_width=True)
                 
-                # Model architecture and training info
+                # Model complexity and training info
                 st.subheader("🏗️ Model Architecture & Training")
                 
                 col1, col2, col3 = st.columns(3)
@@ -687,75 +662,67 @@ def show_volatility_predictions(db, fresh_data):
                     st.write("**Training Split:** 80% train / 20% test")
                 
                 with col2:
-                    st.write(f"**Training RMSE:** {train_rmse:.6f}")
-                    st.write(f"**Testing RMSE:** {test_rmse:.6f}")
+                    train_rmse = metrics.get('train_rmse', 0)
+                    test_rmse = metrics.get('test_rmse', 0)
                     overfit_ratio = train_rmse / test_rmse if test_rmse > 0 else 0
-                    st.write(f"**Overfitting Ratio:** {overfit_ratio:.3f}")
                     
+                    st.metric("Training RMSE", f"{train_rmse:.6f}")
+                    st.metric("Test RMSE", f"{test_rmse:.6f}")
+                    st.metric("Overfitting Ratio", f"{overfit_ratio:.3f}")
+                
                 with col3:
-                    st.write(f"**Training R²:** {train_r2:.4f}")
-                    st.write(f"**Testing R²:** {test_r2:.4f}")
+                    train_r2 = metrics.get('train_r2', 0)
+                    test_r2 = metrics.get('test_r2', 0)
                     generalization = test_r2 / train_r2 if train_r2 > 0 else 0
-                    st.write(f"**Generalization:** {generalization:.3f}")
+                    
+                    st.metric("Training R²", f"{train_r2:.4f}")
+                    st.metric("Test R²", f"{test_r2:.4f}")
+                    st.metric("Generalization", f"{generalization:.3f}")
                 
                 # Feature categories breakdown
-                if feature_importance:
-                    st.subheader("📊 Feature Categories")
-                    
-                    # Categorize features
-                    tech_indicators = ['atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width']
-                    custom_features = ['log_return', 'realized_volatility', 'parkinson_volatility', 
-                                     'high_low_ratio', 'gap_pct', 'price_vs_vwap', 'volatility_spike_flag', 'candle_body_ratio']
-                    lagged_features = ['lag_volatility_1', 'lag_volatility_3', 'lag_volatility_5',
-                                     'lag_atr_1', 'lag_atr_3', 'lag_bb_width', 'volatility_regime']
-                    time_features = ['hour', 'minute', 'day_of_week', 'is_post_10am', 
-                                   'is_opening_range', 'is_closing_phase', 'is_weekend']
-                    
-                    category_importance = {}
-                    for category, features in [
-                        ('Technical Indicators', tech_indicators),
-                        ('Custom Engineered', custom_features),
-                        ('Lagged Features', lagged_features),
-                        ('Time Context', time_features)
-                    ]:
-                        total_importance = sum(feature_importance.get(f, 0) for f in features)
-                        category_importance[category] = total_importance
-                    
-                    # Category importance chart
-                    categories = list(category_importance.keys())
-                    importances = list(category_importance.values())
-                    
-                    if sum(importances) > 0:  # Only show if we have data
-                        fig = go.Figure()
-                        fig.add_trace(go.Pie(
-                            labels=categories,
-                            values=importances,
-                            hole=0.4,
-                            textinfo='label+percent',
-                            textposition='outside'
-                        ))
-                        
-                        fig.update_layout(
-                            title="Feature Importance by Category",
-                            height=400,
-                            template="plotly_dark"
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
+                st.subheader("📊 Feature Categories")
+                
+                # Categorize features
+                tech_indicators = ['atr', 'bb_width', 'keltner_width', 'rsi', 'donchian_width']
+                custom_features = ['log_return', 'realized_volatility', 'parkinson_volatility', 
+                                 'high_low_ratio', 'gap_pct', 'price_vs_vwap', 'volatility_spike_flag', 'candle_body_ratio']
+                lagged_features = ['lag_volatility_1', 'lag_volatility_3', 'lag_volatility_5',
+                                 'lag_atr_1', 'lag_atr_3', 'lag_bb_width', 'volatility_regime']
+                time_features = ['hour', 'minute', 'day_of_week', 'is_post_10am', 
+                               'is_opening_range', 'is_closing_phase', 'is_weekend']
+                
+                category_importance = {}
+                for category, features in [
+                    ('Technical Indicators', tech_indicators),
+                    ('Custom Engineered', custom_features),
+                    ('Lagged Features', lagged_features),
+                    ('Time Context', time_features)
+                ]:
+                    total_importance = sum(feature_importance.get(f, 0) for f in features)
+                    category_importance[category] = total_importance
+                
+                # Category importance chart
+                categories = list(category_importance.keys())
+                importances = list(category_importance.values())
+                
+                fig = go.Figure()
+                fig.add_trace(go.Pie(
+                    labels=categories,
+                    values=importances,
+                    hole=0.4,
+                    textinfo='label+percent',
+                    textposition='outside'
+                ))
+                
+                fig.update_layout(
+                    title="Feature Importance by Category",
+                    height=400,
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
                 
             else:
-                st.warning("⚠️ No model performance metrics available. Please train the volatility model first.")
-                
-                # Show available model info for debugging
-                available_models = model_manager.get_trained_models()
-                if available_models:
-                    st.info(f"Available trained models: {', '.join(available_models)}")
-                    
-                    # Show what's in the model info
-                    if model_info:
-                        st.write("**Available model info keys:**")
-                        st.write(list(model_info.keys()))
-                else:
-                    st.info("No trained models found. Please train models in the Model Training page.")
+                st.info("No performance metrics available. Please train the volatility model first.")
 
     except Exception as e:
         st.error(f"Error generating volatility predictions: {str(e)}")
