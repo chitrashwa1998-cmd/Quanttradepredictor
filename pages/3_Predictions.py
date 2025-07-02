@@ -475,47 +475,91 @@ def show_profit_predictions(db, fresh_data):
             'Time': datetime_index.strftime('%H:%M:%S')
         }, index=datetime_index)
 
-        # Display recent predictions
-        recent_predictions = pred_df.tail(100)
+        # Remove rows with NaN predictions for display
+        pred_df = pred_df.dropna(subset=['Profit_Probability'])
 
-        st.subheader("Recent Profit Probability Predictions")
+        if len(pred_df) == 0:
+            st.error("No valid predictions generated")
+            return
 
-        if len(recent_predictions) > 0:
-            st.dataframe(recent_predictions, use_container_width=True)
+        # Create sub-tabs for different views
+        chart_tab, data_tab, metrics_tab = st.tabs(["📈 Interactive Chart", "📋 Detailed Data", "📊 Performance Metrics"])
 
-            # Create chart
-            fig = go.Figure()
+        with chart_tab:
+            st.subheader("Profit Probability Prediction Chart")
+            recent_predictions = pred_df.tail(100)
 
-            # Add high profit signals
-            high_profit = recent_predictions[recent_predictions['Profit_Probability'] == 'High Profit']
-            if len(high_profit) > 0:
-                fig.add_trace(go.Scatter(
-                    x=high_profit['DateTime'],
-                    y=[1] * len(high_profit),
-                    mode='markers',
-                    name='High Profit',
-                    marker=dict(color='green', size=10)
-                ))
+            if len(recent_predictions) > 0:
+                fig = go.Figure()
 
-            # Add low profit signals
-            low_profit = recent_predictions[recent_predictions['Profit_Probability'] == 'Low Profit']
-            if len(low_profit) > 0:
-                fig.add_trace(go.Scatter(
-                    x=low_profit['DateTime'],
-                    y=[0] * len(low_profit),
-                    mode='markers',
-                    name='Low Profit',
-                    marker=dict(color='red', size=10)
-                ))
+                # Add high profit signals
+                high_profit = recent_predictions[recent_predictions['Profit_Probability'] == 'High Profit']
+                if len(high_profit) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=high_profit['DateTime'],
+                        y=[1] * len(high_profit),
+                        mode='markers',
+                        name='High Profit',
+                        marker=dict(color='green', size=10)
+                    ))
 
-            fig.update_layout(
-                title="Profit Probability Predictions - Last 100 Data Points",
-                xaxis_title="DateTime",
-                yaxis_title="Profit Probability (1=High, 0=Low)",
-                height=500
-            )
+                # Add low profit signals
+                low_profit = recent_predictions[recent_predictions['Profit_Probability'] == 'Low Profit']
+                if len(low_profit) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=low_profit['DateTime'],
+                        y=[0] * len(low_profit),
+                        mode='markers',
+                        name='Low Profit',
+                        marker=dict(color='red', size=10)
+                    ))
 
-            st.plotly_chart(fig, use_container_width=True)
+                fig.update_layout(
+                    title="Profit Probability Predictions - Last 100 Data Points",
+                    xaxis_title="DateTime",
+                    yaxis_title="Profit Probability (1=High, 0=Low)",
+                    height=500
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+        with data_tab:
+            st.subheader("Detailed Prediction Data")
+            recent_predictions = pred_df.tail(200)
+            st.dataframe(recent_predictions[['Date', 'Time', 'Profit_Probability', 'Confidence']], use_container_width=True)
+
+        with metrics_tab:
+            st.subheader("Model Performance Metrics")
+
+            # Get model info
+            model_info = model_manager.get_model_info('profit_probability')
+            if model_info and 'metrics' in model_info:
+                metrics = model_info['metrics']
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    accuracy = metrics.get('accuracy', 0)
+                    st.metric("Accuracy", f"{accuracy:.2%}")
+                with col2:
+                    classification_metrics = metrics.get('classification_report', {})
+                    precision = classification_metrics.get('weighted avg', {}).get('precision', 0)
+                    st.metric("Precision", f"{precision:.2%}")
+                with col3:
+                    recall = classification_metrics.get('weighted avg', {}).get('recall', 0)
+                    st.metric("Recall", f"{recall:.2%}")
+
+                # Feature importance
+                feature_importance = model_manager.get_feature_importance('profit_probability')
+                if feature_importance:
+                    st.subheader("Feature Importance")
+                    importance_df = pd.DataFrame(
+                        list(feature_importance.items()), 
+                        columns=['Feature', 'Importance']
+                    ).sort_values('Importance', ascending=False)
+
+                    st.dataframe(importance_df.head(10), use_container_width=True)
+            else:
+                st.info("No performance metrics available")
 
     except Exception as e:
         st.error(f"Error generating profit probability predictions: {str(e)}")
