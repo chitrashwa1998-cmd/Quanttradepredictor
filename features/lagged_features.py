@@ -29,18 +29,16 @@ def add_volatility_lagged_features(df):
     if 'bb_width' in df.columns:
         df['lag_bb_width'] = df['bb_width'].shift(1)
 
-    # Volatility regime classification (5 regimes)
+    # Volatility regime classification
     if 'realized_volatility' in df.columns:
         vol_20 = df['realized_volatility'].rolling(20).mean()
         vol_std = df['realized_volatility'].rolling(20).std()
 
         conditions = [
-            df['realized_volatility'] < (vol_20 - 1.5 * vol_std),  # Very Low
-            df['realized_volatility'] < (vol_20 - 0.5 * vol_std),  # Low
-            df['realized_volatility'] > (vol_20 + 1.5 * vol_std),  # Very High
-            df['realized_volatility'] > (vol_20 + 0.5 * vol_std)   # High
+            df['realized_volatility'] < (vol_20 - 0.5 * vol_std),
+            df['realized_volatility'] > (vol_20 + 0.5 * vol_std)
         ]
-        choices = [0, 1, 4, 3]  # 0=very low, 1=low, 2=medium, 3=high, 4=very high
-        df['volatility_regime'] = np.select(conditions, choices, default=2)
+        choices = [0, 2]  # 0=low, 1=medium, 2=high
+        df['volatility_regime'] = np.select(conditions, choices, default=1)
 
     return df
