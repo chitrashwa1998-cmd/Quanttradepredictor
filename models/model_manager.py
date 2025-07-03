@@ -35,51 +35,64 @@ class ModelManager:
                         model_data = loaded_models[model_name]
                         if 'task_type' not in model_data:
                             model_data['task_type'] = 'regression' if model_name == 'volatility' else 'classification'
+                        
+                        # Ensure model has all required keys
+                        if 'model' not in model_data and 'ensemble' in model_data:
+                            model_data['model'] = model_data['ensemble']
+                        
                         self.trained_models[model_name] = model_data
-                        print(f"Loaded {model_name} model from database")
+                        print(f"✅ Loaded {model_name} model from database with {len(model_data.get('feature_names', []))} features")
 
-            # Also check session state for direction model specifically
+            # Also check session state for any models not loaded from database
             if hasattr(st, 'session_state'):
-                if hasattr(st.session_state, 'direction_trained_models') and st.session_state.direction_trained_models:
-                    if 'direction' in st.session_state.direction_trained_models:
-                        direction_model_instance = st.session_state.direction_trained_models['direction']
-                        if hasattr(direction_model_instance, 'model') and direction_model_instance.model is not None:
-                            # Convert model instance to the format expected by ModelManager
-                            self.trained_models['direction'] = {
-                                'model': direction_model_instance.model,
-                                'scaler': direction_model_instance.scaler,
-                                'feature_names': getattr(direction_model_instance, 'selected_features', []),
-                                'task_type': 'classification'
-                            }
-                            print("Loaded direction model from session state")
+                # Only load from session state if not already loaded from database
+                if 'direction' not in self.trained_models:
+                    if hasattr(st.session_state, 'direction_trained_models') and st.session_state.direction_trained_models:
+                        if 'direction' in st.session_state.direction_trained_models:
+                            direction_model_instance = st.session_state.direction_trained_models['direction']
+                            if hasattr(direction_model_instance, 'model') and direction_model_instance.model is not None:
+                                self.trained_models['direction'] = {
+                                    'model': direction_model_instance.model,
+                                    'scaler': direction_model_instance.scaler,
+                                    'feature_names': getattr(direction_model_instance, 'selected_features', []),
+                                    'task_type': 'classification'
+                                }
+                                print("✅ Loaded direction model from session state")
 
                 # Check for profit probability model in session state
-                if hasattr(st.session_state, 'profit_prob_trained_models'):
-                    profit_models = st.session_state.profit_prob_trained_models
-                    if 'profit_probability' in profit_models:
-                        profit_model_instance = profit_models['profit_probability']
-                        if hasattr(profit_model_instance, 'model') and profit_model_instance.model is not None:
-                            self.trained_models['profit_probability'] = {
-                                'model': profit_model_instance.model,
-                                'scaler': profit_model_instance.scaler,
-                                'feature_names': getattr(profit_model_instance, 'feature_names', []),
-                                'task_type': 'classification'
-                            }
-                            print("Loaded profit_probability model from session state")
+                if 'profit_probability' not in self.trained_models:
+                    if hasattr(st.session_state, 'profit_prob_trained_models'):
+                        profit_models = st.session_state.profit_prob_trained_models
+                        if 'profit_probability' in profit_models:
+                            profit_model_instance = profit_models['profit_probability']
+                            if hasattr(profit_model_instance, 'model') and profit_model_instance.model is not None:
+                                self.trained_models['profit_probability'] = {
+                                    'model': profit_model_instance.model,
+                                    'scaler': profit_model_instance.scaler,
+                                    'feature_names': getattr(profit_model_instance, 'feature_names', []),
+                                    'task_type': 'classification'
+                                }
+                                print("✅ Loaded profit_probability model from session state")
 
                 # Check for reversal model in session state
-                if hasattr(st.session_state, 'reversal_trained_models'):
-                    reversal_models = st.session_state.reversal_trained_models
-                    if 'reversal' in reversal_models:
-                        reversal_model_instance = reversal_models['reversal']
-                        if hasattr(reversal_model_instance, 'model') and reversal_model_instance.model is not None:
-                            self.trained_models['reversal'] = {
-                                'model': reversal_model_instance.model,
-                                'scaler': reversal_model_instance.scaler,
-                                'feature_names': getattr(reversal_model_instance, 'feature_names', []),
-                                'task_type': 'classification'
-                            }
-                            print("Loaded reversal model from session state")
+                if 'reversal' not in self.trained_models:
+                    if hasattr(st.session_state, 'reversal_trained_models'):
+                        reversal_models = st.session_state.reversal_trained_models
+                        if 'reversal' in reversal_models:
+                            reversal_model_instance = reversal_models['reversal']
+                            if hasattr(reversal_model_instance, 'model') and reversal_model_instance.model is not None:
+                                self.trained_models['reversal'] = {
+                                    'model': reversal_model_instance.model,
+                                    'scaler': reversal_model_instance.scaler,
+                                    'feature_names': getattr(reversal_model_instance, 'feature_names', []),
+                                    'task_type': 'classification'
+                                }
+                                print("✅ Loaded reversal model from session state")
+                
+                # Update session state with loaded models
+                if self.trained_models:
+                    st.session_state.trained_models = self.trained_models
+                    print(f"✅ Restored {len(self.trained_models)} trained models to session state")
 
         except Exception as e:
             print(f"Could not load existing models: {str(e)}")
@@ -356,22 +369,30 @@ class ModelManager:
             models_to_save = {}
             for model_name in self.trained_models:
                 model_data = self.trained_models[model_name]
-                if 'model' in model_data:
-                    models_to_save[model_name] = {
-                        'ensemble': model_data['model'],
-                        'scaler': model_data.get('scaler'),
-                        'feature_names': model_data.get('feature_names', []),
-                        'task_type': model_data.get('task_type', 'regression'),
-                        'metrics': model_data.get('metrics', {}),  # Include metrics!
-                        'feature_importance': model_data.get('feature_importance', {})  # Include feature importance!
-                    }
+                if 'model' in model_data or 'ensemble' in model_data:
+                    # Handle both 'model' and 'ensemble' keys
+                    model_obj = model_data.get('model') or model_data.get('ensemble')
+                    if model_obj is not None:
+                        models_to_save[model_name] = {
+                            'ensemble': model_obj,
+                            'scaler': model_data.get('scaler'),
+                            'feature_names': model_data.get('feature_names', []),
+                            'task_type': model_data.get('task_type', 'regression'),
+                            'metrics': model_data.get('metrics', {}),
+                            'feature_importance': model_data.get('feature_importance', {})
+                        }
+                        print(f"✅ Prepared {model_name} model for database save")
 
             if models_to_save:
                 success = db.save_trained_models(models_to_save)
                 if success:
-                    print(f"Saved models to database")
+                    print(f"✅ Saved {len(models_to_save)} models to database: {list(models_to_save.keys())}")
                 else:
-                    print("Failed to save models to database")
+                    print("❌ Failed to save models to database")
+            else:
+                print("⚠️ No models to save to database")
 
         except Exception as e:
-            print(f"Error saving models to database: {str(e)}")
+            print(f"❌ Error saving models to database: {str(e)}")
+            import traceback
+            traceback.print_exc()
