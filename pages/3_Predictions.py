@@ -599,17 +599,16 @@ def show_volatility_predictions(db, fresh_data):
             # Get model info with debug information
             model_info = model_manager.get_model_info('volatility')
             
+            # Debug: Show what's actually in model_info
             if model_info:
-                st.write("**Debug: Available model info keys:**")
-                st.code(f"{list(model_info.keys())}")
+                st.write("**Debug: Available model info keys:**", list(model_info.keys()))
                 
-                # Enhanced metrics detection with comprehensive fallback locations
+                # Enhanced metrics detection with multiple fallback locations
                 metrics = None
                 metrics_location = ""
                 
-                # Primary locations to check
-                primary_locations = ['metrics', 'training_metrics', 'performance']
-                for location in primary_locations:
+                # Primary locations
+                for location in ['metrics', 'training_metrics', 'performance']:
                     if location in model_info and isinstance(model_info[location], dict):
                         candidate_metrics = model_info[location]
                         if any(key in candidate_metrics for key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse']):
@@ -618,77 +617,23 @@ def show_volatility_predictions(db, fresh_data):
                             st.success(f"✅ Found metrics in '{location}' key")
                             break
                 
-                # Check if training_results contains the metrics
-                if not metrics and 'training_results' in model_info:
-                    training_results = model_info['training_results']
-                    if isinstance(training_results, dict):
-                        for location in primary_locations:
-                            if location in training_results and isinstance(training_results[location], dict):
-                                candidate_metrics = training_results[location]
-                                if any(key in candidate_metrics for key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse']):
-                                    metrics = candidate_metrics
-                                    metrics_location = f"training_results.{location}"
-                                    st.success(f"✅ Found metrics in '{metrics_location}'")
-                                    break
-                        
-                        # Also check if training_results itself contains metrics
-                        if not metrics and any(key in training_results for key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse']):
-                            metrics = {k: v for k, v in training_results.items() if k in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse', 'train_r2', 'test_r2']}
-                            metrics_location = "training_results (direct)"
-                            st.success(f"✅ Found metrics in '{metrics_location}'")
-                
-                # Final fallback: check top-level model_info for direct metrics
+                # Secondary search through all nested dictionaries
                 if not metrics:
-                    top_level_metrics = {}
-                    for key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse', 'train_r2', 'test_r2']:
-                        if key in model_info:
-                            top_level_metrics[key] = model_info[key]
-                    if top_level_metrics:
-                        metrics = top_level_metrics
-                        metrics_location = "top-level keys"
-                        st.success(f"✅ Found metrics in '{metrics_location}'")
+                    st.info("🔍 Searching through all nested data structures...")
+                    for key, value in model_info.items():
+                        if isinstance(value, dict) and value:
+                            st.write(f"**Checking '{key}':** {list(value.keys())[:10]}")  # Show first 10 keys
+                            if any(metric_key in value for metric_key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse']):
+                                metrics = value
+                                metrics_location = key
+                                st.success(f"✅ Found metrics in '{key}' key")
+                                break
                 
-                # Check all nested dictionaries recursively
-                if not metrics:
-                    st.info("🔍 Metrics not found in standard locations, checking alternative sources...")
-                    
-                    def find_metrics_recursive(data, path=""):
-                        if isinstance(data, dict):
-                            # Check current level for metrics
-                            if any(key in data for key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse']):
-                                return data, path if path else "root level"' in model_info:
-                    training_results = model_info['training_results']
-                    if isinstance(training_results, dict):
-                        for location in primary_locations:
-                            if location in training_results and isinstance(training_results[location], dict):
-                                candidate_metrics = training_results[location]
-                                if any(key in candidate_metrics for key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse']):
-                                    metrics = candidate_metrics
-                                    metrics_location = f"training_results.{location}"
-                                    st.success(f"✅ Found metrics in '{metrics_location}'")
-                                    break
-                
-                # Check all nested dictionaries recursively
-                if not metrics:
-                    st.info("🔍 Metrics not found in standard locations, checking alternative sources...")
-                    
-                    def find_metrics_recursive(data, path=""):
-                        if isinstance(data, dict):
-                            # Check current level for metrics
-                            if any(key in data for key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse']):
-                                return data, path if path else "root level"
-                            
-                            # Recursively check nested dictionaries
-                            for key, value in data.items():
-                                if isinstance(value, dict):
-                                    result, found_path = find_metrics_recursive(value, f"{path}.{key}" if path else key)
-                                    if result:
-                                        return result, found_path
-                        return None, ""
-                    
-                    metrics, metrics_location = find_metrics_recursive(model_info)
-                    if metrics:
-                        st.success(f"✅ Found metrics in '{metrics_location}'")
+                # Last resort: check if model_info itself contains metrics
+                if not metrics and any(key in model_info for key in ['rmse', 'r2', 'mae', 'mse']):
+                    metrics = model_info
+                    metrics_location = "root level"
+                    st.success("✅ Found metrics at root level")
 
                 if metrics:
                     st.write("**Available metric keys:**", list(metrics.keys()) if isinstance(metrics, dict) else "Not a dictionary")

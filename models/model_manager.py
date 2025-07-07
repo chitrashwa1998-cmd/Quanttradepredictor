@@ -47,31 +47,6 @@ class ModelManager:
                             for key, value in training_results.items():
                                 if key not in model_data:
                                     model_data[key] = value
-                            
-                            # Ensure metrics are available at top level for easy access
-                            if 'metrics' not in model_data and 'metrics' in training_results:
-                                model_data['metrics'] = training_results['metrics']
-                        
-                        # Additional metrics extraction for volatility model
-                        if model_name == 'volatility':
-                            # Extract metrics from various possible locations
-                            if 'metrics' not in model_data:
-                                # Try to extract from training_results first
-                                if 'training_results' in model_data and isinstance(model_data['training_results'], dict):
-                                    tr = model_data['training_results']
-                                    if 'metrics' in tr:
-                                        model_data['metrics'] = tr['metrics']
-                                    elif any(k in tr for k in ['rmse', 'r2', 'mae', 'mse']):
-                                        model_data['metrics'] = {k: v for k, v in tr.items() if k in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse', 'train_r2', 'test_r2']}
-                                
-                                # Try to extract from top-level keys
-                                if 'metrics' not in model_data:
-                                    top_level_metrics = {}
-                                    for key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse', 'train_r2', 'test_r2']:
-                                        if key in model_data:
-                                            top_level_metrics[key] = model_data[key]
-                                    if top_level_metrics:
-                                        model_data['metrics'] = top_level_metrics
                         
                         self.trained_models[model_name] = model_data
                         print(f"✅ Loaded {model_name} model from database with {len(model_data.get('feature_names', []))} features")
@@ -414,15 +389,6 @@ class ModelManager:
                                 if key in model_data and isinstance(model_data[key], dict):
                                     metrics = model_data[key]
                                     break
-                            
-                            # If still no metrics, try to extract from top-level keys
-                            if not metrics:
-                                top_level_metrics = {}
-                                for key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse', 'train_r2', 'test_r2']:
-                                    if key in model_data:
-                                        top_level_metrics[key] = model_data[key]
-                                if top_level_metrics:
-                                    metrics = top_level_metrics
                         
                         models_to_save[model_name] = {
                             'ensemble': model_obj,
