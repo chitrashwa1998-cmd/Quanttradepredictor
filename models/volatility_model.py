@@ -249,7 +249,7 @@ class VolatilityModel:
             'r2': test_r2
         }
 
-        return {
+        training_results = {
             'model': ensemble_model,
             'ensemble': ensemble_model,  # Ensure both keys exist
             'scaler': self.scaler,
@@ -275,6 +275,12 @@ class VolatilityModel:
             'mse': np.mean((y_test - y_pred_test) ** 2),
             'r2': test_r2
         }
+        
+        # Print debug info to verify metrics are included
+        print(f"✅ Volatility model trained with metrics: {list(metrics_dict.keys())}")
+        print(f"✅ Training results keys: {list(training_results.keys())}")
+        
+        return training_results
 
     def predict(self, X: pd.DataFrame) -> Tuple[np.ndarray, None]:
         """Make predictions using trained volatility model."""
