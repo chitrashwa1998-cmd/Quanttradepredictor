@@ -603,29 +603,37 @@ def show_volatility_predictions(db, fresh_data):
             if model_info:
                 st.write("**Debug: Available model info keys:**", list(model_info.keys()))
                 
-                # Try to find metrics in various possible locations
+                # Enhanced metrics detection with multiple fallback locations
                 metrics = None
-                if 'metrics' in model_info:
-                    metrics = model_info['metrics']
-                    st.success("✅ Found metrics in 'metrics' key")
-                elif 'training_metrics' in model_info:
-                    metrics = model_info['training_metrics']
-                    st.success("✅ Found metrics in 'training_metrics' key")
-                elif 'performance' in model_info:
-                    metrics = model_info['performance']
-                    st.success("✅ Found metrics in 'performance' key")
-                else:
-                    # Try to extract from console logs or other sources
-                    st.info("🔍 Metrics not found in standard locations, checking alternative sources...")
-                    
-                    # Check if we can find any numerical performance data
+                metrics_location = ""
+                
+                # Primary locations
+                for location in ['metrics', 'training_metrics', 'performance']:
+                    if location in model_info and isinstance(model_info[location], dict):
+                        candidate_metrics = model_info[location]
+                        if any(key in candidate_metrics for key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse']):
+                            metrics = candidate_metrics
+                            metrics_location = location
+                            st.success(f"✅ Found metrics in '{location}' key")
+                            break
+                
+                # Secondary search through all nested dictionaries
+                if not metrics:
+                    st.info("🔍 Searching through all nested data structures...")
                     for key, value in model_info.items():
-                        if isinstance(value, dict):
-                            st.write(f"**Found nested data in '{key}':**", list(value.keys()) if value else "Empty")
-                            if any(metric_key in value for metric_key in ['rmse', 'r2', 'mae', 'mse']):
+                        if isinstance(value, dict) and value:
+                            st.write(f"**Checking '{key}':** {list(value.keys())[:10]}")  # Show first 10 keys
+                            if any(metric_key in value for metric_key in ['rmse', 'r2', 'mae', 'mse', 'train_rmse', 'test_rmse']):
                                 metrics = value
+                                metrics_location = key
                                 st.success(f"✅ Found metrics in '{key}' key")
                                 break
+                
+                # Last resort: check if model_info itself contains metrics
+                if not metrics and any(key in model_info for key in ['rmse', 'r2', 'mae', 'mse']):
+                    metrics = model_info
+                    metrics_location = "root level"
+                    st.success("✅ Found metrics at root level")
 
                 if metrics:
                     st.write("**Available metric keys:**", list(metrics.keys()) if isinstance(metrics, dict) else "Not a dictionary")

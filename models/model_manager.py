@@ -40,6 +40,14 @@ class ModelManager:
                         if 'model' not in model_data and 'ensemble' in model_data:
                             model_data['model'] = model_data['ensemble']
                         
+                        # Restore training results if available
+                        if 'training_results' in model_data:
+                            training_results = model_data['training_results']
+                            # Merge training results back into model_data
+                            for key, value in training_results.items():
+                                if key not in model_data:
+                                    model_data[key] = value
+                        
                         self.trained_models[model_name] = model_data
                         print(f"✅ Loaded {model_name} model from database with {len(model_data.get('feature_names', []))} features")
 
@@ -373,15 +381,26 @@ class ModelManager:
                     # Handle both 'model' and 'ensemble' keys
                     model_obj = model_data.get('model') or model_data.get('ensemble')
                     if model_obj is not None:
+                        # Ensure metrics are properly extracted and saved
+                        metrics = model_data.get('metrics', {})
+                        if not metrics:
+                            # Try to find metrics in alternative locations
+                            for key in ['training_metrics', 'performance', 'results']:
+                                if key in model_data and isinstance(model_data[key], dict):
+                                    metrics = model_data[key]
+                                    break
+                        
                         models_to_save[model_name] = {
                             'ensemble': model_obj,
                             'scaler': model_data.get('scaler'),
                             'feature_names': model_data.get('feature_names', []),
                             'task_type': model_data.get('task_type', 'regression'),
-                            'metrics': model_data.get('metrics', {}),
-                            'feature_importance': model_data.get('feature_importance', {})
+                            'metrics': metrics,
+                            'feature_importance': model_data.get('feature_importance', {}),
+                            # Preserve all original data for debugging
+                            'training_results': model_data
                         }
-                        print(f"✅ Prepared {model_name} model for database save")
+                        print(f"✅ Prepared {model_name} model for database save with metrics: {list(metrics.keys())}")
 
             if models_to_save:
                 success = db.save_trained_models(models_to_save)

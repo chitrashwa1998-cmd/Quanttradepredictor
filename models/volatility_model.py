@@ -238,19 +238,26 @@ class VolatilityModel:
         except Exception as e:
             print(f"Could not extract feature importance: {e}")
 
+        metrics_dict = {
+            'train_rmse': train_rmse,
+            'test_rmse': test_rmse,
+            'train_r2': train_r2,
+            'test_r2': test_r2,
+            'rmse': test_rmse,
+            'mae': np.mean(np.abs(y_test - y_pred_test)),
+            'mse': np.mean((y_test - y_pred_test) ** 2),
+            'r2': test_r2
+        }
+
         return {
             'model': ensemble_model,
+            'ensemble': ensemble_model,  # Ensure both keys exist
             'scaler': self.scaler,
             'feature_names': self.feature_names,
-            'metrics': {
-                'train_rmse': train_rmse,
-                'test_rmse': test_rmse,
-                'train_r2': train_r2,
-                'test_r2': test_r2,
-                'rmse': test_rmse,
-                'mae': np.mean(np.abs(y_test - y_pred_test)),
-                'mse': np.mean((y_test - y_pred_test) ** 2)
-            },
+            'task_type': 'regression',
+            'metrics': metrics_dict,
+            'training_metrics': metrics_dict,  # Backup location
+            'performance': metrics_dict,       # Another backup location
             'feature_importance': feature_importance,
             'predictions': {
                 'train': y_pred_train,
