@@ -47,6 +47,10 @@ class ModelManager:
                             for key, value in training_results.items():
                                 if key not in model_data:
                                     model_data[key] = value
+                            
+                            # Ensure metrics are available at top level for easy access
+                            if 'metrics' not in model_data and 'metrics' in training_results:
+                                model_data['metrics'] = training_results['metrics']
                         
                         self.trained_models[model_name] = model_data
                         print(f"✅ Loaded {model_name} model from database with {len(model_data.get('feature_names', []))} features")
