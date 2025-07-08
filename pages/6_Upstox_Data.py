@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -52,9 +51,9 @@ if not st.session_state.upstox_authenticated:
     **Step 1:** Click the button below to authenticate with your Upstox account.
     You'll be redirected to Upstox login page and then brought back here.
     """)
-    
+
     col1, col2 = st.columns([1, 3])
-    
+
     with col1:
         if st.button("🚀 Login to Upstox", type="primary"):
             try:
@@ -64,39 +63,27 @@ if not st.session_state.upstox_authenticated:
                 st.success("Redirecting to Upstox login...")
             except Exception as e:
                 st.error(f"Error creating login URL: {str(e)}")
-    
+
     with col2:
         st.info("🔒 Your credentials are stored securely and used only for data fetching.")
 
 else:
     # Authenticated UI
     st.success("✅ Connected to Upstox API")
-    
+
     # Initialize client with stored token
     if st.session_state.upstox_client is None:
         upstox_client = UpstoxClient()
         upstox_client.set_access_token(st.session_state.upstox_access_token)
         st.session_state.upstox_client = upstox_client
-    
+
     upstox_client = st.session_state.upstox_client
-    
-    # Test connection
-    connection_status = upstox_client.test_connection()
-    if connection_status:
-        st.success("🟢 API Connection Active")
-    else:
-        st.warning("🟡 API Connection Issues - Token may have expired")
-        if st.button("Re-authenticate"):
-            st.session_state.upstox_authenticated = False
-            st.session_state.upstox_client = None
-            st.session_state.upstox_access_token = None
-            st.rerun()
 
     # Data Fetching Section
     st.header("📊 NIFTY 50 Data Management")
-    
+
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         data_period = st.selectbox(
             "Historical Data Period",
@@ -104,7 +91,7 @@ else:
             index=2,
             help="Number of days of historical data to fetch"
         )
-    
+
     with col2:
         interval = st.selectbox(
             "Candle Interval",
@@ -112,33 +99,33 @@ else:
             index=0,
             help="Timeframe for OHLC candles"
         )
-    
+
     with col3:
         auto_update = st.checkbox(
             "Auto-refresh every 5 minutes",
             value=False,
             help="Automatically fetch new data every 5 minutes"
         )
-    
+
     # Fetch Data Button
     col1, col2, col3 = st.columns([1, 1, 2])
-    
+
     with col1:
         if st.button("📡 Fetch NIFTY 50 Data", type="primary"):
             with st.spinner(f"Fetching {data_period} days of {interval} NIFTY 50 data..."):
                 try:
                     df = upstox_client.fetch_nifty50_data(days=data_period, interval=interval)
-                    
+
                     if df is not None and len(df) > 0:
                         # Store in session state
                         st.session_state.data = df
-                        
+
                         # Auto-save to database
                         save_success = trading_db.save_ohlc_data(df, "upstox_nifty50", preserve_full_data=True)
-                        
+
                         if save_success:
                             st.success(f"✅ Fetched {len(df)} records and saved to database!")
-                            
+
                             # Auto-calculate technical indicators
                             with st.spinner("Calculating technical indicators..."):
                                 features_data = TechnicalIndicators.calculate_all_indicators(df)
@@ -146,37 +133,37 @@ else:
                                 st.success("✅ Technical indicators calculated!")
                         else:
                             st.warning("⚠️ Data fetched but failed to save to database")
-                        
+
                         st.rerun()
                     else:
                         st.error("❌ No data received from Upstox API")
-                        
+
                 except Exception as e:
                     st.error(f"❌ Error fetching data: {str(e)}")
-    
+
     with col2:
         if st.button("🔄 Get Live Quote"):
             with st.spinner("Fetching live NIFTY 50 quote..."):
                 try:
                     quote = upstox_client.get_live_quote("NSE_INDEX|Nifty 50")
-                    
+
                     if quote:
                         st.json(quote)
                     else:
                         st.error("❌ Failed to get live quote")
-                        
+
                 except Exception as e:
                     st.error(f"❌ Error getting live quote: {str(e)}")
-    
+
     # Display current data if available
     if st.session_state.data is not None:
         df = st.session_state.data
-        
+
         st.header("📈 Current Dataset Overview")
-        
+
         # Data summary
         col1, col2, col3, col4 = st.columns(4)
-        
+
         with col1:
             st.metric("Total Records", len(df))
         with col2:
@@ -186,17 +173,17 @@ else:
         with col4:
             daily_change = ((df['Close'].iloc[-1] - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100)
             st.metric("Last Change", f"{daily_change:.2f}%")
-        
+
         # Chart
         st.subheader("📊 NIFTY 50 Price Chart")
-        
+
         # Chart controls
         col1, col2 = st.columns(2)
         with col1:
             chart_type = st.selectbox("Chart Type", ["Candlestick", "Line"], key="chart_type")
         with col2:
             show_volume = st.checkbox("Show Volume", value=True, key="show_volume")
-        
+
         # Create chart
         if show_volume:
             fig = make_subplots(
@@ -208,7 +195,7 @@ else:
             )
         else:
             fig = go.Figure()
-        
+
         if chart_type == "Candlestick":
             candlestick = go.Candlestick(
                 x=df.index,
@@ -218,7 +205,7 @@ else:
                 close=df['Close'],
                 name="NIFTY 50"
             )
-            
+
             if show_volume:
                 fig.add_trace(candlestick, row=1, col=1)
             else:
@@ -231,12 +218,12 @@ else:
                 name='NIFTY 50 Close',
                 line=dict(color='#00ffff', width=2)
             )
-            
+
             if show_volume:
                 fig.add_trace(line_chart, row=1, col=1)
             else:
                 fig.add_trace(line_chart)
-        
+
         # Add volume if requested
         if show_volume and 'Volume' in df.columns:
             fig.add_trace(go.Bar(
@@ -245,7 +232,7 @@ else:
                 name='Volume',
                 marker_color='rgba(158,202,225,0.6)'
             ), row=2, col=1)
-        
+
         fig.update_layout(
             title="NIFTY 50 Real-time Data",
             xaxis_title="DateTime",
@@ -254,13 +241,13 @@ else:
             xaxis_rangeslider_visible=False,
             template="plotly_dark"
         )
-        
+
         st.plotly_chart(fig, use_container_width=True)
-        
+
         # Data table
         st.subheader("📋 Recent Data")
         st.dataframe(df.tail(20), use_container_width=True)
-        
+
         # Integration info
         st.info("💡 **Next Steps**: Your Upstox data is now loaded! Go to **Model Training** to train AI models with this live data, or **Predictions** to generate forecasts.")
 
