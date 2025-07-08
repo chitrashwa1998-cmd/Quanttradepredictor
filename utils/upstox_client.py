@@ -293,7 +293,7 @@ class UpstoxWebSocketClient:
     def on_open(self, ws):
         """WebSocket connection opened."""
         self.is_connected = True
-        st.success("🔗 WebSocket connected!")
+        print("🔗 WebSocket connection opened successfully!")
         
         # Subscribe to NIFTY 50
         subscribe_message = {
@@ -305,6 +305,7 @@ class UpstoxWebSocketClient:
             }
         }
         
+        print(f"📡 Sending subscription message: {subscribe_message}")
         ws.send(json.dumps(subscribe_message))
 
     def on_message(self, ws, message):
@@ -345,7 +346,15 @@ class UpstoxWebSocketClient:
     def on_close(self, ws, close_status_code, close_msg):
         """WebSocket connection closed."""
         self.is_connected = False
-        st.warning("🔌 WebSocket disconnected")
+        print(f"🔌 WebSocket disconnected - Status: {close_status_code}, Message: {close_msg}")
+        
+        # Check for authentication errors
+        if close_status_code == 1006:
+            print("❌ WebSocket closed abnormally - likely authentication issue")
+        elif close_status_code == 1000:
+            print("✅ WebSocket closed normally")
+        else:
+            print(f"⚠️ WebSocket closed with code: {close_status_code}")
 
     def disconnect(self):
         """Disconnect from WebSocket."""

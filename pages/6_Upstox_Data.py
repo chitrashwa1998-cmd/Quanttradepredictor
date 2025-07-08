@@ -90,6 +90,15 @@ if not st.session_state.upstox_authenticated:
 else:
     # Authenticated UI
     st.success("✅ Connected to Upstox API")
+    
+    # Debug: Show token status
+    with st.expander("🔍 Debug Token Information"):
+        st.write(f"**Token Available:** {'✅ Yes' if st.session_state.upstox_access_token else '❌ No'}")
+        if st.session_state.upstox_access_token:
+            st.write(f"**Token Length:** {len(st.session_state.upstox_access_token)}")
+            st.write(f"**Token Preview:** {st.session_state.upstox_access_token[:20]}...")
+        else:
+            st.error("❌ No access token found in session state")
 
     # Initialize client with stored token
     if st.session_state.upstox_client is None:
@@ -414,9 +423,25 @@ else:
 # Logout option
 if st.session_state.upstox_authenticated:
     st.markdown("---")
-    if st.button("🚪 Logout from Upstox"):
-        st.session_state.upstox_authenticated = False
-        st.session_state.upstox_client = None
-        st.session_state.upstox_access_token = None
-        st.success("✅ Logged out successfully")
-        st.rerun()
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🚪 Logout from Upstox"):
+            st.session_state.upstox_authenticated = False
+            st.session_state.upstox_client = None
+            st.session_state.upstox_access_token = None
+            st.success("✅ Logged out successfully")
+            st.rerun()
+    
+    with col2:
+        if st.button("🔄 Reset WebSocket Connection"):
+            # Clear WebSocket related session state
+            if 'websocket_client' in st.session_state:
+                if st.session_state.websocket_client:
+                    st.session_state.websocket_client.disconnect()
+                st.session_state.websocket_client = None
+            st.session_state.websocket_connected = False
+            st.session_state.live_ohlc_data = pd.DataFrame()
+            st.session_state.current_tick = None
+            st.success("✅ WebSocket connection reset")
+            st.rerun()
