@@ -97,8 +97,22 @@ else:
         if st.session_state.upstox_access_token:
             st.write(f"**Token Length:** {len(st.session_state.upstox_access_token)}")
             st.write(f"**Token Preview:** {st.session_state.upstox_access_token[:20]}...")
+            
+            # Test token validity
+            if st.button("🔍 Test Token Validity"):
+                with st.spinner("Testing token..."):
+                    try:
+                        quote = upstox_client.get_live_quote("NSE_INDEX|Nifty 50")
+                        if quote:
+                            st.success("✅ Token is valid and working!")
+                            st.json(quote)
+                        else:
+                            st.error("❌ Token test failed - may be expired")
+                    except Exception as e:
+                        st.error(f"❌ Token test error: {str(e)}")
         else:
             st.error("❌ No access token found in session state")
+            st.info("💡 Click 'Login to Upstox' to authenticate")
 
     # Initialize client with stored token
     if st.session_state.upstox_client is None:

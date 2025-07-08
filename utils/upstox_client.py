@@ -220,7 +220,7 @@ class UpstoxClient:
     def get_websocket_url(self) -> Optional[str]:
         """Get WebSocket URL for real-time data streaming."""
         if not self.access_token:
-            st.error("Access token not available. Please authenticate first.")
+            print("❌ Access token not available. Please authenticate first.")
             return None
 
         try:
@@ -230,21 +230,27 @@ class UpstoxClient:
                 'Accept': 'application/json'
             }
 
+            print(f"🔍 Requesting WebSocket URL from: {url}")
             response = requests.get(url, headers=headers)
 
             if response.status_code == 200:
                 data = response.json()
-                if data.get('status') == 'success':
-                    return data['data']['authorizedRedirectUri']
+                print(f"📡 WebSocket API Response: {data}")
+                
+                if data.get('status') == 'success' and 'data' in data:
+                    ws_url = data['data']['authorizedRedirectUri']
+                    print(f"✅ WebSocket URL obtained: {ws_url}")
+                    return ws_url
                 else:
-                    st.error(f"WebSocket authorization failed: {data.get('message', 'Unknown error')}")
+                    error_msg = data.get('message', 'Unknown error')
+                    print(f"❌ WebSocket authorization failed: {error_msg}")
                     return None
             else:
-                st.error(f"HTTP Error {response.status_code}: {response.text}")
+                print(f"❌ HTTP Error {response.status_code}: {response.text}")
                 return None
 
         except Exception as e:
-            st.error(f"Error getting WebSocket URL: {str(e)}")
+            print(f"❌ Error getting WebSocket URL: {str(e)}")
             return None
 
 
@@ -267,16 +273,23 @@ class UpstoxWebSocketClient:
     def connect(self) -> bool:
         """Connect to Upstox WebSocket."""
         try:
+            print("🔍 Getting WebSocket URL...")
             self.ws_url = self.upstox_client.get_websocket_url()
             if not self.ws_url:
+                print("❌ Failed to get WebSocket URL")
                 return False
 
+            print(f"🚀 Connecting to WebSocket: {self.ws_url}")
+            
             self.ws = websocket.WebSocketApp(
                 self.ws_url,
                 on_open=self.on_open,
                 on_message=self.on_message,
                 on_error=self.on_error,
-                on_close=self.on_close
+                on_close=self.on_close,
+                header={
+                    'Authorization': f'Bearer {self.upstox_client.access_token}'
+                }
             )
 
             # Start WebSocket in a separate thread
@@ -284,10 +297,18 @@ class UpstoxWebSocketClient:
             self.ws_thread.daemon = True
             self.ws_thread.start()
 
-            return True
+            # Wait a bit to see if connection succeeds
+            time.sleep(2)
+            
+            if self.is_connected:
+                print("✅ WebSocket connected successfully!")
+                return True
+            else:
+                print("❌ WebSocket connection failed")
+                return False
 
         except Exception as e:
-            st.error(f"Error connecting to WebSocket: {str(e)}")
+            print(f"❌ Error connecting to WebSocket: {str(e)}")
             return False
 
     def on_open(self, ws):
@@ -295,7 +316,7 @@ class UpstoxWebSocketClient:
         self.is_connected = True
         print("🔗 WebSocket connection opened successfully!")
         
-        # Subscribe to NIFTY 50
+        # Subscribe to NIFTY 50 with proper authentication
         subscribe_message = {
             "guid": "someguid",
             "method": "sub",
@@ -306,7 +327,12 @@ class UpstoxWebSocketClient:
         }
         
         print(f"📡 Sending subscription message: {subscribe_message}")
-        ws.send(json.dumps(subscribe_message))
+        try:
+            ws.send(json.dumps(subscribe_message))
+            print("✅ Subscription message sent successfully")
+        except Exception as e:
+            print(f"❌ Error sending subscription: {str(e)}")
+            self.is_connected = False
 
     def on_message(self, ws, message):
         """Handle incoming WebSocket messages."""
@@ -351,10 +377,18 @@ class UpstoxWebSocketClient:
         # Check for authentication errors
         if close_status_code == 1006:
             print("❌ WebSocket closed abnormally - likely authentication issue")
+            print("💡 Try refreshing your access token on the Upstox Data page")
         elif close_status_code == 1000:
             print("✅ WebSocket closed normally")
+        elif close_status_code == 4001:
+            print("❌ WebSocket authentication failed - invalid access token")
+        elif close_status_code == 4003:
+            print("❌ WebSocket authorization failed - token expired")
         else:
             print(f"⚠️ WebSocket closed with code: {close_status_code}")
+            
+        # Clear connection state
+        self.ws = None
 
     def disconnect(self):
         """Disconnect from WebSocket."""
