@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import time
-from utils.upstox_client import UpstoxClient
+from utils.upstox_client import UpstoxClient, UpstoxWebSocketClient
 from utils.database_adapter import DatabaseAdapter
 from features.technical_indicators import TechnicalIndicators
 from utils.data_processing import DataProcessor
@@ -34,6 +34,14 @@ if 'upstox_authenticated' not in st.session_state:
     st.session_state.upstox_authenticated = False
 if 'upstox_access_token' not in st.session_state:
     st.session_state.upstox_access_token = None
+if 'websocket_client' not in st.session_state:
+    st.session_state.websocket_client = None
+if 'websocket_connected' not in st.session_state:
+    st.session_state.websocket_connected = False
+if 'live_ohlc_data' not in st.session_state:
+    st.session_state.live_ohlc_data = pd.DataFrame()
+if 'current_tick' not in st.session_state:
+    st.session_state.current_tick = None
 
 # Initialize core session state variables that may be accessed
 if 'data' not in st.session_state:
@@ -91,8 +99,137 @@ else:
 
     upstox_client = st.session_state.upstox_client
 
-    # Data Fetching Section
-    st.header("📊 NIFTY 50 Data Management")
+    # WebSocket Real-time Data Section
+    st.header("🔴 Real-time WebSocket Data Stream")
+    
+    col1, col2, col3 = st.columns([1, 1, 2])
+    
+    with col1:
+        if not st.session_state.websocket_connected:
+            if st.button("🚀 Start WebSocket Stream", type="primary"):
+                with st.spinner("Connecting to WebSocket..."):
+                    try:
+                        ws_client = UpstoxWebSocketClient(upstox_client)
+                        
+                        # Add callback to update session state
+                        def on_ohlc_update(ohlc_candle):
+                            if not st.session_state.live_ohlc_data.empty:
+                                new_row = pd.DataFrame([ohlc_candle])
+                                new_row.set_index('DateTime', inplace=True)
+                                st.session_state.live_ohlc_data = pd.concat([st.session_state.live_ohlc_data, new_row])
+                            else:
+                                st.session_state.live_ohlc_data = pd.DataFrame([ohlc_candle])
+                                st.session_state.live_ohlc_data.set_index('DateTime', inplace=True)
+                        
+                        ws_client.add_callback(on_ohlc_update)
+                        
+                        success = ws_client.connect()
+                        if success:
+                            st.session_state.websocket_client = ws_client
+                            st.session_state.websocket_connected = True
+                            st.success("✅ WebSocket connected successfully!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to connect WebSocket")
+                    except Exception as e:
+                        st.error(f"❌ WebSocket connection error: {str(e)}")
+        else:
+            st.success("🟢 WebSocket Active")
+    
+    with col2:
+        if st.session_state.websocket_connected:
+            if st.button("⏹️ Stop WebSocket", type="secondary"):
+                try:
+                    if st.session_state.websocket_client:
+                        st.session_state.websocket_client.disconnect()
+                    st.session_state.websocket_connected = False
+                    st.session_state.websocket_client = None
+                    st.success("✅ WebSocket disconnected")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error disconnecting: {str(e)}")
+    
+    with col3:
+        if st.session_state.websocket_connected and st.session_state.websocket_client:
+            # Display current tick info
+            current_tick = st.session_state.websocket_client.get_latest_tick()
+            current_candle = st.session_state.websocket_client.get_current_ohlc()
+            
+            if current_tick:
+                st.session_state.current_tick = current_tick
+            
+            if st.session_state.current_tick:
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.metric("Live Price", f"₹{st.session_state.current_tick['ltp']:.2f}")
+                with col_b:
+                    st.metric("Last Update", st.session_state.current_tick['timestamp'].strftime('%H:%M:%S'))
+            
+            if current_candle:
+                st.write("**Current 5-min Candle:**")
+                col_a, col_b, col_c, col_d = st.columns(4)
+                with col_a:
+                    st.metric("O", f"₹{current_candle['Open']:.2f}")
+                with col_b:
+                    st.metric("H", f"₹{current_candle['High']:.2f}")
+                with col_c:
+                    st.metric("L", f"₹{current_candle['Low']:.2f}")
+                with col_d:
+                    st.metric("C", f"₹{current_candle['Close']:.2f}")
+
+    # Live Data Display
+    if st.session_state.websocket_connected and not st.session_state.live_ohlc_data.empty:
+        st.subheader("📈 Live OHLC Data Stream")
+        
+        # Auto-refresh the chart every 5 seconds
+        placeholder = st.empty()
+        
+        with placeholder.container():
+            recent_data = st.session_state.live_ohlc_data.tail(50)
+            
+            if len(recent_data) > 0:
+                fig = go.Figure(data=go.Candlestick(
+                    x=recent_data.index,
+                    open=recent_data['Open'],
+                    high=recent_data['High'],
+                    low=recent_data['Low'],
+                    close=recent_data['Close'],
+                    name="NIFTY 50 Live"
+                ))
+                
+                fig.update_layout(
+                    title="Live NIFTY 50 - Last 50 Candles",
+                    xaxis_title="Time",
+                    yaxis_title="Price (₹)",
+                    height=400,
+                    template="plotly_dark"
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Show recent candles table
+                st.write("**Recent 5-minute Candles:**")
+                st.dataframe(recent_data.tail(10), use_container_width=True)
+                
+                # Auto-save to database button
+                if st.button("💾 Save Live Data to Database"):
+                    with st.spinner("Saving live data..."):
+                        save_success = trading_db.save_ohlc_data(
+                            st.session_state.live_ohlc_data, 
+                            "upstox_live_websocket", 
+                            preserve_full_data=True
+                        )
+                        if save_success:
+                            st.success(f"✅ Saved {len(st.session_state.live_ohlc_data)} live candles to database!")
+                            # Update main session data
+                            st.session_state.data = st.session_state.live_ohlc_data
+                            st.session_state.data_source = "upstox_websocket"
+                            st.session_state.last_data_update = datetime.now()
+                        else:
+                            st.error("❌ Failed to save live data")
+
+    # Historical Data Fetching Section
+    st.header("📊 Historical NIFTY 50 Data Management")
 
     col1, col2, col3 = st.columns(3)
 

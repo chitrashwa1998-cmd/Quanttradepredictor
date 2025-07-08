@@ -7,6 +7,10 @@ import time
 import json
 from typing import Optional, Dict, Any, List
 import urllib.parse
+import websocket
+import threading
+import queue
+from collections import defaultdict
 
 class UpstoxClient:
     """Upstox API client for fetching real-time and historical OHLC data."""
@@ -212,3 +216,240 @@ class UpstoxClient:
     def is_authenticated(self) -> bool:
         """Check if the client is authenticated."""
         return self.access_token is not None
+
+    def get_websocket_url(self) -> Optional[str]:
+        """Get WebSocket URL for real-time data streaming."""
+        if not self.access_token:
+            st.error("Access token not available. Please authenticate first.")
+            return None
+
+        try:
+            url = f"{self.base_url}/feed/authorize"
+            headers = {
+                'Authorization': f'Bearer {self.access_token}',
+                'Accept': 'application/json'
+            }
+
+            response = requests.get(url, headers=headers)
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'success':
+                    return data['data']['authorizedRedirectUri']
+                else:
+                    st.error(f"WebSocket authorization failed: {data.get('message', 'Unknown error')}")
+                    return None
+            else:
+                st.error(f"HTTP Error {response.status_code}: {response.text}")
+                return None
+
+        except Exception as e:
+            st.error(f"Error getting WebSocket URL: {str(e)}")
+            return None
+
+
+class UpstoxWebSocketClient:
+    """WebSocket client for real-time NIFTY 50 data streaming."""
+
+    def __init__(self, upstox_client: UpstoxClient):
+        self.upstox_client = upstox_client
+        self.ws = None
+        self.ws_url = None
+        self.is_connected = False
+        self.tick_queue = queue.Queue()
+        self.ohlc_builder = OHLCBuilder()
+        self.callbacks = []
+        
+    def add_callback(self, callback):
+        """Add callback function to receive OHLC updates."""
+        self.callbacks.append(callback)
+        
+    def connect(self) -> bool:
+        """Connect to Upstox WebSocket."""
+        try:
+            self.ws_url = self.upstox_client.get_websocket_url()
+            if not self.ws_url:
+                return False
+
+            self.ws = websocket.WebSocketApp(
+                self.ws_url,
+                on_open=self.on_open,
+                on_message=self.on_message,
+                on_error=self.on_error,
+                on_close=self.on_close
+            )
+
+            # Start WebSocket in a separate thread
+            self.ws_thread = threading.Thread(target=self.ws.run_forever)
+            self.ws_thread.daemon = True
+            self.ws_thread.start()
+
+            return True
+
+        except Exception as e:
+            st.error(f"Error connecting to WebSocket: {str(e)}")
+            return False
+
+    def on_open(self, ws):
+        """WebSocket connection opened."""
+        self.is_connected = True
+        st.success("🔗 WebSocket connected!")
+        
+        # Subscribe to NIFTY 50
+        subscribe_message = {
+            "guid": "someguid",
+            "method": "sub",
+            "data": {
+                "mode": "full",
+                "instrumentKeys": ["NSE_INDEX|Nifty 50"]
+            }
+        }
+        
+        ws.send(json.dumps(subscribe_message))
+
+    def on_message(self, ws, message):
+        """Handle incoming WebSocket messages."""
+        try:
+            data = json.loads(message)
+            
+            if data.get('type') == 'feed':
+                feeds = data.get('feeds', {})
+                
+                for instrument_key, feed_data in feeds.items():
+                    if instrument_key == 'NSE_INDEX|Nifty 50':
+                        tick = {
+                            'instrument_key': instrument_key,
+                            'ltp': feed_data.get('ltp', 0),
+                            'volume': feed_data.get('volume', 0),
+                            'timestamp': datetime.now()
+                        }
+                        
+                        # Add tick to queue for processing
+                        self.tick_queue.put(tick)
+                        
+                        # Process tick for OHLC building
+                        ohlc_candle = self.ohlc_builder.process_tick(tick)
+                        
+                        # If a 5-minute candle is complete, notify callbacks
+                        if ohlc_candle:
+                            for callback in self.callbacks:
+                                callback(ohlc_candle)
+
+        except Exception as e:
+            print(f"Error processing WebSocket message: {str(e)}")
+
+    def on_error(self, ws, error):
+        """Handle WebSocket errors."""
+        st.error(f"WebSocket error: {str(error)}")
+
+    def on_close(self, ws, close_status_code, close_msg):
+        """WebSocket connection closed."""
+        self.is_connected = False
+        st.warning("🔌 WebSocket disconnected")
+
+    def disconnect(self):
+        """Disconnect from WebSocket."""
+        if self.ws:
+            self.ws.close()
+            self.is_connected = False
+
+    def get_latest_tick(self) -> Optional[Dict]:
+        """Get the latest tick from queue."""
+        try:
+            return self.tick_queue.get_nowait()
+        except queue.Empty:
+            return None
+
+    def get_current_ohlc(self) -> Optional[Dict]:
+        """Get current 5-minute OHLC candle in progress."""
+        return self.ohlc_builder.get_current_candle()
+
+
+class OHLCBuilder:
+    """Build 5-minute OHLC candles from real-time ticks."""
+
+    def __init__(self):
+        self.current_candle = None
+        self.candle_start_time = None
+        self.ticks_in_candle = []
+        self.completed_candles = []
+
+    def process_tick(self, tick: Dict) -> Optional[Dict]:
+        """Process a tick and return completed OHLC candle if ready."""
+        current_time = tick['timestamp']
+        
+        # Determine 5-minute window
+        minute = current_time.minute
+        candle_minute = (minute // 5) * 5
+        window_start = current_time.replace(minute=candle_minute, second=0, microsecond=0)
+        window_end = window_start + timedelta(minutes=5)
+
+        # If this is a new candle period
+        if self.candle_start_time != window_start:
+            completed_candle = None
+            
+            # Complete previous candle if exists
+            if self.current_candle and self.ticks_in_candle:
+                completed_candle = self._finalize_candle()
+                self.completed_candles.append(completed_candle)
+
+            # Start new candle
+            self._start_new_candle(window_start, tick)
+            
+            return completed_candle
+        else:
+            # Add tick to current candle
+            self._update_current_candle(tick)
+            return None
+
+    def _start_new_candle(self, window_start: datetime, tick: Dict):
+        """Start a new 5-minute candle."""
+        self.candle_start_time = window_start
+        self.current_candle = {
+            'DateTime': window_start,
+            'Open': tick['ltp'],
+            'High': tick['ltp'],
+            'Low': tick['ltp'],
+            'Close': tick['ltp'],
+            'Volume': tick['volume'],
+            'tick_count': 1
+        }
+        self.ticks_in_candle = [tick]
+
+    def _update_current_candle(self, tick: Dict):
+        """Update current candle with new tick."""
+        if self.current_candle:
+            self.current_candle['High'] = max(self.current_candle['High'], tick['ltp'])
+            self.current_candle['Low'] = min(self.current_candle['Low'], tick['ltp'])
+            self.current_candle['Close'] = tick['ltp']
+            self.current_candle['Volume'] += tick['volume']
+            self.current_candle['tick_count'] += 1
+            self.ticks_in_candle.append(tick)
+
+    def _finalize_candle(self) -> Dict:
+        """Finalize and return completed candle."""
+        if self.current_candle:
+            return {
+                'DateTime': self.current_candle['DateTime'],
+                'Open': self.current_candle['Open'],
+                'High': self.current_candle['High'],
+                'Low': self.current_candle['Low'],
+                'Close': self.current_candle['Close'],
+                'Volume': self.current_candle['Volume'],
+                'tick_count': self.current_candle['tick_count']
+            }
+        return None
+
+    def get_current_candle(self) -> Optional[Dict]:
+        """Get current candle in progress."""
+        return self.current_candle.copy() if self.current_candle else None
+
+    def get_completed_candles_df(self) -> pd.DataFrame:
+        """Get all completed candles as DataFrame."""
+        if not self.completed_candles:
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(self.completed_candles)
+        df.set_index('DateTime', inplace=True)
+        df = df[['Open', 'High', 'Low', 'Close', 'Volume']]  # Keep only OHLCV
+        return df
