@@ -111,3 +111,33 @@ class TechnicalIndicators:
         print(f"Generated features: {feature_cols}")
 
         return result_df
+
+    @staticmethod
+    def calculate_realtime_indicators(df, last_n_rows=50):
+        """Optimized calculation for real-time trading - only process recent data"""
+        print("⚡ Calculating real-time indicators (optimized)...")
+        
+        # Use only recent data for faster processing
+        recent_df = df.tail(last_n_rows).copy()
+        
+        # Calculate indicators on recent data
+        result_df = TechnicalIndicators.calculate_volatility_indicators(recent_df)
+        
+        # Add custom features
+        from features.custom_engineered import compute_custom_volatility_features
+        result_df = compute_custom_volatility_features(result_df)
+        
+        # Add lagged features
+        from features.lagged_features import add_volatility_lagged_features  
+        result_df = add_volatility_lagged_features(result_df)
+        
+        # Add time context
+        from features.time_context_features import add_time_context_features
+        result_df = add_time_context_features(result_df)
+        
+        # Quick cleanup
+        result_df = result_df.replace([np.inf, -np.inf], np.nan)
+        result_df = result_df.dropna()
+        
+        print(f"⚡ Real-time calculation completed in optimized mode")
+        return result_df

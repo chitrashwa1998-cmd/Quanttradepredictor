@@ -160,6 +160,59 @@ else:
                     st.error(f"❌ Error fetching data: {str(e)}")
 
     with col2:
+        if st.button("⚡ Real-Time Prediction"):
+            if 'data' in st.session_state and st.session_state.data is not None:
+                with st.spinner("Generating fast trading signal..."):
+                    try:
+                        from utils.realtime_predictor import realtime_predictor
+                        
+                        # Get latest data from database
+                        latest_data = db.load_ohlc_data()
+                        if latest_data is not None and len(latest_data) > 50:
+                            trading_signal = realtime_predictor.get_trading_signal(latest_data)
+                            
+                            # Display results
+                            st.subheader("⚡ Real-Time Trading Signal")
+                            
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                action_color = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡"}
+                                st.metric(
+                                    "Action", 
+                                    f"{action_color.get(trading_signal['action'], '⚪')} {trading_signal['action']}"
+                                )
+                            with col2:
+                                st.metric(
+                                    "Confidence", 
+                                    f"{trading_signal['confidence']:.1%}"
+                                )
+                            with col3:
+                                st.metric(
+                                    "Processing Time", 
+                                    f"{trading_signal['processing_time']:.2f}s"
+                                )
+                            
+                            # Individual signals
+                            if trading_signal['individual_signals']:
+                                st.subheader("Individual Model Signals")
+                                for model, signal in trading_signal['individual_signals'].items():
+                                    with st.expander(f"{model.title()} Model"):
+                                        st.json(signal)
+                            
+                            # Reasoning
+                            if trading_signal['reasoning']:
+                                st.subheader("Decision Reasoning")
+                                for reason in trading_signal['reasoning']:
+                                    st.write(f"• {reason}")
+                                    
+                        else:
+                            st.error("⚠️ Insufficient data for real-time prediction")
+                            
+                    except Exception as e:
+                        st.error(f"❌ Real-time prediction error: {str(e)}")
+            else:
+                st.warning("⚠️ No data available. Fetch historical data first.")
+
         if st.button("🔄 Get Live Quote"):
             with st.spinner("Fetching live NIFTY 50 quote..."):
                 try:
