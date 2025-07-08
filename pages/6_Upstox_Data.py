@@ -39,7 +39,10 @@ if 'upstox_access_token' not in st.session_state:
 # Check for OAuth callback
 query_params = st.query_params
 if 'code' in query_params and not st.session_state.upstox_authenticated:
-    with st.spinner("Authenticating with Upstox..."):
+    # Clear the URL parameters to prevent redirect loop
+    st.query_params.clear()
+    
+    with st.spinner("🔐 Processing Upstox authentication..."):
         try:
             upstox_client = UpstoxClient()
             success = upstox_client.exchange_code_for_token(query_params['code'])
@@ -48,7 +51,10 @@ if 'code' in query_params and not st.session_state.upstox_authenticated:
                 st.session_state.upstox_client = upstox_client
                 st.session_state.upstox_authenticated = True
                 st.session_state.upstox_access_token = upstox_client.access_token
+                
+                # Force a clean reload to show authenticated state
                 st.success("✅ Successfully authenticated with Upstox!")
+                time.sleep(1)  # Brief pause to show success message
                 st.rerun()
             else:
                 st.error("❌ Authentication failed. Please try again.")
