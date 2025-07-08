@@ -35,6 +35,18 @@ if 'upstox_authenticated' not in st.session_state:
 if 'upstox_access_token' not in st.session_state:
     st.session_state.upstox_access_token = None
 
+# Initialize core session state variables that may be accessed
+if 'data' not in st.session_state:
+    st.session_state.data = None
+if 'features' not in st.session_state:
+    st.session_state.features = None
+if 'models' not in st.session_state:
+    st.session_state.models = {}
+if 'predictions' not in st.session_state:
+    st.session_state.predictions = None
+if 'model_trainer' not in st.session_state:
+    st.session_state.model_trainer = None
+
 # Check if we just completed authentication
 if st.session_state.upstox_authenticated and 'upstox_just_authenticated' not in st.session_state:
     st.session_state.upstox_just_authenticated = True
