@@ -232,3 +232,43 @@ class UpstoxClient:
 
         except Exception:
             return False
+
+    def test_api_connectivity(self) -> Dict[str, Any]:
+        """Test connectivity to Upstox API endpoints."""
+        try:
+            # Test basic API connectivity
+            url = f"{self.base_url}/market-quote/quotes"
+            
+            response = requests.get(url, timeout=10)
+            
+            api_reachable = response.status_code in [200, 401, 403]  # Even auth errors mean API is reachable
+            
+            # Test login endpoint specifically
+            login_url = "https://api.upstox.com/v2/login/authorization/dialog"
+            login_response = requests.get(login_url, timeout=10)
+            login_endpoint = login_response.status_code in [200, 400]  # 400 is expected without params
+            
+            return {
+                'api_reachable': api_reachable,
+                'login_endpoint': login_endpoint,
+                'error_message': None
+            }
+            
+        except requests.exceptions.ConnectionError:
+            return {
+                'api_reachable': False,
+                'login_endpoint': False,
+                'error_message': 'Cannot connect to Upstox servers. Check your internet connection.'
+            }
+        except requests.exceptions.Timeout:
+            return {
+                'api_reachable': False,
+                'login_endpoint': False,
+                'error_message': 'Connection to Upstox timed out. Try again later.'
+            }
+        except Exception as e:
+            return {
+                'api_reachable': False,
+                'login_endpoint': False,
+                'error_message': f'Connectivity test failed: {str(e)}'
+            }
