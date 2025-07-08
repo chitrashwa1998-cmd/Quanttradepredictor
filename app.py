@@ -41,26 +41,11 @@ trading_db = DatabaseAdapter()
 
 # Restore previous session
 auto_restore_system()
+
 import numpy as np
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
-
-# Page configuration
-st.set_page_config(
-    page_title="TribexAlpha",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Load custom CSS
-with open('style.css') as f:
-    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
-
-# Auto-restore system
-from auto_restore import auto_restore_system
-auto_restore_system()
 
 # Initialize session state with automatic data recovery
 def initialize_session_state():
