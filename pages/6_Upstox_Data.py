@@ -143,6 +143,12 @@ else:
                                 features_data = TechnicalIndicators.calculate_all_indicators(df)
                                 st.session_state.features = features_data
                                 st.success("✅ Technical indicators calculated!")
+                                
+                                # Set data source flag for other pages
+                                st.session_state.data_source = "upstox_live"
+                                st.session_state.last_data_update = datetime.now()
+                                
+                                st.info("🔗 **Ready for AI**: Your live data is now available in Model Training and Predictions pages!")
                         else:
                             st.warning("⚠️ Data fetched but failed to save to database")
 
