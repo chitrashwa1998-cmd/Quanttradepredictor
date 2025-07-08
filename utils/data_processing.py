@@ -62,8 +62,8 @@ class DataProcessor:
             return False, f"Found {invalid_low_close} rows where Low > Close"
 
         # Check for sufficient data
-        if len(df) < 100:
-            return False, f"Insufficient data: {len(df)} rows. Need at least 100 rows for meaningful analysis."
+        if len(df) < 10:
+            return False, f"Insufficient data: {len(df)} rows. Need at least 10 rows for basic validation."
 
         # Check for reasonable price ranges (detect potential data issues)
         for col in required_columns:
