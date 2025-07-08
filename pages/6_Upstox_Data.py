@@ -36,13 +36,24 @@ if 'upstox_authenticated' not in st.session_state:
 if 'upstox_access_token' not in st.session_state:
     st.session_state.upstox_access_token = None
 
-# Check if we just completed authentication
-if st.session_state.upstox_authenticated and 'upstox_just_authenticated' not in st.session_state:
-    st.session_state.upstox_just_authenticated = True
-    st.success("✅ Successfully authenticated with Upstox!")
-    st.rerun()
-elif 'upstox_just_authenticated' in st.session_state:
-    del st.session_state.upstox_just_authenticated
+# Check for OAuth callback
+query_params = st.query_params
+if 'code' in query_params and not st.session_state.upstox_authenticated:
+    with st.spinner("Authenticating with Upstox..."):
+        try:
+            upstox_client = UpstoxClient()
+            success = upstox_client.exchange_code_for_token(query_params['code'])
+            
+            if success:
+                st.session_state.upstox_client = upstox_client
+                st.session_state.upstox_authenticated = True
+                st.session_state.upstox_access_token = upstox_client.access_token
+                st.success("✅ Successfully authenticated with Upstox!")
+                st.rerun()
+            else:
+                st.error("❌ Authentication failed. Please try again.")
+        except Exception as e:
+            st.error(f"❌ Authentication error: {str(e)}")
 
 # Authentication Section
 st.header("🔐 Upstox Authentication")
@@ -59,11 +70,43 @@ if not st.session_state.upstox_authenticated:
         if st.button("🚀 Login to Upstox", type="primary"):
             try:
                 upstox_client = UpstoxClient()
-                login_url = upstox_client.get_login_url()
-                st.markdown(f'<meta http-equiv="refresh" content="0; url={login_url}">', unsafe_allow_html=True)
-                st.success("Redirecting to Upstox login...")
+                
+                # Test connectivity first
+                with st.spinner("Testing connectivity to Upstox..."):
+                    connectivity = upstox_client.test_api_connectivity()
+                    
+                    if not connectivity['api_reachable']:
+                        st.error(f"❌ Cannot connect to Upstox API: {connectivity['error_message']}")
+                        st.info("💡 **Troubleshooting tips:**")
+                        st.info("• Check your internet connection")
+                        st.info("• Try again in a few minutes (Upstox API might be temporarily down)")
+                        st.info("• Verify that api.upstox.com is not blocked by your network")
+                    else:
+                        login_url = upstox_client.get_login_url()
+                        st.markdown(f'<meta http-equiv="refresh" content="0; url={login_url}">', unsafe_allow_html=True)
+                        st.success("✅ Connectivity OK - Redirecting to Upstox login...")
+                        
             except Exception as e:
                 st.error(f"Error creating login URL: {str(e)}")
+                
+        # Add connectivity test button
+        if st.button("🔍 Test Connectivity"):
+            try:
+                upstox_client = UpstoxClient()
+                with st.spinner("Testing connectivity..."):
+                    results = upstox_client.test_api_connectivity()
+                    
+                    if results['api_reachable']:
+                        st.success("✅ Can connect to Upstox API")
+                        if results['login_endpoint']:
+                            st.success("✅ Login endpoint is accessible")
+                        else:
+                            st.warning("⚠️ Login endpoint issues detected")
+                    else:
+                        st.error(f"❌ Cannot connect to Upstox API: {results['error_message']}")
+                        
+            except Exception as e:
+                st.error(f"Connectivity test failed: {str(e)}")
     
     with col2:
         st.info("🔒 Your credentials are stored securely and used only for data fetching.")
