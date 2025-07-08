@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import time
+import requests
 from utils.upstox_client import UpstoxClient, UpstoxWebSocketClient
 from utils.database_adapter import DatabaseAdapter
 from features.technical_indicators import TechnicalIndicators
@@ -102,14 +103,30 @@ else:
             if st.button("🔍 Test Token Validity"):
                 with st.spinner("Testing token..."):
                     try:
+                        # Ensure client has the token
+                        if not upstox_client:
+                            upstox_client = UpstoxClient()
+                            upstox_client.set_access_token(st.session_state.upstox_access_token)
+                        
+                        st.info("🔄 Making API call to test token...")
                         quote = upstox_client.get_live_quote("NSE_INDEX|Nifty 50")
-                        if quote:
+                        
+                        if quote and isinstance(quote, dict):
                             st.success("✅ Token is valid and working!")
+                            st.write("**API Response:**")
                             st.json(quote)
+                        elif quote is None:
+                            st.error("❌ Token test failed - API returned None (likely authentication issue)")
                         else:
-                            st.error("❌ Token test failed - may be expired")
+                            st.warning(f"⚠️ Unexpected response type: {type(quote)}")
+                            st.write("Response:", quote)
+                            
+                    except requests.exceptions.RequestException as e:
+                        st.error(f"❌ Network error: {str(e)}")
                     except Exception as e:
                         st.error(f"❌ Token test error: {str(e)}")
+                        st.write("**Error details:**")
+                        st.code(str(e))
         else:
             st.error("❌ No access token found in session state")
             st.info("💡 Click 'Login to Upstox' to authenticate")
