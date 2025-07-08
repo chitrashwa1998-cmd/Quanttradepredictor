@@ -107,8 +107,8 @@ else:
     with col2:
         interval = st.selectbox(
             "Candle Interval",
-            ["5minute", "1minute", "15minute", "30minute", "1hour"],
-            index=0,
+            ["1minute", "30minute", "day", "week", "month"],
+            index=1,
             help="Timeframe for OHLC candles"
         )
 
