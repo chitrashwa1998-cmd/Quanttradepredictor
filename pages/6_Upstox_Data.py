@@ -36,30 +36,13 @@ if 'upstox_authenticated' not in st.session_state:
 if 'upstox_access_token' not in st.session_state:
     st.session_state.upstox_access_token = None
 
-# Check for OAuth callback
-query_params = st.query_params
-if 'code' in query_params and not st.session_state.upstox_authenticated:
-    # Clear the URL parameters to prevent redirect loop
-    st.query_params.clear()
-    
-    with st.spinner("🔐 Processing Upstox authentication..."):
-        try:
-            upstox_client = UpstoxClient()
-            success = upstox_client.exchange_code_for_token(query_params['code'])
-            
-            if success:
-                st.session_state.upstox_client = upstox_client
-                st.session_state.upstox_authenticated = True
-                st.session_state.upstox_access_token = upstox_client.access_token
-                
-                # Force a clean reload to show authenticated state
-                st.success("✅ Successfully authenticated with Upstox!")
-                time.sleep(1)  # Brief pause to show success message
-                st.rerun()
-            else:
-                st.error("❌ Authentication failed. Please try again.")
-        except Exception as e:
-            st.error(f"❌ Authentication error: {str(e)}")
+# Check if we just completed authentication
+if st.session_state.upstox_authenticated and 'upstox_just_authenticated' not in st.session_state:
+    st.session_state.upstox_just_authenticated = True
+    st.success("✅ Successfully authenticated with Upstox!")
+    st.rerun()
+elif 'upstox_just_authenticated' in st.session_state:
+    del st.session_state.upstox_just_authenticated
 
 # Authentication Section
 st.header("🔐 Upstox Authentication")
