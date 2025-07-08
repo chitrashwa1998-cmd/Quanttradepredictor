@@ -129,6 +129,7 @@ initialize_session_state()
 nav_pages = {
     "🏠 HOME": "home",
     "📊 DATA UPLOAD": "data",
+    "📡 UPSTOX DATA": "upstox",
     "🔬 MODEL TRAINING": "training", 
     "🎯 PREDICTIONS": "predictions",
     "📈 BACKTESTING": "backtesting",
