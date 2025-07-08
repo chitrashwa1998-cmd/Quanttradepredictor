@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from utils.database_adapter import DatabaseAdapter
-from auto_restore import AutoRestore
+from auto_restore import auto_restore_system
 from utils.upstox_client import UpstoxClient
 
 # Handle Upstox OAuth callback FIRST
@@ -38,13 +38,9 @@ with open('style.css') as f:
 
 # Initialize database and auto-restore
 trading_db = DatabaseAdapter()
-auto_restore = AutoRestore()
 
 # Restore previous session
-auto_restore.restore_session()
-# Applying the provided changes to fix date formatting error when data index is not datetime.
-import streamlit as st
-import pandas as pd
+auto_restore_system()
 import numpy as np
 from datetime import datetime
 import warnings
