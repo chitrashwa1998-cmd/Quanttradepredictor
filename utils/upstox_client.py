@@ -15,7 +15,7 @@ class UpstoxClient:
     def __init__(self):
         self.api_key = os.getenv('UPSTOX_API_KEY')
         self.api_secret = os.getenv('UPSTOX_API_SECRET')
-        self.redirect_uri = f"https://{os.getenv('REPLIT_DEV_DOMAIN', 'localhost')}/6_Upstox_Data"
+        self.redirect_uri = f"https://{os.getenv('REPLIT_DEV_DOMAIN', 'localhost')}/6-upstox-data"
         self.base_url = "https://api.upstox.com/v2"
         self.access_token = None
         
