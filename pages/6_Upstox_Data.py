@@ -36,6 +36,18 @@ if 'upstox_authenticated' not in st.session_state:
 if 'upstox_access_token' not in st.session_state:
     st.session_state.upstox_access_token = None
 
+# Initialize core session state variables that may be accessed
+if 'data' not in st.session_state:
+    st.session_state.data = None
+if 'features' not in st.session_state:
+    st.session_state.features = None
+if 'models' not in st.session_state:
+    st.session_state.models = {}
+if 'predictions' not in st.session_state:
+    st.session_state.predictions = None
+if 'model_trainer' not in st.session_state:
+    st.session_state.model_trainer = None
+
 # Check for OAuth callback
 query_params = st.query_params
 if 'code' in query_params and not st.session_state.upstox_authenticated:
