@@ -524,53 +524,35 @@ if st.session_state.upstox_authenticated:
             try:
                 if os.path.exists('.upstox_token'):
                     os.remove('.upstox_token')
-                    print("🗑️ Token file deleted")
+                    st.info("🗑️ Token file deleted")
             except Exception as e:
-                print(f"⚠️ Error deleting token file: {e}")
+                st.warning(f"⚠️ Error deleting token file: {e}")
             
-            # Clear all Upstox-related session state variables
-            keys_to_clear = [
-                'upstox_authenticated',
-                'upstox_client', 
-                'upstox_access_token',
-                'websocket_client',
-                'websocket_connected',
-                'live_ohlc_data',
-                'current_tick',
-                'upstox_just_authenticated'
-            ]
+            # Clear ALL session state (nuclear option)
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             
-            for key in keys_to_clear:
-                if key in st.session_state:
-                    del st.session_state[key]
-            
-            # Set the essential ones to False/None explicitly
+            # Reinitialize essential session state
             st.session_state.upstox_authenticated = False
             st.session_state.upstox_client = None
             st.session_state.upstox_access_token = None
             st.session_state.websocket_connected = False
             st.session_state.live_ohlc_data = pd.DataFrame()
             
-            # Show success and force page refresh
-            st.success("✅ Logged out successfully - all sessions cleared")
+            # Initialize core session state variables
+            st.session_state.data = None
+            st.session_state.features = None
+            st.session_state.models = {}
+            st.session_state.predictions = None
+            st.session_state.model_trainer = None
             
-            # Use JavaScript to clear browser cache and reload
-            st.markdown("""
-            <script>
-            setTimeout(function() {
-                // Clear browser cache
-                if ('caches' in window) {
-                    caches.keys().then(function(names) {
-                        names.forEach(function(name) {
-                            caches.delete(name);
-                        });
-                    });
-                }
-                // Force reload with cache bypass
-                window.location.reload(true);
-            }, 1000);
-            </script>
-            """, unsafe_allow_html=True)
+            # Show success message
+            st.success("✅ Complete logout successful - all sessions cleared")
+            st.info("🔄 Page will refresh automatically...")
+            
+            # Force immediate rerun
+            time.sleep(1)
+            st.rerun()
 
     with col2:
         if st.button("🔄 Reset WebSocket Connection"):
