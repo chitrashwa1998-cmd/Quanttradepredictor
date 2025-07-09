@@ -513,10 +513,31 @@ if st.session_state.upstox_authenticated:
 
     with col1:
         if st.button("🚪 Logout from Upstox"):
+            # Clear all Upstox-related session state
             st.session_state.upstox_authenticated = False
             st.session_state.upstox_client = None
             st.session_state.upstox_access_token = None
-            st.success("✅ Logged out successfully")
+            
+            # Clear WebSocket related state
+            if 'websocket_client' in st.session_state:
+                if st.session_state.websocket_client:
+                    try:
+                        st.session_state.websocket_client.disconnect()
+                    except:
+                        pass
+                st.session_state.websocket_client = None
+            st.session_state.websocket_connected = False
+            st.session_state.live_ohlc_data = pd.DataFrame()
+            st.session_state.current_tick = None
+            
+            # Delete the token file
+            try:
+                if os.path.exists('.upstox_token'):
+                    os.remove('.upstox_token')
+            except:
+                pass
+                
+            st.success("✅ Logged out successfully - all sessions cleared")
             st.rerun()
 
     with col2:
