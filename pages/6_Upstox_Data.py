@@ -29,6 +29,26 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Troubleshooting info
+with st.expander("🔧 WebSocket Connection Troubleshooting"):
+    st.markdown("""
+    **If WebSocket keeps disconnecting:**
+    
+    1. **Check Token Status** - Most disconnections are due to expired tokens
+    2. **Click "Refresh Token"** - This clears the old token and prompts for new authentication
+    3. **Login to Upstox** - Complete the authentication process
+    4. **Verify token validity** - Should show "Token is valid and working!"
+    5. **Start WebSocket** - Connection should now work properly
+    
+    **Common Issues:**
+    - ❌ Token expired → Refresh token and re-authenticate
+    - ❌ "WebSocket onclose" → Token issue, refresh needed
+    - ❌ No data received → Check market hours and token validity
+    - ❌ Authorization errors → Get fresh token from Upstox
+    
+    **Token Validity:** Upstox tokens expire every 24 hours and need regular refresh.
+    """)
+
 # Initialize session state
 if 'upstox_client' not in st.session_state:
     st.session_state.upstox_client = None
@@ -93,98 +113,69 @@ else:
     # Authenticated UI
     st.success("✅ Connected to Upstox API")
 
-    # Debug: Show token status
-    with st.expander("🔍 Debug Token Information"):
-        st.write(f"**Token Available:** {'✅ Yes' if st.session_state.upstox_access_token else '❌ No'}")
-        if st.session_state.upstox_access_token:
-            st.write(f"**Token Length:** {len(st.session_state.upstox_access_token)}")
-            st.write(f"**Token Preview:** {st.session_state.upstox_access_token[:20]}...")
-
-            col_a, col_b = st.columns(2)
-
-            with col_a:
-                # Test token validity
-                if st.button("🔍 Test Token Validity"):
-                    with st.spinner("Testing token..."):
-                        try:
-                            # Ensure client has the token
-                            if not upstox_client:
-                                upstox_client = UpstoxClient()
-                                upstox_client.set_access_token(st.session_state.upstox_access_token)
-
-                            st.info("🔄 Making API call to test token...")
-                            quote = upstox_client.get_live_quote("NSE_INDEX|Nifty 50")
-
-                            if quote and isinstance(quote, dict):
-                                st.success("✅ Token is valid and working!")
-                                st.write("**API Response:**")
-                                st.json(quote)
-                            elif quote is None:
-                                st.error("❌ Token test failed - API returned None (likely authentication issue)")
-                            else:
-                                st.warning(f"⚠️ Unexpected response type: {type(quote)}")
-                                st.write("Response:", quote)
-
-                        except requests.exceptions.RequestException as e:
-                            st.error(f"❌ Network error: {str(e)}")
-                        except Exception as e:
-                            st.error(f"❌ Token test error: {str(e)}")
-                            st.write("**Error details:**")
-                            st.code(str(e))
-            with col_b:
-                # Save token to file
-                if st.button("💾 Save Token to File"):
-                    try:
-                        # Define the file path to match console script
-                        file_path = ".upstox_token"
-                        
-                        # Get current working directory
-                        import os
-                        current_dir = os.getcwd()
-                        full_path = os.path.join(current_dir, file_path)
-
-                        # Ensure we have write permissions
-                        st.write(f"**Current directory:** {current_dir}")
-                        st.write(f"**Directory writable:** {os.access(current_dir, os.W_OK)}")
-                        
-                        # Write the token to the file with explicit encoding
-                        with open(file_path, "w", encoding='utf-8') as f:
-                            f.write(st.session_state.upstox_access_token)
-                            f.flush()  # Ensure it's written immediately
-                            os.fsync(f.fileno())  # Force write to disk
-
-                        # Verify the file was saved
-                        if os.path.exists(file_path):
-                            file_size = os.path.getsize(file_path)
-                            st.success(f"✅ Token saved to `{full_path}` ({file_size} bytes)")
-                            
-                            # Show first 20 chars for verification
-                            with open(file_path, "r", encoding='utf-8') as f:
-                                saved_token = f.read()
-                            st.info(f"📄 Saved token preview: {saved_token[:20]}...")
-                            
-                            # Double check with ls command
-                            import subprocess
-                            result = subprocess.run(['ls', '-la', file_path], capture_output=True, text=True)
-                            st.code(f"ls -la {file_path}:\n{result.stdout}")
-                            
-                        else:
-                            st.error("❌ File was not created successfully")
-                            
-                            # Show directory contents
-                            files = os.listdir(current_dir)
-                            st.write(f"**Files in directory:** {files}")
-                            
-                    except Exception as e:
-                        st.error(f"❌ Error saving token to file: {str(e)}")
-                        st.write(f"**Current directory:** {os.getcwd()}")
-                        st.write(f"**Attempted file path:** {file_path}")
-                        import traceback
-                        st.code(traceback.format_exc())
-
-        else:
-            st.error("❌ No access token found in session state")
-            st.info("💡 Click 'Login to Upstox' to authenticate")
+    # Token Status and Management
+    st.subheader("🔑 Token Status")
+    
+    # Test token validity automatically
+    token_valid = False
+    if st.session_state.upstox_access_token:
+        try:
+            # Ensure client has the token
+            if not upstox_client:
+                upstox_client = UpstoxClient()
+                upstox_client.set_access_token(st.session_state.upstox_access_token)
+            
+            quote = upstox_client.get_live_quote("NSE_INDEX|Nifty 50")
+            token_valid = quote is not None and isinstance(quote, dict)
+        except:
+            token_valid = False
+    
+    # Show token status
+    if token_valid:
+        st.success("✅ Token is valid and working!")
+        st.info(f"📊 Current NIFTY price: ₹{quote.get('ltp', 'N/A')}")
+    else:
+        st.error("❌ Token is expired or invalid")
+        st.warning("🔄 WebSocket connections will fail until you refresh the token")
+    
+    col_refresh, col_debug = st.columns([1, 1])
+    
+    with col_refresh:
+        if st.button("🔄 Refresh Token", type="primary"):
+            # Clear current authentication
+            st.session_state.upstox_authenticated = False
+            st.session_state.upstox_access_token = None
+            st.session_state.upstox_client = None
+            st.session_state.websocket_connected = False
+            st.session_state.websocket_client = None
+            
+            # Save empty token to file to clear cached version
+            try:
+                with open(".upstox_token", "w") as f:
+                    f.write("")
+                st.success("🗑️ Cleared cached token")
+            except:
+                pass
+            
+            st.info("🔄 Please click 'Login to Upstox' below to get a fresh token")
+            st.rerun()
+    
+    with col_debug:
+        with st.expander("🔍 Debug Token Information"):
+            st.write(f"**Token Available:** {'✅ Yes' if st.session_state.upstox_access_token else '❌ No'}")
+            if st.session_state.upstox_access_token:
+                st.write(f"**Token Length:** {len(st.session_state.upstox_access_token)}")
+                st.write(f"**Token Preview:** {st.session_state.upstox_access_token[:20]}...")
+                
+                # Auto-save token to file
+                try:
+                    with open(".upstox_token", "w") as f:
+                        f.write(st.session_state.upstox_access_token)
+                    st.success("💾 Token auto-saved to file")
+                except Exception as e:
+                    st.error(f"❌ Could not save token: {str(e)}")
+            else:
+                st.error("❌ No access token found in session state")
 
     # Initialize client with stored token
     if st.session_state.upstox_client is None:
@@ -196,6 +187,12 @@ else:
 
     # WebSocket Real-time Data Section
     st.header("🔴 Real-time WebSocket Data Stream")
+    
+    # Check token validity before allowing WebSocket
+    if not token_valid:
+        st.error("❌ Cannot start WebSocket - Token is expired or invalid")
+        st.info("💡 Please refresh your token first using the 'Refresh Token' button above")
+        return
 
     col1, col2, col3 = st.columns([1, 1, 2])
 
@@ -204,6 +201,12 @@ else:
             if st.button("🚀 Start WebSocket Stream", type="primary"):
                 with st.spinner("Connecting to WebSocket..."):
                     try:
+                        # Double check token before connecting
+                        test_quote = upstox_client.get_live_quote("NSE_INDEX|Nifty 50")
+                        if not test_quote:
+                            st.error("❌ Token test failed - please refresh token first")
+                            return
+                        
                         ws_client = UpstoxWebSocketClient(upstox_client)
 
                         # Add callback to update session state
@@ -226,10 +229,17 @@ else:
                             st.rerun()
                         else:
                             st.error("❌ Failed to connect WebSocket")
+                            st.warning("Common causes: Token expired, network issues, or API rate limits")
                     except Exception as e:
                         st.error(f"❌ WebSocket connection error: {str(e)}")
+                        st.info("💡 If you see authorization errors, please refresh your token")
         else:
             st.success("🟢 WebSocket Active")
+            
+            # Check if WebSocket is still actually connected
+            if st.session_state.websocket_client and not st.session_state.websocket_client.is_connected:
+                st.warning("⚠️ WebSocket appears to be disconnected")
+                st.info("💡 Click 'Stop WebSocket' and try reconnecting")
 
     with col2:
         if st.session_state.websocket_connected:
