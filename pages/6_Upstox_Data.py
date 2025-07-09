@@ -192,7 +192,7 @@ else:
     if not token_valid:
         st.error("❌ Cannot start WebSocket - Token is expired or invalid")
         st.info("💡 Please refresh your token first using the 'Refresh Token' button above")
-        return
+        st.stop()
 
     col1, col2, col3 = st.columns([1, 1, 2])
 
