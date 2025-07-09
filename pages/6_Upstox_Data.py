@@ -513,32 +513,64 @@ if st.session_state.upstox_authenticated:
 
     with col1:
         if st.button("🚪 Logout from Upstox"):
-            # Clear all Upstox-related session state
-            st.session_state.upstox_authenticated = False
-            st.session_state.upstox_client = None
-            st.session_state.upstox_access_token = None
+            # First disconnect WebSocket if active
+            if 'websocket_client' in st.session_state and st.session_state.websocket_client:
+                try:
+                    st.session_state.websocket_client.disconnect()
+                except:
+                    pass
             
-            # Clear WebSocket related state
-            if 'websocket_client' in st.session_state:
-                if st.session_state.websocket_client:
-                    try:
-                        st.session_state.websocket_client.disconnect()
-                    except:
-                        pass
-                st.session_state.websocket_client = None
-            st.session_state.websocket_connected = False
-            st.session_state.live_ohlc_data = pd.DataFrame()
-            st.session_state.current_tick = None
-            
-            # Delete the token file
+            # Delete the token file first
             try:
                 if os.path.exists('.upstox_token'):
                     os.remove('.upstox_token')
-            except:
-                pass
-                
+                    print("🗑️ Token file deleted")
+            except Exception as e:
+                print(f"⚠️ Error deleting token file: {e}")
+            
+            # Clear all Upstox-related session state variables
+            keys_to_clear = [
+                'upstox_authenticated',
+                'upstox_client', 
+                'upstox_access_token',
+                'websocket_client',
+                'websocket_connected',
+                'live_ohlc_data',
+                'current_tick',
+                'upstox_just_authenticated'
+            ]
+            
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
+            
+            # Set the essential ones to False/None explicitly
+            st.session_state.upstox_authenticated = False
+            st.session_state.upstox_client = None
+            st.session_state.upstox_access_token = None
+            st.session_state.websocket_connected = False
+            st.session_state.live_ohlc_data = pd.DataFrame()
+            
+            # Show success and force page refresh
             st.success("✅ Logged out successfully - all sessions cleared")
-            st.rerun()
+            
+            # Use JavaScript to clear browser cache and reload
+            st.markdown("""
+            <script>
+            setTimeout(function() {
+                // Clear browser cache
+                if ('caches' in window) {
+                    caches.keys().then(function(names) {
+                        names.forEach(function(name) {
+                            caches.delete(name);
+                        });
+                    });
+                }
+                // Force reload with cache bypass
+                window.location.reload(true);
+            }, 1000);
+            </script>
+            """, unsafe_allow_html=True)
 
     with col2:
         if st.button("🔄 Reset WebSocket Connection"):
