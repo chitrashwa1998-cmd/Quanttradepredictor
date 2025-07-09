@@ -13,20 +13,47 @@ from models.profit_probability_model import ProfitProbabilityModel
 from models.reversal_model import ReversalModel
 from utils.database_adapter import DatabaseAdapter
 
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def get_cached_database_data():
+    """Get cached database data to prevent repeated loading"""
+    try:
+        db = DatabaseAdapter()
+        data = db.load_ohlc_data()
+        return data
+    except Exception as e:
+        st.error(f"Database error: {str(e)}")
+        return None
+
+@st.cache_resource
+def get_cached_model_manager():
+    """Get cached model manager to prevent repeated initialization"""
+    from models.model_manager import ModelManager
+    return ModelManager()
+
 def show_predictions_page():
-    """Main predictions page with all 4 models - NO FALLBACK LOGIC"""
+    """Main predictions page with all 4 models - WITH CACHING"""
 
     st.title("🔮 Real-Time Predictions")
-    st.markdown("### Advanced ML Model Predictions - Authentic Data Only")
+    st.markdown("### Advanced ML Model Predictions - Cached for Performance")
 
-    # Add cache clearing button to remove synthetic values
-    if st.button("🗑️ Clear All Cached Data", help="Click if you see synthetic datetime warnings"):
-        # Clear ALL session state to remove any synthetic datetime values
-        st.session_state.clear()
-        st.success("✅ Cleared all cached data. Page will reload with fresh database data.")
-        st.rerun()
+    # Add cache clearing button
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        if st.button("🗑️ Clear Cache", help="Clear all cached data and reload"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.session_state.clear()
+            st.success("✅ Cache cleared! Reloading...")
+            st.rerun()
 
-    # Initialize database with error handling
+    # Get cached data instead of initializing fresh each time
+    fresh_data = get_cached_database_data()
+    
+    if fresh_data is None or len(fresh_data) == 0:
+        st.error("⚠️ No data available in database. Please upload data first.")
+        st.stop()
+
+    # Initialize database only when needed
     try:
         db = DatabaseAdapter()
     except Exception as e:
@@ -123,8 +150,24 @@ def show_predictions_page():
     with reversal_tab:
         show_reversal_predictions(db, fresh_data)
 
+@st.cache_data(ttl=300)
+def get_cached_volatility_features(data_hash):
+    """Cache volatility features to prevent recalculation"""
+    try:
+        from features.technical_indicators import TechnicalIndicators
+        # Recreate data from hash (this is a simplified approach)
+        db = DatabaseAdapter()
+        fresh_data = db.load_ohlc_data()
+        
+        ti = TechnicalIndicators()
+        features = ti.calculate_all_indicators(fresh_data)
+        return features
+    except Exception as e:
+        st.error(f"Error calculating features: {str(e)}")
+        return None
+
 def show_volatility_predictions(db, fresh_data):
-    """Volatility predictions with authentic data only"""
+    """Volatility predictions with cached features"""
 
     st.header("📊 Volatility Forecasting")
 
@@ -133,20 +176,18 @@ def show_volatility_predictions(db, fresh_data):
         st.error("No fresh data available")
         return
 
-    # Initialize model manager and check for trained models
-    from models.model_manager import ModelManager
-    model_manager = ModelManager()
+    # Get cached model manager
+    model_manager = get_cached_model_manager()
 
     # Check if volatility model exists
     if not model_manager.is_model_trained('volatility'):
         st.warning("⚠️ Volatility model not trained. Please train the model first.")
         return
 
-    # Prepare features from fresh data
+    # Get cached features instead of recalculating
     try:
-        from features.technical_indicators import TechnicalIndicators
-        ti = TechnicalIndicators()
-        features = ti.calculate_all_indicators(fresh_data)
+        data_hash = str(hash(str(fresh_data.index[-1])))  # Simple hash based on latest timestamp
+        features = get_cached_volatility_features(data_hash)
 
         if features is None or len(features) == 0:
             st.error("Failed to calculate features")
@@ -778,8 +819,24 @@ def show_volatility_predictions(db, fresh_data):
     except Exception as e:
         st.error(f"Error generating volatility predictions: {str(e)}")
 
+@st.cache_data(ttl=300)
+def get_cached_direction_features(data_hash):
+    """Cache direction features to prevent recalculation"""
+    try:
+        from features.direction_technical_indicators import DirectionTechnicalIndicators
+        # Recreate data from hash
+        db = DatabaseAdapter()
+        fresh_data = db.load_ohlc_data()
+        
+        dti = DirectionTechnicalIndicators()
+        features = dti.calculate_all_direction_indicators(fresh_data)
+        return features
+    except Exception as e:
+        st.error(f"Error calculating direction features: {str(e)}")
+        return None
+
 def show_direction_predictions(db, fresh_data):
-    """Direction predictions with authentic data only"""
+    """Direction predictions with cached features"""
 
     st.header("📈 Direction Predictions")
 
@@ -788,21 +845,18 @@ def show_direction_predictions(db, fresh_data):
         st.error("No fresh data available")
         return
 
-    # Initialize model manager and check for trained models
-    from models.model_manager import ModelManager
-    model_manager = ModelManager()
+    # Get cached model manager
+    model_manager = get_cached_model_manager()
 
     # Check if direction model exists
     if not model_manager.is_model_trained('direction'):
         st.warning("⚠️ Direction model not trained. Please train the model first.")
         return
 
-    # Prepare features from fresh data
+    # Get cached features instead of recalculating
     try:
-        # Use direction-specific features
-        from features.direction_technical_indicators import DirectionTechnicalIndicators
-        dti = DirectionTechnicalIndicators()
-        features = dti.calculate_all_direction_indicators(fresh_data)
+        data_hash = str(hash(str(fresh_data.index[-1])))
+        features = get_cached_direction_features(data_hash)
 
         if features is None or len(features) == 0:
             st.error("Failed to calculate direction features")
