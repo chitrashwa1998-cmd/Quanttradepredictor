@@ -135,8 +135,8 @@ else:
                 # Save token to file
                 if st.button("💾 Save Token to File"):
                     try:
-                        # Define the file path
-                        file_path = "upstox_token.txt"
+                        # Define the file path to match console script
+                        file_path = ".upstox_token"
 
                         # Write the token to the file
                         with open(file_path, "w") as f:
