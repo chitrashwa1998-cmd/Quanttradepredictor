@@ -23,10 +23,19 @@ def test_websocket():
         # Initialize Upstox client
         upstox_client = UpstoxClient()
         
-        # For testing, you would need a valid access token
-        # In production, this comes from the OAuth flow
-        if not upstox_client.access_token:
-            print("⚠️ No access token available. Please authenticate through the web interface first.")
+        # Try to get access token from streamlit session if available
+        import streamlit as st
+        try:
+            if hasattr(st, 'session_state') and 'upstox_access_token' in st.session_state:
+                upstox_client.set_access_token(st.session_state.upstox_access_token)
+                print(f"✅ Using token from Streamlit session")
+            else:
+                print("⚠️ No access token available. Please authenticate through the web interface first.")
+                print("💡 Go to the Upstox Data page and click 'Login to Upstox' first")
+                return
+        except Exception as e:
+            print(f"⚠️ Could not access Streamlit session: {e}")
+            print("💡 Please authenticate through the web interface first")
             return
         
         print("🔗 Creating WebSocket client...")
