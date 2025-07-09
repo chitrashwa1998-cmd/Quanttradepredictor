@@ -80,11 +80,28 @@ def test_websocket():
             if quote:
                 print("✅ API test successful!")
                 print(f"📊 Current NIFTY price: ₹{quote.get('ltp', 'N/A')}")
+                print(f"📊 Full quote data: {quote}")
             else:
                 print("❌ API test failed - invalid token or API issue")
+                print("💡 Token might be expired or invalid")
                 return
         except Exception as e:
             print(f"❌ API test failed: {e}")
+            print("💡 This usually means the token is expired or invalid")
+            return
+        
+        # Test WebSocket authorization URL
+        print("🔍 Testing WebSocket authorization...")
+        try:
+            ws_url = upstox_client.get_websocket_url()
+            if ws_url:
+                print(f"✅ WebSocket URL obtained: {ws_url}")
+            else:
+                print("❌ Failed to get WebSocket URL")
+                print("💡 Check if your token has WebSocket permissions")
+                return
+        except Exception as e:
+            print(f"❌ WebSocket URL test failed: {e}")
             return
         
         print("🔗 Creating WebSocket client...")
@@ -97,20 +114,32 @@ def test_websocket():
         ws_client.add_callback(on_ohlc_received)
         
         print("🚀 Connecting to WebSocket...")
+        print("🔍 Detailed WebSocket connection attempt...")
         success = ws_client.connect()
         
         if success:
             print("✅ WebSocket connected! Streaming data...")
             print("Press Ctrl+C to stop")
             
+            # Wait a bit more for connection to stabilize
+            print("⏳ Waiting for data stream to start...")
+            time.sleep(5)
+            
             # Keep running and show live ticks
             try:
                 tick_count = 0
+                no_data_count = 0
                 while True:
                     tick = ws_client.get_latest_tick()
                     if tick:
                         tick_count += 1
+                        no_data_count = 0
                         print(f"💰 Live tick #{tick_count}: Price=₹{tick['ltp']:.2f}, Time={tick['timestamp'].strftime('%H:%M:%S')}")
+                    else:
+                        no_data_count += 1
+                        if no_data_count % 10 == 0:
+                            print(f"⏳ No data received for {no_data_count} seconds...")
+                            print(f"🔍 WebSocket still connected: {ws_client.is_connected}")
                     
                     # Show current OHLC candle in progress
                     current_candle = ws_client.get_current_ohlc()
@@ -125,7 +154,12 @@ def test_websocket():
                 print("✅ WebSocket disconnected")
         else:
             print("❌ Failed to connect to WebSocket")
-            print("💡 Check your token validity and try again")
+            print("💡 This usually means:")
+            print("   1. Token is expired")
+            print("   2. Token doesn't have WebSocket permissions")
+            print("   3. Network connectivity issues")
+            print("   4. Upstox API is down")
+            print("\n🔄 Please try getting a fresh token from the Upstox Data page")
             
     except Exception as e:
         print(f"❌ Error in WebSocket test: {str(e)}")
