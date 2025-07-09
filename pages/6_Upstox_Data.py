@@ -205,7 +205,7 @@ else:
                         test_quote = upstox_client.get_live_quote("NSE_INDEX|Nifty 50")
                         if not test_quote:
                             st.error("❌ Token test failed - please refresh token first")
-                            return
+                            st.stop()
                         
                         ws_client = UpstoxWebSocketClient(upstox_client)
 
