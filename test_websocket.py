@@ -96,9 +96,22 @@ def test_websocket():
             ws_url = upstox_client.get_websocket_url()
             if ws_url:
                 print(f"✅ WebSocket URL obtained: {ws_url}")
+                
+                # Parse the URL to check for issues
+                if "wss://" in ws_url:
+                    print("✅ Secure WebSocket URL (wss://)")
+                elif "ws://" in ws_url:
+                    print("⚠️ Non-secure WebSocket URL (ws://)")
+                else:
+                    print("❌ Invalid WebSocket URL format")
+                    return
+                    
             else:
                 print("❌ Failed to get WebSocket URL")
-                print("💡 Check if your token has WebSocket permissions")
+                print("💡 Common causes:")
+                print("   - Token expired (get new token from Upstox Data page)")
+                print("   - Token doesn't have WebSocket permissions")
+                print("   - API rate limiting")
                 return
         except Exception as e:
             print(f"❌ WebSocket URL test failed: {e}")

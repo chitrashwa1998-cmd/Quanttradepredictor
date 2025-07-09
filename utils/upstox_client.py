@@ -316,6 +316,9 @@ class UpstoxWebSocketClient:
         self.is_connected = True
         print("🔗 WebSocket connection opened successfully!")
         
+        # Validate connection with a small delay
+        time.sleep(0.5)
+        
         # Subscribe to NIFTY 50 with proper authentication
         subscribe_message = {
             "guid": "someguid",
@@ -330,6 +333,12 @@ class UpstoxWebSocketClient:
         try:
             ws.send(json.dumps(subscribe_message))
             print("✅ Subscription message sent successfully")
+            
+            # Send a ping to check connection stability
+            ping_message = {"guid": "ping", "method": "ping"}
+            ws.send(json.dumps(ping_message))
+            print("📶 Ping sent to test connection")
+            
         except Exception as e:
             print(f"❌ Error sending subscription: {str(e)}")
             self.is_connected = False
@@ -367,7 +376,22 @@ class UpstoxWebSocketClient:
 
     def on_error(self, ws, error):
         """Handle WebSocket errors."""
-        st.error(f"WebSocket error: {str(error)}")
+        print(f"❌ WebSocket error: {str(error)}")
+        print(f"🔍 Error type: {type(error)}")
+        
+        # Check for specific error types
+        if "401" in str(error) or "Unauthorized" in str(error):
+            print("🔑 Authorization error - token may be expired or invalid")
+        elif "403" in str(error) or "Forbidden" in str(error):
+            print("🚫 Access forbidden - token may not have WebSocket permissions")
+        elif "timeout" in str(error).lower():
+            print("⏱️ Connection timeout - network issue")
+        
+        # Show error in Streamlit if available
+        try:
+            st.error(f"WebSocket error: {str(error)}")
+        except:
+            pass  # Streamlit not available in console
 
     def on_close(self, ws, close_status_code, close_msg):
         """WebSocket connection closed."""
@@ -384,8 +408,14 @@ class UpstoxWebSocketClient:
             print("❌ WebSocket authentication failed - invalid access token")
         elif close_status_code == 4003:
             print("❌ WebSocket authorization failed - token expired")
+        elif close_status_code == 3000:
+            print("❌ WebSocket authorization failed - token not authorized for WebSocket")
         else:
             print(f"⚠️ WebSocket closed with code: {close_status_code}")
+            
+        # Log the close message for debugging
+        if close_msg:
+            print(f"📝 Close message: {close_msg}")
             
         # Clear connection state
         self.ws = None
