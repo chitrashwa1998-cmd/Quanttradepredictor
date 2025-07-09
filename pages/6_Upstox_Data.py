@@ -610,3 +610,69 @@ if st.session_state.upstox_authenticated:
             st.session_state.current_tick = None
             st.success("✅ WebSocket connection reset")
             st.rerun()
+
+# Complete Upstox API Disconnect Section
+st.markdown("---")
+st.header("🔌 Disconnect Upstox API")
+
+col_disconnect, col_status = st.columns([1, 1])
+
+with col_disconnect:
+    if st.button("🔴 Completely Disconnect Upstox API", type="secondary"):
+        # First disconnect WebSocket if active
+        if 'websocket_client' in st.session_state and st.session_state.websocket_client:
+            try:
+                st.session_state.websocket_client.disconnect()
+                st.info("🔌 WebSocket disconnected")
+            except:
+                pass
+        
+        # Clear ALL Upstox-related session state
+        upstox_keys = [
+            'upstox_client', 'upstox_authenticated', 'upstox_access_token',
+            'websocket_client', 'websocket_connected', 'live_ohlc_data', 
+            'current_tick', 'upstox_just_authenticated'
+        ]
+        
+        for key in upstox_keys:
+            if key in st.session_state:
+                del st.session_state[key]
+        
+        # Delete the token file
+        try:
+            if os.path.exists('.upstox_token'):
+                os.remove('.upstox_token')
+                st.info("🗑️ Token file deleted")
+        except Exception as e:
+            st.warning(f"⚠️ Error deleting token file: {e}")
+        
+        # Reset authentication state
+        st.session_state.upstox_authenticated = False
+        st.session_state.upstox_client = None
+        st.session_state.upstox_access_token = None
+        st.session_state.websocket_connected = False
+        st.session_state.live_ohlc_data = pd.DataFrame()
+        
+        st.success("✅ Upstox API completely disconnected!")
+        st.info("🔄 All tokens cleared, WebSocket disconnected, session cleaned")
+        
+        # Force page refresh
+        time.sleep(1)
+        st.rerun()
+
+with col_status:
+    st.write("**Current Connection Status:**")
+    ws_status = "🟢 Connected" if st.session_state.get('websocket_connected', False) else "🔴 Disconnected"
+    api_status = "🟢 Authenticated" if st.session_state.get('upstox_authenticated', False) else "🔴 Not Authenticated"
+    token_exists = "🟢 Yes" if os.path.exists('.upstox_token') and st.session_state.get('upstox_access_token') else "🔴 No"
+    
+    st.write(f"**WebSocket:** {ws_status}")
+    st.write(f"**API Auth:** {api_status}")  
+    st.write(f"**Token:** {token_exists}")
+    
+    if st.session_state.get('websocket_connected', False):
+        st.warning("⚠️ WebSocket is still active - disconnect recommended to stop data streaming")
+    elif st.session_state.get('upstox_authenticated', False):
+        st.info("ℹ️ API authenticated but WebSocket inactive")
+    else:
+        st.success("✅ All connections are disconnected")
