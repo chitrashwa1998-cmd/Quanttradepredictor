@@ -81,13 +81,16 @@ def test_websocket():
                 print("✅ API test successful!")
                 print(f"📊 Current NIFTY price: ₹{quote.get('ltp', 'N/A')}")
                 print(f"📊 Full quote data: {quote}")
+                print("🔍 This means your token is valid for REST API calls")
             else:
                 print("❌ API test failed - invalid token or API issue")
                 print("💡 Token might be expired or invalid")
+                print("🔄 Please get a fresh token from your Upstox Data page")
                 return
         except Exception as e:
             print(f"❌ API test failed: {e}")
             print("💡 This usually means the token is expired or invalid")
+            print("🔄 Please get a fresh token from your Upstox Data page")
             return
         
         # Test WebSocket authorization URL
@@ -133,6 +136,16 @@ def test_websocket():
         if success:
             print("✅ WebSocket connected! Streaming data...")
             print("Press Ctrl+C to stop")
+            print("\n" + "="*60)
+            print("🎯 EXPECTED OUTPUT - You should see:")
+            print("="*60)
+            print("💰 Live tick #1: Price=₹24,305.50, Time=17:25:30")
+            print("💰 Live tick #2: Price=₹24,306.25, Time=17:25:31")
+            print("📈 Current candle: O=24300.00 H=24310.00 L=24295.00 C=24305.75")
+            print("📊 New 5-min candle: {'DateTime': '2025-07-09 17:25:00', ...}")
+            print("="*60)
+            print("🚀 ACTUAL OUTPUT:")
+            print("="*60)
             
             # Wait a bit more for connection to stabilize
             print("⏳ Waiting for data stream to start...")
@@ -153,6 +166,12 @@ def test_websocket():
                         if no_data_count % 10 == 0:
                             print(f"⏳ No data received for {no_data_count} seconds...")
                             print(f"🔍 WebSocket still connected: {ws_client.is_connected}")
+                            
+                            # If no data for 30 seconds, likely token issue
+                            if no_data_count >= 30:
+                                print("❌ No data for 30+ seconds - likely token expired!")
+                                print("🔄 Please get a fresh token from Upstox Data page")
+                                break
                     
                     # Show current OHLC candle in progress
                     current_candle = ws_client.get_current_ohlc()
