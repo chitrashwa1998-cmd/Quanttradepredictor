@@ -1,33 +1,15 @@
+# Applying the provided changes to fix date formatting error when data index is not datetime.
 import streamlit as st
 import pandas as pd
-from utils.database_adapter import DatabaseAdapter
-from auto_restore import auto_restore_system
-from utils.upstox_client import UpstoxClient
+import numpy as np
+from datetime import datetime
+import warnings
+warnings.filterwarnings('ignore')
 
-# Handle Upstox OAuth callback FIRST
-query_params = st.query_params
-if 'code' in query_params and 'state' in query_params and query_params['state'] == 'upstox_auth':
-    try:
-        upstox_client = UpstoxClient()
-        success = upstox_client.exchange_code_for_token(query_params['code'])
-
-        if success:
-            st.session_state.upstox_client = upstox_client
-            st.session_state.upstox_authenticated = True
-            st.session_state.upstox_access_token = upstox_client.access_token
-
-            # Clear the OAuth params and redirect to Upstox page
-            st.query_params.clear()
-            st.switch_page("pages/6_Upstox_Data.py")
-        else:
-            st.error("❌ Upstox authentication failed")
-    except Exception as e:
-        st.error(f"❌ Upstox authentication error: {str(e)}")
-
-# Configure page
+# Page configuration
 st.set_page_config(
-    page_title="TribexAlpha Trading Platform",
-    page_icon="📈",
+    page_title="TribexAlpha",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -36,16 +18,9 @@ st.set_page_config(
 with open('style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
-# Initialize database and auto-restore
-trading_db = DatabaseAdapter()
-
-# Restore previous session
+# Auto-restore system
+from auto_restore import auto_restore_system
 auto_restore_system()
-
-import numpy as np
-from datetime import datetime
-import warnings
-warnings.filterwarnings('ignore')
 
 # Initialize session state with automatic data recovery
 def initialize_session_state():
@@ -154,7 +129,6 @@ initialize_session_state()
 nav_pages = {
     "🏠 HOME": "home",
     "📊 DATA UPLOAD": "data",
-    "📡 UPSTOX DATA": "upstox",
     "🔬 MODEL TRAINING": "training", 
     "🎯 PREDICTIONS": "predictions",
     "📈 BACKTESTING": "backtesting",
