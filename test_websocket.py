@@ -23,41 +23,68 @@ def test_websocket():
         # Initialize Upstox client
         upstox_client = UpstoxClient()
         
-        # Try to get access token from a temporary file
+        # Method 1: Try to get access token from file
         token_file = ".upstox_token"
+        token = None
         
         print(f"🔍 Looking for token file: {os.path.abspath(token_file)}")
-        print(f"🔍 Current working directory: {os.getcwd()}")
-        print(f"🔍 Files in current directory: {os.listdir('.')}")
         
         if os.path.exists(token_file):
             try:
                 with open(token_file, 'r') as f:
                     token = f.read().strip()
                     
-                print(f"📄 Token file size: {os.path.getsize(token_file)} bytes")
-                print(f"📄 Token content length: {len(token)}")
-                
                 if token:
-                    upstox_client.set_access_token(token)
-                    print(f"✅ Using token from file: {token[:20]}...")
+                    print(f"✅ Found token in file: {token[:20]}...")
                 else:
                     print("⚠️ Token file is empty")
-                    print("💡 Go to the Upstox Data page and click 'Save Token to File' again")
-                    return
+                    
             except Exception as e:
                 print(f"⚠️ Error reading token file: {e}")
-                print(f"📁 File exists: {os.path.exists(token_file)}")
-                print(f"📁 File readable: {os.access(token_file, os.R_OK)}")
-                return
-        else:
-            print("⚠️ No token file found (.upstox_token)")
-            print("💡 Go to the Upstox Data page and click 'Save Token to File' first")
+        
+        # Method 2: Manual token input if file method fails
+        if not token:
+            print("\n" + "="*60)
+            print("🔑 TOKEN INPUT REQUIRED")
+            print("="*60)
+            print("Since the token file wasn't found, please:")
+            print("1. Go to your Streamlit app")
+            print("2. Navigate to 'Upstox Data' page")
+            print("3. Authenticate and get your token")
+            print("4. Copy the token that appears in the debug section")
+            print("5. Paste it below:")
+            print()
             
-            # Check if there are any similar files
-            similar_files = [f for f in os.listdir('.') if 'token' in f.lower() or 'upstox' in f.lower()]
-            if similar_files:
-                print(f"🔍 Found similar files: {similar_files}")
+            token = input("📋 Paste your Upstox access token here: ").strip()
+            
+            if not token:
+                print("❌ No token provided. Exiting.")
+                return
+                
+            # Save token to file for future use
+            try:
+                with open(token_file, 'w') as f:
+                    f.write(token)
+                print(f"💾 Token saved to {token_file} for future use")
+            except Exception as e:
+                print(f"⚠️ Could not save token to file: {e}")
+        
+        # Set the token
+        upstox_client.set_access_token(token)
+        print(f"🔗 Using access token: {token[:20]}...")
+        
+        # Test API connectivity first
+        print("🧪 Testing API connectivity...")
+        try:
+            quote = upstox_client.get_live_quote("NSE_INDEX|Nifty 50")
+            if quote:
+                print("✅ API test successful!")
+                print(f"📊 Current NIFTY price: ₹{quote.get('ltp', 'N/A')}")
+            else:
+                print("❌ API test failed - invalid token or API issue")
+                return
+        except Exception as e:
+            print(f"❌ API test failed: {e}")
             return
         
         print("🔗 Creating WebSocket client...")
@@ -78,26 +105,32 @@ def test_websocket():
             
             # Keep running and show live ticks
             try:
+                tick_count = 0
                 while True:
                     tick = ws_client.get_latest_tick()
                     if tick:
-                        print(f"💰 Live tick: ₹{tick['ltp']:.2f} at {tick['timestamp'].strftime('%H:%M:%S')}")
+                        tick_count += 1
+                        print(f"💰 Live tick #{tick_count}: Price=₹{tick['ltp']:.2f}, Time={tick['timestamp'].strftime('%H:%M:%S')}")
                     
+                    # Show current OHLC candle in progress
                     current_candle = ws_client.get_current_ohlc()
-                    if current_candle:
-                        print(f"📈 Current candle: O:{current_candle['Open']:.2f} H:{current_candle['High']:.2f} L:{current_candle['Low']:.2f} C:{current_candle['Close']:.2f}")
+                    if current_candle and tick_count % 10 == 0:  # Show every 10 ticks
+                        print(f"📈 Current candle: O={current_candle['Open']:.2f} H={current_candle['High']:.2f} L={current_candle['Low']:.2f} C={current_candle['Close']:.2f}")
                     
-                    time.sleep(2)
+                    time.sleep(1)  # Check every second
                     
             except KeyboardInterrupt:
-                print("\n⏹️ Stopping WebSocket...")
+                print("\n🛑 Stopping WebSocket...")
                 ws_client.disconnect()
                 print("✅ WebSocket disconnected")
         else:
-            print("❌ Failed to connect WebSocket")
+            print("❌ Failed to connect to WebSocket")
+            print("💡 Check your token validity and try again")
             
     except Exception as e:
-        print(f"❌ Error during WebSocket test: {str(e)}")
+        print(f"❌ Error in WebSocket test: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     test_websocket()
