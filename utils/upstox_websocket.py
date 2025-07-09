@@ -1,5 +1,4 @@
 
-import upstox_client
 import websocket
 import threading
 import time
@@ -9,12 +8,13 @@ from datetime import datetime
 import json
 import struct
 from typing import Callable, Optional, Dict, Any
+import requests
 
 class UpstoxWebSocketClient:
-    """Real-time Upstox WebSocket client using official SDK."""
+    """Real-time Upstox WebSocket client using direct WebSocket connection."""
     
     def __init__(self, access_token: str, api_key: str):
-        """Initialize Upstox WebSocket client with official SDK."""
+        """Initialize Upstox WebSocket client."""
         self.access_token = access_token
         self.api_key = api_key
         self.ws = None
@@ -26,28 +26,42 @@ class UpstoxWebSocketClient:
         self.last_tick_data = {}
         self.websocket_url = None
         
-        # Configure Upstox API client
-        configuration = upstox_client.Configuration()
-        configuration.access_token = access_token
-        self.api_client = upstox_client.ApiClient(configuration)
-        
-        # Get WebSocket URL
+        # Get WebSocket URL from Upstox API
         self._get_websocket_url()
         
     def _get_websocket_url(self):
-        """Get WebSocket URL from Upstox API."""
+        """Get WebSocket URL from Upstox Market Data Feed API."""
         try:
-            websocket_api = upstox_client.WebSocketApi(self.api_client)
-            api_response = websocket_api.get_market_data_feed_authorize(api_version='2.0')
-            if hasattr(api_response, 'data') and hasattr(api_response.data, 'authorized_redirect_uri'):
-                self.websocket_url = api_response.data.authorized_redirect_uri
-                print(f"✅ Got WebSocket URL: {self.websocket_url}")
+            # Use the correct Upstox API endpoint to get WebSocket URL
+            url = "https://api.upstox.com/v2/feed/market-data-feed/authorize"
+            headers = {
+                "Authorization": f"Bearer {self.access_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "success" and "data" in data:
+                    self.websocket_url = data["data"]["authorized_redirect_uri"]
+                    print(f"✅ Got WebSocket URL: {self.websocket_url}")
+                else:
+                    print(f"❌ API Error: {data}")
+                    self._fallback_websocket_url()
             else:
-                print("❌ Failed to get WebSocket URL from API response")
+                print(f"❌ HTTP Error {response.status_code}: {response.text}")
+                self._fallback_websocket_url()
+                
         except Exception as e:
             print(f"❌ Error getting WebSocket URL: {e}")
-            # Fallback to direct URL construction
-            self.websocket_url = f"wss://ws-api.upstox.com/v3/ws/market-data-feed/marketdata?access_token={self.access_token}"
+            self._fallback_websocket_url()
+    
+    def _fallback_websocket_url(self):
+        """Fallback to direct WebSocket URL construction."""
+        # Direct WebSocket URL with access token
+        self.websocket_url = f"wss://ws-api.upstox.com/v3/ws/market-data-feed/marketdata?access_token={self.access_token}"
+        print(f"🔄 Using fallback WebSocket URL")
         
     def set_callbacks(self, 
                      tick_callback: Optional[Callable] = None,
@@ -68,7 +82,7 @@ class UpstoxWebSocketClient:
     def on_close(self, ws, close_status_code, close_msg):
         """Handle WebSocket connection close."""
         self.is_connected = False
-        print("❌ Upstox WebSocket connection closed")
+        print(f"❌ Upstox WebSocket connection closed: {close_status_code} - {close_msg}")
         if self.connection_callback:
             self.connection_callback("disconnected")
     
@@ -99,28 +113,29 @@ class UpstoxWebSocketClient:
     def parse_binary_message(self, message: bytes) -> Optional[Dict]:
         """Parse binary protobuf message (simplified parsing)."""
         try:
-            # This is a simplified parser - in production, you'd use proper protobuf
-            # For now, we'll try to extract basic information
+            # This is a simplified parser - Upstox sends protobuf data
+            # For production, you'd need the proper protobuf schema
             if len(message) < 10:
                 return None
             
-            # Basic tick data structure (this is simplified)
+            # Extract basic information from binary data
+            # This is a placeholder - actual protobuf parsing would be different
             tick = {
-                'instrument_token': 'binary_data',
+                'instrument_token': 'binary_instrument',
                 'timestamp': datetime.now(),
-                'ltp': 0,
+                'ltp': 0.0,
                 'ltq': 0,
                 'volume': 0,
-                'bid_price': 0,
-                'ask_price': 0,
+                'bid_price': 0.0,
+                'ask_price': 0.0,
                 'bid_qty': 0,
                 'ask_qty': 0,
-                'open': 0,
-                'high': 0,
-                'low': 0,
-                'close': 0,
-                'change': 0,
-                'change_percent': 0
+                'open': 0.0,
+                'high': 0.0,
+                'low': 0.0,
+                'close': 0.0,
+                'change': 0.0,
+                'change_percent': 0.0
             }
             
             return tick
@@ -142,28 +157,37 @@ class UpstoxWebSocketClient:
                 instrument_key = list(feeds.keys())[0]
                 feed_data = feeds[instrument_key]
                 
+                # Parse the feed data into standardized format
                 tick = {
                     'instrument_token': instrument_key,
                     'timestamp': datetime.now(),
-                    'ltp': feed_data.get('ltp', 0),
-                    'ltq': feed_data.get('ltq', 0),
+                    'ltp': float(feed_data.get('ltp', 0)),
+                    'ltq': int(feed_data.get('ltq', 0)),
                     'ltt': feed_data.get('ltt'),
-                    'bid_price': feed_data.get('bp1', 0),
-                    'ask_price': feed_data.get('ap1', 0),
-                    'bid_qty': feed_data.get('bq1', 0),
-                    'ask_qty': feed_data.get('aq1', 0),
-                    'volume': feed_data.get('vol', 0),
-                    'open': feed_data.get('open', 0),
-                    'high': feed_data.get('high', 0),
-                    'low': feed_data.get('low', 0),
-                    'close': feed_data.get('close', 0),
-                    'change': feed_data.get('chng', 0),
-                    'change_percent': feed_data.get('chngPer', 0)
+                    'bid_price': float(feed_data.get('bp1', 0)),
+                    'ask_price': float(feed_data.get('ap1', 0)),
+                    'bid_qty': int(feed_data.get('bq1', 0)),
+                    'ask_qty': int(feed_data.get('aq1', 0)),
+                    'volume': int(feed_data.get('vol', 0)),
+                    'open': float(feed_data.get('open', 0)),
+                    'high': float(feed_data.get('high', 0)),
+                    'low': float(feed_data.get('low', 0)),
+                    'close': float(feed_data.get('close', 0)),
+                    'change': float(feed_data.get('chng', 0)),
+                    'change_percent': float(feed_data.get('chngPer', 0))
                 }
                 
                 # Store latest tick data
                 self.last_tick_data[instrument_key] = tick
                 return tick
+            
+            elif data.get('type') == 'connection':
+                print(f"📡 Connection message: {data}")
+                return None
+            
+            elif data.get('type') == 'error':
+                print(f"❌ Error message: {data}")
+                return None
             
             return None
             
@@ -178,13 +202,21 @@ class UpstoxWebSocketClient:
                 print("❌ No WebSocket URL available")
                 return False
             
-            # Create WebSocket connection
+            print(f"🔄 Connecting to: {self.websocket_url}")
+            
+            # Create WebSocket connection with proper headers
+            headers = {
+                "Authorization": f"Bearer {self.access_token}",
+                "User-Agent": "Python-WebSocket-Client"
+            }
+            
             self.ws = websocket.WebSocketApp(
                 self.websocket_url,
                 on_open=self.on_open,
                 on_message=self.on_message,
                 on_error=self.on_error,
-                on_close=self.on_close
+                on_close=self.on_close,
+                header=headers
             )
             
             # Start WebSocket in a separate thread
@@ -193,7 +225,7 @@ class UpstoxWebSocketClient:
             wst.start()
             
             # Wait for connection
-            time.sleep(2)
+            time.sleep(3)
             return self.is_connected
             
         except Exception as e:
@@ -208,6 +240,7 @@ class UpstoxWebSocketClient:
             except:
                 pass
             self.is_connected = False
+            print("🔌 Disconnected from WebSocket")
     
     def subscribe(self, instrument_keys: list, mode: str = "full"):
         """Subscribe to instruments for live data."""
@@ -216,9 +249,9 @@ class UpstoxWebSocketClient:
             return False
         
         try:
-            # Create subscription message
+            # Create subscription message in Upstox format
             subscribe_request = {
-                "guid": "someguid",
+                "guid": "subscription_guid",
                 "method": "sub",
                 "data": {
                     "mode": mode,
@@ -228,12 +261,13 @@ class UpstoxWebSocketClient:
             
             # Send subscription through WebSocket
             if self.ws:
-                self.ws.send(json.dumps(subscribe_request))
+                message = json.dumps(subscribe_request)
+                self.ws.send(message)
                 
                 # Update subscribed instruments
                 self.subscribed_instruments.update(instrument_keys)
                 
-                print(f"✅ Subscribed to {len(instrument_keys)} instruments")
+                print(f"✅ Subscribed to {len(instrument_keys)} instruments: {instrument_keys}")
                 return True
             
         except Exception as e:
@@ -247,7 +281,7 @@ class UpstoxWebSocketClient:
         
         try:
             unsubscribe_request = {
-                "guid": "someguid",
+                "guid": "unsubscription_guid",
                 "method": "unsub",
                 "data": {
                     "instrumentKeys": instrument_keys
@@ -255,7 +289,8 @@ class UpstoxWebSocketClient:
             }
             
             if self.ws:
-                self.ws.send(json.dumps(unsubscribe_request))
+                message = json.dumps(unsubscribe_request)
+                self.ws.send(message)
                 
                 # Remove from subscribed instruments
                 self.subscribed_instruments.difference_update(instrument_keys)
@@ -274,3 +309,13 @@ class UpstoxWebSocketClient:
     def get_all_latest_ticks(self) -> Dict:
         """Get latest tick data for all subscribed instruments."""
         return self.last_tick_data.copy()
+    
+    def get_connection_status(self) -> Dict:
+        """Get current connection status."""
+        return {
+            'is_connected': self.is_connected,
+            'subscribed_instruments': list(self.subscribed_instruments),
+            'total_instruments': len(self.subscribed_instruments),
+            'websocket_url': self.websocket_url,
+            'last_tick_count': len(self.last_tick_data)
+        }
