@@ -29,30 +29,16 @@ class ModelManager:
             db = get_trading_database()
             loaded_models = db.load_trained_models()
 
-            print(f"🔍 Database loaded models: {list(loaded_models.keys()) if loaded_models else 'None'}")
-
             if loaded_models:
                 for model_name in ['volatility', 'direction', 'profit_probability', 'reversal']:
                     if model_name in loaded_models:
                         model_data = loaded_models[model_name]
-                        
-                        # Debug: Show what's in the model data
-                        print(f"🔍 Loading {model_name} model with keys: {list(model_data.keys())}")
-                        
                         if 'task_type' not in model_data:
                             model_data['task_type'] = 'regression' if model_name == 'volatility' else 'classification'
                         
                         # Ensure model has all required keys
                         if 'model' not in model_data and 'ensemble' in model_data:
                             model_data['model'] = model_data['ensemble']
-                        
-                        # Ensure scaler is properly available
-                        if 'scaler' not in model_data or model_data['scaler'] is None:
-                            print(f"⚠️ Warning: No scaler found for {model_name} model")
-                            # Try to get scaler from training_results
-                            if 'training_results' in model_data and 'scaler' in model_data['training_results']:
-                                model_data['scaler'] = model_data['training_results']['scaler']
-                                print(f"✅ Recovered scaler from training_results for {model_name}")
                         
                         # Restore training results if available
                         if 'training_results' in model_data:
@@ -63,8 +49,7 @@ class ModelManager:
                                     model_data[key] = value
                         
                         self.trained_models[model_name] = model_data
-                        scaler_status = "✅" if model_data.get('scaler') is not None else "❌"
-                        print(f"✅ Loaded {model_name} model from database with {len(model_data.get('feature_names', []))} features, scaler: {scaler_status}")
+                        print(f"✅ Loaded {model_name} model from database with {len(model_data.get('feature_names', []))} features")
 
             # Also check session state for any models not loaded from database
             if hasattr(st, 'session_state'):
@@ -116,12 +101,6 @@ class ModelManager:
                 if self.trained_models:
                     st.session_state.trained_models = self.trained_models
                     print(f"✅ Restored {len(self.trained_models)} trained models to session state")
-                    
-                # Debug: Print final loaded models
-                print(f"🔍 Final loaded models: {list(self.trained_models.keys())}")
-                for model_name in self.trained_models:
-                    model_data = self.trained_models[model_name]
-                    print(f"🔍 {model_name}: {type(model_data.get('model') or model_data.get('ensemble'))}, features: {len(model_data.get('feature_names', []))}")
 
         except Exception as e:
             print(f"Could not load existing models: {str(e)}")
@@ -166,15 +145,8 @@ class ModelManager:
                     else:
                         raise ValueError(f"Cannot align features for {model_name}")
 
-        # Validate scaler before using
-        if scaler is None:
-            raise ValueError(f"No scaler available for {model_name} model. Please retrain the model.")
-
         # Scale features
-        try:
-            features_scaled = scaler.transform(features)
-        except Exception as e:
-            raise ValueError(f"Scaler transform failed for {model_name}: {str(e)}. Please retrain the model.")
+        features_scaled = scaler.transform(features)
 
         # Make predictions
         predictions = model.predict(features_scaled)
@@ -368,11 +340,6 @@ class ModelManager:
                     self.trained_models[model_name] = result
                     results[model_name] = result
 
-                    # Update session state immediately
-                    if not hasattr(st.session_state, 'trained_models'):
-                        st.session_state.trained_models = {}
-                    st.session_state.trained_models[model_name] = result
-
                     st.success(f"✅ {model_name} trained successfully")
                 else:
                     st.warning(f"⚠️ Could not prepare data for {model_name}")
@@ -390,12 +357,6 @@ class ModelManager:
         # Save trained models
         status_text.text("Saving trained models to database...")
         try:
-            # Debug: Show what's actually in trained_models before saving
-            print(f"🔍 Before saving - trained_models keys: {list(self.trained_models.keys())}")
-            for model_name in self.trained_models:
-                model_data = self.trained_models[model_name]
-                print(f"🔍 {model_name} model data keys: {list(model_data.keys()) if model_data else 'None'}")
-            
             self._save_models_to_database()
             status_text.text("✅ Models trained and saved!")
         except Exception as e:
@@ -413,13 +374,9 @@ class ModelManager:
             from utils.database_adapter import get_trading_database
             db = get_trading_database()
 
-            print(f"🔍 Attempting to save models: {list(self.trained_models.keys())}")
-
             models_to_save = {}
             for model_name in self.trained_models:
                 model_data = self.trained_models[model_name]
-                print(f"🔍 Processing {model_name} model with keys: {list(model_data.keys())}")
-                
                 if 'model' in model_data or 'ensemble' in model_data:
                     # Handle both 'model' and 'ensemble' keys
                     model_obj = model_data.get('model') or model_data.get('ensemble')
@@ -443,17 +400,12 @@ class ModelManager:
                             # Preserve all original data for debugging
                             'training_results': model_data
                         }
-                        print(f"✅ Prepared {model_name} model for database save with {len(model_data.get('feature_names', []))} features")
-                    else:
-                        print(f"❌ {model_name} model object is None")
-                else:
-                    print(f"❌ {model_name} model missing 'model' or 'ensemble' key")
+                        print(f"✅ Prepared {model_name} model for database save with metrics: {list(metrics.keys())}")
 
             if models_to_save:
-                print(f"🔍 Saving {len(models_to_save)} models to database: {list(models_to_save.keys())}")
                 success = db.save_trained_models(models_to_save)
                 if success:
-                    print(f"✅ Successfully saved {len(models_to_save)} models to database")
+                    print(f"✅ Saved {len(models_to_save)} models to database: {list(models_to_save.keys())}")
                 else:
                     print("❌ Failed to save models to database")
             else:
