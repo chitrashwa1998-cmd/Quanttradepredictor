@@ -132,6 +132,7 @@ nav_pages = {
     "🔬 MODEL TRAINING": "training", 
     "🎯 PREDICTIONS": "predictions",
     "📈 BACKTESTING": "backtesting",
+    "📡 LIVE DATA": "live_data",
     "💾 DATABASE": "database",
     "📋 ABOUT US": "about",
     "📞 CONTACT": "contact"
