@@ -23,19 +23,25 @@ def test_websocket():
         # Initialize Upstox client
         upstox_client = UpstoxClient()
         
-        # Try to get access token from streamlit session if available
-        import streamlit as st
-        try:
-            if hasattr(st, 'session_state') and 'upstox_access_token' in st.session_state:
-                upstox_client.set_access_token(st.session_state.upstox_access_token)
-                print(f"✅ Using token from Streamlit session")
-            else:
-                print("⚠️ No access token available. Please authenticate through the web interface first.")
-                print("💡 Go to the Upstox Data page and click 'Login to Upstox' first")
+        # Try to get access token from a temporary file
+        token_file = ".upstox_token"
+        if os.path.exists(token_file):
+            try:
+                with open(token_file, 'r') as f:
+                    token = f.read().strip()
+                if token:
+                    upstox_client.set_access_token(token)
+                    print(f"✅ Using token from file: {token[:20]}...")
+                else:
+                    print("⚠️ Token file is empty")
+                    print("💡 Go to the Upstox Data page and click 'Save Token for Console' first")
+                    return
+            except Exception as e:
+                print(f"⚠️ Error reading token file: {e}")
                 return
-        except Exception as e:
-            print(f"⚠️ Could not access Streamlit session: {e}")
-            print("💡 Please authenticate through the web interface first")
+        else:
+            print("⚠️ No token file found (.upstox_token)")
+            print("💡 Go to the Upstox Data page and click 'Save Token for Console' first")
             return
         
         print("🔗 Creating WebSocket client...")

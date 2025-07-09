@@ -9,6 +9,7 @@ from utils.upstox_client import UpstoxClient, UpstoxWebSocketClient
 from utils.database_adapter import DatabaseAdapter
 from features.technical_indicators import TechnicalIndicators
 from utils.data_processing import DataProcessor
+import os
 
 # Initialize components
 trading_db = DatabaseAdapter()
@@ -91,42 +92,60 @@ if not st.session_state.upstox_authenticated:
 else:
     # Authenticated UI
     st.success("✅ Connected to Upstox API")
-    
+
     # Debug: Show token status
     with st.expander("🔍 Debug Token Information"):
         st.write(f"**Token Available:** {'✅ Yes' if st.session_state.upstox_access_token else '❌ No'}")
         if st.session_state.upstox_access_token:
             st.write(f"**Token Length:** {len(st.session_state.upstox_access_token)}")
             st.write(f"**Token Preview:** {st.session_state.upstox_access_token[:20]}...")
-            
-            # Test token validity
-            if st.button("🔍 Test Token Validity"):
-                with st.spinner("Testing token..."):
+
+            col_a, col_b = st.columns(2)
+
+            with col_a:
+                # Test token validity
+                if st.button("🔍 Test Token Validity"):
+                    with st.spinner("Testing token..."):
+                        try:
+                            # Ensure client has the token
+                            if not upstox_client:
+                                upstox_client = UpstoxClient()
+                                upstox_client.set_access_token(st.session_state.upstox_access_token)
+
+                            st.info("🔄 Making API call to test token...")
+                            quote = upstox_client.get_live_quote("NSE_INDEX|Nifty 50")
+
+                            if quote and isinstance(quote, dict):
+                                st.success("✅ Token is valid and working!")
+                                st.write("**API Response:**")
+                                st.json(quote)
+                            elif quote is None:
+                                st.error("❌ Token test failed - API returned None (likely authentication issue)")
+                            else:
+                                st.warning(f"⚠️ Unexpected response type: {type(quote)}")
+                                st.write("Response:", quote)
+
+                        except requests.exceptions.RequestException as e:
+                            st.error(f"❌ Network error: {str(e)}")
+                        except Exception as e:
+                            st.error(f"❌ Token test error: {str(e)}")
+                            st.write("**Error details:**")
+                            st.code(str(e))
+            with col_b:
+                # Save token to file
+                if st.button("💾 Save Token to File"):
                     try:
-                        # Ensure client has the token
-                        if not upstox_client:
-                            upstox_client = UpstoxClient()
-                            upstox_client.set_access_token(st.session_state.upstox_access_token)
-                        
-                        st.info("🔄 Making API call to test token...")
-                        quote = upstox_client.get_live_quote("NSE_INDEX|Nifty 50")
-                        
-                        if quote and isinstance(quote, dict):
-                            st.success("✅ Token is valid and working!")
-                            st.write("**API Response:**")
-                            st.json(quote)
-                        elif quote is None:
-                            st.error("❌ Token test failed - API returned None (likely authentication issue)")
-                        else:
-                            st.warning(f"⚠️ Unexpected response type: {type(quote)}")
-                            st.write("Response:", quote)
-                            
-                    except requests.exceptions.RequestException as e:
-                        st.error(f"❌ Network error: {str(e)}")
+                        # Define the file path
+                        file_path = "upstox_token.txt"
+
+                        # Write the token to the file
+                        with open(file_path, "w") as f:
+                            f.write(st.session_state.upstox_access_token)
+
+                        st.success(f"✅ Token saved to `{file_path}`")
                     except Exception as e:
-                        st.error(f"❌ Token test error: {str(e)}")
-                        st.write("**Error details:**")
-                        st.code(str(e))
+                        st.error(f"❌ Error saving token to file: {str(e)}")
+
         else:
             st.error("❌ No access token found in session state")
             st.info("💡 Click 'Login to Upstox' to authenticate")
@@ -141,16 +160,16 @@ else:
 
     # WebSocket Real-time Data Section
     st.header("🔴 Real-time WebSocket Data Stream")
-    
+
     col1, col2, col3 = st.columns([1, 1, 2])
-    
+
     with col1:
         if not st.session_state.websocket_connected:
             if st.button("🚀 Start WebSocket Stream", type="primary"):
                 with st.spinner("Connecting to WebSocket..."):
                     try:
                         ws_client = UpstoxWebSocketClient(upstox_client)
-                        
+
                         # Add callback to update session state
                         def on_ohlc_update(ohlc_candle):
                             if not st.session_state.live_ohlc_data.empty:
@@ -160,9 +179,9 @@ else:
                             else:
                                 st.session_state.live_ohlc_data = pd.DataFrame([ohlc_candle])
                                 st.session_state.live_ohlc_data.set_index('DateTime', inplace=True)
-                        
+
                         ws_client.add_callback(on_ohlc_update)
-                        
+
                         success = ws_client.connect()
                         if success:
                             st.session_state.websocket_client = ws_client
@@ -175,7 +194,7 @@ else:
                         st.error(f"❌ WebSocket connection error: {str(e)}")
         else:
             st.success("🟢 WebSocket Active")
-    
+
     with col2:
         if st.session_state.websocket_connected:
             if st.button("⏹️ Stop WebSocket", type="secondary"):
@@ -188,23 +207,23 @@ else:
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error disconnecting: {str(e)}")
-    
+
     with col3:
         if st.session_state.websocket_connected and st.session_state.websocket_client:
             # Display current tick info
             current_tick = st.session_state.websocket_client.get_latest_tick()
             current_candle = st.session_state.websocket_client.get_current_ohlc()
-            
+
             if current_tick:
                 st.session_state.current_tick = current_tick
-            
+
             if st.session_state.current_tick:
                 col_a, col_b = st.columns(2)
                 with col_a:
                     st.metric("Live Price", f"₹{st.session_state.current_tick['ltp']:.2f}")
                 with col_b:
                     st.metric("Last Update", st.session_state.current_tick['timestamp'].strftime('%H:%M:%S'))
-            
+
             if current_candle:
                 st.write("**Current 5-min Candle:**")
                 col_a, col_b, col_c, col_d = st.columns(4)
@@ -220,13 +239,13 @@ else:
     # Live Data Display
     if st.session_state.websocket_connected and not st.session_state.live_ohlc_data.empty:
         st.subheader("📈 Live OHLC Data Stream")
-        
+
         # Auto-refresh the chart every 5 seconds
         placeholder = st.empty()
-        
+
         with placeholder.container():
             recent_data = st.session_state.live_ohlc_data.tail(50)
-            
+
             if len(recent_data) > 0:
                 fig = go.Figure(data=go.Candlestick(
                     x=recent_data.index,
@@ -236,7 +255,7 @@ else:
                     close=recent_data['Close'],
                     name="NIFTY 50 Live"
                 ))
-                
+
                 fig.update_layout(
                     title="Live NIFTY 50 - Last 50 Candles",
                     xaxis_title="Time",
@@ -244,13 +263,13 @@ else:
                     height=400,
                     template="plotly_dark"
                 )
-                
+
                 st.plotly_chart(fig, use_container_width=True)
-                
+
                 # Show recent candles table
                 st.write("**Recent 5-minute Candles:**")
                 st.dataframe(recent_data.tail(10), use_container_width=True)
-                
+
                 # Auto-save to database button
                 if st.button("💾 Save Live Data to Database"):
                     with st.spinner("Saving live data..."):
@@ -320,11 +339,11 @@ else:
                                 features_data = TechnicalIndicators.calculate_all_indicators(df)
                                 st.session_state.features = features_data
                                 st.success("✅ Technical indicators calculated!")
-                                
+
                                 # Set data source flag for other pages
                                 st.session_state.data_source = "upstox_live"
                                 st.session_state.last_data_update = datetime.now()
-                                
+
                                 st.info("🔗 **Ready for AI**: Your live data is now available in Model Training and Predictions pages!")
                         else:
                             st.warning("⚠️ Data fetched but failed to save to database")
@@ -455,7 +474,7 @@ else:
 if st.session_state.upstox_authenticated:
     st.markdown("---")
     col1, col2 = st.columns(2)
-    
+
     with col1:
         if st.button("🚪 Logout from Upstox"):
             st.session_state.upstox_authenticated = False
@@ -463,7 +482,7 @@ if st.session_state.upstox_authenticated:
             st.session_state.upstox_access_token = None
             st.success("✅ Logged out successfully")
             st.rerun()
-    
+
     with col2:
         if st.button("🔄 Reset WebSocket Connection"):
             # Clear WebSocket related session state
