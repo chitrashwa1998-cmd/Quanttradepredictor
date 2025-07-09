@@ -1,19 +1,18 @@
 
-import websocket
-import json
+import upstox_client
 import threading
 import time
 import pandas as pd
 import streamlit as st
 from datetime import datetime
 from typing import Callable, Optional, Dict, Any
-import ssl
+import json
 
 class UpstoxWebSocketClient:
-    """Real-time Upstox WebSocket client for live market data."""
+    """Real-time Upstox WebSocket client using official SDK."""
     
     def __init__(self, access_token: str, api_key: str):
-        """Initialize Upstox WebSocket client."""
+        """Initialize Upstox WebSocket client with official SDK."""
         self.access_token = access_token
         self.api_key = api_key
         self.ws = None
@@ -24,8 +23,11 @@ class UpstoxWebSocketClient:
         self.connection_callback = None
         self.last_tick_data = {}
         
-        # WebSocket URL for Upstox
-        self.ws_url = "wss://ws-api.upstox.com/v3/ws/market-data-feed/marketdata"
+        # Configure Upstox API client
+        configuration = upstox_client.Configuration()
+        configuration.access_token = access_token
+        self.api_client = upstox_client.ApiClient(configuration)
+        self.websocket_api = upstox_client.WebSocketApi(self.api_client)
         
     def set_callbacks(self, 
                      tick_callback: Optional[Callable] = None,
@@ -43,10 +45,10 @@ class UpstoxWebSocketClient:
         if self.connection_callback:
             self.connection_callback("connected")
     
-    def on_close(self, ws, close_status_code, close_msg):
+    def on_close(self, ws):
         """Handle WebSocket connection close."""
         self.is_connected = False
-        print(f"❌ Upstox WebSocket connection closed: {close_msg}")
+        print("❌ Upstox WebSocket connection closed")
         if self.connection_callback:
             self.connection_callback("disconnected")
     
@@ -59,24 +61,61 @@ class UpstoxWebSocketClient:
     def on_message(self, ws, message):
         """Handle incoming WebSocket messages."""
         try:
-            # Parse the binary message (Upstox sends protobuf format)
-            # For this example, we'll assume JSON format for simplicity
-            data = json.loads(message)
-            
-            # Process tick data
-            if data.get('type') == 'feed':
-                tick_data = self.parse_tick_data(data)
+            # The official SDK handles protobuf parsing automatically
+            # Message should already be parsed into Python dict/object
+            if hasattr(message, 'feeds') and message.feeds:
+                tick_data = self.parse_tick_data(message)
+                if tick_data and self.tick_callback:
+                    self.tick_callback(tick_data)
+            elif isinstance(message, dict):
+                # Handle dict format messages
+                tick_data = self.parse_tick_data_dict(message)
                 if tick_data and self.tick_callback:
                     self.tick_callback(tick_data)
                     
-        except json.JSONDecodeError:
-            # Handle binary/protobuf data if needed
-            pass
         except Exception as e:
             print(f"Error processing message: {e}")
     
-    def parse_tick_data(self, data: Dict) -> Optional[Dict]:
-        """Parse raw tick data into standardized format."""
+    def parse_tick_data(self, message) -> Optional[Dict]:
+        """Parse tick data from SDK message object."""
+        try:
+            feeds = message.feeds if hasattr(message, 'feeds') else {}
+            if not feeds:
+                return None
+            
+            # Extract first instrument data
+            instrument_key = list(feeds.keys())[0]
+            feed_data = feeds[instrument_key]
+            
+            tick = {
+                'instrument_token': instrument_key,
+                'timestamp': datetime.now(),
+                'ltp': getattr(feed_data, 'ltp', 0),
+                'ltq': getattr(feed_data, 'ltq', 0),
+                'ltt': getattr(feed_data, 'ltt', None),
+                'bid_price': getattr(feed_data, 'bp1', 0),
+                'ask_price': getattr(feed_data, 'ap1', 0),
+                'bid_qty': getattr(feed_data, 'bq1', 0),
+                'ask_qty': getattr(feed_data, 'aq1', 0),
+                'volume': getattr(feed_data, 'vol', 0),
+                'open': getattr(feed_data, 'open', 0),
+                'high': getattr(feed_data, 'high', 0),
+                'low': getattr(feed_data, 'low', 0),
+                'close': getattr(feed_data, 'close', 0),
+                'change': getattr(feed_data, 'chng', 0),
+                'change_percent': getattr(feed_data, 'chngPer', 0)
+            }
+            
+            # Store latest tick data
+            self.last_tick_data[instrument_key] = tick
+            return tick
+            
+        except Exception as e:
+            print(f"Error parsing tick data: {e}")
+            return None
+    
+    def parse_tick_data_dict(self, data: Dict) -> Optional[Dict]:
+        """Parse tick data from dictionary format."""
         try:
             feeds = data.get('feeds', {})
             if not feeds:
@@ -101,8 +140,8 @@ class UpstoxWebSocketClient:
                 'high': feed_data.get('high', 0),
                 'low': feed_data.get('low', 0),
                 'close': feed_data.get('close', 0),
-                'change': feed_data.get('change', 0),
-                'change_percent': feed_data.get('change_percent', 0)
+                'change': feed_data.get('chng', 0),
+                'change_percent': feed_data.get('chngPer', 0)
             }
             
             # Store latest tick data
@@ -110,34 +149,36 @@ class UpstoxWebSocketClient:
             return tick
             
         except Exception as e:
-            print(f"Error parsing tick data: {e}")
+            print(f"Error parsing dict tick data: {e}")
             return None
     
     def connect(self):
-        """Establish WebSocket connection."""
+        """Establish WebSocket connection using official SDK."""
         try:
-            # Create WebSocket connection with headers
-            headers = {
-                'Authorization': f'Bearer {self.access_token}',
-                'Api-Key': self.api_key
-            }
+            # Get WebSocket URL from the API
+            websocket_api_instance = upstox_client.WebSocketApi(self.api_client)
             
-            self.ws = websocket.WebSocketApp(
-                self.ws_url,
-                header=headers,
-                on_open=self.on_open,
-                on_message=self.on_message,
-                on_error=self.on_error,
-                on_close=self.on_close
-            )
+            # Configure WebSocket callbacks
+            def on_message_wrapper(ws, message):
+                self.on_message(ws, message)
             
-            # Start WebSocket in a separate thread
-            self.ws_thread = threading.Thread(
-                target=self.ws.run_forever,
-                kwargs={'sslopt': {"cert_reqs": ssl.CERT_NONE}}
+            def on_open_wrapper(ws):
+                self.on_open(ws)
+            
+            def on_close_wrapper(ws):
+                self.on_close(ws)
+            
+            def on_error_wrapper(ws, error):
+                self.on_error(ws, error)
+            
+            # Start WebSocket connection
+            self.ws = websocket_api_instance.get_market_data_feed_authorize(
+                api_version='2.0',
+                on_message=on_message_wrapper,
+                on_open=on_open_wrapper,
+                on_close=on_close_wrapper,
+                on_error=on_error_wrapper
             )
-            self.ws_thread.daemon = True
-            self.ws_thread.start()
             
             return True
             
@@ -148,60 +189,71 @@ class UpstoxWebSocketClient:
     def disconnect(self):
         """Close WebSocket connection."""
         if self.ws:
-            self.ws.close()
+            try:
+                self.ws.close()
+            except:
+                pass
             self.is_connected = False
     
     def subscribe(self, instrument_keys: list, mode: str = "full"):
-        """Subscribe to instruments for live data."""
+        """Subscribe to instruments for live data using official SDK."""
         if not self.is_connected:
             print("❌ WebSocket not connected. Please connect first.")
             return False
         
         try:
-            # Prepare subscription message
-            subscription_data = {
+            # Convert mode to SDK format
+            mode_mapping = {
+                "ltpc": "ltpc",
+                "full": "full", 
+                "quote": "quote"
+            }
+            sdk_mode = mode_mapping.get(mode, "full")
+            
+            # Subscribe using the official SDK method
+            subscribe_request = {
                 "action": "subscribe",
-                "correlationId": f"sub_{int(time.time())}",
                 "data": {
-                    "mode": mode,  # "ltpc", "full", "quote"
+                    "mode": sdk_mode,
                     "instrumentKeys": instrument_keys
                 }
             }
             
-            # Send subscription request
-            self.ws.send(json.dumps(subscription_data))
-            
-            # Update subscribed instruments
-            self.subscribed_instruments.update(instrument_keys)
-            
-            print(f"✅ Subscribed to {len(instrument_keys)} instruments")
-            return True
+            # Send subscription through WebSocket
+            if self.ws:
+                self.ws.send(json.dumps(subscribe_request))
+                
+                # Update subscribed instruments
+                self.subscribed_instruments.update(instrument_keys)
+                
+                print(f"✅ Subscribed to {len(instrument_keys)} instruments")
+                return True
             
         except Exception as e:
             print(f"Failed to subscribe to instruments: {e}")
             return False
     
     def unsubscribe(self, instrument_keys: list):
-        """Unsubscribe from instruments."""
+        """Unsubscribe from instruments using official SDK."""
         if not self.is_connected:
             return False
         
         try:
-            unsubscription_data = {
+            unsubscribe_request = {
                 "action": "unsubscribe",
-                "correlationId": f"unsub_{int(time.time())}",
                 "data": {
                     "instrumentKeys": instrument_keys
                 }
             }
             
-            self.ws.send(json.dumps(unsubscription_data))
-            
-            # Remove from subscribed instruments
-            self.subscribed_instruments.difference_update(instrument_keys)
-            
-            print(f"✅ Unsubscribed from {len(instrument_keys)} instruments")
-            return True
+            if self.ws:
+                self.ws.send(json.dumps(unsubscribe_request))
+                
+                # Remove from subscribed instruments
+                self.subscribed_instruments.difference_update(instrument_keys)
+                
+                print(f"✅ Unsubscribed from {len(instrument_keys)} instruments")
+                return True
             
         except Exception as e:
             print(f"Failed to unsubscribe from instruments: {e}")
