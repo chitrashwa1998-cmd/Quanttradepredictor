@@ -56,6 +56,23 @@ if 'upstox_authenticated' not in st.session_state:
     st.session_state.upstox_authenticated = False
 if 'upstox_access_token' not in st.session_state:
     st.session_state.upstox_access_token = None
+
+# Load token from file if it exists and session state is empty
+if not st.session_state.upstox_access_token and os.path.exists('.upstox_token'):
+    try:
+        with open('.upstox_token', 'r') as f:
+            token = f.read().strip()
+        if token:
+            st.session_state.upstox_access_token = token
+            # Test if the token is valid
+            client = UpstoxClient()
+            client.set_access_token(token)
+            quote = client.get_live_quote("NSE_INDEX|Nifty 50")
+            if quote:
+                st.session_state.upstox_authenticated = True
+                st.session_state.upstox_client = client
+    except Exception:
+        pass
 if 'websocket_client' not in st.session_state:
     st.session_state.websocket_client = None
 if 'websocket_connected' not in st.session_state:
