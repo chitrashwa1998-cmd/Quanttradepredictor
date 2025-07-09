@@ -46,6 +46,14 @@ class ModelManager:
                         if 'model' not in model_data and 'ensemble' in model_data:
                             model_data['model'] = model_data['ensemble']
                         
+                        # Ensure scaler is properly available
+                        if 'scaler' not in model_data or model_data['scaler'] is None:
+                            print(f"⚠️ Warning: No scaler found for {model_name} model")
+                            # Try to get scaler from training_results
+                            if 'training_results' in model_data and 'scaler' in model_data['training_results']:
+                                model_data['scaler'] = model_data['training_results']['scaler']
+                                print(f"✅ Recovered scaler from training_results for {model_name}")
+                        
                         # Restore training results if available
                         if 'training_results' in model_data:
                             training_results = model_data['training_results']
@@ -55,7 +63,8 @@ class ModelManager:
                                     model_data[key] = value
                         
                         self.trained_models[model_name] = model_data
-                        print(f"✅ Loaded {model_name} model from database with {len(model_data.get('feature_names', []))} features")
+                        scaler_status = "✅" if model_data.get('scaler') is not None else "❌"
+                        print(f"✅ Loaded {model_name} model from database with {len(model_data.get('feature_names', []))} features, scaler: {scaler_status}")
 
             # Also check session state for any models not loaded from database
             if hasattr(st, 'session_state'):
@@ -157,8 +166,15 @@ class ModelManager:
                     else:
                         raise ValueError(f"Cannot align features for {model_name}")
 
+        # Validate scaler before using
+        if scaler is None:
+            raise ValueError(f"No scaler available for {model_name} model. Please retrain the model.")
+
         # Scale features
-        features_scaled = scaler.transform(features)
+        try:
+            features_scaled = scaler.transform(features)
+        except Exception as e:
+            raise ValueError(f"Scaler transform failed for {model_name}: {str(e)}. Please retrain the model.")
 
         # Make predictions
         predictions = model.predict(features_scaled)
