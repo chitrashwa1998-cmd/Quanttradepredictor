@@ -711,130 +711,34 @@ if hasattr(st.session_state, 'trained_models') and st.session_state.trained_mode
 else:
     st.info("ℹ️ No models trained yet")
 
-# Export Models Section
+# Auto-Save Information Section
 if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
-    st.header("💾 Export Models")
+    st.header("💾 Model Persistence")
     
-    col1, col2 = st.columns(2)
+    st.info("🔄 **Auto-Save Enabled**: All trained models are automatically saved to the database for persistence across app restarts.")
+    
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        subcol1, subcol2 = st.columns(2)
-        
-        with subcol1:
-            if st.button("📥 Save Volatility Model", disabled='volatility' not in st.session_state.trained_models):
-                try:
-                    if hasattr(st.session_state, 'volatility_trainer'):
-                        st.session_state.volatility_trainer._save_models_to_database()
-                        st.success("✅ Volatility model saved to database!")
-                    else:
-                        st.error("❌ Volatility trainer not available")
-                except Exception as e:
-                    st.error(f"❌ Failed to save volatility model: {str(e)}")
-        
-        with subcol2:
-            if st.button("📥 Save Direction Model", disabled='direction' not in st.session_state.trained_models):
-                try:
-                    from utils.database_adapter import get_trading_database
-                    db = get_trading_database()
-                    
-                    # Save direction model object for persistence
-                    if ('direction_trained_models' in st.session_state and 
-                        'direction' in st.session_state.direction_trained_models and
-                        st.session_state.direction_trained_models['direction'] is not None):
-                        
-                        direction_model = st.session_state.direction_trained_models['direction']
-                        
-                        # Prepare model for database save
-                        models_to_save = {
-                            'direction': {
-                                'ensemble': direction_model.model,
-                                'scaler': direction_model.scaler,
-                                'feature_names': getattr(direction_model, 'selected_features', []),
-                                'task_type': 'classification',
-                                'metrics': st.session_state.trained_models.get('direction', {}).get('metrics', {}),
-                                'feature_importance': st.session_state.trained_models.get('direction', {}).get('feature_importance', {})
-                            }
-                        }
-                        
-                        success = db.save_trained_models(models_to_save)
-                        if success:
-                            st.success("✅ Direction model saved to database!")
-                        else:
-                            st.error("❌ Failed to save direction model to database")
-                    else:
-                        st.error("❌ Direction model not available")
-                except Exception as e:
-                    st.error(f"❌ Failed to save direction model: {str(e)}")
+        if 'volatility' in st.session_state.trained_models:
+            st.success("✅ Volatility Model\n(Auto-saved)")
+        else:
+            st.info("⏳ Volatility Model\n(Not trained)")
     
     with col2:
-        subcol1, subcol2 = st.columns(2)
-        
-        with subcol1:
-            if st.button("📥 Save Profit Probability Model", disabled='profit_probability' not in st.session_state.trained_models):
-                try:
-                    from utils.database_adapter import get_trading_database
-                    db = get_trading_database()
-                    
-                    # Save profit probability model object for persistence
-                    if ('profit_prob_trained_models' in st.session_state and 
-                        'profit_probability' in st.session_state.profit_prob_trained_models and
-                        st.session_state.profit_prob_trained_models['profit_probability'] is not None):
-                        
-                        profit_model = st.session_state.profit_prob_trained_models['profit_probability']
-                        
-                        # Prepare model for database save
-                        models_to_save = {
-                            'profit_probability': {
-                                'ensemble': profit_model.model,
-                                'scaler': profit_model.scaler,
-                                'feature_names': getattr(profit_model, 'feature_names', []),
-                                'task_type': 'classification',
-                                'metrics': st.session_state.trained_models.get('profit_probability', {}).get('metrics', {}),
-                                'feature_importance': st.session_state.trained_models.get('profit_probability', {}).get('feature_importance', {})
-                            }
-                        }
-                        
-                        success = db.save_trained_models(models_to_save)
-                        if success:
-                            st.success("✅ Profit probability model saved to database!")
-                        else:
-                            st.error("❌ Failed to save profit probability model to database")
-                    else:
-                        st.error("❌ Profit probability model not available")
-                except Exception as e:
-                    st.error(f"❌ Failed to save profit probability model: {str(e)}")
-        
-        with subcol2:
-            if st.button("📥 Save Reversal Model", disabled='reversal' not in st.session_state.trained_models):
-                try:
-                    from utils.database_adapter import get_trading_database
-                    db = get_trading_database()
-                    
-                    # Save reversal model object for persistence
-                    if ('reversal_trained_models' in st.session_state and 
-                        'reversal' in st.session_state.reversal_trained_models and
-                        st.session_state.reversal_trained_models['reversal'] is not None):
-                        
-                        reversal_model = st.session_state.reversal_trained_models['reversal']
-                        
-                        # Prepare model for database save
-                        models_to_save = {
-                            'reversal': {
-                                'ensemble': reversal_model.model,
-                                'scaler': reversal_model.scaler,
-                                'feature_names': getattr(reversal_model, 'feature_names', []),
-                                'task_type': 'classification',
-                                'metrics': st.session_state.trained_models.get('reversal', {}).get('metrics', {}),
-                                'feature_importance': st.session_state.trained_models.get('reversal', {}).get('feature_importance', {})
-                            }
-                        }
-                        
-                        success = db.save_trained_models(models_to_save)
-                        if success:
-                            st.success("✅ Reversal model saved to database!")
-                        else:
-                            st.error("❌ Failed to save reversal model to database")
-                    else:
-                        st.error("❌ Reversal model not available")
-                except Exception as e:
-                    st.error(f"❌ Failed to save reversal model: {str(e)}")
+        if 'direction' in st.session_state.trained_models:
+            st.success("✅ Direction Model\n(Auto-saved)")
+        else:
+            st.info("⏳ Direction Model\n(Not trained)")
+    
+    with col3:
+        if 'profit_probability' in st.session_state.trained_models:
+            st.success("✅ Profit Probability Model\n(Auto-saved)")
+        else:
+            st.info("⏳ Profit Probability Model\n(Not trained)")
+    
+    with col4:
+        if 'reversal' in st.session_state.trained_models:
+            st.success("✅ Reversal Model\n(Auto-saved)")
+        else:
+            st.info("⏳ Reversal Model\n(Not trained)")

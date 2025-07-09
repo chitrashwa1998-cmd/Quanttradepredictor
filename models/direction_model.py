@@ -245,7 +245,7 @@ class DirectionModel:
         except Exception as e:
             print(f"Could not extract feature importance: {e}")
 
-        return {
+        result = {
             'model': self.model,
             'metrics': metrics,
             'feature_importance': feature_importance,
@@ -253,8 +253,40 @@ class DirectionModel:
             'task_type': self.task_type,
             'predictions': y_pred,
             'probabilities': y_pred_proba,
-            'test_indices': X_test.index
+            'test_indices': X_test.index,
+            'scaler': self.scaler
         }
+        
+        # Auto-save to database
+        self._save_model_to_database(result)
+        
+        return result
+
+    def _save_model_to_database(self, training_result):
+        """Save trained direction model to database for persistence."""
+        try:
+            from utils.database_adapter import get_trading_database
+            db = get_trading_database()
+            
+            models_to_save = {
+                'direction': {
+                    'ensemble': training_result['model'],
+                    'scaler': training_result['scaler'],
+                    'feature_names': training_result['feature_names'],
+                    'task_type': training_result['task_type'],
+                    'metrics': training_result['metrics'],
+                    'feature_importance': training_result['feature_importance']
+                }
+            }
+            
+            success = db.save_trained_models(models_to_save)
+            if success:
+                print("✅ Direction model auto-saved to database")
+            else:
+                print("❌ Failed to auto-save direction model to database")
+                
+        except Exception as e:
+            print(f"❌ Error auto-saving direction model: {str(e)}")
 
     def predict(self, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """Make predictions using trained direction model."""
