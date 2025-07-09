@@ -64,7 +64,7 @@ class LiveDataManager:
         self.connection_status = status
         print(f"Connection status: {status}")
     
-    def update_ohlc_data(self, instrument_key: str, timeframe: str = "1T"):
+    def update_ohlc_data(self, instrument_key: str, timeframe: str = "5T"):
         """Convert tick data to OHLC format."""
         try:
             ticks = list(self.tick_buffer[instrument_key])
