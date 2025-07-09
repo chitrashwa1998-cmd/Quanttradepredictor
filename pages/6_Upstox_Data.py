@@ -159,7 +159,7 @@ else:
     # Show token status
     if token_valid:
         st.success("✅ Token is valid and working!")
-        st.info(f"📊 Current NIFTY price: ₹{quote.get('ltp', 'N/A')}")
+        st.info(f"📊 Current NIFTY price: ₹{quote.get('last_price', 'N/A')}")
     else:
         st.error("❌ Token is expired or invalid")
         st.warning("🔄 WebSocket connections will fail until you refresh the token")

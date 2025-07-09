@@ -160,7 +160,6 @@ class UpstoxClient:
     def get_live_quote(self, instrument_key: str) -> Optional[Dict]:
         """Get live market quote for an instrument."""
         if not self.access_token:
-            st.error("Access token not available. Please authenticate first.")
             return None
 
         try:
@@ -181,16 +180,41 @@ class UpstoxClient:
                 data = response.json()
 
                 if data.get('status') == 'success' and 'data' in data:
-                    return data['data'][instrument_key]
+                    # Handle different key formats (| vs :)
+                    if instrument_key in data['data']:
+                        return data['data'][instrument_key]
+                    else:
+                        # Try with colon format
+                        alt_key = instrument_key.replace('|', ':')
+                        if alt_key in data['data']:
+                            return data['data'][alt_key]
+                        else:
+                            # Try to find the key with either format
+                            for key in data['data'].keys():
+                                if 'Nifty 50' in key:
+                                    return data['data'][key]
+                    return None
                 else:
-                    st.error(f"API Error: {data.get('message', 'Unknown error')}")
+                    # Only show error in Streamlit if context is available
+                    try:
+                        st.error(f"API Error: {data.get('message', 'Unknown error')}")
+                    except:
+                        pass
                     return None
             else:
-                st.error(f"HTTP Error {response.status_code}: {response.text}")
+                # Only show error in Streamlit if context is available
+                try:
+                    st.error(f"HTTP Error {response.status_code}: {response.text}")
+                except:
+                    pass
                 return None
 
         except Exception as e:
-            st.error(f"Error fetching live quote: {str(e)}")
+            # Only show error in Streamlit if context is available
+            try:
+                st.error(f"Error fetching live quote: {str(e)}")
+            except:
+                pass
             return None
 
     def fetch_nifty50_data(self, days: int = 30, interval: str = "5minute") -> Optional[pd.DataFrame]:
