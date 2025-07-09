@@ -25,23 +25,39 @@ def test_websocket():
         
         # Try to get access token from a temporary file
         token_file = ".upstox_token"
+        
+        print(f"🔍 Looking for token file: {os.path.abspath(token_file)}")
+        print(f"🔍 Current working directory: {os.getcwd()}")
+        print(f"🔍 Files in current directory: {os.listdir('.')}")
+        
         if os.path.exists(token_file):
             try:
                 with open(token_file, 'r') as f:
                     token = f.read().strip()
+                    
+                print(f"📄 Token file size: {os.path.getsize(token_file)} bytes")
+                print(f"📄 Token content length: {len(token)}")
+                
                 if token:
                     upstox_client.set_access_token(token)
                     print(f"✅ Using token from file: {token[:20]}...")
                 else:
                     print("⚠️ Token file is empty")
-                    print("💡 Go to the Upstox Data page and click 'Save Token for Console' first")
+                    print("💡 Go to the Upstox Data page and click 'Save Token to File' again")
                     return
             except Exception as e:
                 print(f"⚠️ Error reading token file: {e}")
+                print(f"📁 File exists: {os.path.exists(token_file)}")
+                print(f"📁 File readable: {os.access(token_file, os.R_OK)}")
                 return
         else:
             print("⚠️ No token file found (.upstox_token)")
-            print("💡 Go to the Upstox Data page and click 'Save Token for Console' first")
+            print("💡 Go to the Upstox Data page and click 'Save Token to File' first")
+            
+            # Check if there are any similar files
+            similar_files = [f for f in os.listdir('.') if 'token' in f.lower() or 'upstox' in f.lower()]
+            if similar_files:
+                print(f"🔍 Found similar files: {similar_files}")
             return
         
         print("🔗 Creating WebSocket client...")

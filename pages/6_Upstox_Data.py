@@ -137,14 +137,32 @@ else:
                     try:
                         # Define the file path to match console script
                         file_path = ".upstox_token"
+                        
+                        # Get current working directory
+                        import os
+                        current_dir = os.getcwd()
+                        full_path = os.path.join(current_dir, file_path)
 
                         # Write the token to the file
                         with open(file_path, "w") as f:
                             f.write(st.session_state.upstox_access_token)
 
-                        st.success(f"✅ Token saved to `{file_path}`")
+                        # Verify the file was saved
+                        if os.path.exists(file_path):
+                            file_size = os.path.getsize(file_path)
+                            st.success(f"✅ Token saved to `{full_path}` ({file_size} bytes)")
+                            
+                            # Show first 20 chars for verification
+                            with open(file_path, "r") as f:
+                                saved_token = f.read()
+                            st.info(f"📄 Saved token preview: {saved_token[:20]}...")
+                        else:
+                            st.error("❌ File was not created successfully")
+                            
                     except Exception as e:
                         st.error(f"❌ Error saving token to file: {str(e)}")
+                        st.write(f"**Current directory:** {os.getcwd()}")
+                        st.write(f"**Attempted file path:** {file_path}")
 
         else:
             st.error("❌ No access token found in session state")
