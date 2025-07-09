@@ -143,9 +143,15 @@ else:
                         current_dir = os.getcwd()
                         full_path = os.path.join(current_dir, file_path)
 
-                        # Write the token to the file
-                        with open(file_path, "w") as f:
+                        # Ensure we have write permissions
+                        st.write(f"**Current directory:** {current_dir}")
+                        st.write(f"**Directory writable:** {os.access(current_dir, os.W_OK)}")
+                        
+                        # Write the token to the file with explicit encoding
+                        with open(file_path, "w", encoding='utf-8') as f:
                             f.write(st.session_state.upstox_access_token)
+                            f.flush()  # Ensure it's written immediately
+                            os.fsync(f.fileno())  # Force write to disk
 
                         # Verify the file was saved
                         if os.path.exists(file_path):
@@ -153,16 +159,28 @@ else:
                             st.success(f"✅ Token saved to `{full_path}` ({file_size} bytes)")
                             
                             # Show first 20 chars for verification
-                            with open(file_path, "r") as f:
+                            with open(file_path, "r", encoding='utf-8') as f:
                                 saved_token = f.read()
                             st.info(f"📄 Saved token preview: {saved_token[:20]}...")
+                            
+                            # Double check with ls command
+                            import subprocess
+                            result = subprocess.run(['ls', '-la', file_path], capture_output=True, text=True)
+                            st.code(f"ls -la {file_path}:\n{result.stdout}")
+                            
                         else:
                             st.error("❌ File was not created successfully")
+                            
+                            # Show directory contents
+                            files = os.listdir(current_dir)
+                            st.write(f"**Files in directory:** {files}")
                             
                     except Exception as e:
                         st.error(f"❌ Error saving token to file: {str(e)}")
                         st.write(f"**Current directory:** {os.getcwd()}")
                         st.write(f"**Attempted file path:** {file_path}")
+                        import traceback
+                        st.code(traceback.format_exc())
 
         else:
             st.error("❌ No access token found in session state")
