@@ -90,14 +90,17 @@ st.header("🔐 Upstox Authentication")
 
 if not st.session_state.upstox_authenticated:
     st.markdown("""
+    ### Getting Your Access Token
+    
     **Step 1:** Click the button below to authenticate with your Upstox account.
-    You'll be redirected to Upstox login page and then brought back here.
+    **Step 2:** You'll be redirected to Upstox login page - enter your credentials.
+    **Step 3:** After successful login, you'll be brought back here with a valid token.
     """)
 
-    col1, col2 = st.columns([1, 3])
+    col1, col2 = st.columns([1, 2])
 
     with col1:
-        if st.button("🚀 Login to Upstox", type="primary"):
+        if st.button("🚀 Login to Upstox", type="primary", use_container_width=True):
             try:
                 upstox_client = UpstoxClient()
                 login_url = upstox_client.get_login_url()
@@ -108,6 +111,12 @@ if not st.session_state.upstox_authenticated:
 
     with col2:
         st.info("🔒 Your credentials are stored securely and used only for data fetching.")
+        st.markdown("""
+        **Need help?**
+        - Make sure popup blockers are disabled
+        - Use the same browser for the entire process
+        - If redirect fails, try refreshing this page
+        """)
 
 else:
     # Authenticated UI
@@ -157,8 +166,16 @@ else:
             except:
                 pass
             
-            st.info("🔄 Please click 'Login to Upstox' below to get a fresh token")
+            st.info("🔄 Please scroll down and click 'Login to Upstox' to get a fresh token")
             st.rerun()
+            
+        # Add a helpful note about the refresh process
+        st.markdown("""
+        **When to refresh token:**
+        - Token shows as expired/invalid
+        - WebSocket keeps disconnecting
+        - Getting authorization errors
+        """, help="Upstox tokens expire every 24 hours")
     
     with col_debug:
         with st.expander("🔍 Debug Token Information"):
