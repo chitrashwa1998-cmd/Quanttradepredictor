@@ -34,13 +34,14 @@ class UpstoxWebSocketClient:
         self._get_websocket_url()
         
     def _get_websocket_url(self):
-        """Get WebSocket URL from Upstox Market Data Feed API."""
+        """Get WebSocket URL from Upstox Market Data Feed API v3."""
         try:
-            # Use the correct Upstox API endpoint to get WebSocket URL
-            url = "https://api.upstox.com/v2/feed/market-data-feed/authorize"
+            # Use the updated Upstox v3 API endpoint
+            url = "https://api.upstox.com/v3/feed/market-data-feed/authorize"
             headers = {
                 "Authorization": f"Bearer {self.access_token}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Accept": "application/json"
             }
             
             response = requests.get(url, headers=headers)
@@ -49,7 +50,7 @@ class UpstoxWebSocketClient:
                 data = response.json()
                 if data.get("status") == "success" and "data" in data:
                     self.websocket_url = data["data"]["authorized_redirect_uri"]
-                    print(f"✅ Got WebSocket URL: {self.websocket_url}")
+                    print(f"✅ Got WebSocket URL (v3): {self.websocket_url}")
                 else:
                     print(f"❌ API Error: {data}")
                     self._fallback_websocket_url()
@@ -62,10 +63,10 @@ class UpstoxWebSocketClient:
             self._fallback_websocket_url()
     
     def _fallback_websocket_url(self):
-        """Fallback to direct WebSocket URL construction."""
-        # Direct WebSocket URL with access token
-        self.websocket_url = f"wss://ws-api.upstox.com/v3/ws/market-data-feed/marketdata?access_token={self.access_token}"
-        print(f"🔄 Using fallback WebSocket URL")
+        """Fallback to direct WebSocket URL construction for v3."""
+        # Updated v3 WebSocket URL
+        self.websocket_url = f"wss://ws-api.upstox.com/v3/feed/market-data-feed?access_token={self.access_token}"
+        print(f"🔄 Using fallback WebSocket URL (v3)")
         
     def set_callbacks(self, 
                      tick_callback: Optional[Callable] = None,
@@ -397,15 +398,15 @@ class UpstoxWebSocketClient:
             print("🔌 Disconnected from WebSocket")
     
     def subscribe(self, instrument_keys: list, mode: str = "full"):
-        """Subscribe to instruments for live data."""
+        """Subscribe to instruments for live data using v3 API format."""
         if not self.is_connected:
             print("❌ WebSocket not connected. Please connect first.")
             return False
         
         try:
-            # Create subscription message in Upstox format
+            # Create subscription message in Upstox v3 format
             subscribe_request = {
-                "guid": "subscription_guid",
+                "guid": f"subscription_{int(time.time())}",
                 "method": "sub",
                 "data": {
                     "mode": mode,
@@ -421,7 +422,7 @@ class UpstoxWebSocketClient:
                 # Update subscribed instruments
                 self.subscribed_instruments.update(instrument_keys)
                 
-                print(f"✅ Subscribed to {len(instrument_keys)} instruments: {instrument_keys}")
+                print(f"✅ Subscribed to {len(instrument_keys)} instruments (v3): {instrument_keys}")
                 return True
             
         except Exception as e:
@@ -429,13 +430,13 @@ class UpstoxWebSocketClient:
             return False
     
     def unsubscribe(self, instrument_keys: list):
-        """Unsubscribe from instruments."""
+        """Unsubscribe from instruments using v3 API format."""
         if not self.is_connected:
             return False
         
         try:
             unsubscribe_request = {
-                "guid": "unsubscription_guid",
+                "guid": f"unsubscription_{int(time.time())}",
                 "method": "unsub",
                 "data": {
                     "instrumentKeys": instrument_keys
@@ -449,7 +450,7 @@ class UpstoxWebSocketClient:
                 # Remove from subscribed instruments
                 self.subscribed_instruments.difference_update(instrument_keys)
                 
-                print(f"✅ Unsubscribed from {len(instrument_keys)} instruments")
+                print(f"✅ Unsubscribed from {len(instrument_keys)} instruments (v3)")
                 return True
             
         except Exception as e:
