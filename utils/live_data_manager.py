@@ -172,42 +172,7 @@ class LiveDataManager:
     
     
 
-    def bootstrap_ohlc_from_ticks(self, instrument_key: str):
-        """Create initial OHLC data from recent ticks for faster predictions."""
-        if instrument_key not in self.tick_buffer or len(self.tick_buffer[instrument_key]) < 20:
-            return
-        
-        try:
-            # Get all ticks
-            ticks = list(self.tick_buffer[instrument_key])
-            
-            # Create DataFrame
-            df = pd.DataFrame(ticks)
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df = df.set_index('timestamp')
-            
-            # Create 1-minute OHLC first, then resample to 5-minute
-            ohlc_1m = df['ltp'].resample('1T').ohlc()
-            ohlc_1m['volume'] = df['volume'].resample('1T').sum()
-            ohlc_1m = ohlc_1m.dropna()
-            
-            if len(ohlc_1m) >= 5:
-                # Resample to 5-minute
-                ohlc_5m = ohlc_1m['open'].resample('5T').first()
-                ohlc_5m = pd.DataFrame({
-                    'Open': ohlc_1m['open'].resample('5T').first(),
-                    'High': ohlc_1m['high'].resample('5T').max(),
-                    'Low': ohlc_1m['low'].resample('5T').min(),
-                    'Close': ohlc_1m['close'].resample('5T').last(),
-                    'Volume': ohlc_1m['volume'].resample('5T').sum()
-                }).dropna()
-                
-                if len(ohlc_5m) > 0:
-                    self.ohlc_data[instrument_key] = ohlc_5m
-                    print(f"🚀 Bootstrapped {len(ohlc_5m)} OHLC rows for {instrument_key}")
-                    
-        except Exception as e:
-            print(f"Error bootstrapping OHLC data: {e}")
+    
     
     def get_seeding_status(self) -> Dict:
         """Get information about live data status."""

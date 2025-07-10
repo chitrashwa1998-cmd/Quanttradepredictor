@@ -28,7 +28,7 @@ class LivePredictionPipeline:
         self.update_interval = 30  # Process predictions every 30 seconds
 
         # Minimum data requirements (reduced for faster live predictions)
-        self.min_ohlc_rows = 10  # Minimum OHLC rows needed for predictions
+        self.min_ohlc_rows = 5  # Minimum OHLC rows needed for predictions
 
     def start_pipeline(self) -> bool:
         """Start the live prediction pipeline."""
@@ -90,9 +90,10 @@ class LivePredictionPipeline:
                 if tick_stats:
                     for instrument_key, stats in tick_stats.items():
                         # Bootstrap OHLC data if we have enough ticks but insufficient OHLC
-                        if stats['tick_count'] >= 20 and stats['ohlc_rows'] < self.min_ohlc_rows:
-                            print(f"🚀 Bootstrapping OHLC data for {instrument_key}")
-                            self.live_data_manager.bootstrap_ohlc_from_ticks(instrument_key)
+                        # Removed bootstrapping function
+                        #if stats['tick_count'] >= 20 and stats['ohlc_rows'] < self.min_ohlc_rows:
+                        #    print(f"🚀 Bootstrapping OHLC data for {instrument_key}")
+                        #    self.live_data_manager.bootstrap_ohlc_from_ticks(instrument_key)
 
                         self._process_instrument_predictions(instrument_key)
 
