@@ -174,6 +174,243 @@ class LiveDataManager:
 
     
     
+    def fetch_nifty_historical_data(self, days: int = 5) -> Optional[Dict[str, pd.DataFrame]]:
+        """Fetch historical data for Nifty 50 and Bank Nifty."""
+        try:
+            import requests
+            from datetime import datetime, timedelta
+            
+            # Nifty instrument keys
+            instruments = {
+                "NSE_INDEX|Nifty 50": "Nifty 50",
+                "NSE_INDEX|Nifty Bank": "Bank Nifty"
+            }
+            
+            # Calculate date range
+            end_date = datetime.now().strftime('%Y-%m-%d')
+            start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+            
+            results = {}
+            
+            for instrument_key, name in instruments.items():
+                try:
+                    print(f"📥 Fetching {name} data for {days} days...")
+                    
+                    # Upstox Historical Data API v2
+                    url = f"https://api.upstox.com/v2/historical-candle/{instrument_key}/day/{end_date}/{start_date}"
+                    
+                    headers = {
+                        "Authorization": f"Bearer {self.ws_client.access_token}",
+                        "Accept": "application/json"
+                    }
+                    
+                    response = requests.get(url, headers=headers)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        if data.get("status") == "success" and "data" in data:
+                            candles = data["data"]["candles"]
+                            
+                            if candles:
+                                # Convert to DataFrame
+                                df = pd.DataFrame(candles, columns=[
+                                    'timestamp', 'open', 'high', 'low', 'close', 'volume', 'oi'
+                                ])
+                                
+                                # Convert timestamp to datetime
+                                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                                df = df.set_index('timestamp')
+                                
+                                # Rename columns to match OHLC format
+                                df = df.rename(columns={
+                                    'open': 'Open',
+                                    'high': 'High', 
+                                    'low': 'Low',
+                                    'close': 'Close',
+                                    'volume': 'Volume'
+                                })
+                                
+                                # Keep only OHLCV columns
+                                df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
+                                
+                                results[instrument_key] = df
+                                print(f"✅ Fetched {len(df)} candles for {name}")
+                            else:
+                                print(f"⚠️ No candle data for {name}")
+                        else:
+                            print(f"❌ API error for {name}: {data.get('message', 'Unknown error')}")
+                    else:
+                        print(f"❌ HTTP error {response.status_code} for {name}")
+                        
+                except Exception as e:
+                    print(f"❌ Error fetching {name}: {str(e)}")
+                    continue
+            
+            return results if results else None
+            
+        except Exception as e:
+            print(f"❌ Error in fetch_nifty_historical_data: {str(e)}")
+            return None
+
+    def fetch_nifty_1min_historical_data(self, days: int = 1) -> Optional[Dict[str, pd.DataFrame]]:
+        """Fetch 1-minute historical data for Nifty 50 and Bank Nifty."""
+        try:
+            import requests
+            from datetime import datetime, timedelta
+            
+            # Nifty instrument keys
+            instruments = {
+                "NSE_INDEX|Nifty 50": "Nifty 50",
+                "NSE_INDEX|Nifty Bank": "Bank Nifty"
+            }
+            
+            # Calculate date range (1-min data is limited to recent days)
+            end_date = datetime.now().strftime('%Y-%m-%d')
+            start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+            
+            results = {}
+            
+            for instrument_key, name in instruments.items():
+                try:
+                    print(f"📥 Fetching {name} 1-minute data for {days} day(s)...")
+                    
+                    # Upstox Historical Data API v2 for 1-minute candles
+                    url = f"https://api.upstox.com/v2/historical-candle/{instrument_key}/1minute/{end_date}/{start_date}"
+                    
+                    headers = {
+                        "Authorization": f"Bearer {self.ws_client.access_token}",
+                        "Accept": "application/json"
+                    }
+                    
+                    response = requests.get(url, headers=headers)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        if data.get("status") == "success" and "data" in data:
+                            candles = data["data"]["candles"]
+                            
+                            if candles:
+                                # Convert to DataFrame
+                                df = pd.DataFrame(candles, columns=[
+                                    'timestamp', 'open', 'high', 'low', 'close', 'volume', 'oi'
+                                ])
+                                
+                                # Convert timestamp to datetime
+                                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                                df = df.set_index('timestamp')
+                                
+                                # Rename columns to match OHLC format
+                                df = df.rename(columns={
+                                    'open': 'Open',
+                                    'high': 'High', 
+                                    'low': 'Low',
+                                    'close': 'Close',
+                                    'volume': 'Volume'
+                                })
+                                
+                                # Keep only OHLCV columns
+                                df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
+                                
+                                # Sort by timestamp
+                                df = df.sort_index()
+                                
+                                results[instrument_key] = df
+                                print(f"✅ Fetched {len(df)} 1-minute candles for {name}")
+                            else:
+                                print(f"⚠️ No 1-minute candle data for {name}")
+                        else:
+                            print(f"❌ API error for {name}: {data.get('message', 'Unknown error')}")
+                    else:
+                        print(f"❌ HTTP error {response.status_code} for {name}")
+                        
+                except Exception as e:
+                    print(f"❌ Error fetching 1-minute data for {name}: {str(e)}")
+                    continue
+            
+            return results if results else None
+            
+        except Exception as e:
+            print(f"❌ Error in fetch_nifty_1min_historical_data: {str(e)}")
+            return None
+
+    def fetch_historical_data(self, instrument_keys: List[str], days: int = 5, interval: str = "day") -> Optional[Dict[str, pd.DataFrame]]:
+        """Fetch historical data for custom instruments with specified interval."""
+        try:
+            import requests
+            from datetime import datetime, timedelta
+            
+            # Calculate date range
+            end_date = datetime.now().strftime('%Y-%m-%d')
+            start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+            
+            results = {}
+            
+            for instrument_key in instrument_keys:
+                try:
+                    print(f"📥 Fetching {interval} data for {instrument_key}...")
+                    
+                    # Upstox Historical Data API v2
+                    url = f"https://api.upstox.com/v2/historical-candle/{instrument_key}/{interval}/{end_date}/{start_date}"
+                    
+                    headers = {
+                        "Authorization": f"Bearer {self.ws_client.access_token}",
+                        "Accept": "application/json"
+                    }
+                    
+                    response = requests.get(url, headers=headers)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        if data.get("status") == "success" and "data" in data:
+                            candles = data["data"]["candles"]
+                            
+                            if candles:
+                                # Convert to DataFrame
+                                df = pd.DataFrame(candles, columns=[
+                                    'timestamp', 'open', 'high', 'low', 'close', 'volume', 'oi'
+                                ])
+                                
+                                # Convert timestamp to datetime
+                                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                                df = df.set_index('timestamp')
+                                
+                                # Rename columns to match OHLC format
+                                df = df.rename(columns={
+                                    'open': 'Open',
+                                    'high': 'High', 
+                                    'low': 'Low',
+                                    'close': 'Close',
+                                    'volume': 'Volume'
+                                })
+                                
+                                # Keep only OHLCV columns
+                                df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
+                                
+                                # Sort by timestamp
+                                df = df.sort_index()
+                                
+                                results[instrument_key] = df
+                                print(f"✅ Fetched {len(df)} {interval} candles for {instrument_key}")
+                            else:
+                                print(f"⚠️ No {interval} candle data for {instrument_key}")
+                        else:
+                            print(f"❌ API error for {instrument_key}: {data.get('message', 'Unknown error')}")
+                    else:
+                        print(f"❌ HTTP error {response.status_code} for {instrument_key}")
+                        
+                except Exception as e:
+                    print(f"❌ Error fetching {interval} data for {instrument_key}: {str(e)}")
+                    continue
+            
+            return results if results else None
+            
+        except Exception as e:
+            print(f"❌ Error in fetch_historical_data: {str(e)}")
+            return None
+
     def get_seeding_status(self) -> Dict:
         """Get information about live data status."""
         return {
