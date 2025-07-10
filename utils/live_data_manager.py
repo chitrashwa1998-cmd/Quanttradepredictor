@@ -31,9 +31,6 @@ class LiveDataManager:
         self.last_update_time = None
         self.total_ticks_received = 0
         
-        # Seed with historical data for immediate predictions
-        self._seed_historical_data()
-        
     def on_tick_received(self, tick_data: Dict):
         """Handle incoming tick data."""
         try:
@@ -68,7 +65,7 @@ class LiveDataManager:
         print(f"Connection status: {status}")
     
     def update_ohlc_data(self, instrument_key: str, timeframe: str = "5T"):
-        """Convert tick data to OHLC format and seamlessly blend with historical data."""
+        """Convert tick data to OHLC format."""
         try:
             ticks = list(self.tick_buffer[instrument_key])
             if not ticks:
@@ -90,36 +87,27 @@ class LiveDataManager:
                 # Rename columns to match existing format
                 new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
                 
-                # Seamlessly blend with existing data (historical + live)
+                # Combine with existing live data
                 if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
                     existing_ohlc = self.ohlc_data[instrument_key]
                     
-                    # Combine historical data with new live data
+                    # Combine with new live data
                     combined_ohlc = pd.concat([existing_ohlc, new_ohlc])
                     
-                    # Remove duplicate timestamps, keeping the latest (live data wins)
+                    # Remove duplicate timestamps, keeping the latest
                     combined_ohlc = combined_ohlc[~combined_ohlc.index.duplicated(keep='last')]
                     
                     # Sort by timestamp
                     combined_ohlc = combined_ohlc.sort_index()
                     
-                    # Keep last 500 rows (preserve both historical seed and live data)
-                    if len(combined_ohlc) > 500:
-                        # Keep some historical data + all recent live data
-                        historical_keep = 100  # Keep 100 historical rows
-                        live_start = len(combined_ohlc) - 400  # Keep 400 most recent
-                        keep_start = max(0, min(historical_keep, live_start))
-                        combined_ohlc = combined_ohlc.iloc[keep_start:]
+                    # Keep last 100 rows maximum for live data
+                    if len(combined_ohlc) > 100:
+                        combined_ohlc = combined_ohlc.tail(100)
                     
                     self.ohlc_data[instrument_key] = combined_ohlc
-                    
-                    # Determine if this is historical or live data update
-                    is_historical_seed = hasattr(self, '_historical_seed_count') and len(combined_ohlc) <= self._historical_seed_count + 10
-                    update_type = "🌱 Historical+Live" if not is_historical_seed else "📈 Live"
-                    
-                    print(f"{update_type} OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
+                    print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
                 else:
-                    # First time - store new data (should not happen if seeded)
+                    # First time - store new data
                     self.ohlc_data[instrument_key] = new_ohlc
                     print(f"📈 Initial OHLC for {instrument_key}: {len(new_ohlc)} rows")
                 
@@ -182,68 +170,7 @@ class LiveDataManager:
                 }
         return stats
     
-    def _seed_historical_data(self):
-        """Seed OHLC data with historical data from database for immediate predictions."""
-        try:
-            from utils.database_adapter import DatabaseAdapter
-            
-            print("🌱 Seeding historical data for immediate predictions...")
-            db = DatabaseAdapter()
-            historical_data = db.load_ohlc_data("main_dataset")
-            
-            if historical_data is not None and len(historical_data) > 100:
-                # Take the last 200 rows for seeding (enough for technical indicators)
-                seed_data = historical_data.tail(200).copy()
-                
-                # Ensure proper 5-minute timeframe and standard column names
-                if not all(col in seed_data.columns for col in ['Open', 'High', 'Low', 'Close']):
-                    # Try to map columns
-                    col_mapping = {}
-                    for col in seed_data.columns:
-                        col_lower = col.lower()
-                        if col_lower in ['open', 'o']:
-                            col_mapping[col] = 'Open'
-                        elif col_lower in ['high', 'h']:
-                            col_mapping[col] = 'High'
-                        elif col_lower in ['low', 'l']:
-                            col_mapping[col] = 'Low'
-                        elif col_lower in ['close', 'c']:
-                            col_mapping[col] = 'Close'
-                        elif col_lower in ['volume', 'vol', 'v']:
-                            col_mapping[col] = 'Volume'
-                    
-                    seed_data = seed_data.rename(columns=col_mapping)
-                
-                # Ensure we have Volume column
-                if 'Volume' not in seed_data.columns:
-                    seed_data['Volume'] = 1000  # Default volume
-                
-                # Resample to 5-minute intervals if needed
-                if len(seed_data) > 500:  # If data is too granular, resample
-                    seed_data = seed_data.resample('5T').agg({
-                        'Open': 'first',
-                        'High': 'max',
-                        'Low': 'min',
-                        'Close': 'last',
-                        'Volume': 'sum'
-                    }).dropna()
-                
-                # Store for Nifty 50 (our main instrument)
-                instrument_key = "NSE_INDEX|Nifty 50"
-                self.ohlc_data[instrument_key] = seed_data
-                
-                print(f"✅ Seeded {len(seed_data)} historical OHLC rows for {instrument_key}")
-                print(f"📅 Historical data range: {seed_data.index[0]} to {seed_data.index[-1]}")
-                
-                # Mark as seeded to distinguish from live data
-                self._historical_seed_count = len(seed_data)
-                
-            else:
-                print("⚠️ No sufficient historical data found for seeding")
-                
-        except Exception as e:
-            print(f"❌ Error seeding historical data: {e}")
-            # Continue without seeding - system will work normally but require wait time
+    
 
     def bootstrap_ohlc_from_ticks(self, instrument_key: str):
         """Create initial OHLC data from recent ticks for faster predictions."""
@@ -283,10 +210,10 @@ class LiveDataManager:
             print(f"Error bootstrapping OHLC data: {e}")
     
     def get_seeding_status(self) -> Dict:
-        """Get information about historical data seeding."""
+        """Get information about live data status."""
         return {
-            'is_seeded': hasattr(self, '_historical_seed_count'),
-            'seed_count': getattr(self, '_historical_seed_count', 0),
+            'is_seeded': False,
+            'seed_count': 0,
             'live_data_available': len(self.ohlc_data) > 0,
             'total_ohlc_rows': sum(len(df) for df in self.ohlc_data.values()),
             'instruments_seeded': list(self.ohlc_data.keys())

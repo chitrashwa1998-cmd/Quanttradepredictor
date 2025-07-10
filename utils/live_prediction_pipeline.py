@@ -28,7 +28,7 @@ class LivePredictionPipeline:
         self.update_interval = 30  # Process predictions every 30 seconds
 
         # Minimum data requirements (reduced for faster live predictions)
-        self.min_ohlc_rows = 50  # Minimum OHLC rows needed for reliable predictions
+        self.min_ohlc_rows = 10  # Minimum OHLC rows needed for predictions
 
     def start_pipeline(self) -> bool:
         """Start the live prediction pipeline."""
@@ -121,16 +121,10 @@ class LivePredictionPipeline:
 
             if ohlc_data is None or len(ohlc_data) < self.min_ohlc_rows:
                 if ohlc_data is not None:
-                    # Check if data is seeded from historical database
-                    seeding_status = self.live_data_manager.get_seeding_status()
-                    if seeding_status['is_seeded'] and len(ohlc_data) >= 20:
-                        print(f"🌱 Using seeded historical data for {instrument_key}: {len(ohlc_data)} rows (sufficient for predictions)")
-                    else:
-                        print(f"📊 Building OHLC data for {instrument_key}: {len(ohlc_data)}/{self.min_ohlc_rows} rows needed")
-                        return
+                    print(f"📊 Building OHLC data for {instrument_key}: {len(ohlc_data)}/{self.min_ohlc_rows} rows needed")
                 else:
                     print(f"📊 No OHLC data available for {instrument_key}")
-                    return
+                return
 
             # Calculate direction features
             features = self._calculate_direction_features(ohlc_data)
