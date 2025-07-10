@@ -8,6 +8,7 @@ import threading
 import time
 from collections import deque
 from utils.upstox_websocket import UpstoxWebSocketClient
+from utils.upstox_historical import UpstoxHistoricalClient
 
 class LiveDataManager:
     """Manage real-time tick data and convert to OHLC format."""
@@ -15,6 +16,7 @@ class LiveDataManager:
     def __init__(self, access_token: str, api_key: str):
         """Initialize live data manager."""
         self.ws_client = UpstoxWebSocketClient(access_token, api_key)
+        self.historical_client = UpstoxHistoricalClient(access_token, api_key)
         self.tick_buffer = {}  # Store ticks for each instrument
         self.ohlc_data = {}    # Store OHLC data for each instrument
         self.buffer_size = 1000  # Maximum ticks to store per instrument
@@ -30,6 +32,10 @@ class LiveDataManager:
         self.connection_status = "disconnected"
         self.last_update_time = None
         self.total_ticks_received = 0
+        
+        # Pre-seeding tracking
+        self.is_seeded = {}  # Track which instruments are pre-seeded
+        self.seed_data_count = {}  # Track how much historical data loaded
         
     def on_tick_received(self, tick_data: Dict):
         """Handle incoming tick data."""
@@ -87,7 +93,7 @@ class LiveDataManager:
                 # Rename columns to match existing format
                 new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
                 
-                # Combine with existing live data
+                # Combine with existing data (could be historical + live)
                 if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
                     existing_ohlc = self.ohlc_data[instrument_key]
                     
@@ -100,12 +106,14 @@ class LiveDataManager:
                     # Sort by timestamp
                     combined_ohlc = combined_ohlc.sort_index()
                     
-                    # Keep last 100 rows maximum for live data
-                    if len(combined_ohlc) > 100:
-                        combined_ohlc = combined_ohlc.tail(100)
+                    # Keep reasonable amount of data (100 recent + any pre-seeded)
+                    max_rows = 200 if self.is_seeded.get(instrument_key, False) else 100
+                    if len(combined_ohlc) > max_rows:
+                        combined_ohlc = combined_ohlc.tail(max_rows)
                     
                     self.ohlc_data[instrument_key] = combined_ohlc
-                    print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
+                    seeded_info = " (pre-seeded)" if self.is_seeded.get(instrument_key, False) else ""
+                    print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows{seeded_info}")
                 else:
                     # First time - store new data
                     self.ohlc_data[instrument_key] = new_ohlc
@@ -174,12 +182,97 @@ class LiveDataManager:
 
     
     
+    def pre_seed_historical_data(self, 
+                                   instrument_keys: List[str], 
+                                   days_back: int = 5) -> bool:
+        """
+        Pre-seed OHLC data with historical data from Upstox API.
+        
+        Args:
+            instrument_keys: List of instrument keys to pre-seed
+            days_back: Number of days of historical data to fetch
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            print(f"🌱 Pre-seeding historical data for {len(instrument_keys)} instruments...")
+            
+            success_count = 0
+            for instrument_key in instrument_keys:
+                print(f"\n📥 Fetching historical data for {instrument_key}...")
+                
+                # Fetch historical data
+                historical_data = self.historical_client.get_historical_data(
+                    instrument_key, 
+                    interval="5minute", 
+                    days_back=days_back
+                )
+                
+                if historical_data is not None and len(historical_data) > 0:
+                    # Store historical data
+                    self.ohlc_data[instrument_key] = historical_data
+                    self.is_seeded[instrument_key] = True
+                    self.seed_data_count[instrument_key] = len(historical_data)
+                    
+                    print(f"✅ Pre-seeded {instrument_key} with {len(historical_data)} historical candles")
+                    print(f"   Date range: {historical_data.index.min()} to {historical_data.index.max()}")
+                    success_count += 1
+                else:
+                    print(f"❌ Failed to fetch historical data for {instrument_key}")
+                
+                # Rate limiting
+                time.sleep(0.5)
+            
+            print(f"\n🌱 Pre-seeding complete: {success_count}/{len(instrument_keys)} instruments seeded")
+            return success_count > 0
+            
+        except Exception as e:
+            print(f"❌ Error during pre-seeding: {e}")
+            return False
+    
+    def pre_seed_nifty_instruments(self, days_back: int = 5) -> bool:
+        """Pre-seed common Nifty instruments with historical data."""
+        instruments = [
+            "NSE_INDEX|Nifty 50",
+            "NSE_INDEX|Nifty Bank"
+        ]
+        return self.pre_seed_historical_data(instruments, days_back)
+    
     def get_seeding_status(self) -> Dict:
-        """Get information about live data status."""
+        """Get information about pre-seeding status."""
+        total_seeded = sum(1 for seeded in self.is_seeded.values() if seeded)
+        total_seed_rows = sum(self.seed_data_count.values())
+        
         return {
-            'is_seeded': False,
-            'seed_count': 0,
+            'is_seeded': total_seeded > 0,
+            'seed_count': total_seeded,
+            'total_seed_rows': total_seed_rows,
             'live_data_available': len(self.ohlc_data) > 0,
             'total_ohlc_rows': sum(len(df) for df in self.ohlc_data.values()),
-            'instruments_seeded': list(self.ohlc_data.keys())
+            'instruments_seeded': [key for key, seeded in self.is_seeded.items() if seeded],
+            'instruments_with_data': list(self.ohlc_data.keys()),
+            'seed_details': {key: count for key, count in self.seed_data_count.items()}
         }
+    
+    def clear_historical_data(self, instrument_key: str = None):
+        """Clear historical/pre-seeded data for instrument(s)."""
+        if instrument_key:
+            # Clear specific instrument
+            if instrument_key in self.ohlc_data:
+                del self.ohlc_data[instrument_key]
+            if instrument_key in self.is_seeded:
+                del self.is_seeded[instrument_key]
+            if instrument_key in self.seed_data_count:
+                del self.seed_data_count[instrument_key]
+            print(f"🧹 Cleared historical data for {instrument_key}")
+        else:
+            # Clear all
+            self.ohlc_data.clear()
+            self.is_seeded.clear() 
+            self.seed_data_count.clear()
+            print("🧹 Cleared all historical data")
+    
+    def get_historical_client(self) -> UpstoxHistoricalClient:
+        """Get the historical data client for direct access."""
+        return self.historical_client

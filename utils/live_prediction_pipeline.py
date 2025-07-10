@@ -209,6 +209,18 @@ class LivePredictionPipeline:
         history = list(self.prediction_history[instrument_key])
         return history[-count:] if count > 0 else history
 
+    def pre_seed_with_historical_data(self, instrument_keys: List[str], days_back: int = 5) -> bool:
+        """Pre-seed the pipeline with historical data for instant predictions."""
+        if self.live_data_manager:
+            return self.live_data_manager.pre_seed_historical_data(instrument_keys, days_back)
+        return False
+    
+    def get_seeding_status(self) -> Dict:
+        """Get historical data seeding status."""
+        if self.live_data_manager:
+            return self.live_data_manager.get_seeding_status()
+        return {'is_seeded': False, 'seed_count': 0}
+    
     def get_pipeline_status(self) -> Dict:
         """Get pipeline status and statistics."""
         connection_status = self.live_data_manager.get_connection_status()
