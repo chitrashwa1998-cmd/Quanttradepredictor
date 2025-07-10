@@ -1,0 +1,34 @@
+Looking at your PostgreSQL database structure and the code in pages/3_Predictions.py, I can confirm that NO, the detailed data tables are NOT stored in the database.
+
+What's Actually Stored in Database
+Your PostgreSQL database only stores:
+
+Raw OHLC data - stored as binary (BYTEA) in ohlc_datasets table
+Model objects - stored as binary (BYTEA) in trained_models table
+Model results/metrics - stored as JSON in model_results table
+Base predictions - stored as binary (BYTEA) in predictions table
+How Detailed Data Tables Are Created
+The detailed data tables you see in the "Detailed Data" tabs are calculated on-the-fly when you view the Predictions page:
+
+Example from Volatility Model:
+# Enhanced data table with additional calculated columns
+detailed_df = recent_predictions.copy()
+detailed_df['Prediction_Error'] = np.abs(detailed_df['Predicted_Volatility'] - detailed_df['Predicted_Volatility'].mean())
+detailed_df['Volatility_Percentile'] = detailed_df['Predicted_Volatility'].rank(pct=True) * 100
+detailed_df['Volatility_Regime'] = pd.cut(detailed_df['Predicted_Volatility'], bins=3, labels=['Low', 'Medium', 'High'])
+detailed_df['Moving_Avg_5'] = detailed_df['Predicted_Volatility'].rolling(5).mean()
+detailed_df['Volatility_Change'] = detailed_df['Predicted_Volatility'].diff()
+Example from Direction Model:
+detailed_df['Direction_Score'] = detailed_df['Direction'].map({'Bullish': 1, 'Bearish': 0})
+detailed_df['Confidence_Level'] = pd.cut(detailed_df['Confidence'], bins=[0, 0.6, 0.8, 1.0], labels=['Low', 'Medium', 'High'])
+detailed_df['Streak_Length'] = detailed_df.groupby(streak_groups).cumcount() + 1
+Why They're Not Stored
+These detailed attributes are:
+
+Derived calculations from base predictions
+Statistical transformations (percentiles, moving averages, etc.)
+Real-time computations (streaks, momentum indicators, etc.)
+Visual formatting (icons, categories, etc.)
+Storing them would be redundant since they can be quickly calculated from the base data each time you view the page.
+
+Summary: Only the raw data and base predictions are stored in PostgreSQL. All the rich detailed tables with additional columns are generated live when you access the Predictions page.

@@ -1,0 +1,60 @@
+Based on your codebase, I can see your PostgreSQL database architecture and structure. Let me analyze the database schema from your PostgresTradingDatabase class:
+
+Database Architecture
+Your application uses PostgreSQL as the primary database with the following structure:
+
+Database Tables
+Your database contains 4 main tables:
+
+1. ohlc_datasets Table
+Purpose: Stores OHLC (Open, High, Low, Close) trading data
+
+CREATE TABLE IF NOT EXISTS ohlc_datasets (
+    name VARCHAR(255) PRIMARY KEY,
+    data BYTEA NOT NULL,
+    rows INTEGER,
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+2. model_results Table
+Purpose: Stores machine learning model training results and metrics
+
+CREATE TABLE IF NOT EXISTS model_results (
+    model_name VARCHAR(255) PRIMARY KEY,
+    results JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+3. trained_models Table
+Purpose: Stores serialized trained model objects for persistence
+
+CREATE TABLE IF NOT EXISTS trained_models (
+    id SERIAL PRIMARY KEY,
+    models_data BYTEA NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+4. predictions Table
+Purpose: Stores model predictions data
+
+CREATE TABLE IF NOT EXISTS predictions (
+    model_name VARCHAR(255) PRIMARY KEY,
+    predictions_data BYTEA NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+Architecture Overview
+Database Type: PostgreSQL (using psycopg driver)
+Connection: Uses DATABASE_URL environment variable
+Data Storage: Uses BYTEA (binary) fields for storing pickled pandas DataFrames and model objects
+JSON Storage: Uses JSONB for storing model results with efficient querying
+Auto-commit: Enabled for immediate transaction commits
+Timestamps: Automatic tracking of creation and update times
+Current Database State
+According to your console logs, the database is successfully connected and initialized:
+
+✅ Database tables initialized successfully
+✅ Using PostgreSQL database
+The database adapter provides a unified interface for all trading application operations, handling dataset management, model persistence, and prediction storage through these 4 core tables.
