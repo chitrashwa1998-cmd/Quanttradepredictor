@@ -7,7 +7,7 @@ class DataProcessor:
     """Utility class for data processing and validation."""
 
     @staticmethod
-    def validate_ohlc_data(df: pd.DataFrame) -> Tuple[bool, str]:
+    def validate_ohlc_data(df: pd.DataFrame, min_rows: int = 100) -> Tuple[bool, str]:
         """Validate OHLC data format and quality."""
         required_columns = ['Open', 'High', 'Low', 'Close']
 
@@ -61,9 +61,12 @@ class DataProcessor:
         if invalid_low_close > 0:
             return False, f"Found {invalid_low_close} rows where Low > Close"
 
+        # For live predictions, allow fewer rows (minimum 5 for basic indicators)
+        actual_min_rows = max(5, min_rows) if min_rows > 5 else min_rows
+
         # Check for sufficient data
-        if len(df) < 100:
-            return False, f"Insufficient data: {len(df)} rows. Need at least 100 rows for meaningful analysis."
+        if len(df) < actual_min_rows:
+            return False, f"Insufficient data: {len(df)} rows. Need at least {actual_min_rows} rows for meaningful analysis."
 
         # Check for reasonable price ranges (detect potential data issues)
         for col in required_columns:

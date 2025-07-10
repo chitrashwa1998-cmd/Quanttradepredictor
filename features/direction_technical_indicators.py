@@ -128,9 +128,9 @@ class DirectionTechnicalIndicators:
         """Calculate all direction-specific technical indicators"""
         print("🔧 Calculating direction-specific technical indicators...")
 
-        # Validate input data
+        # Validate input data with relaxed requirements for live predictions
         from utils.data_processing import DataProcessor
-        is_valid, message = DataProcessor.validate_ohlc_data(df)
+        is_valid, message = DataProcessor.validate_ohlc_data(df, min_rows=5)
         if not is_valid:
             raise ValueError(f"Invalid OHLC data provided: {message}")
 
