@@ -217,7 +217,8 @@ class LiveDataManager:
                     self.historical_data_fetched[instrument_key] = True
                     self.historical_data_count[instrument_key] = len(historical_data)
                     
-                    print(f"✅ Fetched {instrument_key}: {len(historical_data)} candles")print(f"   Date range: {historical_data.index.min()} to {historical_data.index.max()}")
+                    print(f"✅ Fetched {instrument_key}: {len(historical_data)} candles")
+                    print(f"   Date range: {historical_data.index.min()} to {historical_data.index.max()}")
                     success_count += 1
                 else:
                     print(f"❌ Failed to fetch historical data for {instrument_key}")
