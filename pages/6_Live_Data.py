@@ -239,7 +239,7 @@ def show_live_data_page():
                         
                         # Auto-refresh functionality for predictions
                         if auto_refresh_predictions:
-                            time.sleep(300)  # Wait 5 minutes to match OHLC candle timeframe
+                            time.sleep(30)
                             st.rerun()
                     
                     else:

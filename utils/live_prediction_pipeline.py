@@ -26,7 +26,7 @@ class LivePredictionPipeline:
         # Processing state
         self.is_processing = False
         self.processing_thread = None
-        self.update_interval = 300  # Process predictions every 5 minutes (300 seconds) to match 5min OHLC candles
+        self.update_interval = 30  # Process predictions every 30 seconds
         
         # Minimum data requirements
         self.min_ohlc_rows = 100  # Minimum OHLC rows needed for reliable predictions
