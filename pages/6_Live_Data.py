@@ -87,75 +87,6 @@ def show_live_data_page():
         if custom_instrument:
             selected_instruments.append(custom_instrument)
 
-    # Historical data fetching section
-    st.subheader("📥 Fetch Historical Data")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        # Custom instruments
-        st.write("**Custom Instruments**")
-        custom_instruments = st.text_area(
-            "Instrument Keys (one per line)",
-            "NSE_INDEX|Nifty 50\nNSE_INDEX|Nifty Bank",
-            height=100
-        )
-
-        days_back = st.slider("Days of historical data", 1, 30, 5)
-
-        if st.button("📥 Fetch Historical Data"):
-            instrument_keys = [key.strip() for key in custom_instruments.split('\n') if key.strip()]
-
-            if instrument_keys:
-                try:
-                    # Fetch historical data
-                    with st.spinner("📥 Fetching historical data from Upstox API..."):
-                        results = st.session_state.live_data_manager.fetch_historical_data(
-                            instrument_keys, days_back
-                        )
-
-                    if results:
-                        st.success(f"✅ Fetched historical data for {len(results)} instruments!")
-
-                        # Show results
-                        for instrument, data in results.items():
-                            st.info(f"📊 {instrument}: {len(data)} candles ({data.index.min()} to {data.index.max()})")
-                    else:
-                        st.error("❌ Failed to fetch historical data")
-
-                except Exception as e:
-                    st.error(f"❌ Historical data fetch error: {str(e)}")
-
-    with col2:
-        # Quick Nifty 50 fetch
-        st.write("**Quick Nifty Fetch**")
-        nifty_days = st.slider("Days for Nifty data", 1, 30, 5, key="nifty_days")
-
-        if st.button("📊 Fetch Nifty 50 Historical Data"):
-            try:
-                with st.spinner("📥 Fetching Nifty 50 historical data..."):
-                    results = st.session_state.live_data_manager.fetch_nifty_historical_data(nifty_days)
-
-                if results:
-                    st.success(f"✅ Fetched Nifty historical data!")
-
-                    for instrument, data in results.items():
-                        name = "Nifty 50" if "Nifty 50" in instrument else "Bank Nifty"
-                        st.info(f"📊 {name}: {len(data)} candles")
-
-                        # Show sample data
-                        st.dataframe(data.head(10), use_container_width=True)
-                else:
-                    st.error("❌ Failed to fetch Nifty historical data")
-
-            except Exception as e:
-                st.error(f"❌ Nifty fetch error: {str(e)}")
-
-    if st.button("🧹 Clear Historical Data"):
-        if st.session_state.live_data_manager:
-            st.session_state.live_data_manager.clear_historical_data()
-            st.success("🧹 Cleared all historical data")
-
     # Connection controls
     st.header("🔌 Connection Controls")
 
@@ -211,7 +142,7 @@ def show_live_data_page():
 
         st.header("📊 Live Prediction Pipeline Status")
 
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        col1, col2, col3, col4, col5 = st.columns(5)
 
         with col1:
             status_color = "🟢" if pipeline_status['data_connected'] else "🔴"
@@ -231,19 +162,6 @@ def show_live_data_page():
         with col5:
             st.metric("Live Predictions", pipeline_status['instruments_with_predictions'])
 
-        with col6:
-            # Show historical data status
-            if st.session_state.live_data_manager:
-                historical_status = st.session_state.live_data_manager.get_historical_data_status()
-
-                if historical_status['has_historical_data']:
-                    st.success(f"🌱 Historical data loaded: {historical_status['fetched_count']} instruments, {historical_status['total_historical_rows']} total candles")
-
-                    # Show details
-                    with st.expander("📊 Historical Data Details"):
-                        for instrument, count in historical_status['historical_details'].items():
-                            st.write(f"• {instrument}: {count} candles")
-
     # Live data display
     if st.session_state.is_live_connected and st.session_state.live_data_manager:
 
@@ -254,11 +172,10 @@ def show_live_data_page():
             st.header("📈 Live Market Data")
 
             # Create tabs for different views
-            overview_tab, predictions_tab, charts_tab, historical_tab, tick_details_tab, export_tab = st.tabs([
+            overview_tab, predictions_tab, charts_tab, tick_details_tab, export_tab = st.tabs([
                 "📊 Market Overview",
                 "🎯 Live Predictions",
-                "📈 Live Charts",
-                "🌱 Historical Data",
+                "📈 Live Charts", 
                 "🔍 Tick Details",
                 "💾 Export Data"
             ])
@@ -401,32 +318,6 @@ def show_live_data_page():
                             st.plotly_chart(fig, use_container_width=True)
                         else:
                             st.info("📊 Accumulating tick data... Please wait for OHLC chart generation.")
-
-            with historical_tab:
-                st.subheader("🌱 Pre-seeded Historical Data")
-
-                # Show historical data status
-                if st.session_state.live_data_manager:
-                    historical_status = st.session_state.live_data_manager.get_historical_data_status()
-
-                    if historical_status['has_historical_data']:
-                        st.success(
-                            f"📊 Historical data available: {historical_status['fetched_count']} instruments, "
-                            f"{historical_status['total_historical_rows']} total candles"
-                        )
-
-                        # Show details
-                        with st.expander("📊 Historical Data Details"):
-                            for instrument, count in historical_status['historical_details'].items():
-                                st.write(f"• {instrument}: {count} candles")
-                    else:
-                        st.info("🌱 No historical data fetched yet. Use the historical data section above to load historical data.")
-
-                        st.write("**Benefits of historical data:**")
-                        st.write("• ⚡ Instant predictions at market open (9:15 AM)")
-                        st.write("• 📊 100+ OHLC data points available immediately")
-                        st.write("• 🎯 No waiting for live data accumulation")
-                        st.write("• 📈 Better technical indicator calculation")
 
             with tick_details_tab:
                 st.subheader("🔍 Detailed Tick Information")

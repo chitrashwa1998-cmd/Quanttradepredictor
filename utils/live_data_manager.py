@@ -8,7 +8,6 @@ import threading
 import time
 from collections import deque
 from utils.upstox_websocket import UpstoxWebSocketClient
-from utils.upstox_historical import UpstoxHistoricalClient
 
 class LiveDataManager:
     """Manage real-time tick data and convert to OHLC format."""
@@ -16,7 +15,6 @@ class LiveDataManager:
     def __init__(self, access_token: str, api_key: str):
         """Initialize live data manager."""
         self.ws_client = UpstoxWebSocketClient(access_token, api_key)
-        self.historical_client = UpstoxHistoricalClient(access_token, api_key)
         self.tick_buffer = {}  # Store ticks for each instrument
         self.ohlc_data = {}    # Store OHLC data for each instrument
         self.buffer_size = 1000  # Maximum ticks to store per instrument
@@ -32,10 +30,6 @@ class LiveDataManager:
         self.connection_status = "disconnected"
         self.last_update_time = None
         self.total_ticks_received = 0
-        
-        # Historical data tracking
-        self.historical_data_fetched = {}  # Track which instruments have historical data
-        self.historical_data_count = {}  # Track how much historical data loaded
         
     def on_tick_received(self, tick_data: Dict):
         """Handle incoming tick data."""
@@ -93,7 +87,7 @@ class LiveDataManager:
                 # Rename columns to match existing format
                 new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
                 
-                # Combine with existing data (could be historical + live)
+                # Combine with existing live data
                 if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
                     existing_ohlc = self.ohlc_data[instrument_key]
                     
@@ -106,14 +100,12 @@ class LiveDataManager:
                     # Sort by timestamp
                     combined_ohlc = combined_ohlc.sort_index()
                     
-                    # Keep reasonable amount of data (100 recent + any pre-seeded)
-                    max_rows = 200 if self.is_seeded.get(instrument_key, False) else 100
-                    if len(combined_ohlc) > max_rows:
-                        combined_ohlc = combined_ohlc.tail(max_rows)
+                    # Keep last 100 rows maximum for live data
+                    if len(combined_ohlc) > 100:
+                        combined_ohlc = combined_ohlc.tail(100)
                     
                     self.ohlc_data[instrument_key] = combined_ohlc
-                    seeded_info = " (pre-seeded)" if self.is_seeded.get(instrument_key, False) else ""
-                    print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows{seeded_info}")
+                    print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
                 else:
                     # First time - store new data
                     self.ohlc_data[instrument_key] = new_ohlc
@@ -182,99 +174,12 @@ class LiveDataManager:
 
     
     
-    def fetch_historical_data(self, 
-                                instrument_keys: List[str], 
-                                days_back: int = 5) -> Dict[str, pd.DataFrame]:
-        """
-        Fetch historical OHLC data from Upstox API.
-        
-        Args:
-            instrument_keys: List of instrument keys to fetch
-            days_back: Number of days of historical data to fetch
-            
-        Returns:
-            Dictionary of {instrument_key: DataFrame} with historical data
-        """
-        try:
-            print(f"📥 Fetching historical data for {len(instrument_keys)} instruments...")
-            
-            results = {}
-            success_count = 0
-            
-            for instrument_key in instrument_keys:
-                print(f"\n📊 Fetching historical data for {instrument_key}...")
-                
-                # Fetch historical data
-                historical_data = self.historical_client.get_historical_data(
-                    instrument_key, 
-                    interval="5minute", 
-                    days_back=days_back
-                )
-                
-                if historical_data is not None and len(historical_data) > 0:
-                    # Store historical data
-                    results[instrument_key] = historical_data
-                    self.historical_data_fetched[instrument_key] = True
-                    self.historical_data_count[instrument_key] = len(historical_data)
-                    
-                    print(f"✅ Fetched {instrument_key}: {len(historical_data)} candles")
-                    print(f"   Date range: {historical_data.index.min()} to {historical_data.index.max()}")
-                    success_count += 1
-                else:
-                    print(f"❌ Failed to fetch historical data for {instrument_key}")
-                
-                # Rate limiting
-                time.sleep(0.5)
-            
-            print(f"\n✅ Historical data fetch complete: {success_count}/{len(instrument_keys)} instruments")
-            return results
-            
-        except Exception as e:
-            print(f"❌ Error during historical data fetch: {e}")
-            return {}
-    
-    def fetch_nifty_historical_data(self, days_back: int = 5) -> Dict[str, pd.DataFrame]:
-        """Fetch historical data for common Nifty instruments."""
-        instruments = [
-            "NSE_INDEX|Nifty 50",
-            "NSE_INDEX|Nifty Bank"
-        ]
-        return self.fetch_historical_data(instruments, days_back)
-    
-    def get_historical_data_status(self) -> Dict:
-        """Get information about historical data status."""
-        total_fetched = sum(1 for fetched in self.historical_data_fetched.values() if fetched)
-        total_historical_rows = sum(self.historical_data_count.values())
-        
+    def get_seeding_status(self) -> Dict:
+        """Get information about live data status."""
         return {
-            'has_historical_data': total_fetched > 0,
-            'fetched_count': total_fetched,
-            'total_historical_rows': total_historical_rows,
+            'is_seeded': False,
+            'seed_count': 0,
             'live_data_available': len(self.ohlc_data) > 0,
             'total_ohlc_rows': sum(len(df) for df in self.ohlc_data.values()),
-            'instruments_with_historical': [key for key, fetched in self.historical_data_fetched.items() if fetched],
-            'instruments_with_data': list(self.ohlc_data.keys()),
-            'historical_details': {key: count for key, count in self.historical_data_count.items()}
+            'instruments_seeded': list(self.ohlc_data.keys())
         }
-    
-    def clear_historical_data(self, instrument_key: str = None):
-        """Clear historical data for instrument(s)."""
-        if instrument_key:
-            # Clear specific instrument
-            if instrument_key in self.ohlc_data:
-                del self.ohlc_data[instrument_key]
-            if instrument_key in self.historical_data_fetched:
-                del self.historical_data_fetched[instrument_key]
-            if instrument_key in self.historical_data_count:
-                del self.historical_data_count[instrument_key]
-            print(f"🧹 Cleared historical data for {instrument_key}")
-        else:
-            # Clear all
-            self.ohlc_data.clear()
-            self.historical_data_fetched.clear() 
-            self.historical_data_count.clear()
-            print("🧹 Cleared all historical data")
-    
-    def get_historical_client(self) -> UpstoxHistoricalClient:
-        """Get the historical data client for direct access."""
-        return self.historical_client
