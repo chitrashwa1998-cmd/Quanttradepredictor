@@ -76,29 +76,60 @@ class UpstoxWebSocketClient:
         """Handle WebSocket connection open."""
         self.is_connected = True
         self._was_connected = True  # Track that we had a successful connection
-        print("✅ Upstox WebSocket connected successfully")
+        
+        # Check market hours
+        if self._is_market_hours():
+            print("✅ Upstox WebSocket connected successfully (Market Hours)")
+        else:
+            print("✅ Upstox WebSocket connected successfully (Outside Market Hours - Limited Data)")
+        
         if self.connection_callback:
             self.connection_callback("connected")
     
     def on_close(self, ws, close_status_code, close_msg):
         """Handle WebSocket connection close."""
         self.is_connected = False
-        print(f"WebSocket onclose")  # Simple log to match your console
+        
+        # Only log if we had a stable connection before
+        if hasattr(self, '_was_connected') and self._was_connected:
+            print(f"WebSocket connection closed: {close_status_code} - {close_msg}")
+        
         if self.connection_callback:
             self.connection_callback("disconnected")
         
-        # Auto-reconnect after 3 seconds if connection was established
+        # Auto-reconnect with exponential backoff
         if hasattr(self, '_was_connected') and self._was_connected:
             import threading
             def reconnect():
                 import time
-                time.sleep(3)
+                # Wait longer between reconnect attempts during market hours
+                backoff_time = 10 if self._is_market_hours() else 30
+                time.sleep(backoff_time)
+                
                 if not self.is_connected:  # Only reconnect if still disconnected
-                    print("🔄 Attempting auto-reconnect...")
+                    print(f"🔄 Attempting auto-reconnect after {backoff_time}s...")
                     self.connect()
             
             thread = threading.Thread(target=reconnect, daemon=True)
             thread.start()
+    
+    def _is_market_hours(self):
+        """Check if current time is within Indian market hours."""
+        from datetime import datetime, time
+        import pytz
+        
+        ist = pytz.timezone('Asia/Kolkata')
+        now = datetime.now(ist)
+        current_time = now.time()
+        
+        # Market hours: 9:15 AM to 3:30 PM IST, Monday to Friday
+        market_start = time(9, 15)
+        market_end = time(15, 30)
+        
+        is_weekday = now.weekday() < 5  # Monday = 0, Friday = 4
+        is_market_time = market_start <= current_time <= market_end
+        
+        return is_weekday and is_market_time
     
     def on_error(self, ws, error):
         """Handle WebSocket errors."""
@@ -291,10 +322,13 @@ class UpstoxWebSocketClient:
                 header=headers
             )
             
-            # Start WebSocket in a separate thread
-            wst = threading.Thread(target=self.ws.run_forever)
+            # Start WebSocket with heartbeat to keep connection alive
+            wst = threading.Thread(target=lambda: self.ws.run_forever(ping_interval=30, ping_timeout=10))
             wst.daemon = True
             wst.start()
+            
+            # Start heartbeat thread
+            self._start_heartbeat()
             
             # Wait for connection
             time.sleep(3)
@@ -303,6 +337,23 @@ class UpstoxWebSocketClient:
         except Exception as e:
             print(f"Failed to connect to Upstox WebSocket: {e}")
             return False
+    
+    def _start_heartbeat(self):
+        """Start heartbeat to keep connection alive."""
+        def heartbeat():
+            while self.is_connected:
+                try:
+                    if self.ws:
+                        # Send ping message every 25 seconds
+                        ping_message = {"type": "ping", "timestamp": time.time()}
+                        self.ws.send(json.dumps(ping_message))
+                    time.sleep(25)
+                except Exception as e:
+                    print(f"Heartbeat error: {e}")
+                    break
+        
+        heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
+        heartbeat_thread.start()
     
     def disconnect(self):
         """Close WebSocket connection."""
