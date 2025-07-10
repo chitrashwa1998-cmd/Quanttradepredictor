@@ -27,8 +27,8 @@ class LivePredictionPipeline:
         self.processing_thread = None
         self.update_interval = 30  # Process predictions every 30 seconds
 
-        # Minimum data requirements (reduced for faster live predictions)
-        self.min_ohlc_rows = 5  # Minimum OHLC rows needed for predictions
+        # Minimum data requirements
+        self.min_ohlc_rows = 100  # Minimum OHLC rows needed for predictions
 
     def start_pipeline(self) -> bool:
         """Start the live prediction pipeline."""
