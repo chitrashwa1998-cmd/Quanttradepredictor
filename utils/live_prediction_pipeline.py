@@ -107,7 +107,7 @@ class LivePredictionPipeline:
                 print(f"❌ Error in processing loop ({consecutive_errors}/{max_consecutive_errors}): {e}")
 
                 if consecutive_errors >= max_consecutive_errors:
-                    print("❌ Too many consecutive errors, stopping pipeline"
+                    print("❌ Too many consecutive errors, stopping pipeline")
                     self.is_processing = False
                     break
 
