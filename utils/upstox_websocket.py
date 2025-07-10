@@ -153,8 +153,8 @@ class UpstoxWebSocketClient:
     
     def on_ping(self, ws, data):
         """Handle WebSocket ping from server."""
-        print(f"📡 Server ping received: {data}")
         # WebSocket library automatically sends pong response
+        pass
     
     def on_message(self, ws, message):
         """Handle incoming WebSocket messages."""
@@ -373,10 +373,9 @@ class UpstoxWebSocketClient:
                         self.ping_count += 1
                         self.ws.ping(f"ping_{self.ping_count}")
                         
-                        # Calculate connection duration
+                        # Calculate connection duration silently
                         if self.connection_start_time:
                             duration = time.time() - self.connection_start_time
-                            print(f"💓 Ping #{self.ping_count} sent (Connected for {duration:.1f}s)")
                         
                     time.sleep(30)  # Send ping every 30 seconds
                 except Exception as e:
