@@ -459,6 +459,18 @@ def show_live_data_page():
 
                             # Show sample data
                             st.dataframe(data.head(10), use_container_width=True)
+                            
+                            # Download button for each instrument
+                            csv_data = data.to_csv()
+                            file_name = f"{instrument.replace('|', '_')}_{interval_option}_{historical_days}days_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                            st.download_button(
+                                label=f"📥 Download {instrument.split('|')[-1] if '|' in instrument else instrument} CSV",
+                                data=csv_data,
+                                file_name=file_name,
+                                mime="text/csv",
+                                key=f"download_{instrument}_{interval_option}",
+                                use_container_width=True
+                            )
                     else:
                         st.error("❌ Failed to fetch historical data")
 
@@ -492,6 +504,18 @@ def show_live_data_page():
 
                             # Show sample data
                             st.dataframe(data.head(10), use_container_width=True)
+                            
+                            # Download button for each Nifty instrument
+                            csv_data = data.to_csv()
+                            file_name = f"{name.replace(' ', '_')}_daily_{nifty_days}days_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                            st.download_button(
+                                label=f"📥 Download {name} Daily CSV",
+                                data=csv_data,
+                                file_name=file_name,
+                                mime="text/csv",
+                                key=f"download_nifty_daily_{instrument}",
+                                use_container_width=True
+                            )
                     else:
                         st.error("❌ Failed to fetch Nifty daily data")
 
@@ -532,6 +556,18 @@ def show_live_data_page():
                                 start_time = data.index.min().strftime('%Y-%m-%d %H:%M:%S')
                                 end_time = data.index.max().strftime('%Y-%m-%d %H:%M:%S')
                                 st.caption(f"Data range: {start_time} to {end_time}")
+                            
+                            # Download button for 1-minute data
+                            csv_data = data.to_csv()
+                            file_name = f"{name.replace(' ', '_')}_1minute_{nifty_1min_days}days_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                            st.download_button(
+                                label=f"📥 Download {name} 1-Min CSV",
+                                data=csv_data,
+                                file_name=file_name,
+                                mime="text/csv",
+                                key=f"download_nifty_1min_{instrument}",
+                                use_container_width=True
+                            )
                     else:
                         st.error("❌ Failed to fetch Nifty 1-minute data")
 
