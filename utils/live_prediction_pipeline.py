@@ -28,8 +28,8 @@ class LivePredictionPipeline:
         self.processing_thread = None
         self.update_interval = 30  # Process predictions every 30 seconds
         
-        # Minimum data requirements
-        self.min_ohlc_rows = 100  # Minimum OHLC rows needed for reliable predictions
+        # Minimum data requirements (reduced for faster live predictions)
+        self.min_ohlc_rows = 50  # Minimum OHLC rows needed for reliable predictions
         
     def start_pipeline(self) -> bool:
         """Start the live prediction pipeline."""
@@ -78,7 +78,12 @@ class LivePredictionPipeline:
                 tick_stats = self.live_data_manager.get_tick_statistics()
                 
                 if tick_stats:
-                    for instrument_key in tick_stats.keys():
+                    for instrument_key, stats in tick_stats.items():
+                        # Bootstrap OHLC data if we have enough ticks but insufficient OHLC
+                        if stats['tick_count'] >= 20 and stats['ohlc_rows'] < self.min_ohlc_rows:
+                            print(f"🚀 Bootstrapping OHLC data for {instrument_key}")
+                            self.live_data_manager.bootstrap_ohlc_from_ticks(instrument_key)
+                        
                         self._process_instrument_predictions(instrument_key)
                 
                 # Wait before next processing cycle
@@ -95,7 +100,10 @@ class LivePredictionPipeline:
             ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=200)
             
             if ohlc_data is None or len(ohlc_data) < self.min_ohlc_rows:
-                print(f"📊 Insufficient OHLC data for {instrument_key}: {len(ohlc_data) if ohlc_data is not None else 0} rows")
+                if ohlc_data is not None:
+                    print(f"📊 Building OHLC data for {instrument_key}: {len(ohlc_data)}/{self.min_ohlc_rows} rows needed")
+                else:
+                    print(f"📊 No OHLC data available for {instrument_key}")
                 return
             
             # Calculate direction features
