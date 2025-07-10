@@ -87,64 +87,74 @@ def show_live_data_page():
         if custom_instrument:
             selected_instruments.append(custom_instrument)
 
-    # Pre-seeding section
-    st.header("🌱 Historical Data Pre-seeding")
-    
+    # Historical data fetching section
+    st.subheader("📥 Fetch Historical Data")
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
-        st.subheader("📊 Pre-seed Configuration")
-        days_back = st.slider(
-            "Days of Historical Data", 
-            min_value=1, 
-            max_value=10, 
-            value=5,
-            help="Number of days of historical 5-minute data to fetch"
+        # Custom instruments
+        st.write("**Custom Instruments**")
+        custom_instruments = st.text_area(
+            "Instrument Keys (one per line)",
+            "NSE_INDEX|Nifty 50\nNSE_INDEX|Nifty Bank",
+            height=100
         )
-        
-        pre_seed_instruments = st.multiselect(
-            "Instruments to Pre-seed",
-            options=list(popular_instruments.keys()),
-            default=["NIFTY 50", "BANK NIFTY"],
-            help="Select instruments to fetch historical data for instant predictions"
-        )
-    
-    with col2:
-        st.subheader("🚀 Pre-seeding Actions")
-        
-        if st.button("🌱 Pre-seed Historical Data", type="primary", disabled=not (access_token and api_key)):
-            if access_token and api_key and pre_seed_instruments:
+
+        days_back = st.slider("Days of historical data", 1, 30, 5)
+
+        if st.button("📥 Fetch Historical Data"):
+            instrument_keys = [key.strip() for key in custom_instruments.split('\n') if key.strip()]
+
+            if instrument_keys:
                 try:
-                    # Initialize historical client
-                    if not st.session_state.live_data_manager:
-                        from utils.live_data_manager import LiveDataManager
-                        st.session_state.live_data_manager = LiveDataManager(access_token, api_key)
-                    
-                    # Convert selected instruments to keys
-                    instrument_keys = [popular_instruments.get(inst, inst) for inst in pre_seed_instruments]
-                    
-                    # Pre-seed with historical data
-                    with st.spinner("🌱 Fetching historical data from Upstox API..."):
-                        success = st.session_state.live_data_manager.pre_seed_historical_data(
+                    # Fetch historical data
+                    with st.spinner("📥 Fetching historical data from Upstox API..."):
+                        results = st.session_state.live_data_manager.fetch_historical_data(
                             instrument_keys, days_back
                         )
-                    
-                    if success:
-                        st.success(f"✅ Pre-seeded {len(instrument_keys)} instruments with {days_back} days of historical data!")
-                        
-                        # Show seeding status
-                        seed_status = st.session_state.live_data_manager.get_seeding_status()
-                        st.info(f"📊 Total historical candles loaded: {seed_status['total_seed_rows']}")
+
+                    if results:
+                        st.success(f"✅ Fetched historical data for {len(results)} instruments!")
+
+                        # Show results
+                        for instrument, data in results.items():
+                            st.info(f"📊 {instrument}: {len(data)} candles ({data.index.min()} to {data.index.max()})")
                     else:
-                        st.error("❌ Failed to pre-seed historical data")
-                        
+                        st.error("❌ Failed to fetch historical data")
+
                 except Exception as e:
-                    st.error(f"❌ Pre-seeding error: {str(e)}")
-        
-        if st.button("🧹 Clear Historical Data"):
-            if st.session_state.live_data_manager:
-                st.session_state.live_data_manager.clear_historical_data()
-                st.success("🧹 Cleared all historical data")
+                    st.error(f"❌ Historical data fetch error: {str(e)}")
+
+    with col2:
+        # Quick Nifty 50 fetch
+        st.write("**Quick Nifty Fetch**")
+        nifty_days = st.slider("Days for Nifty data", 1, 30, 5, key="nifty_days")
+
+        if st.button("📊 Fetch Nifty 50 Historical Data"):
+            try:
+                with st.spinner("📥 Fetching Nifty 50 historical data..."):
+                    results = st.session_state.live_data_manager.fetch_nifty_historical_data(nifty_days)
+
+                if results:
+                    st.success(f"✅ Fetched Nifty historical data!")
+
+                    for instrument, data in results.items():
+                        name = "Nifty 50" if "Nifty 50" in instrument else "Bank Nifty"
+                        st.info(f"📊 {name}: {len(data)} candles")
+
+                        # Show sample data
+                        st.dataframe(data.head(10), use_container_width=True)
+                else:
+                    st.error("❌ Failed to fetch Nifty historical data")
+
+            except Exception as e:
+                st.error(f"❌ Nifty fetch error: {str(e)}")
+
+    if st.button("🧹 Clear Historical Data"):
+        if st.session_state.live_data_manager:
+            st.session_state.live_data_manager.clear_historical_data()
+            st.success("🧹 Cleared all historical data")
 
     # Connection controls
     st.header("🔌 Connection Controls")
@@ -220,13 +230,19 @@ def show_live_data_page():
 
         with col5:
             st.metric("Live Predictions", pipeline_status['instruments_with_predictions'])
-        
+
         with col6:
-            # Show seeding status
+            # Show historical data status
             if st.session_state.live_data_manager:
-                seed_status = st.session_state.live_data_manager.get_seeding_status()
-                seed_color = "🟢" if seed_status['is_seeded'] else "🟡"
-                st.metric("Historical Data", f"{seed_color} {seed_status['total_seed_rows']} candles")
+                historical_status = st.session_state.live_data_manager.get_historical_data_status()
+
+                if historical_status['has_historical_data']:
+                    st.success(f"🌱 Historical data loaded: {historical_status['fetched_count']} instruments, {historical_status['total_historical_rows']} total candles")
+
+                    # Show details
+                    with st.expander("📊 Historical Data Details"):
+                        for instrument, count in historical_status['historical_details'].items():
+                            st.write(f"• {instrument}: {count} candles")
 
     # Live data display
     if st.session_state.is_live_connected and st.session_state.live_data_manager:
@@ -388,51 +404,29 @@ def show_live_data_page():
 
             with historical_tab:
                 st.subheader("🌱 Pre-seeded Historical Data")
-                
-                # Show seeding status
-                seed_status = st.session_state.live_data_manager.get_seeding_status()
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Instruments Seeded", seed_status['seed_count'])
-                with col2:
-                    st.metric("Total Historical Candles", seed_status['total_seed_rows'])
-                with col3:
-                    st.metric("Total OHLC Rows", seed_status['total_ohlc_rows'])
-                
-                if seed_status['is_seeded']:
-                    st.success("✅ Historical data is pre-seeded - predictions can start immediately!")
-                    
-                    # Show details for each seeded instrument
-                    for instrument_key in seed_status['instruments_seeded']:
-                        display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-                        seed_count = seed_status['seed_details'].get(instrument_key, 0)
-                        
-                        with st.expander(f"📊 {display_name} - {seed_count} historical candles"):
-                            ohlc_data = st.session_state.live_data_manager.get_live_ohlc(instrument_key, rows=200)
-                            
-                            if ohlc_data is not None and len(ohlc_data) > 0:
-                                col1, col2 = st.columns(2)
-                                
-                                with col1:
-                                    st.write("**Data Summary:**")
-                                    st.write(f"• Total rows: {len(ohlc_data)}")
-                                    st.write(f"• Date range: {ohlc_data.index.min()} to {ohlc_data.index.max()}")
-                                    st.write(f"• Latest price: ₹{ohlc_data['Close'].iloc[-1]:.2f}")
-                                    st.write(f"• Price range: ₹{ohlc_data['Low'].min():.2f} - ₹{ohlc_data['High'].max():.2f}")
-                                
-                                with col2:
-                                    st.write("**Recent 5 Candles:**")
-                                    recent_data = ohlc_data.tail(5)[['Open', 'High', 'Low', 'Close', 'Volume']]
-                                    st.dataframe(recent_data, use_container_width=True)
-                else:
-                    st.info("🌱 No historical data pre-seeded. Use the pre-seeding section above to load historical data for instant predictions.")
-                    
-                    st.write("**Benefits of pre-seeding:**")
-                    st.write("• ⚡ Instant predictions at market open (9:15 AM)")
-                    st.write("• 📊 100+ OHLC data points available immediately")
-                    st.write("• 🎯 No waiting for live data accumulation")
-                    st.write("• 📈 Better technical indicator calculation")
+
+                # Show historical data status
+                if st.session_state.live_data_manager:
+                    historical_status = st.session_state.live_data_manager.get_historical_data_status()
+
+                    if historical_status['has_historical_data']:
+                        st.success(
+                            f"📊 Historical data available: {historical_status['fetched_count']} instruments, "
+                            f"{historical_status['total_historical_rows']} total candles"
+                        )
+
+                        # Show details
+                        with st.expander("📊 Historical Data Details"):
+                            for instrument, count in historical_status['historical_details'].items():
+                                st.write(f"• {instrument}: {count} candles")
+                    else:
+                        st.info("🌱 No historical data fetched yet. Use the historical data section above to load historical data.")
+
+                        st.write("**Benefits of historical data:**")
+                        st.write("• ⚡ Instant predictions at market open (9:15 AM)")
+                        st.write("• 📊 100+ OHLC data points available immediately")
+                        st.write("• 🎯 No waiting for live data accumulation")
+                        st.write("• 📈 Better technical indicator calculation")
 
             with tick_details_tab:
                 st.subheader("🔍 Detailed Tick Information")

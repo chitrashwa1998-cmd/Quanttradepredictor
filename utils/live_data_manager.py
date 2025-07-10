@@ -33,9 +33,9 @@ class LiveDataManager:
         self.last_update_time = None
         self.total_ticks_received = 0
         
-        # Pre-seeding tracking
-        self.is_seeded = {}  # Track which instruments are pre-seeded
-        self.seed_data_count = {}  # Track how much historical data loaded
+        # Historical data tracking
+        self.historical_data_fetched = {}  # Track which instruments have historical data
+        self.historical_data_count = {}  # Track how much historical data loaded
         
     def on_tick_received(self, tick_data: Dict):
         """Handle incoming tick data."""
@@ -182,25 +182,27 @@ class LiveDataManager:
 
     
     
-    def pre_seed_historical_data(self, 
-                                   instrument_keys: List[str], 
-                                   days_back: int = 5) -> bool:
+    def fetch_historical_data(self, 
+                                instrument_keys: List[str], 
+                                days_back: int = 5) -> Dict[str, pd.DataFrame]:
         """
-        Pre-seed OHLC data with historical data from Upstox API.
+        Fetch historical OHLC data from Upstox API.
         
         Args:
-            instrument_keys: List of instrument keys to pre-seed
+            instrument_keys: List of instrument keys to fetch
             days_back: Number of days of historical data to fetch
             
         Returns:
-            True if successful, False otherwise
+            Dictionary of {instrument_key: DataFrame} with historical data
         """
         try:
-            print(f"🌱 Pre-seeding historical data for {len(instrument_keys)} instruments...")
+            print(f"📥 Fetching historical data for {len(instrument_keys)} instruments...")
             
+            results = {}
             success_count = 0
+            
             for instrument_key in instrument_keys:
-                print(f"\n📥 Fetching historical data for {instrument_key}...")
+                print(f"\n📊 Fetching historical data for {instrument_key}...")
                 
                 # Fetch historical data
                 historical_data = self.historical_client.get_historical_data(
@@ -211,12 +213,11 @@ class LiveDataManager:
                 
                 if historical_data is not None and len(historical_data) > 0:
                     # Store historical data
-                    self.ohlc_data[instrument_key] = historical_data
-                    self.is_seeded[instrument_key] = True
-                    self.seed_data_count[instrument_key] = len(historical_data)
+                    results[instrument_key] = historical_data
+                    self.historical_data_fetched[instrument_key] = True
+                    self.historical_data_count[instrument_key] = len(historical_data)
                     
-                    print(f"✅ Pre-seeded {instrument_key} with {len(historical_data)} historical candles")
-                    print(f"   Date range: {historical_data.index.min()} to {historical_data.index.max()}")
+                    print(f"✅ Fetched {instrument_key}: {len(historical_data)} candles")print(f"   Date range: {historical_data.index.min()} to {historical_data.index.max()}")
                     success_count += 1
                 else:
                     print(f"❌ Failed to fetch historical data for {instrument_key}")
@@ -224,53 +225,53 @@ class LiveDataManager:
                 # Rate limiting
                 time.sleep(0.5)
             
-            print(f"\n🌱 Pre-seeding complete: {success_count}/{len(instrument_keys)} instruments seeded")
-            return success_count > 0
+            print(f"\n✅ Historical data fetch complete: {success_count}/{len(instrument_keys)} instruments")
+            return results
             
         except Exception as e:
-            print(f"❌ Error during pre-seeding: {e}")
-            return False
+            print(f"❌ Error during historical data fetch: {e}")
+            return {}
     
-    def pre_seed_nifty_instruments(self, days_back: int = 5) -> bool:
-        """Pre-seed common Nifty instruments with historical data."""
+    def fetch_nifty_historical_data(self, days_back: int = 5) -> Dict[str, pd.DataFrame]:
+        """Fetch historical data for common Nifty instruments."""
         instruments = [
             "NSE_INDEX|Nifty 50",
             "NSE_INDEX|Nifty Bank"
         ]
-        return self.pre_seed_historical_data(instruments, days_back)
+        return self.fetch_historical_data(instruments, days_back)
     
-    def get_seeding_status(self) -> Dict:
-        """Get information about pre-seeding status."""
-        total_seeded = sum(1 for seeded in self.is_seeded.values() if seeded)
-        total_seed_rows = sum(self.seed_data_count.values())
+    def get_historical_data_status(self) -> Dict:
+        """Get information about historical data status."""
+        total_fetched = sum(1 for fetched in self.historical_data_fetched.values() if fetched)
+        total_historical_rows = sum(self.historical_data_count.values())
         
         return {
-            'is_seeded': total_seeded > 0,
-            'seed_count': total_seeded,
-            'total_seed_rows': total_seed_rows,
+            'has_historical_data': total_fetched > 0,
+            'fetched_count': total_fetched,
+            'total_historical_rows': total_historical_rows,
             'live_data_available': len(self.ohlc_data) > 0,
             'total_ohlc_rows': sum(len(df) for df in self.ohlc_data.values()),
-            'instruments_seeded': [key for key, seeded in self.is_seeded.items() if seeded],
+            'instruments_with_historical': [key for key, fetched in self.historical_data_fetched.items() if fetched],
             'instruments_with_data': list(self.ohlc_data.keys()),
-            'seed_details': {key: count for key, count in self.seed_data_count.items()}
+            'historical_details': {key: count for key, count in self.historical_data_count.items()}
         }
     
     def clear_historical_data(self, instrument_key: str = None):
-        """Clear historical/pre-seeded data for instrument(s)."""
+        """Clear historical data for instrument(s)."""
         if instrument_key:
             # Clear specific instrument
             if instrument_key in self.ohlc_data:
                 del self.ohlc_data[instrument_key]
-            if instrument_key in self.is_seeded:
-                del self.is_seeded[instrument_key]
-            if instrument_key in self.seed_data_count:
-                del self.seed_data_count[instrument_key]
+            if instrument_key in self.historical_data_fetched:
+                del self.historical_data_fetched[instrument_key]
+            if instrument_key in self.historical_data_count:
+                del self.historical_data_count[instrument_key]
             print(f"🧹 Cleared historical data for {instrument_key}")
         else:
             # Clear all
             self.ohlc_data.clear()
-            self.is_seeded.clear() 
-            self.seed_data_count.clear()
+            self.historical_data_fetched.clear() 
+            self.historical_data_count.clear()
             print("🧹 Cleared all historical data")
     
     def get_historical_client(self) -> UpstoxHistoricalClient:
