@@ -103,27 +103,35 @@ class UpstoxWebSocketClient:
         if hasattr(self, '_was_connected') and self._was_connected:
             print(f"🔌 WebSocket closed: {close_status_code} - {close_msg}")
             
-            # Don't auto-reconnect if it's a frequent disconnect pattern
+            # Track close count but don't stop reconnecting too early
             self.close_count = getattr(self, 'close_count', 0) + 1
             
-            if self.close_count > 5:
-                print("⚠️ Too many disconnects - stopping auto-reconnect")
-                return
+            if self.close_count > 10:  # Increased threshold
+                print("⚠️ Too many disconnects - pausing auto-reconnect")
+                time.sleep(60)  # Wait 1 minute before trying again
+                self.close_count = 0  # Reset counter
         
         if self.connection_callback:
             self.connection_callback("disconnected")
         
-        # Auto-reconnect with exponential backoff (only if market hours)
-        if hasattr(self, '_was_connected') and self._was_connected and self._is_market_hours():
+        # Auto-reconnect with exponential backoff
+        if hasattr(self, '_was_connected') and self._was_connected:
             import threading
             def reconnect():
                 import time
-                backoff_time = min(30, 5 * self.close_count)  # Progressive backoff
+                backoff_time = min(20, 2 * self.close_count)  # Shorter backoff
                 time.sleep(backoff_time)
                 
                 if not self.is_connected:
                     print(f"🔄 Reconnecting after {backoff_time}s... (attempt {self.close_count})")
-                    self.connect()
+                    success = self.connect()
+                    
+                    # Re-subscribe to instruments after reconnection
+                    if success and self.subscribed_instruments:
+                        time.sleep(2)  # Wait for connection to stabilize
+                        instruments = list(self.subscribed_instruments)
+                        self.subscribed_instruments.clear()  # Clear to avoid duplicates
+                        self.subscribe(instruments)
             
             thread = threading.Thread(target=reconnect, daemon=True)
             thread.start()
@@ -281,8 +289,7 @@ class UpstoxWebSocketClient:
                     offset += 1
                     continue
             
-            # If no valid price found, create a minimal tick for debugging
-            print(f"📊 Parsed tick: {instrument_key} @ ₹0.00")
+            # If no valid price found, return None without logging
             return None
             
         except Exception as e:
@@ -421,17 +428,27 @@ class UpstoxWebSocketClient:
                 header=headers
             )
             
-            # Start WebSocket with proper ping mechanism
+            # Start WebSocket with improved ping mechanism
             wst = threading.Thread(target=lambda: self.ws.run_forever(
-                ping_interval=60,    # Send ping every 60 seconds
-                ping_timeout=10,     # Wait 10 seconds for pong
+                ping_interval=30,    # Send ping every 30 seconds
+                ping_timeout=20,     # Wait 20 seconds for pong
                 ping_payload="upstox_ping"
             ))
             wst.daemon = True
             wst.start()
             
-            # Wait for connection
-            time.sleep(3)
+            # Wait for connection with timeout
+            max_wait = 10
+            wait_time = 0
+            while wait_time < max_wait and not self.is_connected:
+                time.sleep(0.5)
+                wait_time += 0.5
+            
+            if self.is_connected:
+                print(f"✅ WebSocket connected in {wait_time:.1f}s")
+            else:
+                print(f"❌ WebSocket connection timeout after {max_wait}s")
+                
             return self.is_connected
             
         except Exception as e:
@@ -455,13 +472,23 @@ class UpstoxWebSocketClient:
             return False
         
         try:
+            # Remove duplicates from input
+            unique_keys = list(set(instrument_keys))
+            
+            # Only subscribe to instruments not already subscribed
+            new_instruments = [key for key in unique_keys if key not in self.subscribed_instruments]
+            
+            if not new_instruments:
+                print(f"✅ All instruments already subscribed: {unique_keys}")
+                return True
+            
             # Create subscription request in v3 format
             subscribe_request = {
                 "guid": str(uuid.uuid4()),
                 "method": "sub",
                 "data": {
                     "mode": mode,
-                    "instrumentKeys": instrument_keys
+                    "instrumentKeys": new_instruments
                 }
             }
             
@@ -474,9 +501,9 @@ class UpstoxWebSocketClient:
                 self.ws.send(message_binary, websocket.ABNF.OPCODE_BINARY)
                 
                 # Update subscribed instruments
-                self.subscribed_instruments.update(instrument_keys)
+                self.subscribed_instruments.update(new_instruments)
                 
-                print(f"✅ Subscribed to {len(instrument_keys)} instruments (v3 Binary): {instrument_keys}")
+                print(f"✅ Subscribed to {len(new_instruments)} new instruments (v3 Binary): {new_instruments}")
                 return True
             
         except Exception as e:

@@ -72,8 +72,19 @@ class LivePredictionPipeline:
     
     def _processing_loop(self):
         """Main processing loop for generating live predictions."""
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        
         while self.is_processing:
             try:
+                # Check if connection is still alive
+                connection_status = self.live_data_manager.get_connection_status()
+                
+                if not connection_status['connected']:
+                    print("🔄 Connection lost, waiting for reconnection...")
+                    time.sleep(10)
+                    continue
+                
                 # Get tick statistics to see which instruments have data
                 tick_stats = self.live_data_manager.get_tick_statistics()
                 
@@ -86,12 +97,22 @@ class LivePredictionPipeline:
                         
                         self._process_instrument_predictions(instrument_key)
                 
+                # Reset error counter on successful processing
+                consecutive_errors = 0
+                
                 # Wait before next processing cycle
                 time.sleep(self.update_interval)
                 
             except Exception as e:
-                print(f"❌ Error in processing loop: {e}")
-                time.sleep(5)  # Wait before retrying
+                consecutive_errors += 1
+                print(f"❌ Error in processing loop ({consecutive_errors}/{max_consecutive_errors}): {e}")
+                
+                if consecutive_errors >= max_consecutive_errors:
+                    print("❌ Too many consecutive errors, stopping pipeline")
+                    self.is_processing = False
+                    break
+                
+                time.sleep(min(30, 5 * consecutive_errors))  # Progressive backoff
     
     def _process_instrument_predictions(self, instrument_key: str):
         """Process predictions for a specific instrument."""
