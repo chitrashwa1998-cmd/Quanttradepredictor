@@ -134,6 +134,11 @@ def show_live_data_page():
             st.rerun()
 
     with col4:
+        if st.button("🔄 Reset Connection", disabled=not st.session_state.live_data_manager):
+            if st.session_state.live_data_manager:
+                st.session_state.live_data_manager.ws_client.reset_connection()
+                st.success("🔄 Connection reset - try connecting again")
+        
         auto_refresh = st.toggle("🔄 Auto Refresh", value=False)
 
     # Status dashboard
