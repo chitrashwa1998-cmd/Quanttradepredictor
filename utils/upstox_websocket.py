@@ -25,6 +25,10 @@ class UpstoxWebSocketClient:
         self.connection_callback = None
         self.last_tick_data = {}
         self.websocket_url = None
+        self.connection_start_time = None
+        self.last_pong_time = None
+        self.ping_count = 0
+        self.pong_count = 0
         
         # Get WebSocket URL from Upstox API
         self._get_websocket_url()
@@ -76,6 +80,9 @@ class UpstoxWebSocketClient:
         """Handle WebSocket connection open."""
         self.is_connected = True
         self._was_connected = True  # Track that we had a successful connection
+        self.connection_start_time = time.time()
+        self.ping_count = 0
+        self.pong_count = 0
         
         # Check market hours
         if self._is_market_hours():
@@ -136,6 +143,17 @@ class UpstoxWebSocketClient:
         print(f"❌ Upstox WebSocket error: {error}")
         if self.error_callback:
             self.error_callback(error)
+    
+    def on_pong(self, ws, data):
+        """Handle WebSocket pong response."""
+        self.last_pong_time = time.time()
+        self.pong_count += 1
+        print(f"💚 Pong #{self.pong_count} - Connection healthy")
+    
+    def on_ping(self, ws, data):
+        """Handle WebSocket ping from server."""
+        print(f"📡 Server ping received: {data}")
+        # WebSocket library automatically sends pong response
     
     def on_message(self, ws, message):
         """Handle incoming WebSocket messages."""
@@ -319,15 +337,21 @@ class UpstoxWebSocketClient:
                 on_message=self.on_message,
                 on_error=self.on_error,
                 on_close=self.on_close,
+                on_ping=self.on_ping,
+                on_pong=self.on_pong,
                 header=headers
             )
             
-            # Start WebSocket with heartbeat to keep connection alive
-            wst = threading.Thread(target=lambda: self.ws.run_forever(ping_interval=30, ping_timeout=10))
+            # Start WebSocket with built-in ping mechanism and our custom heartbeat
+            wst = threading.Thread(target=lambda: self.ws.run_forever(
+                ping_interval=25,    # Send ping every 25 seconds
+                ping_timeout=10,     # Wait 10 seconds for pong
+                ping_payload="upstox_ping"  # Custom ping payload
+            ))
             wst.daemon = True
             wst.start()
             
-            # Start heartbeat thread
+            # Start additional heartbeat thread as backup
             self._start_heartbeat()
             
             # Wait for connection
@@ -339,18 +363,25 @@ class UpstoxWebSocketClient:
             return False
     
     def _start_heartbeat(self):
-        """Start heartbeat to keep connection alive."""
+        """Start heartbeat to keep connection alive using WebSocket ping frames."""
         def heartbeat():
             while self.is_connected:
                 try:
-                    if self.ws:
-                        # Send ping message every 25 seconds
-                        ping_message = {"type": "ping", "timestamp": time.time()}
-                        self.ws.send(json.dumps(ping_message))
-                    time.sleep(25)
+                    if self.ws and hasattr(self.ws, 'sock') and self.ws.sock:
+                        # Send WebSocket ping frame (not JSON message)
+                        self.ping_count += 1
+                        self.ws.ping(f"ping_{self.ping_count}")
+                        
+                        # Calculate connection duration
+                        if self.connection_start_time:
+                            duration = time.time() - self.connection_start_time
+                            print(f"💓 Ping #{self.ping_count} sent (Connected for {duration:.1f}s)")
+                        
+                    time.sleep(30)  # Send ping every 30 seconds
                 except Exception as e:
-                    print(f"Heartbeat error: {e}")
-                    break
+                    print(f"❌ Heartbeat error: {e}")
+                    # Don't break immediately, try a few more times
+                    time.sleep(5)
         
         heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
         heartbeat_thread.start()
