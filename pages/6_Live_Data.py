@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -19,7 +18,7 @@ with open('style.css') as f:
 
 def show_live_data_page():
     """Main live data page."""
-    
+
     st.markdown("""
     <div class="trading-header">
         <h1 style="margin:0;">📡 LIVE MARKET DATA</h1>
@@ -28,7 +27,7 @@ def show_live_data_page():
         </p>
     </div>
     """, unsafe_allow_html=True)
-    
+
     # Initialize session state for live data manager and prediction pipeline
     if 'live_data_manager' not in st.session_state:
         st.session_state.live_data_manager = None
@@ -38,12 +37,12 @@ def show_live_data_page():
         st.session_state.is_live_connected = False
     if 'is_prediction_pipeline_active' not in st.session_state:
         st.session_state.is_prediction_pipeline_active = False
-    
+
     # Configuration section
     st.header("🔧 Configuration")
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.subheader("📱 Upstox API Credentials")
         access_token = st.text_input(
@@ -58,10 +57,10 @@ def show_live_data_page():
             help="Your Upstox API key",
             key="upstox_api_key"
         )
-    
+
     with col2:
         st.subheader("📊 Instrument Configuration")
-        
+
         # Common instrument keys for Indian market
         popular_instruments = {
             "NIFTY 50": "NSE_INDEX|Nifty 50",
@@ -71,28 +70,28 @@ def show_live_data_page():
             "HDFC BANK": "NSE_EQ|INE040A01034",
             "INFOSYS": "NSE_EQ|INE009A01021"
         }
-        
+
         selected_instruments = st.multiselect(
             "Select Instruments",
             options=list(popular_instruments.keys()),
             default=["NIFTY 50", "BANK NIFTY"],
             help="Choose instruments to subscribe for live data"
         )
-        
+
         # Custom instrument input
         custom_instrument = st.text_input(
             "Custom Instrument Key",
             help="Enter custom instrument key (e.g., NSE_EQ|INE002A01018)"
         )
-        
+
         if custom_instrument:
             selected_instruments.append(custom_instrument)
-    
+
     # Connection controls
     st.header("🔌 Connection Controls")
-    
+
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         if st.button("🚀 Connect", type="primary", disabled=not (access_token and api_key)):
             if access_token and api_key:
@@ -100,16 +99,16 @@ def show_live_data_page():
                     # Initialize prediction pipeline (includes live data manager)
                     st.session_state.live_prediction_pipeline = LivePredictionPipeline(access_token, api_key)
                     st.session_state.live_data_manager = st.session_state.live_prediction_pipeline.live_data_manager
-                    
+
                     # Start the prediction pipeline
                     if st.session_state.live_prediction_pipeline.start_pipeline():
                         st.session_state.is_live_connected = True
                         st.session_state.is_prediction_pipeline_active = True
                         st.success("✅ Connected to Upstox WebSocket with Prediction Pipeline!")
-                        
+
                         # Wait a moment for connection to establish
                         time.sleep(2)
-                        
+
                         # Subscribe to selected instruments
                         if selected_instruments:
                             instrument_keys = [popular_instruments.get(inst, inst) for inst in selected_instruments]
@@ -121,7 +120,7 @@ def show_live_data_page():
                         st.error("❌ Failed to start prediction pipeline")
                 except Exception as e:
                     st.error(f"❌ Connection error: {str(e)}")
-    
+
     with col2:
         if st.button("🔌 Disconnect", disabled=not st.session_state.is_live_connected):
             if st.session_state.live_prediction_pipeline:
@@ -129,49 +128,49 @@ def show_live_data_page():
                 st.session_state.is_live_connected = False
                 st.session_state.is_prediction_pipeline_active = False
                 st.info("🔌 Disconnected from live data feed and prediction pipeline")
-    
+
     with col3:
         if st.button("🔄 Refresh Status"):
             st.rerun()
-    
+
     with col4:
         auto_refresh = st.toggle("🔄 Auto Refresh", value=False)
-    
+
     # Status dashboard
     if st.session_state.live_prediction_pipeline:
         pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
-        
+
         st.header("📊 Live Prediction Pipeline Status")
-        
+
         col1, col2, col3, col4, col5 = st.columns(5)
-        
+
         with col1:
             status_color = "🟢" if pipeline_status['data_connected'] else "🔴"
             st.metric("Data Connection", f"{status_color} {'Connected' if pipeline_status['data_connected'] else 'Disconnected'}")
-        
+
         with col2:
             pipeline_color = "🟢" if pipeline_status['pipeline_active'] else "🔴"
             st.metric("Prediction Pipeline", f"{pipeline_color} {'Active' if pipeline_status['pipeline_active'] else 'Inactive'}")
-        
+
         with col3:
             model_color = "🟢" if pipeline_status['model_ready'] else "🔴"
             st.metric("Direction Model", f"{model_color} {'Ready' if pipeline_status['model_ready'] else 'Not Trained'}")
-        
+
         with col4:
             st.metric("Subscribed Instruments", pipeline_status['subscribed_instruments'])
-        
+
         with col5:
             st.metric("Live Predictions", pipeline_status['instruments_with_predictions'])
-    
+
     # Live data display
     if st.session_state.is_live_connected and st.session_state.live_data_manager:
-        
+
         # Get tick statistics
         tick_stats = st.session_state.live_data_manager.get_tick_statistics()
-        
+
         if tick_stats:
             st.header("📈 Live Market Data")
-            
+
             # Create tabs for different views
             overview_tab, predictions_tab, charts_tab, tick_details_tab, export_tab = st.tabs([
                 "📊 Market Overview",
@@ -180,25 +179,25 @@ def show_live_data_page():
                 "🔍 Tick Details",
                 "💾 Export Data"
             ])
-            
+
             with predictions_tab:
                 if st.session_state.is_prediction_pipeline_active:
                     st.subheader("🎯 Real-time Direction Predictions")
-                    
+
                     # Get live predictions
                     live_predictions = st.session_state.live_prediction_pipeline.get_latest_predictions()
-                    
+
                     if live_predictions:
                         # Display predictions in a grid
                         for instrument_key, prediction in live_predictions.items():
                             display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-                            
+
                             # Get detailed summary
                             summary = st.session_state.live_prediction_pipeline.get_instrument_summary(instrument_key)
-                            
+
                             with st.container():
                                 col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
-                                
+
                                 with col1:
                                     direction_color = "🟢" if prediction['direction'] == 'Bullish' else "🔴"
                                     st.markdown(f"""
@@ -206,13 +205,13 @@ def show_live_data_page():
                                     Direction: **{prediction['direction']}**  
                                     Confidence: **{prediction['confidence']:.1%}**
                                     """)
-                                
+
                                 with col2:
                                     st.metric("Current Price", f"₹{prediction['current_price']:.2f}")
-                                
+
                                 with col3:
                                     st.metric("Volume", f"{prediction['volume']:,}")
-                                
+
                                 with col4:
                                     if summary and 'recent_stats' in summary:
                                         stats = summary['recent_stats']
@@ -221,54 +220,54 @@ def show_live_data_page():
                                         Bullish: {stats['bullish_signals']} ({stats['bullish_percentage']:.0f}%)  
                                         Avg Confidence: {stats['average_confidence']:.1%}
                                         """)
-                                
+
                                 # Show prediction timestamp
                                 time_ago = datetime.now() - prediction['generated_at']
                                 st.caption(f"Generated {time_ago.total_seconds():.0f}s ago")
-                                
+
                                 st.divider()
-                        
+
                         # Auto-refresh toggle
                         col1, col2 = st.columns(2)
                         with col1:
                             if st.button("🔄 Refresh Predictions"):
                                 st.rerun()
-                        
+
                         with col2:
                             auto_refresh_predictions = st.toggle("🔄 Auto Refresh (30s)", value=False, key="auto_refresh_predictions")
-                        
+
                         # Auto-refresh functionality for predictions
                         if auto_refresh_predictions:
                             time.sleep(30)
                             st.rerun()
-                    
+
                     else:
                         st.info("🎯 Prediction pipeline is active but no predictions generated yet. Please wait for sufficient OHLC data to accumulate...")
-                        
+
                         # Show requirements
                         st.write("**Requirements for predictions:**")
                         st.write("• Minimum 100 OHLC data points")
                         st.write("• Direction model must be trained")
                         st.write("• Sufficient tick data for feature calculation")
-                
+
                 else:
                     st.warning("⚠️ Prediction pipeline not active. Please connect to start receiving live predictions.")
 
             with overview_tab:
                 st.subheader("💹 Real-time Price Dashboard")
-                
+
                 # Display live prices in a grid
                 cols = st.columns(min(3, len(tick_stats)))
-                
+
                 for i, (instrument, stats) in enumerate(tick_stats.items()):
                     with cols[i % len(cols)]:
                         # Get instrument display name
                         display_name = instrument.split('|')[-1] if '|' in instrument else instrument
-                        
+
                         # Color based on change
                         change_pct = stats.get('change_percent', 0)
                         color = "🟢" if change_pct >= 0 else "🔴"
-                        
+
                         st.markdown(f"""
                         <div class="metric-container">
                             <h4 style="color: #00ffff; margin: 0;">{color} {display_name}</h4>
@@ -281,10 +280,10 @@ def show_live_data_page():
                             </p>
                         </div>
                         """, unsafe_allow_html=True)
-            
+
             with charts_tab:
                 st.subheader("📈 Real-time Price Charts")
-                
+
                 # Select instrument for detailed chart
                 if tick_stats:
                     selected_instrument = st.selectbox(
@@ -292,11 +291,11 @@ def show_live_data_page():
                         options=list(tick_stats.keys()),
                         format_func=lambda x: x.split('|')[-1] if '|' in x else x
                     )
-                    
+
                     if selected_instrument:
                         # Get OHLC data
                         ohlc_data = st.session_state.live_data_manager.get_live_ohlc(selected_instrument)
-                        
+
                         if ohlc_data is not None and len(ohlc_data) > 0:
                             # Create candlestick chart
                             fig = go.Figure(data=go.Candlestick(
@@ -307,7 +306,7 @@ def show_live_data_page():
                                 close=ohlc_data['Close'],
                                 name="Price"
                             ))
-                            
+
                             fig.update_layout(
                                 title=f"Live Chart - {selected_instrument.split('|')[-1] if '|' in selected_instrument else selected_instrument}",
                                 xaxis_title="Time",
@@ -315,22 +314,22 @@ def show_live_data_page():
                                 height=500,
                                 template="plotly_dark"
                             )
-                            
+
                             st.plotly_chart(fig, use_container_width=True)
                         else:
                             st.info("📊 Accumulating tick data... Please wait for OHLC chart generation.")
-            
+
             with tick_details_tab:
                 st.subheader("🔍 Detailed Tick Information")
-                
+
                 # Show latest ticks for each instrument
                 for instrument, stats in tick_stats.items():
                     with st.expander(f"📊 {instrument.split('|')[-1] if '|' in instrument else instrument} - Latest Tick"):
                         latest_tick = st.session_state.live_data_manager.get_latest_tick(instrument)
-                        
+
                         if latest_tick:
                             col1, col2 = st.columns(2)
-                            
+
                             with col1:
                                 st.write("**Price Information:**")
                                 st.write(f"• LTP: ₹{latest_tick.get('ltp', 0):.2f}")
@@ -338,7 +337,7 @@ def show_live_data_page():
                                 st.write(f"• High: ₹{latest_tick.get('high', 0):.2f}")
                                 st.write(f"• Low: ₹{latest_tick.get('low', 0):.2f}")
                                 st.write(f"• Close: ₹{latest_tick.get('close', 0):.2f}")
-                            
+
                             with col2:
                                 st.write("**Market Data:**")
                                 st.write(f"• Volume: {latest_tick.get('volume', 0):,}")
@@ -346,15 +345,15 @@ def show_live_data_page():
                                 st.write(f"• Ask: ₹{latest_tick.get('ask_price', 0):.2f} ({latest_tick.get('ask_qty', 0):,})")
                                 st.write(f"• Change: {latest_tick.get('change_percent', 0):+.2f}%")
                                 st.write(f"• Timestamp: {latest_tick.get('timestamp', 'N/A')}")
-            
+
             with export_tab:
                 st.subheader("💾 Export Live Data")
-                
+
                 col1, col2 = st.columns(2)
-                
+
                 with col1:
                     st.write("**Export Options:**")
-                    
+
                     # Select instrument to export
                     export_instrument = st.selectbox(
                         "Select Instrument to Export",
@@ -362,16 +361,16 @@ def show_live_data_page():
                         format_func=lambda x: x.split('|')[-1] if '|' in x else x,
                         key="export_instrument"
                     )
-                    
+
                     export_format = st.radio(
                         "Export Format",
                         ["OHLC Data", "Raw Tick Data"],
                         key="export_format"
                     )
-                
+
                 with col2:
                     st.write("**Export Actions:**")
-                    
+
                     if st.button("📥 Download CSV", type="primary"):
                         if export_instrument:
                             if export_format == "OHLC Data":
@@ -389,7 +388,7 @@ def show_live_data_page():
                             else:
                                 # Export raw tick data would require storing individual ticks
                                 st.info("Raw tick export feature coming soon!")
-                    
+
                     if st.button("💾 Save to Database"):
                         if export_instrument:
                             try:
@@ -410,7 +409,7 @@ def show_live_data_page():
             st.info("📡 Connected but no tick data received yet. Please wait...")
     else:
         st.info("🔌 Please connect to start receiving live market data.")
-    
+
     # Auto-refresh functionality
     if auto_refresh and st.session_state.is_live_connected:
         time.sleep(2)
