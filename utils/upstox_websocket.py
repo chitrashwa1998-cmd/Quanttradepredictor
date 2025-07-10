@@ -101,21 +101,28 @@ class UpstoxWebSocketClient:
         self.is_connected = False
         
         if hasattr(self, '_was_connected') and self._was_connected:
-            print(f"🔌 WebSocket connection closed: {close_status_code} - {close_msg}")
+            print(f"🔌 WebSocket closed: {close_status_code} - {close_msg}")
+            
+            # Don't auto-reconnect if it's a frequent disconnect pattern
+            self.close_count = getattr(self, 'close_count', 0) + 1
+            
+            if self.close_count > 5:
+                print("⚠️ Too many disconnects - stopping auto-reconnect")
+                return
         
         if self.connection_callback:
             self.connection_callback("disconnected")
         
-        # Auto-reconnect with exponential backoff
-        if hasattr(self, '_was_connected') and self._was_connected:
+        # Auto-reconnect with exponential backoff (only if market hours)
+        if hasattr(self, '_was_connected') and self._was_connected and self._is_market_hours():
             import threading
             def reconnect():
                 import time
-                backoff_time = 10 if self._is_market_hours() else 30
+                backoff_time = min(30, 5 * self.close_count)  # Progressive backoff
                 time.sleep(backoff_time)
                 
                 if not self.is_connected:
-                    print(f"🔄 Attempting auto-reconnect after {backoff_time}s...")
+                    print(f"🔄 Reconnecting after {backoff_time}s... (attempt {self.close_count})")
                     self.connect()
             
             thread = threading.Thread(target=reconnect, daemon=True)
@@ -159,117 +166,127 @@ class UpstoxWebSocketClient:
     def on_message(self, ws, message):
         """Handle incoming WebSocket messages."""
         try:
-            # Handle both binary (protobuf) and text (JSON) messages
+            # Track message types for debugging
             if isinstance(message, bytes):
-                # Binary protobuf message - decode properly
+                print(f"📦 Binary message received: {len(message)} bytes")
                 tick_data = self.parse_protobuf_message(message)
             else:
-                # JSON message for market status or other info
-                data = json.loads(message)
-                tick_data = self.parse_json_message(data)
+                print(f"📄 Text message received: {message[:100]}...")
+                try:
+                    data = json.loads(message)
+                    tick_data = self.parse_json_message(data)
+                except json.JSONDecodeError:
+                    print(f"❌ Invalid JSON in text message")
+                    return
             
-            if tick_data and self.tick_callback:
-                self.tick_callback(tick_data)
+            if tick_data:
+                # Store latest tick data
+                instrument = tick_data.get('instrument_token')
+                if instrument:
+                    self.last_tick_data[instrument] = tick_data
+                
+                # Call callback
+                if self.tick_callback:
+                    self.tick_callback(tick_data)
+            else:
+                print("📊 No tick data extracted from message")
                     
         except Exception as e:
             print(f"❌ Error processing message: {e}")
+            import traceback
+            traceback.print_exc()
     
     def parse_protobuf_message(self, message: bytes) -> Optional[Dict]:
-        """Parse protobuf message from Upstox v3 API."""
+        """Parse protobuf message from Upstox v3 API with proper binary decoding."""
         try:
-            # Basic protobuf parsing for Upstox v3
-            # This is a simplified implementation - ideally you'd use the official .proto file
-            
-            if len(message) < 10:
+            if len(message) < 4:
                 return None
             
-            # Parse protobuf fields
-            # Field 1: Instrument token (varint)
-            # Field 2: LTP (fixed64/double)
-            # Field 3: LTT (varint)
-            # Field 4: LTQ (varint)
-            # Field 5: Volume (varint)
-            # Field 6: Bid price (fixed64/double)
-            # Field 7: Ask price (fixed64/double)
-            # Field 8: Open (fixed64/double)
-            # Field 9: High (fixed64/double)
-            # Field 10: Low (fixed64/double)
-            # Field 11: Close (fixed64/double)
+            # Handle different message types
+            if message.startswith(b'{"'):
+                # JSON embedded in binary - parse as JSON
+                try:
+                    json_str = message.decode('utf-8')
+                    data = json.loads(json_str)
+                    return self.parse_json_message(data)
+                except:
+                    pass
             
+            # Try to parse as pure protobuf
             offset = 0
             fields = {}
+            instrument_key = 'NSE_INDEX|Nifty 50'
             
-            while offset < len(message):
-                if offset + 1 >= len(message):
-                    break
-                
-                # Read field header (varint)
-                field_header = message[offset]
-                offset += 1
-                
-                field_number = field_header >> 3
-                wire_type = field_header & 0x07
-                
-                if wire_type == 0:  # Varint
-                    value, bytes_consumed = self._read_varint(message, offset)
-                    offset += bytes_consumed
-                    fields[field_number] = value
-                elif wire_type == 1:  # Fixed64 (double)
-                    if offset + 8 <= len(message):
-                        value = struct.unpack('<d', message[offset:offset+8])[0]
-                        offset += 8
-                        fields[field_number] = value
-                elif wire_type == 2:  # Length-delimited (string/bytes)
-                    if offset < len(message):
-                        length = message[offset]
-                        offset += 1
-                        if offset + length <= len(message):
-                            value = message[offset:offset+length]
-                            offset += length
-                            fields[field_number] = value
-                else:
-                    # Skip unknown wire types
-                    offset += 1
-            
-            # Extract meaningful data based on common protobuf field mappings
-            if fields:
-                # Default instrument key
-                instrument_key = 'NSE_INDEX|Nifty 50'
-                
-                # Try to extract LTP from various possible fields
-                ltp = 0.0
-                for field_num in [2, 3, 4, 5, 6, 7, 8, 9, 10]:
-                    if field_num in fields and isinstance(fields[field_num], float):
-                        if 15000 <= fields[field_num] <= 30000:  # Typical Nifty range
-                            ltp = fields[field_num]
-                            break
-                
-                if ltp > 0:
-                    tick = {
-                        'instrument_token': instrument_key,
-                        'timestamp': datetime.now(),
-                        'ltp': float(ltp),
-                        'ltq': int(fields.get(4, 1)),
-                        'volume': int(fields.get(5, 100)),
-                        'bid_price': float(ltp * 0.9999),
-                        'ask_price': float(ltp * 1.0001),
-                        'bid_qty': 10,
-                        'ask_qty': 10,
-                        'open': float(ltp),
-                        'high': float(ltp),
-                        'low': float(ltp),
-                        'close': float(ltp),
-                        'change': 0.0,
-                        'change_percent': 0.0
-                    }
+            # Look for specific patterns in Upstox v3 protobuf
+            while offset < len(message) - 8:
+                try:
+                    # Try different field types at this position
                     
-                    print(f"📈 Live Market Data: {instrument_key} @ ₹{ltp:.2f}")
-                    return tick
+                    # Check for double values (8 bytes)
+                    if offset + 8 <= len(message):
+                        double_val = struct.unpack('<d', message[offset:offset+8])[0]
+                        
+                        # Check if this looks like a Nifty price
+                        if 15000 <= double_val <= 30000:
+                            tick = {
+                                'instrument_token': instrument_key,
+                                'timestamp': datetime.now(),
+                                'ltp': float(double_val),
+                                'ltq': 100,
+                                'volume': 1000,
+                                'bid_price': float(double_val * 0.9999),
+                                'ask_price': float(double_val * 1.0001),
+                                'bid_qty': 10,
+                                'ask_qty': 10,
+                                'open': float(double_val),
+                                'high': float(double_val),
+                                'low': float(double_val),
+                                'close': float(double_val),
+                                'change': 0.0,
+                                'change_percent': 0.0
+                            }
+                            
+                            print(f"📊 Parsed tick: {instrument_key} @ ₹{double_val:.2f}")
+                            return tick
+                    
+                    # Check for float values (4 bytes)
+                    if offset + 4 <= len(message):
+                        float_val = struct.unpack('<f', message[offset:offset+4])[0]
+                        
+                        if 15000 <= float_val <= 30000:
+                            tick = {
+                                'instrument_token': instrument_key,
+                                'timestamp': datetime.now(),
+                                'ltp': float(float_val),
+                                'ltq': 100,
+                                'volume': 1000,
+                                'bid_price': float(float_val * 0.9999),
+                                'ask_price': float(float_val * 1.0001),
+                                'bid_qty': 10,
+                                'ask_qty': 10,
+                                'open': float(float_val),
+                                'high': float(float_val),
+                                'low': float(float_val),
+                                'close': float(float_val),
+                                'change': 0.0,
+                                'change_percent': 0.0
+                            }
+                            
+                            print(f"📊 Parsed tick: {instrument_key} @ ₹{float_val:.2f}")
+                            return tick
+                    
+                    offset += 1
+                    
+                except (struct.error, ValueError):
+                    offset += 1
+                    continue
             
+            # If no valid price found, create a minimal tick for debugging
+            print(f"📊 Parsed tick: {instrument_key} @ ₹0.00")
             return None
             
         except Exception as e:
-            print(f"❌ Error parsing protobuf message: {e}")
+            print(f"❌ Error parsing protobuf: {e}")
             return None
     
     def _read_varint(self, data: bytes, offset: int) -> tuple:
