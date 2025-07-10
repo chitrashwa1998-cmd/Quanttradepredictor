@@ -65,7 +65,7 @@ class LiveDataManager:
         print(f"Connection status: {status}")
     
     def update_ohlc_data(self, instrument_key: str, timeframe: str = "5T"):
-        """Convert tick data to OHLC format with proper 5-minute alignment."""
+        """Convert tick data to OHLC format."""
         try:
             ticks = list(self.tick_buffer[instrument_key])
             if not ticks:
@@ -76,57 +76,40 @@ class LiveDataManager:
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df = df.set_index('timestamp')
             
-            # Resample to OHLC format starting from market opening time (9:15 AM)
-            # This ensures candles align to 9:15, 9:20, 9:25, etc.
-            new_ohlc = df['ltp'].resample(timeframe, origin='2024-01-01 09:15:00').ohlc()
-            new_ohlc['volume'] = df['volume'].resample(timeframe, origin='2024-01-01 09:15:00').sum()
+            # Resample to OHLC format
+            new_ohlc = df['ltp'].resample(timeframe).ohlc()
+            new_ohlc['volume'] = df['volume'].resample(timeframe).sum()
             
-            # Remove NaN values and incomplete candles
+            # Remove NaN values
             new_ohlc = new_ohlc.dropna()
             
-            # Only keep complete 5-minute candles (filter out partial candles)
             if len(new_ohlc) > 0:
-                current_time = pd.Timestamp.now()
-                # Remove the last candle if it's still forming (within current 5-minute period)
-                last_candle_time = new_ohlc.index[-1]
-                current_5min_boundary = current_time.floor('5T')
+                # Rename columns to match existing format
+                new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
                 
-                if last_candle_time >= current_5min_boundary:
-                    new_ohlc = new_ohlc[:-1]  # Remove incomplete candle
+                # Combine with existing live data
+                if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
+                    existing_ohlc = self.ohlc_data[instrument_key]
                     
-                if len(new_ohlc) > 0:
-                    # Rename columns to match existing format
-                    new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+                    # Combine with new live data
+                    combined_ohlc = pd.concat([existing_ohlc, new_ohlc])
                     
-                    # Combine with existing live data
-                    if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
-                        existing_ohlc = self.ohlc_data[instrument_key]
-                        
-                        # Combine with new live data
-                        combined_ohlc = pd.concat([existing_ohlc, new_ohlc])
-                        
-                        # Remove duplicate timestamps, keeping the latest
-                        combined_ohlc = combined_ohlc[~combined_ohlc.index.duplicated(keep='last')]
-                        
-                        # Sort by timestamp
-                        combined_ohlc = combined_ohlc.sort_index()
-                        
-                        # Keep last 100 rows maximum for live data
-                        if len(combined_ohlc) > 100:
-                            combined_ohlc = combined_ohlc.tail(100)
-                        
-                        self.ohlc_data[instrument_key] = combined_ohlc
-                        
-                        # Only log when we get a complete new candle
-                        if len(new_ohlc) > 0:
-                            latest_candle_time = combined_ohlc.index[-1]
-                            print(f"📈 Complete 5-min candle for {instrument_key}: {latest_candle_time.strftime('%H:%M:%S')} | Total rows: {len(combined_ohlc)}")
-                    else:
-                        # First time - store new data
-                        self.ohlc_data[instrument_key] = new_ohlc
-                        if len(new_ohlc) > 0:
-                            latest_candle_time = new_ohlc.index[-1]
-                            print(f"📈 Initial complete candle for {instrument_key}: {latest_candle_time.strftime('%H:%M:%S')} | Rows: {len(new_ohlc)}")
+                    # Remove duplicate timestamps, keeping the latest
+                    combined_ohlc = combined_ohlc[~combined_ohlc.index.duplicated(keep='last')]
+                    
+                    # Sort by timestamp
+                    combined_ohlc = combined_ohlc.sort_index()
+                    
+                    # Keep last 100 rows maximum for live data
+                    if len(combined_ohlc) > 100:
+                        combined_ohlc = combined_ohlc.tail(100)
+                    
+                    self.ohlc_data[instrument_key] = combined_ohlc
+                    print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
+                else:
+                    # First time - store new data
+                    self.ohlc_data[instrument_key] = new_ohlc
+                    print(f"📈 Initial OHLC for {instrument_key}: {len(new_ohlc)} rows")
                 
         except Exception as e:
             print(f"Error updating OHLC data: {e}")

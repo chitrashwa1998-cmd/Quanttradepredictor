@@ -103,33 +103,32 @@ class UpstoxWebSocketClient:
         if hasattr(self, '_was_connected') and self._was_connected:
             print(f"🔌 WebSocket closed: {close_status_code} - {close_msg}")
             
-            # Track close count and implement stricter limits
+            # Track close count but don't stop reconnecting too early
             self.close_count = getattr(self, 'close_count', 0) + 1
             
-            if self.close_count > 5:  # Reduced threshold
-                print("⚠️ Too many disconnects - stopping auto-reconnect")
-                print("💡 Try manually reconnecting from the Live Data page")
-                return  # Stop auto-reconnect
+            if self.close_count > 10:  # Increased threshold
+                print("⚠️ Too many disconnects - pausing auto-reconnect")
+                time.sleep(60)  # Wait 1 minute before trying again
+                self.close_count = 0  # Reset counter
         
         if self.connection_callback:
             self.connection_callback("disconnected")
         
-        # Auto-reconnect with longer backoff times
-        if hasattr(self, '_was_connected') and self._was_connected and self.close_count <= 5:
+        # Auto-reconnect with exponential backoff
+        if hasattr(self, '_was_connected') and self._was_connected:
             import threading
             def reconnect():
                 import time
-                backoff_time = min(60, 10 * self.close_count)  # Longer backoff
-                print(f"⏳ Waiting {backoff_time}s before reconnection attempt {self.close_count}")
+                backoff_time = min(20, 2 * self.close_count)  # Shorter backoff
                 time.sleep(backoff_time)
                 
                 if not self.is_connected:
-                    print(f"🔄 Reconnecting... (attempt {self.close_count})")
+                    print(f"🔄 Reconnecting after {backoff_time}s... (attempt {self.close_count})")
                     success = self.connect()
                     
                     # Re-subscribe to instruments after reconnection
                     if success and self.subscribed_instruments:
-                        time.sleep(3)  # Wait longer for connection to stabilize
+                        time.sleep(2)  # Wait for connection to stabilize
                         instruments = list(self.subscribed_instruments)
                         self.subscribed_instruments.clear()  # Clear to avoid duplicates
                         self.subscribe(instruments)
@@ -465,13 +464,6 @@ class UpstoxWebSocketClient:
                 pass
             self.is_connected = False
             print("🔌 Disconnected from WebSocket")
-    
-    def reset_connection(self):
-        """Reset connection counters and state."""
-        self.close_count = 0
-        self.is_connected = False
-        self._was_connected = False
-        print("🔄 Connection state reset")
     
     def subscribe(self, instrument_keys: list, mode: str = "ltpc"):
         """Subscribe to instruments using v3 API binary format."""

@@ -70,10 +70,9 @@ class LivePredictionPipeline:
         return self.live_data_manager.subscribe_instruments(instrument_keys)
 
     def _processing_loop(self):
-        """Main processing loop for generating live predictions only on complete 5-minute candle close."""
+        """Main processing loop for generating live predictions."""
         consecutive_errors = 0
         max_consecutive_errors = 5
-        last_prediction_times = {}  # Track last prediction time for each instrument
 
         while self.is_processing:
             try:
@@ -90,17 +89,19 @@ class LivePredictionPipeline:
 
                 if tick_stats:
                     for instrument_key, stats in tick_stats.items():
-                        # Check if we should generate prediction for this instrument
-                        if self._should_generate_prediction(instrument_key, last_prediction_times):
-                            self._process_instrument_predictions(instrument_key)
-                            # Update last prediction time to current 5-minute boundary
-                            last_prediction_times[instrument_key] = self._get_current_5min_boundary()
+                        # Bootstrap OHLC data if we have enough ticks but insufficient OHLC
+                        # Removed bootstrapping function
+                        #if stats['tick_count'] >= 20 and stats['ohlc_rows'] < self.min_ohlc_rows:
+                        #    print(f"🚀 Bootstrapping OHLC data for {instrument_key}")
+                        #    self.live_data_manager.bootstrap_ohlc_from_ticks(instrument_key)
+
+                        self._process_instrument_predictions(instrument_key)
 
                 # Reset error counter on successful processing
                 consecutive_errors = 0
 
-                # Check every 10 seconds instead of 30 for more responsive candle close detection
-                time.sleep(10)
+                # Wait before next processing cycle
+                time.sleep(self.update_interval)
 
             except Exception as e:
                 consecutive_errors += 1
@@ -114,7 +115,7 @@ class LivePredictionPipeline:
                 time.sleep(min(30, 5 * consecutive_errors))  # Progressive backoff
 
     def _process_instrument_predictions(self, instrument_key: str):
-        """Process predictions for a specific instrument only on complete 5-minute candle close."""
+        """Process predictions for a specific instrument."""
         try:
             # Get live OHLC data
             ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=200)
@@ -126,11 +127,6 @@ class LivePredictionPipeline:
                     print(f"📊 No OHLC data available for {instrument_key}")
                 return
 
-            # Verify the latest candle is complete and on 5-minute boundary
-            latest_candle_time = ohlc_data.index[-1]
-            if hasattr(latest_candle_time, 'to_pydatetime'):
-                latest_candle_time = latest_candle_time.to_pydatetime()
-            
             # Calculate direction features
             features = self._calculate_direction_features(ohlc_data)
 
@@ -145,7 +141,7 @@ class LivePredictionPipeline:
                 print(f"❌ Failed to generate predictions for {instrument_key}")
                 return
 
-            # Store latest prediction with candle completion timestamp
+            # Store latest prediction
             latest_prediction = self._format_prediction(
                 instrument_key, 
                 features.index[-1], 
@@ -153,10 +149,6 @@ class LivePredictionPipeline:
                 probabilities[-1] if probabilities is not None else None,
                 ohlc_data.iloc[-1]
             )
-
-            # Add candle completion info
-            latest_prediction['candle_close_time'] = latest_candle_time
-            latest_prediction['next_prediction_at'] = latest_candle_time + timedelta(minutes=5)
 
             self.live_predictions[instrument_key] = latest_prediction
 
@@ -166,7 +158,7 @@ class LivePredictionPipeline:
 
             self.prediction_history[instrument_key].append(latest_prediction)
 
-            print(f"🎯 Complete 5-min candle prediction for {instrument_key}: {latest_prediction['direction']} ({latest_prediction['confidence']:.3f}) | Candle closed at {latest_candle_time.strftime('%H:%M:%S')} | Next prediction at {latest_prediction['next_prediction_at'].strftime('%H:%M:%S')}")
+            print(f"✅ Generated live prediction for {instrument_key}: {latest_prediction['direction']} ({latest_prediction['confidence']:.3f})")
 
         except Exception as e:
             print(f"❌ Error processing predictions for {instrument_key}: {e}")
@@ -232,53 +224,6 @@ class LivePredictionPipeline:
             ) if self.live_predictions else None,
             'model_ready': self.model_manager.is_model_trained('direction')
         }
-
-    def _get_current_5min_boundary(self) -> datetime:
-        """Get the current 5-minute boundary timestamp."""
-        now = datetime.now()
-        # Round down to the nearest 5-minute boundary
-        minutes = (now.minute // 5) * 5
-        return now.replace(minute=minutes, second=0, microsecond=0)
-    
-    def _get_next_5min_boundary(self) -> datetime:
-        """Get the next 5-minute boundary timestamp."""
-        current_boundary = self._get_current_5min_boundary()
-        return current_boundary + timedelta(minutes=5)
-    
-    def _should_generate_prediction(self, instrument_key: str, last_prediction_times: Dict) -> bool:
-        """Check if we should generate a new prediction for this instrument."""
-        current_5min_boundary = self._get_current_5min_boundary()
-        now = datetime.now()
-        
-        # Only predict if we're within 30 seconds after a 5-minute boundary
-        seconds_after_boundary = (now - current_5min_boundary).total_seconds()
-        
-        if seconds_after_boundary > 30:  # More than 30 seconds after boundary
-            return False
-        
-        # Check if we already predicted for this 5-minute boundary
-        last_prediction_time = last_prediction_times.get(instrument_key)
-        if last_prediction_time and last_prediction_time >= current_5min_boundary:
-            return False
-            
-        # Get OHLC data to check if we have a complete candle
-        ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=10)
-        if ohlc_data is None or len(ohlc_data) < self.min_ohlc_rows:
-            return False
-            
-        # Check if the latest candle timestamp aligns with 5-minute boundary
-        latest_candle_time = ohlc_data.index[-1]
-        
-        # Convert to datetime if it's not already
-        if hasattr(latest_candle_time, 'to_pydatetime'):
-            latest_candle_time = latest_candle_time.to_pydatetime()
-        
-        # Check if latest candle is on a 5-minute boundary
-        if latest_candle_time.minute % 5 != 0 or latest_candle_time.second != 0:
-            return False
-            
-        print(f"🕐 5-minute candle completed at {latest_candle_time.strftime('%H:%M:%S')} - Generating prediction for {instrument_key}")
-        return True
 
     def get_instrument_summary(self, instrument_key: str) -> Optional[Dict]:
         """Get summary for a specific instrument."""
