@@ -18,6 +18,21 @@ def show_predictions_page():
 
     st.title("🔮 Real-Time Predictions")
     st.markdown("### Advanced ML Model Predictions - Authentic Data Only")
+    
+    # Check for live prediction pipeline
+    live_predictions_available = False
+    if 'live_prediction_pipeline' in st.session_state and st.session_state.live_prediction_pipeline:
+        pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
+        if pipeline_status['pipeline_active'] and pipeline_status['instruments_with_predictions'] > 0:
+            live_predictions_available = True
+            
+            # Show live predictions banner
+            st.info("🎯 **Live Predictions Available!** Real-time direction predictions are being generated from live market data.")
+            
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                if st.button("📡 View Live Data Page"):
+                    st.switch_page("pages/6_Live_Data.py")
 
     # Add cache clearing button to remove synthetic values
     if st.button("🗑️ Clear All Cached Data", help="Click if you see synthetic datetime warnings"):
