@@ -84,6 +84,9 @@ class LiveDataManager:
                 # If different timezone, convert to IST
                 df['timestamp'] = df['timestamp'].dt.tz_convert(ist)
 
+            # Convert timezone-aware to timezone-naive for clean timestamps
+            df['timestamp'] = df['timestamp'].dt.tz_localize(None)
+
             df = df.set_index('timestamp')
 
             # Resample to OHLC format

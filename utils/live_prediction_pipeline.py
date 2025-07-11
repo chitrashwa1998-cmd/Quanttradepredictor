@@ -187,6 +187,10 @@ class LivePredictionPipeline:
         direction = 'Bullish' if prediction == 1 else 'Bearish'
         confidence = np.max(probability) if probability is not None else 0.5
 
+        # Ensure timestamp is timezone-naive
+        if hasattr(timestamp, 'tz_localize'):
+            timestamp = timestamp.tz_localize(None)
+
         return {
             'instrument': instrument_key,
             'timestamp': timestamp,
