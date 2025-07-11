@@ -112,15 +112,56 @@ if len(datasets) > 0:
             with col3:
                 # Initialize confirmation state
                 confirm_key = f"confirm_delete_{dataset['name']}"
+                rename_key = f"rename_{dataset['name']}"
+                
                 if confirm_key not in st.session_state:
                     st.session_state[confirm_key] = False
+                if rename_key not in st.session_state:
+                    st.session_state[rename_key] = False
+                
+                # Rename button
+                if st.button(f"✏️ Rename", key=f"rename_{i}", type="secondary"):
+                    st.session_state[rename_key] = True
                 
                 # Delete button
                 if st.button(f"🗑️ Delete", key=f"delete_{i}", type="secondary"):
                     st.session_state[confirm_key] = True
                 
+                # Show rename input if rename was clicked
+                if st.session_state[rename_key]:
+                    st.write(f"**Rename '{dataset['name']}':**")
+                    new_name = st.text_input("New name:", value=dataset['name'], key=f"new_name_{i}")
+                    
+                    col3a, col3b = st.columns(2)
+                    with col3a:
+                        if st.button("✅ Rename", key=f"confirm_rename_{i}", type="primary"):
+                            if new_name and new_name != dataset['name']:
+                                # Load the data
+                                data_to_rename = trading_db.load_ohlc_data(dataset['name'])
+                                if data_to_rename is not None:
+                                    # Save with new name
+                                    if trading_db.save_ohlc_data(data_to_rename, new_name):
+                                        # Delete old dataset
+                                        if trading_db.delete_dataset(dataset['name']):
+                                            st.success(f"✅ Renamed '{dataset['name']}' to '{new_name}'")
+                                        else:
+                                            st.warning(f"✅ Created '{new_name}' but failed to delete old '{dataset['name']}'")
+                                    else:
+                                        st.error("Failed to create renamed dataset")
+                                else:
+                                    st.error("Failed to load original dataset")
+                            else:
+                                st.error("Please enter a different name")
+                            st.session_state[rename_key] = False
+                            st.rerun()
+                    
+                    with col3b:
+                        if st.button("❌ Cancel", key=f"cancel_rename_{i}"):
+                            st.session_state[rename_key] = False
+                            st.rerun()
+                
                 # Show confirmation if delete was clicked
-                if st.session_state[confirm_key]:
+                elif st.session_state[confirm_key]:
                     st.warning(f"⚠️ Delete '{dataset['name']}'?")
                     col3a, col3b = st.columns(2)
                     
