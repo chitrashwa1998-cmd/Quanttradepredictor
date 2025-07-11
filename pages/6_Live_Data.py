@@ -43,7 +43,7 @@ def show_live_data_page():
 
     # Create tabs for different features
     config_tab, historical_tab = st.tabs(["🔌 Live Data Config", "📊 Historical Data Fetch"])
-    
+
     with config_tab:
         col1, col2 = st.columns(2)
 
@@ -94,9 +94,9 @@ def show_live_data_page():
     with historical_tab:
         st.subheader("📈 Fetch Historical Data from Upstox")
         st.write("Fetch historical 1-minute data for Nifty 50 and other instruments using Upstox API")
-        
+
         col1, col2, col3 = st.columns(3)
-        
+
         with col1:
             st.write("**API Credentials**")
             hist_access_token = st.text_input(
@@ -111,7 +111,7 @@ def show_live_data_page():
                 help="Your Upstox API key for historical data",
                 key="hist_api_key"
             )
-        
+
         with col2:
             st.write("**Instrument Selection**")
             hist_instruments = {
@@ -124,25 +124,25 @@ def show_live_data_page():
                 "HDFC BANK": "NSE_EQ|INE040A01034",
                 "INFOSYS": "NSE_EQ|INE009A01021"
             }
-            
+
             selected_hist_instrument = st.selectbox(
                 "Select Instrument",
                 options=list(hist_instruments.keys()),
                 index=0
             )
-            
+
             custom_hist_instrument = st.text_input(
                 "Custom Instrument",
                 placeholder="NSE_EQ|INE002A01018"
             )
-            
+
             if custom_hist_instrument:
                 instrument_key = custom_hist_instrument
                 display_name = custom_hist_instrument
             else:
                 instrument_key = hist_instruments[selected_hist_instrument]
                 display_name = selected_hist_instrument
-        
+
         with col3:
             st.write("**Data Parameters**")
             interval_options = {
@@ -153,13 +153,13 @@ def show_live_data_page():
                 "1 hour": "1hour",
                 "1 day": "day"
             }
-            
+
             selected_interval = st.selectbox(
                 "Interval",
                 options=list(interval_options.keys()),
                 index=0  # Default to 1 minute
             )
-            
+
             days_back = st.number_input(
                 "Days Back",
                 min_value=1,
@@ -167,7 +167,7 @@ def show_live_data_page():
                 value=7,
                 help="Number of days of historical data"
             )
-        
+
         # Fetch button
         if st.button("📥 Fetch Historical Data", type="primary", disabled=not (hist_access_token and hist_api_key)):
             if hist_access_token and hist_api_key:
@@ -176,36 +176,36 @@ def show_live_data_page():
                         # Calculate date range
                         end_date = datetime.now()
                         start_date = end_date - timedelta(days=days_back)
-                        
+
                         # Format dates for Upstox API
                         from_date = start_date.strftime('%Y-%m-%d')
                         to_date = end_date.strftime('%Y-%m-%d')
-                        
+
                         # Upstox historical data API endpoint
                         url = f"https://api.upstox.com/v2/historical-candle/{instrument_key}/{interval_options[selected_interval]}/{to_date}/{from_date}"
-                        
+
                         headers = {
                             "Authorization": f"Bearer {hist_access_token}",
                             "Accept": "application/json"
                         }
-                        
+
                         import requests
                         response = requests.get(url, headers=headers)
-                        
+
                         if response.status_code == 200:
                             data = response.json()
-                            
+
                             if data.get("status") == "success" and "data" in data and "candles" in data["data"]:
                                 candles = data["data"]["candles"]
-                                
+
                                 if candles:
                                     # Convert to DataFrame
                                     df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'oi'])
-                                    
+
                                     # Convert timestamp to datetime
                                     df['timestamp'] = pd.to_datetime(df['timestamp'])
                                     df = df.set_index('timestamp')
-                                    
+
                                     # Rename columns to standard format
                                     df = df.rename(columns={
                                         'open': 'Open',
@@ -214,15 +214,15 @@ def show_live_data_page():
                                         'close': 'Close',
                                         'volume': 'Volume'
                                     })
-                                    
+
                                     # Remove unnecessary columns
                                     df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
-                                    
+
                                     # Sort by timestamp
                                     df = df.sort_index()
-                                    
+
                                     st.success(f"✅ Successfully fetched {len(df)} data points!")
-                                    
+
                                     # Display summary
                                     col1, col2, col3, col4 = st.columns(4)
                                     with col1:
@@ -233,15 +233,15 @@ def show_live_data_page():
                                         st.metric("To", f"{df.index.max().strftime('%Y-%m-%d')}")
                                     with col4:
                                         st.metric("Latest Price", f"₹{df['Close'].iloc[-1]:.2f}")
-                                    
+
                                     # Show sample data
                                     st.subheader("📊 Sample Data")
                                     st.dataframe(df.head(10), use_container_width=True)
-                                    
+
                                     # Download button
                                     csv_data = df.to_csv()
                                     file_name = f"{display_name.replace(' ', '_')}_{interval_options[selected_interval]}_{days_back}days_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                                    
+
                                     st.download_button(
                                         label=f"📥 Download {display_name} {selected_interval} Data",
                                         data=csv_data,
@@ -249,21 +249,21 @@ def show_live_data_page():
                                         mime="text/csv",
                                         use_container_width=True
                                     )
-                                    
+
                                     # Option to save to database
                                     if st.button("💾 Save to Database"):
                                         try:
                                             from utils.database_adapter import DatabaseAdapter
                                             db = DatabaseAdapter()
                                             dataset_name = f"upstox_{display_name.replace(' ', '_').lower()}_{interval_options[selected_interval]}"
-                                            
+
                                             if db.save_ohlc_data(df, dataset_name):
                                                 st.success(f"✅ Saved historical data to database as '{dataset_name}'")
                                             else:
                                                 st.error("❌ Failed to save data to database")
                                         except Exception as e:
                                             st.error(f"❌ Database error: {str(e)}")
-                                    
+
                                     # Basic chart
                                     st.subheader("📈 Price Chart")
                                     fig = go.Figure(data=go.Candlestick(
@@ -274,7 +274,7 @@ def show_live_data_page():
                                         close=df['Close'],
                                         name=display_name
                                     ))
-                                    
+
                                     fig.update_layout(
                                         title=f"{display_name} - {selected_interval} Chart ({days_back} days)",
                                         xaxis_title="Time",
@@ -282,21 +282,21 @@ def show_live_data_page():
                                         height=500,
                                         template="plotly_dark"
                                     )
-                                    
+
                                     st.plotly_chart(fig, use_container_width=True)
-                                    
+
                                 else:
                                     st.warning("⚠️ No candle data returned from API")
                             else:
                                 st.error(f"❌ API Error: {data.get('message', 'Unknown error')}")
                         else:
                             st.error(f"❌ HTTP Error {response.status_code}: {response.text}")
-                            
+
                     except Exception as e:
                         st.error(f"❌ Error fetching historical data: {str(e)}")
             else:
                 st.warning("⚠️ Please provide both Access Token and API Key")
-        
+
         # Information section
         st.info("""
         **📋 Upstox Historical Data Features:**
@@ -306,7 +306,7 @@ def show_live_data_page():
         • Direct CSV download
         • Database storage option
         • Interactive charts
-        
+
         **🔑 API Requirements:**
         • Valid Upstox access token (refreshed daily)
         • Active API subscription for historical data
@@ -362,8 +362,8 @@ def show_live_data_page():
 
     with col4:
         auto_refresh = st.toggle("🔄 Auto Refresh", value=False)
-        
-    
+
+
 
     # Status dashboard
     if st.session_state.live_prediction_pipeline:

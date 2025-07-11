@@ -178,14 +178,18 @@ class UpstoxWebSocketClient:
             # Track message types for debugging
             if isinstance(message, bytes):
                 print(f"📦 Binary message received: {len(message)} bytes")
+                # Log first few bytes for debugging
+                if len(message) > 0:
+                    print(f"🔍 First 20 bytes: {message[:20]}")
                 tick_data = self.parse_protobuf_message(message)
             else:
-                print(f"📄 Text message received: {message[:100]}...")
+                print(f"📄 Text message received: {message[:200]}...")
                 try:
                     data = json.loads(message)
+                    print(f"🔍 JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
                     tick_data = self.parse_json_message(data)
                 except json.JSONDecodeError:
-                    print(f"❌ Invalid JSON in text message")
+                    print(f"❌ Invalid JSON in text message: {message[:100]}")
                     return
             
             if tick_data:
@@ -193,12 +197,18 @@ class UpstoxWebSocketClient:
                 instrument = tick_data.get('instrument_token')
                 if instrument:
                     self.last_tick_data[instrument] = tick_data
+                    print(f"✅ Stored tick data for {instrument}: LTP={tick_data.get('ltp', 'N/A')}")
                 
                 # Call callback
                 if self.tick_callback:
                     self.tick_callback(tick_data)
             else:
-                print("📊 No tick data extracted from message")
+                print("📊 No tick data extracted from message - checking raw message format")
+                # Log raw message for debugging
+                if isinstance(message, bytes) and len(message) > 0:
+                    print(f"🔍 Raw bytes (first 50): {message[:50]}")
+                elif isinstance(message, str):
+                    print(f"🔍 Raw string: {message[:200]}")
                     
         except Exception as e:
             print(f"❌ Error processing message: {e}")
