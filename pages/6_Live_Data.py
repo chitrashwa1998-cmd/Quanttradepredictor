@@ -392,6 +392,43 @@ def show_live_data_page():
     # Live data display
     if st.session_state.is_live_connected and st.session_state.live_data_manager:
 
+        # Get connection status
+        connection_status = st.session_state.live_data_manager.get_connection_status()
+        
+        # Real-time tick display
+        st.header("🔴 Live Tick Feed")
+        
+        # Show connection info
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Connection Status", "🟢 Connected" if connection_status['connected'] else "🔴 Disconnected")
+        with col2:
+            st.metric("Total Ticks", f"{connection_status['total_ticks_received']:,}")
+        with col3:
+            st.metric("Subscribed", connection_status['subscribed_instruments'])
+        with col4:
+            st.metric("Last Update", str(connection_status['last_update'])[:19] if connection_status['last_update'] else "N/A")
+        
+        # Show latest tick data
+        if connection_status['total_ticks_received'] > 0:
+            latest_ticks = st.session_state.live_data_manager.ws_client.get_all_latest_ticks()
+            
+            if latest_ticks:
+                st.subheader("🔥 Latest Tick Data")
+                
+                for instrument_key, tick_data in latest_ticks.items():
+                    display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric(f"{display_name}", f"₹{tick_data.get('ltp', 0):.2f}")
+                    with col2:
+                        st.metric("Volume", f"{tick_data.get('volume', 0):,}")
+                    with col3:
+                        st.metric("Change", f"{tick_data.get('change_percent', 0):+.2f}%")
+                    with col4:
+                        st.metric("Time", str(tick_data.get('timestamp', 'N/A'))[:19])
+
         # Get tick statistics
         tick_stats = st.session_state.live_data_manager.get_tick_statistics()
 

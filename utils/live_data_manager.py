@@ -47,12 +47,16 @@ class LiveDataManager:
             self.total_ticks_received += 1
             self.last_update_time = timestamp
             
-            # Update OHLC data if we have enough ticks
-            if len(self.tick_buffer[instrument_key]) >= 5:
-                self.update_ohlc_data(instrument_key)
+            # Update OHLC data immediately for live display
+            self.update_ohlc_data(instrument_key)
+            
+            # Print live tick info
+            print(f"📊 Live tick {instrument_key}: ₹{tick_data.get('ltp', 0):.2f} | Vol: {tick_data.get('volume', 0)} | Buffer: {len(self.tick_buffer[instrument_key])}")
                 
         except Exception as e:
             print(f"Error processing tick: {e}")
+            import traceback
+            traceback.print_exc()
     
     def on_error(self, error):
         """Handle WebSocket errors."""
@@ -64,7 +68,7 @@ class LiveDataManager:
         self.connection_status = status
         print(f"Connection status: {status}")
     
-    def update_ohlc_data(self, instrument_key: str, timeframe: str = "5T"):
+    def update_ohlc_data(self, instrument_key: str, timeframe: str = "1T"):
         """Convert tick data to OHLC format."""
         try:
             ticks = list(self.tick_buffer[instrument_key])
@@ -76,43 +80,50 @@ class LiveDataManager:
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df = df.set_index('timestamp')
             
-            # Resample to OHLC format
-            new_ohlc = df['ltp'].resample(timeframe).ohlc()
-            new_ohlc['volume'] = df['volume'].resample(timeframe).sum()
-            
-            # Remove NaN values
-            new_ohlc = new_ohlc.dropna()
-            
-            if len(new_ohlc) > 0:
-                # Rename columns to match existing format
-                new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+            # For live data, create OHLC from available ticks even if few
+            if len(df) >= 1:
+                # Resample to OHLC format (1 minute intervals)
+                new_ohlc = df['ltp'].resample(timeframe).ohlc()
+                new_ohlc['volume'] = df['volume'].resample(timeframe).sum()
                 
-                # Combine with existing live data
-                if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
-                    existing_ohlc = self.ohlc_data[instrument_key]
+                # Fill missing OHLC values with LTP for incomplete candles
+                new_ohlc = new_ohlc.fillna(method='ffill')
+                
+                # Remove completely NaN rows
+                new_ohlc = new_ohlc.dropna()
+                
+                if len(new_ohlc) > 0:
+                    # Rename columns to match existing format
+                    new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
                     
-                    # Combine with new live data
-                    combined_ohlc = pd.concat([existing_ohlc, new_ohlc])
-                    
-                    # Remove duplicate timestamps, keeping the latest
-                    combined_ohlc = combined_ohlc[~combined_ohlc.index.duplicated(keep='last')]
-                    
-                    # Sort by timestamp
-                    combined_ohlc = combined_ohlc.sort_index()
-                    
-                    # Keep last 100 rows maximum for live data
-                    if len(combined_ohlc) > 100:
-                        combined_ohlc = combined_ohlc.tail(100)
-                    
-                    self.ohlc_data[instrument_key] = combined_ohlc
-                    print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
-                else:
-                    # First time - store new data
-                    self.ohlc_data[instrument_key] = new_ohlc
-                    print(f"📈 Initial OHLC for {instrument_key}: {len(new_ohlc)} rows")
+                    # Combine with existing live data
+                    if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
+                        existing_ohlc = self.ohlc_data[instrument_key]
+                        
+                        # Combine with new live data
+                        combined_ohlc = pd.concat([existing_ohlc, new_ohlc])
+                        
+                        # Remove duplicate timestamps, keeping the latest
+                        combined_ohlc = combined_ohlc[~combined_ohlc.index.duplicated(keep='last')]
+                        
+                        # Sort by timestamp
+                        combined_ohlc = combined_ohlc.sort_index()
+                        
+                        # Keep last 100 rows maximum for live data
+                        if len(combined_ohlc) > 100:
+                            combined_ohlc = combined_ohlc.tail(100)
+                        
+                        self.ohlc_data[instrument_key] = combined_ohlc
+                        print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows, latest: ₹{combined_ohlc['Close'].iloc[-1]:.2f}")
+                    else:
+                        # First time - store new data
+                        self.ohlc_data[instrument_key] = new_ohlc
+                        print(f"📈 Initial OHLC for {instrument_key}: {len(new_ohlc)} rows, latest: ₹{new_ohlc['Close'].iloc[-1]:.2f}")
                 
         except Exception as e:
             print(f"Error updating OHLC data: {e}")
+            import traceback
+            traceback.print_exc()
     
     def connect(self) -> bool:
         """Connect to live data feed."""
