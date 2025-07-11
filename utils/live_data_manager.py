@@ -282,7 +282,7 @@ class LiveDataManager:
             from utils.database_adapter import DatabaseAdapter
             
             # Convert instrument key to database dataset name
-            dataset_name = f"live_{instrument_key.replace('|', '_')}"
+            dataset_name = "livenifty50"
             
             db = DatabaseAdapter()
             historical_data = db.load_ohlc_data(dataset_name)
@@ -330,17 +330,17 @@ class LiveDataManager:
     @staticmethod
     def get_continuation_dataset_name(instrument_key: str) -> str:
         """Get the dataset name needed for continuation for a given instrument."""
-        return f"live_{instrument_key.replace('|', '_')}"
+        return "livenifty50"
     
     @staticmethod
     def get_continuation_info() -> Dict[str, str]:
         """Get continuation dataset names for common instruments."""
         common_instruments = {
-            "NSE_INDEX|Nifty 50": "live_NSE_INDEX_Nifty_50",
-            "NSE_INDEX|Nifty Bank": "live_NSE_INDEX_Nifty_Bank", 
-            "NSE_EQ|INE002A01018": "live_NSE_EQ_INE002A01018",  # Reliance
-            "NSE_EQ|INE467B01029": "live_NSE_EQ_INE467B01029",  # TCS
-            "NSE_EQ|INE040A01034": "live_NSE_EQ_INE040A01034",  # HDFC Bank
-            "NSE_EQ|INE009A01021": "live_NSE_EQ_INE009A01021"   # Infosys
+            "NSE_INDEX|Nifty 50": "livenifty50",
+            "NSE_INDEX|Nifty Bank": "liveniftybank", 
+            "NSE_EQ|INE002A01018": "livereliance",  # Reliance
+            "NSE_EQ|INE467B01029": "livetcs",  # TCS
+            "NSE_EQ|INE040A01034": "livehdfcbank",  # HDFC Bank
+            "NSE_EQ|INE009A01021": "liveinfosys"   # Infosys
         }
         return common_instruments

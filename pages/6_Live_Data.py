@@ -326,11 +326,11 @@ def show_live_data_page():
         **To enable continuation:**
         1. Go to **Data Upload** page
         2. Upload your historical data  
-        3. Save it with name: `live_NSE_INDEX_Nifty_50` (for Nifty 50)
+        3. Save it with name: `livenifty50` (for Nifty 50)
         4. Return here and connect live data
         5. System will automatically detect and use your historical data
         
-        **Naming pattern:** `live_[INSTRUMENT_KEY_WITH_UNDERSCORES]`
+        **Naming pattern:** `livenifty50`, `liveniftybank`, `livereliance`, etc.
         """)
 
     # Continue with live data configuration
@@ -743,7 +743,7 @@ def show_live_data_page():
                                     if complete_ohlc_data is not None and len(complete_ohlc_data) > 0:
                                         # Save complete dataset (seeded + live) to database
                                         db = DatabaseAdapter()
-                                        dataset_name = f"live_{export_instrument.replace('|', '_')}"
+                                        dataset_name = "livenifty50"
                                         
                                         if db.save_ohlc_data(complete_ohlc_data, dataset_name):
                                             seeding_status = live_manager.get_seeding_status()
