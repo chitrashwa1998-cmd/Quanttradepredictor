@@ -111,34 +111,35 @@ class UpstoxWebSocketClient:
         if hasattr(self, '_was_connected') and self._was_connected:
             print(f"🔌 WebSocket closed: {close_status_code} - {close_msg}")
             
-            # Track close count but don't stop reconnecting too early
+            # Track close count
             self.close_count = getattr(self, 'close_count', 0) + 1
             
-            if self.close_count > 10:  # Increased threshold
-                print("⚠️ Too many disconnects - pausing auto-reconnect")
-                time.sleep(60)  # Wait 1 minute before trying again
-                self.close_count = 0  # Reset counter
+            # Don't auto-reconnect during market hours if too many failures
+            if self.close_count > 15:
+                print("⚠️ Too many disconnects - stopping auto-reconnect")
+                return
         
         if self.connection_callback:
             self.connection_callback("disconnected")
         
-        # Auto-reconnect with exponential backoff
-        if hasattr(self, '_was_connected') and self._was_connected:
+        # Auto-reconnect only during market hours and if not too many failures
+        if (hasattr(self, '_was_connected') and self._was_connected and 
+            self._is_market_hours() and self.close_count <= 15):
+            
             import threading
             def reconnect():
                 import time
-                backoff_time = min(20, 2 * self.close_count)  # Shorter backoff
+                backoff_time = min(30, 5 * self.close_count)
                 time.sleep(backoff_time)
                 
-                if not self.is_connected:
-                    print(f"🔄 Reconnecting after {backoff_time}s... (attempt {self.close_count})")
+                if not self.is_connected and self._is_market_hours():
+                    print(f"🔄 Reconnecting attempt {self.close_count}...")
                     success = self.connect()
                     
-                    # Re-subscribe to instruments after reconnection
                     if success and self.subscribed_instruments:
-                        time.sleep(2)  # Wait for connection to stabilize
+                        time.sleep(3)  # Wait for connection to stabilize
                         instruments = list(self.subscribed_instruments)
-                        self.subscribed_instruments.clear()  # Clear to avoid duplicates
+                        self.subscribed_instruments.clear()
                         self.subscribe(instruments)
             
             thread = threading.Thread(target=reconnect, daemon=True)
@@ -182,21 +183,28 @@ class UpstoxWebSocketClient:
     def on_message(self, ws, message):
         """Handle incoming WebSocket messages."""
         try:
-            # Track message types for debugging
+            # Handle both binary and text messages from Upstox v3
             if isinstance(message, bytes):
                 print(f"📦 Binary message received: {len(message)} bytes")
-                # Log first few bytes for debugging
-                if len(message) > 0:
-                    print(f"🔍 First 20 bytes: {message[:20]}")
-                tick_data = self.parse_protobuf_message(message)
+                # Try to decode as UTF-8 first (common in v3)
+                try:
+                    decoded_message = message.decode('utf-8')
+                    if decoded_message.startswith('{'):
+                        data = json.loads(decoded_message)
+                        tick_data = self.parse_json_message(data)
+                    else:
+                        # Parse as protobuf if not JSON
+                        tick_data = self.parse_protobuf_message(message)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    # Pure protobuf message
+                    tick_data = self.parse_protobuf_message(message)
             else:
-                print(f"📄 Text message received: {message[:200]}...")
+                print(f"📄 Text message received")
                 try:
                     data = json.loads(message)
-                    print(f"🔍 JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
                     tick_data = self.parse_json_message(data)
                 except json.JSONDecodeError:
-                    print(f"❌ Invalid JSON in text message: {message[:100]}")
+                    print(f"❌ Invalid JSON in text message")
                     return
             
             if tick_data:
@@ -204,18 +212,11 @@ class UpstoxWebSocketClient:
                 instrument = tick_data.get('instrument_token')
                 if instrument:
                     self.last_tick_data[instrument] = tick_data
-                    print(f"✅ Stored tick data for {instrument}: LTP={tick_data.get('ltp', 'N/A')}")
+                    print(f"📊 Live tick: {instrument.split('|')[-1]} @ ₹{tick_data.get('ltp', 0):.2f}")
                 
                 # Call callback
                 if self.tick_callback:
                     self.tick_callback(tick_data)
-            else:
-                print("📊 No tick data extracted from message - checking raw message format")
-                # Log raw message for debugging
-                if isinstance(message, bytes) and len(message) > 0:
-                    print(f"🔍 Raw bytes (first 50): {message[:50]}")
-                elif isinstance(message, str):
-                    print(f"🔍 Raw string: {message[:200]}")
                     
         except Exception as e:
             print(f"❌ Error processing message: {e}")
@@ -337,73 +338,38 @@ class UpstoxWebSocketClient:
         return value, bytes_consumed
     
     def parse_json_message(self, data: Dict) -> Optional[Dict]:
-        """Parse JSON message format for market status and live feed as per v3 documentation."""
+        """Parse JSON message format for v3 API responses."""
         try:
-            # Handle market status message (first message as per v3 docs)
-            if data.get('type') == 'market_info':
-                self.market_status = data.get('marketInfo', {})
-                segment_count = len(self.market_status.get('segmentStatus', {}))
-                print(f"📊 Market Status Updated: {segment_count} segments")
-                
-                # Log segment statuses
-                for segment, status in self.market_status.get('segmentStatus', {}).items():
-                    print(f"   {segment}: {status}")
-                
+            # Debug: Print the full structure of received data
+            print(f"🔍 Received JSON structure: {json.dumps(data, indent=2)[:500]}...")
+            
+            # Handle subscription acknowledgment
+            if data.get('status') == 'success' and 'data' in data:
+                if 'subscribed' in data['data']:
+                    print(f"✅ Subscription confirmed: {data['data']['subscribed']}")
                 return None
             
-            # Handle live feed message (as per v3 documentation structure)
-            elif data.get('type') == 'live_feed':
-                feeds = data.get('feeds', {})
-                if not feeds:
-                    print("📊 Empty feeds object in live_feed message")
-                    return None
+            # Handle market status (initial message)
+            if 'type' in data and data['type'] == 'initial':
+                self.market_status = data
+                print(f"📊 Market status received")
+                return None
+            
+            # Handle live feed data - Look for feeds structure
+            if 'feeds' in data:
+                feeds = data['feeds']
                 
-                # Process each instrument in the feeds
+                # Process each instrument in feeds
                 for instrument_key, feed_data in feeds.items():
-                    print(f"🔍 Processing feed for {instrument_key}")
+                    print(f"🔍 Processing {instrument_key}: {list(feed_data.keys())}")
                     
-                    # Parse LTPC data (as shown in v3 documentation)
+                    # Look for LTPC data
                     if 'ltpc' in feed_data:
-                        ltpc_data = feed_data['ltpc']
+                        ltpc = feed_data['ltpc']
+                        ltp = float(ltpc.get('ltp', 0))
+                        cp = float(ltpc.get('cp', ltp))  # Use LTP as fallback
                         
-                        # Calculate change if close price is available
-                        ltp = float(ltpc_data.get('ltp', 0))
-                        cp = float(ltpc_data.get('cp', 0))
-                        change = ltp - cp if cp > 0 else 0.0
-                        change_percent = (change / cp * 100) if cp > 0 else 0.0
-                        
-                        tick = {
-                            'instrument_token': instrument_key,
-                            'timestamp': datetime.now(),
-                            'ltp': ltp,
-                            'ltq': int(ltpc_data.get('ltq', 0)),
-                            'ltt': ltpc_data.get('ltt'),
-                            'close': cp,
-                            'bid_price': ltp * 0.9999,  # Approximate bid
-                            'ask_price': ltp * 1.0001,  # Approximate ask
-                            'bid_qty': 10,
-                            'ask_qty': 10,
-                            'volume': int(ltpc_data.get('ltq', 0)),
-                            'open': ltp,  # Use LTP as approximate open
-                            'high': ltp,  # Use LTP as approximate high
-                            'low': ltp,   # Use LTP as approximate low
-                            'change': change,
-                            'change_percent': change_percent
-                        }
-                        
-                        print(f"📈 LTPC Update: {instrument_key} @ ₹{ltp:.2f} (Change: {change_percent:+.2f}%)")
-                        return tick
-                    
-                    # Parse full feed data (if available)
-                    elif 'fullFeed' in feed_data:
-                        full_feed = feed_data['fullFeed']
-                        
-                        # Extract LTPC data from full feed
-                        if 'marketFF' in full_feed and 'ltpc' in full_feed['marketFF']:
-                            ltpc_data = full_feed['marketFF']['ltpc']
-                            
-                            ltp = float(ltpc_data.get('ltp', 0))
-                            cp = float(ltpc_data.get('cp', 0))
+                        if ltp > 0:
                             change = ltp - cp if cp > 0 else 0.0
                             change_percent = (change / cp * 100) if cp > 0 else 0.0
                             
@@ -411,10 +377,9 @@ class UpstoxWebSocketClient:
                                 'instrument_token': instrument_key,
                                 'timestamp': datetime.now(),
                                 'ltp': ltp,
-                                'ltq': int(ltpc_data.get('ltq', 0)),
-                                'ltt': ltpc_data.get('ltt'),
+                                'ltq': int(ltpc.get('ltq', 0)),
+                                'volume': int(ltpc.get('ltq', 0)),
                                 'close': cp,
-                                'volume': int(full_feed['marketFF'].get('vtt', 0)),
                                 'open': ltp,
                                 'high': ltp,
                                 'low': ltp,
@@ -426,24 +391,46 @@ class UpstoxWebSocketClient:
                                 'ask_qty': 10
                             }
                             
-                            print(f"📈 Full Feed Update: {instrument_key} @ ₹{ltp:.2f} (Vol: {tick['volume']:,})")
+                            print(f"📈 LTPC Update: {instrument_key.split('|')[-1]} @ ₹{ltp:.2f}")
                             return tick
-                        
-                        print(f"⚠️ Full feed data structure not recognized for {instrument_key}")
-                        return None
                     
-                    else:
-                        print(f"⚠️ Unknown feed data structure for {instrument_key}: {list(feed_data.keys())}")
-                        return None
-                
-                return None
+                    # Look for full market data
+                    elif 'ff' in feed_data:
+                        ff_data = feed_data['ff']
+                        if 'marketFF' in ff_data:
+                            market_ff = ff_data['marketFF']
+                            if 'ltpc' in market_ff:
+                                ltpc = market_ff['ltpc']
+                                ltp = float(ltpc.get('ltp', 0))
+                                
+                                if ltp > 0:
+                                    tick = {
+                                        'instrument_token': instrument_key,
+                                        'timestamp': datetime.now(),
+                                        'ltp': ltp,
+                                        'ltq': int(ltpc.get('ltq', 0)),
+                                        'volume': int(market_ff.get('vtt', 0)),
+                                        'close': float(ltpc.get('cp', ltp)),
+                                        'open': ltp,
+                                        'high': ltp,
+                                        'low': ltp,
+                                        'change': 0.0,
+                                        'change_percent': 0.0,
+                                        'bid_price': ltp * 0.9999,
+                                        'ask_price': ltp * 1.0001,
+                                        'bid_qty': 10,
+                                        'ask_qty': 10
+                                    }
+                                    
+                                    print(f"📈 Full Feed: {instrument_key.split('|')[-1]} @ ₹{ltp:.2f}")
+                                    return tick
             
-            else:
-                print(f"📊 Unknown message type: {data.get('type')}")
-                return None
+            # If no recognizable structure, log it
+            print(f"📊 Unrecognized message structure. Keys: {list(data.keys())}")
+            return None
             
         except Exception as e:
-            print(f"❌ Error parsing JSON message: {e}")
+            print(f"❌ Error parsing JSON: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -512,23 +499,21 @@ class UpstoxWebSocketClient:
             print("🔌 Disconnected from WebSocket")
     
     def subscribe(self, instrument_keys: list, mode: str = "full"):
-        """Subscribe to instruments using v3 API format - BINARY messages only as per documentation."""
+        """Subscribe to instruments using v3 API format - BINARY messages only."""
         if not self.is_connected:
             print("❌ WebSocket not connected. Please connect first.")
             return False
         
         try:
-            # Remove duplicates from input
+            # Remove duplicates and filter new instruments
             unique_keys = list(set(instrument_keys))
-            
-            # Only subscribe to instruments not already subscribed
             new_instruments = [key for key in unique_keys if key not in self.subscribed_instruments]
             
             if not new_instruments:
-                print(f"✅ All instruments already subscribed: {unique_keys}")
+                print(f"✅ All instruments already subscribed")
                 return True
             
-            # Create subscription request in v3 format
+            # Create subscription request exactly as per v3 documentation
             subscribe_request = {
                 "guid": str(uuid.uuid4()),
                 "method": "sub",
@@ -538,40 +523,41 @@ class UpstoxWebSocketClient:
                 }
             }
             
-            print(f"🔄 Subscribing with mode '{mode}' to: {new_instruments}")
+            print(f"🔄 Subscribing to {len(new_instruments)} instruments in '{mode}' mode")
+            print(f"📋 Instruments: {[key.split('|')[-1] for key in new_instruments]}")
             
-            # Convert to binary format as required by v3 documentation
+            # Convert to binary format (v3 requirement)
             message_json = json.dumps(subscribe_request)
             message_binary = message_json.encode('utf-8')
             
             if self.ws and hasattr(self.ws, 'send'):
-                # Send as binary message as per v3 documentation requirement
+                # Send as binary message
                 self.ws.send(message_binary, websocket.ABNF.OPCODE_BINARY)
-                print(f"📤 Sent subscription as BINARY message (v3 requirement)")
+                print(f"📤 Subscription sent as binary message")
                 
                 # Update subscribed instruments
                 self.subscribed_instruments.update(new_instruments)
                 
-                print(f"✅ Subscribed to {len(new_instruments)} instruments: {new_instruments}")
+                # Small delay then subscribe to LTPC mode as well for better data coverage
+                time.sleep(1)
                 
-                # Also subscribe in LTPC mode as backup
-                if mode == "full":
-                    ltpc_request = subscribe_request.copy()
-                    ltpc_request["data"]["mode"] = "ltpc"
-                    ltpc_request["guid"] = str(uuid.uuid4())
-                    
-                    try:
-                        ltpc_json = json.dumps(ltpc_request)
-                        ltpc_binary = ltpc_json.encode('utf-8')
-                        self.ws.send(ltpc_binary, websocket.ABNF.OPCODE_BINARY)
-                        print(f"📤 Also subscribed in LTPC mode for backup (binary)")
-                    except:
-                        pass
+                ltpc_request = {
+                    "guid": str(uuid.uuid4()),
+                    "method": "sub", 
+                    "data": {
+                        "mode": "ltpc",
+                        "instrumentKeys": new_instruments
+                    }
+                }
+                
+                ltpc_binary = json.dumps(ltpc_request).encode('utf-8')
+                self.ws.send(ltpc_binary, websocket.ABNF.OPCODE_BINARY)
+                print(f"📤 LTPC subscription also sent for data redundancy")
                 
                 return True
             
         except Exception as e:
-            print(f"❌ Failed to subscribe to instruments: {e}")
+            print(f"❌ Subscription failed: {e}")
             import traceback
             traceback.print_exc()
             return False
