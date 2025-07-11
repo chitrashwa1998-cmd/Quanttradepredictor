@@ -413,7 +413,34 @@ def show_live_data_page():
 
             with predictions_tab:
                 if st.session_state.is_prediction_pipeline_active:
-                    st.subheader("🎯 Real-time Direction Predictions")
+                    st.subheader("🎯 Real-time ML Model Predictions")
+                    
+                    # Show model status
+                    pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
+                    trained_models = pipeline_status.get('trained_models', [])
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        direction_ready = "direction" in trained_models
+                        status_icon = "✅" if direction_ready else "❌"
+                        st.markdown(f"**{status_icon} Direction Model:** {'Ready' if direction_ready else 'Not Trained'}")
+                    
+                    with col2:
+                        volatility_ready = "volatility" in trained_models
+                        status_icon = "✅" if volatility_ready else "❌"
+                        st.markdown(f"**{status_icon} Volatility Model:** {'Ready' if volatility_ready else 'Not Trained'}")
+                    
+                    with col3:
+                        profit_ready = "profit_probability" in trained_models
+                        status_icon = "✅" if profit_ready else "❌"
+                        st.markdown(f"**{status_icon} Profit Probability:** {'Ready' if profit_ready else 'Not Trained'}")
+                    
+                    with col4:
+                        reversal_ready = "reversal" in trained_models
+                        status_icon = "✅" if reversal_ready else "❌"
+                        st.markdown(f"**{status_icon} Reversal Model:** {'Ready' if reversal_ready else 'Not Trained'}")
+
+                    st.divider()
 
                     # Get live predictions
                     live_predictions = st.session_state.live_prediction_pipeline.get_latest_predictions()
@@ -429,66 +456,61 @@ def show_live_data_page():
                             with st.container():
                                 col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
 
-                            with col1:
-                                st.markdown(f"**📊 {display_name}**")
-                                
-                                # Direction prediction
-                                if 'direction' in prediction:
-                                    direction_data = prediction.get('direction', {})
-                                    if isinstance(direction_data, dict):
-                                        direction = direction_data.get('prediction', 'Unknown')
-                                        confidence = direction_data.get('confidence', 0.5)
-                                    else:
-                                        direction = prediction.get('direction', 'Unknown')
-                                        confidence = prediction.get('confidence', 0.5)
+                                with col1:
+                                    st.markdown(f"**📊 {display_name}**")
                                     
-                                    direction_color = "🟢" if direction == 'Bullish' else "🔴"
-                                    st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
-
-                            with col2:
-                                # Volatility prediction
-                                if 'volatility' in prediction:
-                                    vol_data = prediction['volatility']
-                                    vol_level = vol_data.get('prediction', 'Unknown')
-                                    vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
-                                    st.markdown(f"**{vol_color} Volatility:** {vol_level}")
-                                
-                                # Profit probability
-                                if 'profit_probability' in prediction:
-                                    profit_data = prediction['profit_probability']
-                                    profit_level = profit_data.get('prediction', 'Unknown')
-                                    profit_conf = profit_data.get('confidence', 0.5)
-                                    profit_color = "💰" if profit_level == 'High' else "⚠️"
-                                    st.markdown(f"**{profit_color} Profit:** {profit_level} ({profit_conf:.1%})")
-
-                            with col3:
-                                # Reversal prediction
-                                if 'reversal' in prediction:
-                                    reversal_data = prediction['reversal']
-                                    reversal_expected = reversal_data.get('prediction', 'Unknown')
-                                    reversal_conf = reversal_data.get('confidence', 0.5)
-                                    reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
-                                    st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
-                                
-                                # Models used
-                                models_used = prediction.get('models_used', [])
-                                st.markdown(f"**📋 Models:** {len(models_used)}/{4}")
-
-                            with col4:
+                                    # Direction prediction
+                                    if 'direction' in prediction:
+                                        direction_data = prediction.get('direction', {})
+                                        if isinstance(direction_data, dict):
+                                            direction = direction_data.get('prediction', 'Unknown')
+                                            confidence = direction_data.get('confidence', 0.5)
+                                        else:
+                                            direction = prediction.get('direction', 'Unknown')
+                                            confidence = prediction.get('confidence', 0.5)
+                                        
+                                        direction_color = "🟢" if direction == 'Bullish' else "🔴"
+                                        st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
 
                                 with col2:
-                                    st.metric("Current Price", f"₹{prediction['current_price']:.2f}")
+                                    # Volatility prediction
+                                    if 'volatility' in prediction:
+                                        vol_data = prediction['volatility']
+                                        vol_level = vol_data.get('prediction', 'Unknown')
+                                        vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
+                                        st.markdown(f"**{vol_color} Volatility:** {vol_level}")
+                                    
+                                    # Profit probability
+                                    if 'profit_probability' in prediction:
+                                        profit_data = prediction['profit_probability']
+                                        profit_level = profit_data.get('prediction', 'Unknown')
+                                        profit_conf = profit_data.get('confidence', 0.5)
+                                        profit_color = "💰" if profit_level == 'High' else "⚠️"
+                                        st.markdown(f"**{profit_color} Profit:** {profit_level} ({profit_conf:.1%})")
 
                                 with col3:
-                                    st.metric("Volume", f"{prediction['volume']:,}")
+                                    # Reversal prediction
+                                    if 'reversal' in prediction:
+                                        reversal_data = prediction['reversal']
+                                        reversal_expected = reversal_data.get('prediction', 'Unknown')
+                                        reversal_conf = reversal_data.get('confidence', 0.5)
+                                        reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
+                                        st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
+                                    
+                                    # Models used
+                                    models_used = prediction.get('models_used', [])
+                                    st.markdown(f"**📋 Active Models:** {len(models_used)}/4")
 
                                 with col4:
-                                    if summary and 'recent_stats' in summary:
-                                        stats = summary['recent_stats']
+                                    st.metric("Current Price", f"₹{prediction['current_price']:.2f}")
+                                    st.metric("Volume", f"{prediction['volume']:,}")
+                                    
+                                    if summary and 'comprehensive_stats' in summary:
+                                        stats = summary['comprehensive_stats']
                                         st.markdown(f"""
-                                        **Recent Signals (20):**  
-                                        Bullish: {stats['bullish_signals']} ({stats['bullish_percentage']:.0f}%)  
-                                        Avg Confidence: {stats['average_confidence']:.1%}
+                                        **Recent Analysis (20 predictions):**  
+                                        Total Models Used: {len(stats.get('models_used', []))}  
+                                        Total Predictions: {stats.get('total_predictions', 0)}
                                         """)
 
                                 # Show prediction timestamp
@@ -514,14 +536,18 @@ def show_live_data_page():
                     else:
                         st.info("🎯 Prediction pipeline is active but no predictions generated yet. Please wait for sufficient OHLC data to accumulate...")
 
-                        # Show requirements
-                        st.write("**Requirements for predictions:**")
+                        # Show requirements for all models
+                        st.write("**Requirements for comprehensive predictions:**")
                         st.write("• Minimum 100 OHLC data points")
-                        st.write("• Direction model must be trained")
+                        st.write("• At least one of the 4 models must be trained:")
+                        st.write("  - Direction Model (price movement prediction)")
+                        st.write("  - Volatility Model (market volatility forecasting)")
+                        st.write("  - Profit Probability Model (profit opportunity detection)")
+                        st.write("  - Reversal Model (trend reversal identification)")
                         st.write("• Sufficient tick data for feature calculation")
 
                 else:
-                    st.warning("⚠️ Prediction pipeline not active. Please connect to start receiving live predictions.")
+                    st.warning("⚠️ Prediction pipeline not active. Please connect to start receiving live predictions from all trained models.")
 
             with overview_tab:
                 st.subheader("💹 Real-time Price Dashboard")
