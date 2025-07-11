@@ -1,3 +1,4 @@
+# Applying the provided changes to the original code to update the prediction display and pipeline status based on candle completion.
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -316,20 +317,20 @@ def show_live_data_page():
         # Continuation feature information
         st.success("""
         **🌱 Live Data Continuation Feature:**
-        
+
         **How it works:**
         • Upload your historical data with name pattern: `live_NSE_INDEX_Nifty_50`
         • When live data starts, it automatically loads your historical data as foundation
         • Live ticks continue building OHLC from that point forward
         • Result: 250+ rows for predictions from day 1 instead of starting with 0
-        
+
         **To enable continuation:**
         1. Go to **Data Upload** page
         2. Upload your historical data  
         3. Save it with name: `livenifty50` (for Nifty 50)
         4. Return here and connect live data
         5. System will automatically detect and use your historical data
-        
+
         **Naming pattern:** `livenifty50`, `liveniftybank`, `livereliance`, etc.
         """)
 
@@ -416,10 +417,10 @@ def show_live_data_page():
         # Show continuation status if available
         if st.session_state.live_data_manager:
             seeding_status = st.session_state.live_data_manager.get_seeding_status()
-            
+
             if seeding_status['is_seeded']:
                 st.success(f"🌱 **Continuation Active:** {seeding_status['seed_count']} historical rows loaded from database")
-                
+
                 with st.expander("📊 Continuation Details"):
                     for instrument, details in seeding_status['seeding_details'].items():
                         display_name = instrument.split('|')[-1] if '|' in instrument else instrument
@@ -451,27 +452,27 @@ def show_live_data_page():
             with predictions_tab:
                 if st.session_state.is_prediction_pipeline_active:
                     st.subheader("🎯 Real-time ML Model Predictions")
-                    
+
                     # Show model status
                     pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
                     trained_models = pipeline_status.get('trained_models', [])
-                    
+
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         direction_ready = "direction" in trained_models
                         status_icon = "✅" if direction_ready else "❌"
                         st.markdown(f"**{status_icon} Direction Model:** {'Ready' if direction_ready else 'Not Trained'}")
-                    
+
                     with col2:
                         volatility_ready = "volatility" in trained_models
                         status_icon = "✅" if volatility_ready else "❌"
                         st.markdown(f"**{status_icon} Volatility Model:** {'Ready' if volatility_ready else 'Not Trained'}")
-                    
+
                     with col3:
                         profit_ready = "profit_probability" in trained_models
                         status_icon = "✅" if profit_ready else "❌"
                         st.markdown(f"**{status_icon} Profit Probability:** {'Ready' if profit_ready else 'Not Trained'}")
-                    
+
                     with col4:
                         reversal_ready = "reversal" in trained_models
                         status_icon = "✅" if reversal_ready else "❌"
@@ -495,7 +496,7 @@ def show_live_data_page():
 
                                 with col1:
                                     st.markdown(f"**📊 {display_name}**")
-                                    
+
                                     # Direction prediction
                                     if 'direction' in prediction:
                                         direction_data = prediction.get('direction', {})
@@ -505,7 +506,7 @@ def show_live_data_page():
                                         else:
                                             direction = prediction.get('direction', 'Unknown')
                                             confidence = prediction.get('confidence', 0.5)
-                                        
+
                                         direction_color = "🟢" if direction == 'Bullish' else "🔴"
                                         st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
 
@@ -516,7 +517,7 @@ def show_live_data_page():
                                         vol_level = vol_data.get('prediction', 'Unknown')
                                         vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
                                         st.markdown(f"**{vol_color} Volatility:** {vol_level}")
-                                    
+
                                     # Profit probability
                                     if 'profit_probability' in prediction:
                                         profit_data = prediction['profit_probability']
@@ -533,22 +534,23 @@ def show_live_data_page():
                                         reversal_conf = reversal_data.get('confidence', 0.5)
                                         reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
                                         st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
-                                    
+
                                     # Models used
                                     models_used = prediction.get('models_used', [])
                                     st.markdown(f"**📋 Active Models:** {len(models_used)}/4")
 
                                 with col4:
-                                    st.metric("Current Price", f"₹{prediction['current_price']:.2f}")
-                                    st.metric("Volume", f"{prediction['volume']:,}")
-                                    
-                                    if summary and 'comprehensive_stats' in summary:
-                                        stats = summary['comprehensive_stats']
-                                        st.markdown(f"""
-                                        **Recent Analysis (20 predictions):**  
-                                        Total Models Used: {len(stats.get('models_used', []))}  
-                                        Total Predictions: {stats.get('total_predictions', 0)}
-                                        """)
+                                    pred_time = prediction['generated_at'].strftime('%H:%M:%S')
+                                    candle_time = prediction['timestamp'].strftime('%H:%M:%S')
+                                    st.markdown(f"**🕐 Candle Close Time:** {candle_time}")
+                                    st.markdown(f"**⏰ Prediction Generated:** {pred_time}")
+                                    st.markdown(f"**💰 Candle Close Price:** ₹{prediction['current_price']:.2f}")
+                                    st.markdown(f"**📊 Volume:** {prediction['volume']:,}")
+                                    st.markdown(f"**🤖 Models Used:** {len(prediction['models_used'])}")
+
+                                    # Show prediction type
+                                    if prediction.get('candle_close_prediction'):
+                                        st.success("✅ Complete 5-minute candle prediction")
 
                                 # Show prediction timestamp
                                 time_ago = datetime.now() - prediction['generated_at']
@@ -710,14 +712,14 @@ def show_live_data_page():
                                 # Get complete dataset (seeded + live)
                                 live_manager = st.session_state.live_data_manager
                                 complete_ohlc_data = live_manager.get_complete_ohlc_data(export_instrument)
-                                
+
                                 if complete_ohlc_data is not None and len(complete_ohlc_data) > 0:
                                     csv_data = complete_ohlc_data.to_csv()
                                     seeding_status = live_manager.get_seeding_status()
-                                    
+
                                     # Add suffix to filename if seeded
                                     suffix = "_complete" if export_instrument in seeding_status['instruments_seeded'] else "_live"
-                                    
+
                                     st.download_button(
                                         label=f"📥 Download OHLC CSV ({len(complete_ohlc_data)} rows)",
                                         data=csv_data,
@@ -736,21 +738,21 @@ def show_live_data_page():
                                 live_manager = st.session_state.live_data_manager
                                 db = DatabaseAdapter()
                                 dataset_name = "livenifty50"
-                                
+
                                 # Get current OHLC data from live manager
                                 if export_instrument in live_manager.ohlc_data:
                                     current_ohlc_data = live_manager.ohlc_data[export_instrument]
-                                    
+
                                     if current_ohlc_data is not None and len(current_ohlc_data) > 0:
                                         # Load existing data from database
                                         existing_data = db.load_ohlc_data(dataset_name)
                                         seeding_status = live_manager.get_seeding_status()
-                                        
-                                        # Determine what data is NEW (live-generated only)
+
+                                        # Determine what data is NEW (livegenerated only)
                                         if export_instrument in seeding_status['instruments_seeded']:
                                             # For seeded instruments, extract only the live-generated data
                                             seed_count = seeding_status['seeding_details'][export_instrument]['seed_count']
-                                            
+
                                             if len(current_ohlc_data) > seed_count:
                                                 # Only the rows beyond seed_count are new live data
                                                 new_live_data = current_ohlc_data.iloc[seed_count:].copy()
@@ -762,17 +764,17 @@ def show_live_data_page():
                                             # For non-seeded instruments, all data is new
                                             new_live_data = current_ohlc_data.copy()
                                             st.info(f"📊 All {len(new_live_data)} rows are new live data")
-                                        
+
                                         # Perform append operation
                                         if len(new_live_data) > 0:
                                             if existing_data is not None and len(existing_data) > 0:
                                                 # Append new data to existing data
                                                 combined_data = pd.concat([existing_data, new_live_data])
-                                                
+
                                                 # Remove duplicates by timestamp (keep last)
                                                 combined_data = combined_data[~combined_data.index.duplicated(keep='last')]
                                                 combined_data = combined_data.sort_index()
-                                                
+
                                                 # Save combined data
                                                 if db.save_ohlc_data(combined_data, dataset_name):
                                                     st.success(f"✅ Appended {len(new_live_data)} new rows to existing {len(existing_data)} rows")

@@ -26,10 +26,13 @@ class LivePredictionPipeline:
         # Processing state
         self.is_processing = False
         self.processing_thread = None
-        self.update_interval = 30  # Process predictions every 30 seconds
+        self.update_interval = 15  # Check for new candles every 15 seconds
 
         # Minimum data requirements
         self.min_ohlc_rows = 100  # Minimum OHLC rows needed for predictions
+        
+        # Candle completion tracking
+        self.last_candle_timestamps = {}  # Track last processed candle for each instrument
 
     def start_pipeline(self) -> bool:
         """Start the live prediction pipeline."""
@@ -102,13 +105,9 @@ class LivePredictionPipeline:
 
                 if tick_stats:
                     for instrument_key, stats in tick_stats.items():
-                        # Bootstrap OHLC data if we have enough ticks but insufficient OHLC
-                        # Removed bootstrapping function
-                        #if stats['tick_count'] >= 20 and stats['ohlc_rows'] < self.min_ohlc_rows:
-                        #    print(f"🚀 Bootstrapping OHLC data for {instrument_key}")
-                        #    self.live_data_manager.bootstrap_ohlc_from_ticks(instrument_key)
-
-                        self._process_instrument_predictions(instrument_key)
+                        # Check if a new candle has closed before processing predictions
+                        if self._has_new_candle_closed(instrument_key):
+                            self._process_instrument_predictions(instrument_key)
 
                 # Reset error counter on successful processing
                 consecutive_errors = 0
@@ -126,6 +125,47 @@ class LivePredictionPipeline:
                     break
 
                 time.sleep(min(30, 5 * consecutive_errors))  # Progressive backoff
+
+    def _has_new_candle_closed(self, instrument_key: str) -> bool:
+        """Check if a new 5-minute candle has closed for the instrument."""
+        try:
+            # Get latest OHLC data
+            ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=2)
+            
+            if ohlc_data is None or len(ohlc_data) < 1:
+                return False
+            
+            # Get the latest candle timestamp
+            latest_candle_timestamp = ohlc_data.index[-1]
+            
+            # Check if this is a new candle compared to last processed
+            if instrument_key not in self.last_candle_timestamps:
+                # First time processing this instrument
+                self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
+                return True
+            
+            # Check if we have a new candle
+            if latest_candle_timestamp > self.last_candle_timestamps[instrument_key]:
+                # New candle detected - check if it's complete
+                current_time = pd.Timestamp.now()
+                
+                # Calculate when this candle period should end
+                candle_end_time = latest_candle_timestamp + pd.Timedelta(minutes=5)
+                
+                # Only process if the candle period has ended (with 1 minute buffer for live data)
+                if current_time >= candle_end_time - pd.Timedelta(minutes=1):
+                    self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
+                    print(f"🕐 New 5-minute candle completed for {instrument_key} at {latest_candle_timestamp}")
+                    return True
+                else:
+                    print(f"⏳ Candle still forming for {instrument_key}, waiting for completion...")
+                    return False
+            
+            return False
+            
+        except Exception as e:
+            print(f"❌ Error checking candle completion for {instrument_key}: {e}")
+            return False
 
     def _process_instrument_predictions(self, instrument_key: str):
         """Process predictions for a specific instrument using all available models."""
@@ -234,10 +274,19 @@ class LivePredictionPipeline:
 
             self.prediction_history[instrument_key].append(latest_prediction)
 
-            # Log summary
+            # Log summary with candle completion info
             model_count = len(all_predictions)
             model_names = list(all_predictions.keys())
-            print(f"✅ Generated {model_count} live predictions for {instrument_key}: {model_names}")
+            print(f"✅ Generated {model_count} live predictions for {instrument_key} on CANDLE CLOSE: {model_names}")
+            print(f"🕐 Prediction timestamp: {timestamp} (Complete 5-minute candle)")
+            
+            # Show clear indication that this is a candle-close prediction
+            seeding_status = self.live_data_manager.get_seeding_status()
+            if instrument_key in seeding_status.get('instruments_seeded', []):
+                current_rows = len(ohlc_data)
+                seed_count = seeding_status['seeding_details'][instrument_key]['seed_count']
+                live_count = current_rows - seed_count
+                print(f"📊 Total data: {current_rows} rows ({seed_count} seeded + {live_count} live candles)")
 
         except Exception as e:
             print(f"❌ Error processing predictions for {instrument_key}: {e}")
@@ -323,7 +372,10 @@ class LivePredictionPipeline:
             'current_price': float(ohlc_row['Close']),
             'volume': int(ohlc_row['Volume']) if 'Volume' in ohlc_row else 0,
             'generated_at': datetime.now(pytz.timezone('Asia/Kolkata')).replace(tzinfo=None),
-            'models_used': list(all_predictions.keys())
+            'models_used': list(all_predictions.keys()),
+            'candle_close_prediction': True,  # Flag to indicate this is a candle-close prediction
+            'candle_period': '5T',  # 5-minute timeframe
+            'prediction_type': 'candle_completion'
         }
 
         # Add predictions from each model
