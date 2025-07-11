@@ -427,7 +427,7 @@ def show_live_data_page():
                             summary = st.session_state.live_prediction_pipeline.get_instrument_summary(instrument_key)
 
                             with st.container():
-                            col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
+                                col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
 
                             with col1:
                                 st.markdown(f"**📊 {display_name}**")
