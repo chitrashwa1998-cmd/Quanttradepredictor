@@ -363,22 +363,7 @@ def show_live_data_page():
     with col4:
         auto_refresh = st.toggle("🔄 Auto Refresh", value=False)
         
-    # Add simulation option for testing
-    if st.session_state.is_live_connected and not tick_stats:
-        st.warning("⚠️ Connected but no live data received. This might be due to market hours or API issues.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🤖 Start Simulated Data (for testing)", type="secondary"):
-                if st.session_state.live_data_manager and selected_instruments:
-                    instrument_keys = [popular_instruments.get(inst, inst) for inst in selected_instruments]
-                    st.session_state.live_data_manager.start_simulated_data(instrument_keys)
-                    st.success("🤖 Started simulated data generation for testing")
-                    time.sleep(2)
-                    st.rerun()
-        
-        with col2:
-            st.info("💡 Simulated data generates realistic price movements for testing the prediction pipeline when live market data is not available.")
+    
 
     # Status dashboard
     if st.session_state.live_prediction_pipeline:
