@@ -195,7 +195,7 @@ class LivePredictionPipeline:
             'prediction_value': int(prediction),
             'current_price': float(ohlc_row['Close']),
             'volume': int(ohlc_row['Volume']) if 'Volume' in ohlc_row else 0,
-            'generated_at': datetime.now(pytz.timezone('Asia/Kolkata'))
+            'generated_at': datetime.now(pytz.timezone('Asia/Kolkata')).replace(tzinfo=None)
         }
 
     def get_latest_predictions(self) -> Dict:
