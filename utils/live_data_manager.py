@@ -105,32 +105,44 @@ class LiveDataManager:
 
                 # Combine with existing data (could be seeded from database or previous live data)
                 if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
-                    existing_ohlc = self.ohlc_data[instrument_key]
+                    existing_ohlc = self.ohlc_data[instrument_key].copy()
 
-                    # Combine with new live data
-                    combined_ohlc = pd.concat([existing_ohlc, new_ohlc])
+                    # Only add new OHLC rows that don't already exist
+                    # Check if any of the new timestamps are actually new
+                    new_timestamps = set(new_ohlc.index)
+                    existing_timestamps = set(existing_ohlc.index)
+                    truly_new_timestamps = new_timestamps - existing_timestamps
 
-                    # Remove duplicate timestamps, keeping the latest
-                    combined_ohlc = combined_ohlc[~combined_ohlc.index.duplicated(keep='last')]
+                    if truly_new_timestamps:
+                        # Only add truly new data
+                        new_data_to_add = new_ohlc.loc[list(truly_new_timestamps)]
+                        combined_ohlc = pd.concat([existing_ohlc, new_data_to_add])
+                        
+                        # Sort by timestamp
+                        combined_ohlc = combined_ohlc.sort_index()
 
-                    # Sort by timestamp
-                    combined_ohlc = combined_ohlc.sort_index()
+                        # For seeded instruments, keep more data (up to 300 rows)
+                        # For fresh instruments, keep standard limit (100 rows)
+                        max_rows = 300 if instrument_key in self.seeded_instruments else 100
+                        if len(combined_ohlc) > max_rows:
+                            combined_ohlc = combined_ohlc.tail(max_rows)
 
-                    # For seeded instruments, keep more data (up to 300 rows)
-                    # For fresh instruments, keep standard limit (100 rows)
-                    max_rows = 300 if instrument_key in self.seeded_instruments else 100
-                    if len(combined_ohlc) > max_rows:
-                        combined_ohlc = combined_ohlc.tail(max_rows)
-
-                    self.ohlc_data[instrument_key] = combined_ohlc
-                    
-                    # Show continuation status
-                    if instrument_key in self.seeded_instruments:
-                        print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows (continuation active)")
+                        self.ohlc_data[instrument_key] = combined_ohlc
+                        
+                        # Show continuation status with proper counts
+                        if instrument_key in self.seeded_instruments:
+                            seed_count = self.seeded_instruments[instrument_key]['seed_count']
+                            live_count = len(combined_ohlc) - seed_count
+                            print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows ({seed_count} seeded + {live_count} live) - continuation active")
+                        else:
+                            print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
                     else:
-                        print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
+                        # No new data, just update the display count
+                        if instrument_key in self.seeded_instruments:
+                            seed_count = self.seeded_instruments[instrument_key]['seed_count']
+                            print(f"📈 Live OHLC for {instrument_key}: {len(existing_ohlc)} total rows ({seed_count} seeded) - continuation active")
                 else:
-                    # First time - store new data
+                    # First time - store new data only if we don't have seeded data
                     self.ohlc_data[instrument_key] = new_ohlc
                     print(f"📈 Initial OHLC for {instrument_key}: {len(new_ohlc)} rows")
 
@@ -233,8 +245,8 @@ class LiveDataManager:
                         'seeded_at': pd.Timestamp.now()
                     }
                     
-                    print(f"📊 Seeded {instrument_key} with {len(seed_data)} historical OHLC rows")
-                    print(f"📈 Live OHLC for {instrument_key}: {len(seed_data)} total rows (seeded from database)")
+                    print(f"🌱 SEEDED {instrument_key} with {len(seed_data)} historical OHLC rows from database")
+                    print(f"📈 Foundation set: {len(seed_data)} rows ready for live continuation")
                     return True
                 else:
                     print(f"⚠️ Database data for {dataset_name} missing required columns")
