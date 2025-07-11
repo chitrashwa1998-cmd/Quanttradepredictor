@@ -172,131 +172,252 @@ def show_live_data_page():
         if st.button("📥 Fetch Historical Data", type="primary", disabled=not (hist_access_token and hist_api_key)):
             if hist_access_token and hist_api_key:
                 with st.spinner(f"Fetching {days_back} days of {selected_interval} data for {display_name}..."):
-                    try:
-                        # Calculate date range
-                        end_date = datetime.now()
-                        start_date = end_date - timedelta(days=days_back)
-                        
-                        # Format dates for Upstox API
-                        from_date = start_date.strftime('%Y-%m-%d')
-                        to_date = end_date.strftime('%Y-%m-%d')
-                        
-                        # Upstox historical data API endpoint
-                        url = f"https://api.upstox.com/v2/historical-candle/{instrument_key}/{interval_options[selected_interval]}/{to_date}/{from_date}"
-                        
-                        headers = {
-                            "Authorization": f"Bearer {hist_access_token}",
-                            "Accept": "application/json"
-                        }
-                        
-                        import requests
-                        response = requests.get(url, headers=headers)
-                        
-                        if response.status_code == 200:
-                            data = response.json()
+                    success = False
+                    max_retries = 3
+                    
+                    for retry in range(max_retries):
+                        try:
+                            # Calculate date range with IST timezone
+                            import pytz
+                            ist = pytz.timezone('Asia/Kolkata')
+                            end_date = datetime.now(ist)
+                            start_date = end_date - timedelta(days=days_back)
                             
-                            if data.get("status") == "success" and "data" in data and "candles" in data["data"]:
-                                candles = data["data"]["candles"]
+                            # Format dates for Upstox API (YYYY-MM-DD format)
+                            from_date = start_date.strftime('%Y-%m-%d')
+                            to_date = end_date.strftime('%Y-%m-%d')
+                            
+                            # Construct API URL with proper encoding
+                            import urllib.parse
+                            encoded_instrument = urllib.parse.quote(instrument_key, safe='')
+                            url = f"https://api.upstox.com/v2/historical-candle/{encoded_instrument}/{interval_options[selected_interval]}/{to_date}/{from_date}"
+                            
+                            st.info(f"🔄 Attempt {retry + 1}/{max_retries} - Fetching from: {url}")
+                            
+                            headers = {
+                                "Authorization": f"Bearer {hist_access_token}",
+                                "Accept": "application/json",
+                                "User-Agent": "UpstoxPythonClient/1.0.0"
+                            }
+                            
+                            import requests
+                            response = requests.get(url, headers=headers, timeout=30)
+                            
+                            st.write(f"📊 Response Status: {response.status_code}")
+                            st.write(f"📋 Response Headers: {dict(response.headers)}")
+                            
+                            if response.status_code == 200:
+                                data = response.json()
+                                st.write(f"📄 API Response Structure: {list(data.keys())}")
                                 
-                                if candles:
-                                    # Convert to DataFrame
-                                    df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'oi'])
-                                    
-                                    # Convert timestamp to datetime
-                                    df['timestamp'] = pd.to_datetime(df['timestamp'])
-                                    df = df.set_index('timestamp')
-                                    
-                                    # Rename columns to standard format
-                                    df = df.rename(columns={
-                                        'open': 'Open',
-                                        'high': 'High', 
-                                        'low': 'Low',
-                                        'close': 'Close',
-                                        'volume': 'Volume'
-                                    })
-                                    
-                                    # Remove unnecessary columns
-                                    df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
-                                    
-                                    # Sort by timestamp
-                                    df = df.sort_index()
-                                    
-                                    st.success(f"✅ Successfully fetched {len(df)} data points!")
-                                    
-                                    # Display summary
-                                    col1, col2, col3, col4 = st.columns(4)
-                                    with col1:
-                                        st.metric("Total Records", f"{len(df):,}")
-                                    with col2:
-                                        st.metric("Date Range", f"{df.index.min().strftime('%Y-%m-%d')}")
-                                    with col3:
-                                        st.metric("To", f"{df.index.max().strftime('%Y-%m-%d')}")
-                                    with col4:
-                                        st.metric("Latest Price", f"₹{df['Close'].iloc[-1]:.2f}")
-                                    
-                                    # Show sample data
-                                    st.subheader("📊 Sample Data")
-                                    st.dataframe(df.head(10), use_container_width=True)
-                                    
-                                    # Download button
-                                    csv_data = df.to_csv()
-                                    file_name = f"{display_name.replace(' ', '_')}_{interval_options[selected_interval]}_{days_back}days_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                                    
-                                    st.download_button(
-                                        label=f"📥 Download {display_name} {selected_interval} Data",
-                                        data=csv_data,
-                                        file_name=file_name,
-                                        mime="text/csv",
-                                        use_container_width=True
-                                    )
-                                    
-                                    # Option to save to database
-                                    if st.button("💾 Save to Database"):
-                                        try:
-                                            from utils.database_adapter import DatabaseAdapter
-                                            db = DatabaseAdapter()
-                                            dataset_name = f"upstox_{display_name.replace(' ', '_').lower()}_{interval_options[selected_interval]}"
-                                            
-                                            if db.save_ohlc_data(df, dataset_name):
-                                                st.success(f"✅ Saved historical data to database as '{dataset_name}'")
-                                            else:
-                                                st.error("❌ Failed to save data to database")
-                                        except Exception as e:
-                                            st.error(f"❌ Database error: {str(e)}")
-                                    
-                                    # Basic chart
-                                    st.subheader("📈 Price Chart")
-                                    fig = go.Figure(data=go.Candlestick(
-                                        x=df.index,
-                                        open=df['Open'],
-                                        high=df['High'],
-                                        low=df['Low'],
-                                        close=df['Close'],
-                                        name=display_name
-                                    ))
-                                    
-                                    fig.update_layout(
-                                        title=f"{display_name} - {selected_interval} Chart ({days_back} days)",
-                                        xaxis_title="Time",
-                                        yaxis_title="Price (₹)",
-                                        height=500,
-                                        template="plotly_dark"
-                                    )
-                                    
-                                    st.plotly_chart(fig, use_container_width=True)
-                                    
+                                if data.get("status") == "success" and "data" in data:
+                                    if "candles" in data["data"] and data["data"]["candles"]:
+                                        candles = data["data"]["candles"]
+                                        st.success(f"✅ Found {len(candles)} candles!")
+                                        
+                                        # Convert to DataFrame
+                                        df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'oi'])
+                                        
+                                        # Convert timestamp to datetime
+                                        df['timestamp'] = pd.to_datetime(df['timestamp'])
+                                        df = df.set_index('timestamp')
+                                        
+                                        # Rename columns to standard format
+                                        df = df.rename(columns={
+                                            'open': 'Open',
+                                            'high': 'High', 
+                                            'low': 'Low',
+                                            'close': 'Close',
+                                            'volume': 'Volume'
+                                        })
+                                        
+                                        # Remove unnecessary columns
+                                        df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
+                                        
+                                        # Sort by timestamp
+                                        df = df.sort_index()
+                                        
+                                        st.success(f"✅ Successfully fetched {len(df)} data points!")
+                                        
+                                        # Display summary
+                                        col1, col2, col3, col4 = st.columns(4)
+                                        with col1:
+                                            st.metric("Total Records", f"{len(df):,}")
+                                        with col2:
+                                            st.metric("Date Range", f"{df.index.min().strftime('%Y-%m-%d')}")
+                                        with col3:
+                                            st.metric("To", f"{df.index.max().strftime('%Y-%m-%d')}")
+                                        with col4:
+                                            st.metric("Latest Price", f"₹{df['Close'].iloc[-1]:.2f}")
+                                        
+                                        # Show sample data
+                                        st.subheader("📊 Sample Data")
+                                        st.dataframe(df.head(10), use_container_width=True)
+                                        
+                                        # Download button
+                                        csv_data = df.to_csv()
+                                        file_name = f"{display_name.replace(' ', '_')}_{interval_options[selected_interval]}_{days_back}days_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                                        
+                                        st.download_button(
+                                            label=f"📥 Download {display_name} {selected_interval} Data",
+                                            data=csv_data,
+                                            file_name=file_name,
+                                            mime="text/csv",
+                                            use_container_width=True
+                                        )
+                                        
+                                        # Option to save to database
+                                        if st.button("💾 Save to Database"):
+                                            try:
+                                                from utils.database_adapter import DatabaseAdapter
+                                                db = DatabaseAdapter()
+                                                dataset_name = f"upstox_{display_name.replace(' ', '_').lower()}_{interval_options[selected_interval]}"
+                                                
+                                                if db.save_ohlc_data(df, dataset_name):
+                                                    st.success(f"✅ Saved historical data to database as '{dataset_name}'")
+                                                else:
+                                                    st.error("❌ Failed to save data to database")
+                                            except Exception as e:
+                                                st.error(f"❌ Database error: {str(e)}")
+                                        
+                                        # Basic chart
+                                        st.subheader("📈 Price Chart")
+                                        fig = go.Figure(data=go.Candlestick(
+                                            x=df.index,
+                                            open=df['Open'],
+                                            high=df['High'],
+                                            low=df['Low'],
+                                            close=df['Close'],
+                                            name=display_name
+                                        ))
+                                        
+                                        fig.update_layout(
+                                            title=f"{display_name} - {selected_interval} Chart ({days_back} days)",
+                                            xaxis_title="Time",
+                                            yaxis_title="Price (₹)",
+                                            height=500,
+                                            template="plotly_dark"
+                                        )
+                                        
+                                        st.plotly_chart(fig, use_container_width=True)
+                                        success = True
+                                        break
+                                        
+                                    else:
+                                        st.warning("⚠️ No candle data in response")
+                                        st.write(f"📋 Data structure: {data.get('data', {})}")
                                 else:
-                                    st.warning("⚠️ No candle data returned from API")
+                                    st.error(f"❌ API Error: {data.get('message', 'Unknown error')}")
+                                    st.write(f"📋 Full response: {data}")
                             else:
-                                st.error(f"❌ API Error: {data.get('message', 'Unknown error')}")
-                        else:
-                            st.error(f"❌ HTTP Error {response.status_code}: {response.text}")
-                            
-                    except Exception as e:
-                        st.error(f"❌ Error fetching historical data: {str(e)}")
+                                st.error(f"❌ HTTP Error {response.status_code}")
+                                st.write(f"📋 Response text: {response.text}")
+                                
+                                if response.status_code == 401:
+                                    st.error("🔑 Authentication failed. Please check your access token.")
+                                    break
+                                elif response.status_code == 429:
+                                    st.warning("⏳ Rate limit hit. Waiting before retry...")
+                                    import time
+                                    time.sleep(5)
+                                    
+                        except requests.exceptions.Timeout:
+                            st.warning(f"⏱️ Request timeout on attempt {retry + 1}")
+                        except Exception as e:
+                            st.error(f"❌ Error on attempt {retry + 1}: {str(e)}")
+                            import traceback
+                            st.code(traceback.format_exc())
+                    
+                    if not success:
+                        st.error("❌ Failed to fetch data after all retry attempts")
+                        st.info("""
+                        **Troubleshooting Tips:**
+                        1. Verify your access token is valid and not expired
+                        2. Check if you have historical data access in your Upstox plan
+                        3. Try a different date range or instrument
+                        4. Ensure instrument key format is correct (e.g., NSE_INDEX|Nifty 50)
+                        """)
             else:
                 st.warning("⚠️ Please provide both Access Token and API Key")
         
+        # Quick test section
+        st.subheader("🚀 Quick Test - Nifty 50 Data")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("⚡ Quick Test: Fetch Nifty 50 (1 day)", disabled=not (hist_access_token and hist_api_key)):
+                if hist_access_token and hist_api_key:
+                    with st.spinner("Testing Nifty 50 data fetch..."):
+                        try:
+                            import requests
+                            import urllib.parse
+                            
+                            # Test with today's date
+                            today = datetime.now().strftime('%Y-%m-%d')
+                            yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                            
+                            # Nifty 50 instrument key
+                            nifty_key = "NSE_INDEX|Nifty 50"
+                            encoded_instrument = urllib.parse.quote(nifty_key, safe='')
+                            
+                            url = f"https://api.upstox.com/v2/historical-candle/{encoded_instrument}/1minute/{today}/{yesterday}"
+                            
+                            headers = {
+                                "Authorization": f"Bearer {hist_access_token}",
+                                "Accept": "application/json"
+                            }
+                            
+                            response = requests.get(url, headers=headers, timeout=15)
+                            
+                            if response.status_code == 200:
+                                data = response.json()
+                                if data.get("status") == "success" and "data" in data and "candles" in data["data"]:
+                                    candles = data["data"]["candles"]
+                                    st.success(f"✅ Test successful! Got {len(candles)} Nifty 50 data points")
+                                    
+                                    if candles:
+                                        # Show latest price
+                                        latest_candle = candles[-1]
+                                        st.metric("Latest Nifty 50 Price", f"₹{latest_candle[4]:.2f}")
+                                else:
+                                    st.error(f"❌ Test failed: {data}")
+                            else:
+                                st.error(f"❌ Test failed: HTTP {response.status_code} - {response.text}")
+                                
+                        except Exception as e:
+                            st.error(f"❌ Test error: {str(e)}")
+        
+        with col2:
+            if st.button("📊 Check API Status", disabled=not (hist_access_token and hist_api_key)):
+                if hist_access_token and hist_api_key:
+                    with st.spinner("Checking API status..."):
+                        try:
+                            import requests
+                            
+                            # Test API connectivity
+                            url = "https://api.upstox.com/v2/user/profile"
+                            headers = {
+                                "Authorization": f"Bearer {hist_access_token}",
+                                "Accept": "application/json"
+                            }
+                            
+                            response = requests.get(url, headers=headers, timeout=10)
+                            
+                            if response.status_code == 200:
+                                data = response.json()
+                                if data.get("status") == "success":
+                                    st.success("✅ API connection successful!")
+                                    user_data = data.get("data", {})
+                                    st.write(f"**User:** {user_data.get('user_name', 'N/A')}")
+                                    st.write(f"**User ID:** {user_data.get('user_id', 'N/A')}")
+                                else:
+                                    st.error(f"❌ API Error: {data}")
+                            else:
+                                st.error(f"❌ API connection failed: {response.status_code}")
+                                
+                        except Exception as e:
+                            st.error(f"❌ Connection error: {str(e)}")
+
         # Information section
         st.info("""
         **📋 Upstox Historical Data Features:**
@@ -310,6 +431,11 @@ def show_live_data_page():
         **🔑 API Requirements:**
         • Valid Upstox access token (refreshed daily)
         • Active API subscription for historical data
+        
+        **🔧 Troubleshooting:**
+        • Use the Quick Test button first
+        • Check API Status to verify credentials
+        • Ensure access token is not expired
         """)
 
     # Continue with live data configuration
