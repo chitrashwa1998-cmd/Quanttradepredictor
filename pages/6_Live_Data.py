@@ -707,13 +707,21 @@ def show_live_data_page():
                     if st.button("📥 Download CSV", type="primary"):
                         if export_instrument:
                             if export_format == "OHLC Data":
-                                ohlc_data = st.session_state.live_data_manager.get_live_ohlc(export_instrument)
-                                if ohlc_data is not None and len(ohlc_data) > 0:
-                                    csv_data = ohlc_data.to_csv()
+                                # Get complete dataset (seeded + live)
+                                live_manager = st.session_state.live_data_manager
+                                complete_ohlc_data = live_manager.get_complete_ohlc_data(export_instrument)
+                                
+                                if complete_ohlc_data is not None and len(complete_ohlc_data) > 0:
+                                    csv_data = complete_ohlc_data.to_csv()
+                                    seeding_status = live_manager.get_seeding_status()
+                                    
+                                    # Add suffix to filename if seeded
+                                    suffix = "_complete" if export_instrument in seeding_status['instruments_seeded'] else "_live"
+                                    
                                     st.download_button(
-                                        label="📥 Download OHLC CSV",
+                                        label=f"📥 Download OHLC CSV ({len(complete_ohlc_data)} rows)",
                                         data=csv_data,
-                                        file_name=f"live_ohlc_{export_instrument.replace('|', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                        file_name=f"live_ohlc_{export_instrument.replace('|', '_')}{suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                         mime="text/csv"
                                     )
                                 else:
@@ -725,17 +733,30 @@ def show_live_data_page():
                     if st.button("💾 Save to Database"):
                         if export_instrument:
                             try:
-                                ohlc_data = st.session_state.live_data_manager.get_live_ohlc(export_instrument)
-                                if ohlc_data is not None and len(ohlc_data) > 0:
-                                    # Save to database
-                                    db = DatabaseAdapter()
-                                    dataset_name = f"live_{export_instrument.replace('|', '_')}"
-                                    if db.save_ohlc_data(ohlc_data, dataset_name):
-                                        st.success(f"✅ Saved live data to database as '{dataset_name}'")
+                                # Get the complete OHLC data (seeded + live combined)
+                                live_manager = st.session_state.live_data_manager
+                                
+                                # Get the full dataset from the live manager's internal storage
+                                if export_instrument in live_manager.ohlc_data:
+                                    complete_ohlc_data = live_manager.ohlc_data[export_instrument]
+                                    
+                                    if complete_ohlc_data is not None and len(complete_ohlc_data) > 0:
+                                        # Save complete dataset (seeded + live) to database
+                                        db = DatabaseAdapter()
+                                        dataset_name = f"live_{export_instrument.replace('|', '_')}"
+                                        
+                                        if db.save_ohlc_data(complete_ohlc_data, dataset_name):
+                                            seeding_status = live_manager.get_seeding_status()
+                                            if export_instrument in seeding_status['instruments_seeded']:
+                                                st.success(f"✅ Saved complete dataset ({len(complete_ohlc_data)} rows) to database as '{dataset_name}' (includes seeded + live data)")
+                                            else:
+                                                st.success(f"✅ Saved live data ({len(complete_ohlc_data)} rows) to database as '{dataset_name}'")
+                                        else:
+                                            st.error("❌ Failed to save data to database")
                                     else:
-                                        st.error("❌ Failed to save data to database")
+                                        st.warning("No data available to save")
                                 else:
-                                    st.warning("No data available to save")
+                                    st.warning(f"No OHLC data found for {export_instrument}")
                             except Exception as e:
                                 st.error(f"❌ Error saving to database: {str(e)}")
         else:

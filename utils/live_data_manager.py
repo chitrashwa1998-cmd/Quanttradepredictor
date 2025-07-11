@@ -166,6 +166,12 @@ class LiveDataManager:
             return ohlc.tail(rows) if len(ohlc) > 0 else None
         return None
 
+    def get_complete_ohlc_data(self, instrument_key: str) -> Optional[pd.DataFrame]:
+        """Get complete OHLC data for an instrument (all seeded + live data)."""
+        if instrument_key in self.ohlc_data:
+            return self.ohlc_data[instrument_key]
+        return None
+
     def get_latest_tick(self, instrument_key: str) -> Optional[Dict]:
         """Get the latest tick for an instrument."""
         return self.ws_client.get_latest_tick(instrument_key)
