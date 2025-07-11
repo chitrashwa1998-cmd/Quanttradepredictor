@@ -39,10 +39,22 @@ class LivePredictionPipeline:
                 print("❌ Failed to connect to live data feed")
                 return False
 
-            # Check if direction model is trained
-            if not self.model_manager.is_model_trained('direction'):
-                print("❌ Direction model not trained. Please train the model first.")
+            # Check which models are trained
+            available_models = []
+            model_names = ['direction', 'volatility', 'profit_probability', 'reversal']
+            
+            for model_name in model_names:
+                if self.model_manager.is_model_trained(model_name):
+                    available_models.append(model_name)
+                    print(f"✅ {model_name} model ready for live predictions")
+                else:
+                    print(f"⚠️ {model_name} model not trained")
+
+            if not available_models:
+                print("❌ No trained models available. Please train at least one model first.")
                 return False
+
+            print(f"🎯 Starting live prediction pipeline with {len(available_models)} models: {available_models}")
 
             # Start processing thread
             self.is_processing = True
@@ -116,7 +128,7 @@ class LivePredictionPipeline:
                 time.sleep(min(30, 5 * consecutive_errors))  # Progressive backoff
 
     def _process_instrument_predictions(self, instrument_key: str):
-        """Process predictions for a specific instrument."""
+        """Process predictions for a specific instrument using all available models."""
         try:
             # Get live OHLC data
             ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=200)
@@ -128,27 +140,84 @@ class LivePredictionPipeline:
                     print(f"📊 No OHLC data available for {instrument_key}")
                 return
 
-            # Calculate direction features
-            features = self._calculate_direction_features(ohlc_data)
+            # Generate predictions from all available models
+            all_predictions = {}
+            timestamp = ohlc_data.index[-1]
+            ohlc_row = ohlc_data.iloc[-1]
 
-            if features is None or len(features) == 0:
-                print(f"❌ Failed to calculate features for {instrument_key}")
+            # Direction Model
+            if self.model_manager.is_model_trained('direction'):
+                direction_features = self._calculate_direction_features(ohlc_data)
+                if direction_features is not None and len(direction_features) > 0:
+                    try:
+                        predictions, probabilities = self.model_manager.predict('direction', direction_features)
+                        if predictions is not None:
+                            direction = 'Bullish' if predictions[-1] == 1 else 'Bearish'
+                            confidence = np.max(probabilities[-1]) if probabilities is not None else 0.5
+                            all_predictions['direction'] = {
+                                'prediction': direction,
+                                'confidence': confidence,
+                                'value': int(predictions[-1])
+                            }
+                    except Exception as e:
+                        print(f"❌ Direction prediction error for {instrument_key}: {e}")
+
+            # Volatility Model
+            if self.model_manager.is_model_trained('volatility'):
+                volatility_features = self._calculate_volatility_features(ohlc_data)
+                if volatility_features is not None and len(volatility_features) > 0:
+                    try:
+                        predictions, _ = self.model_manager.predict('volatility', volatility_features)
+                        if predictions is not None:
+                            volatility_level = self._categorize_volatility(predictions[-1])
+                            all_predictions['volatility'] = {
+                                'prediction': volatility_level,
+                                'value': float(predictions[-1])
+                            }
+                    except Exception as e:
+                        print(f"❌ Volatility prediction error for {instrument_key}: {e}")
+
+            # Profit Probability Model
+            if self.model_manager.is_model_trained('profit_probability'):
+                profit_features = self._calculate_profit_probability_features(ohlc_data)
+                if profit_features is not None and len(profit_features) > 0:
+                    try:
+                        predictions, probabilities = self.model_manager.predict('profit_probability', profit_features)
+                        if predictions is not None:
+                            profit_likely = 'High' if predictions[-1] == 1 else 'Low'
+                            confidence = np.max(probabilities[-1]) if probabilities is not None else 0.5
+                            all_predictions['profit_probability'] = {
+                                'prediction': profit_likely,
+                                'confidence': confidence,
+                                'value': int(predictions[-1])
+                            }
+                    except Exception as e:
+                        print(f"❌ Profit probability prediction error for {instrument_key}: {e}")
+
+            # Reversal Model
+            if self.model_manager.is_model_trained('reversal'):
+                reversal_features = self._calculate_reversal_features(ohlc_data)
+                if reversal_features is not None and len(reversal_features) > 0:
+                    try:
+                        predictions, probabilities = self.model_manager.predict('reversal', reversal_features)
+                        if predictions is not None:
+                            reversal_expected = 'Yes' if predictions[-1] == 1 else 'No'
+                            confidence = np.max(probabilities[-1]) if probabilities is not None else 0.5
+                            all_predictions['reversal'] = {
+                                'prediction': reversal_expected,
+                                'confidence': confidence,
+                                'value': int(predictions[-1])
+                            }
+                    except Exception as e:
+                        print(f"❌ Reversal prediction error for {instrument_key}: {e}")
+
+            if not all_predictions:
+                print(f"❌ No predictions generated for {instrument_key}")
                 return
 
-            # Make predictions
-            predictions, probabilities = self.model_manager.predict('direction', features)
-
-            if predictions is None:
-                print(f"❌ Failed to generate predictions for {instrument_key}")
-                return
-
-            # Store latest prediction
-            latest_prediction = self._format_prediction(
-                instrument_key, 
-                features.index[-1], 
-                predictions[-1], 
-                probabilities[-1] if probabilities is not None else None,
-                ohlc_data.iloc[-1]
+            # Format comprehensive prediction
+            latest_prediction = self._format_comprehensive_prediction(
+                instrument_key, timestamp, all_predictions, ohlc_row
             )
 
             self.live_predictions[instrument_key] = latest_prediction
@@ -159,7 +228,10 @@ class LivePredictionPipeline:
 
             self.prediction_history[instrument_key].append(latest_prediction)
 
-            print(f"✅ Generated live prediction for {instrument_key}: {latest_prediction['direction']} ({latest_prediction['confidence']:.3f})")
+            # Log summary
+            model_count = len(all_predictions)
+            model_names = list(all_predictions.keys())
+            print(f"✅ Generated {model_count} live predictions for {instrument_key}: {model_names}")
 
         except Exception as e:
             print(f"❌ Error processing predictions for {instrument_key}: {e}")
@@ -167,40 +239,98 @@ class LivePredictionPipeline:
     def _calculate_direction_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
         """Calculate direction-specific features from OHLC data."""
         try:
-            # Use the same feature calculation as the trained model
+            from features.direction_technical_indicators import DirectionTechnicalIndicators
             dti = DirectionTechnicalIndicators()
             features = dti.calculate_all_direction_indicators(ohlc_data)
-
-            # Remove rows with NaN values
             features = features.dropna()
-
             return features
-
         except Exception as e:
             print(f"❌ Error calculating direction features: {e}")
             return None
 
-    def _format_prediction(self, instrument_key: str, timestamp: pd.Timestamp, 
-                          prediction: int, probability: Optional[np.ndarray],
-                          ohlc_row: pd.Series) -> Dict:
-        """Format prediction data for storage and display."""
-        direction = 'Bullish' if prediction == 1 else 'Bearish'
-        confidence = np.max(probability) if probability is not None else 0.5
+    def _calculate_volatility_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Calculate volatility-specific features from OHLC data."""
+        try:
+            from features.technical_indicators import TechnicalIndicators
+            from features.custom_engineered import compute_custom_volatility_features
+            from features.lagged_features import add_volatility_lagged_features
+            from features.time_context_features import add_time_context_features
+            
+            # Calculate comprehensive volatility features
+            df_with_features = ohlc_data.copy()
+            df_with_features = TechnicalIndicators.calculate_volatility_indicators(df_with_features)
+            df_with_features = compute_custom_volatility_features(df_with_features)
+            df_with_features = add_volatility_lagged_features(df_with_features)
+            df_with_features = add_time_context_features(df_with_features)
+            
+            # Use volatility model's prepare_features method
+            features = self.model_manager.models['volatility'].prepare_features(df_with_features)
+            return features
+        except Exception as e:
+            print(f"❌ Error calculating volatility features: {e}")
+            return None
 
+    def _calculate_profit_probability_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Calculate profit probability features from OHLC data."""
+        try:
+            from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
+            
+            # Calculate profit probability features using the model's prepare_features method
+            features = self.model_manager.models['profit_probability'].prepare_features(ohlc_data)
+            return features
+        except Exception as e:
+            print(f"❌ Error calculating profit probability features: {e}")
+            return None
+
+    def _calculate_reversal_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Calculate reversal detection features from OHLC data."""
+        try:
+            # Use reversal model's prepare_features method which includes all feature types
+            features = self.model_manager.models['reversal'].prepare_features(ohlc_data)
+            return features
+        except Exception as e:
+            print(f"❌ Error calculating reversal features: {e}")
+            return None
+
+    def _categorize_volatility(self, volatility_value: float) -> str:
+        """Categorize volatility value into readable format."""
+        if volatility_value < 0.01:
+            return 'Low'
+        elif volatility_value < 0.02:
+            return 'Medium'
+        elif volatility_value < 0.03:
+            return 'High'
+        else:
+            return 'Very High'
+
+    def _format_comprehensive_prediction(self, instrument_key: str, timestamp: pd.Timestamp, 
+                                        all_predictions: Dict, ohlc_row: pd.Series) -> Dict:
+        """Format comprehensive prediction data from all models."""
         # Ensure timestamp is timezone-naive
         if hasattr(timestamp, 'tz_localize'):
             timestamp = timestamp.tz_localize(None)
 
-        return {
+        # Base prediction structure
+        formatted_prediction = {
             'instrument': instrument_key,
             'timestamp': timestamp,
-            'direction': direction,
-            'confidence': confidence,
-            'prediction_value': int(prediction),
             'current_price': float(ohlc_row['Close']),
             'volume': int(ohlc_row['Volume']) if 'Volume' in ohlc_row else 0,
-            'generated_at': datetime.now(pytz.timezone('Asia/Kolkata')).replace(tzinfo=None)
+            'generated_at': datetime.now(pytz.timezone('Asia/Kolkata')).replace(tzinfo=None),
+            'models_used': list(all_predictions.keys())
         }
+
+        # Add predictions from each model
+        for model_name, prediction_data in all_predictions.items():
+            formatted_prediction[model_name] = prediction_data
+
+        # Legacy support - use direction as primary if available
+        if 'direction' in all_predictions:
+            formatted_prediction['direction'] = all_predictions['direction']['prediction']
+            formatted_prediction['confidence'] = all_predictions['direction']['confidence']
+            formatted_prediction['prediction_value'] = all_predictions['direction']['value']
+
+        return formatted_prediction
 
     def get_latest_predictions(self) -> Dict:
         """Get latest predictions for all instruments."""
@@ -218,6 +348,15 @@ class LivePredictionPipeline:
         """Get pipeline status and statistics."""
         connection_status = self.live_data_manager.get_connection_status()
 
+        # Check status of all models
+        model_status = {}
+        model_names = ['direction', 'volatility', 'profit_probability', 'reversal']
+        
+        for model_name in model_names:
+            model_status[f'{model_name}_ready'] = self.model_manager.is_model_trained(model_name)
+
+        trained_models = [name for name in model_names if self.model_manager.is_model_trained(name)]
+
         return {
             'pipeline_active': self.is_processing,
             'data_connected': connection_status['connected'],
@@ -227,11 +366,13 @@ class LivePredictionPipeline:
             'last_prediction_time': max(
                 [pred['generated_at'] for pred in self.live_predictions.values()]
             ) if self.live_predictions else None,
-            'model_ready': self.model_manager.is_model_trained('direction')
+            'trained_models': trained_models,
+            'total_trained_models': len(trained_models),
+            **model_status
         }
 
     def get_instrument_summary(self, instrument_key: str) -> Optional[Dict]:
-        """Get summary for a specific instrument."""
+        """Get comprehensive summary for a specific instrument."""
         if instrument_key not in self.live_predictions:
             return None
 
@@ -241,22 +382,57 @@ class LivePredictionPipeline:
         if not history:
             return latest
 
-        # Calculate recent statistics
-        recent_directions = [p['direction'] for p in history]
-        bullish_count = recent_directions.count('Bullish')
-        bearish_count = recent_directions.count('Bearish')
+        # Calculate statistics for all models
+        stats = {
+            'total_predictions': len(history),
+            'models_used': latest.get('models_used', [])
+        }
 
-        recent_confidences = [p['confidence'] for p in history]
-        avg_confidence = np.mean(recent_confidences)
+        # Direction model statistics
+        if 'direction' in latest:
+            recent_directions = [p.get('direction', {}).get('prediction', p.get('direction', 'Unknown')) 
+                               for p in history if 'direction' in p or 'direction' in str(p)]
+            bullish_count = recent_directions.count('Bullish')
+            bearish_count = recent_directions.count('Bearish')
+            
+            stats['direction_stats'] = {
+                'bullish_signals': bullish_count,
+                'bearish_signals': bearish_count,
+                'bullish_percentage': (bullish_count / len(recent_directions)) * 100 if recent_directions else 0
+            }
+
+        # Volatility model statistics
+        if 'volatility' in latest:
+            recent_volatility = [p.get('volatility', {}).get('prediction', 'Unknown') 
+                               for p in history if 'volatility' in p]
+            if recent_volatility:
+                high_vol_count = sum(1 for v in recent_volatility if v in ['High', 'Very High'])
+                stats['volatility_stats'] = {
+                    'high_volatility_percentage': (high_vol_count / len(recent_volatility)) * 100
+                }
+
+        # Profit probability statistics
+        if 'profit_probability' in latest:
+            recent_profit = [p.get('profit_probability', {}).get('prediction', 'Unknown') 
+                           for p in history if 'profit_probability' in p]
+            if recent_profit:
+                high_profit_count = recent_profit.count('High')
+                stats['profit_stats'] = {
+                    'high_profit_percentage': (high_profit_count / len(recent_profit)) * 100
+                }
+
+        # Reversal statistics
+        if 'reversal' in latest:
+            recent_reversal = [p.get('reversal', {}).get('prediction', 'Unknown') 
+                             for p in history if 'reversal' in p]
+            if recent_reversal:
+                reversal_count = recent_reversal.count('Yes')
+                stats['reversal_stats'] = {
+                    'reversal_signals': reversal_count,
+                    'reversal_percentage': (reversal_count / len(recent_reversal)) * 100
+                }
 
         return {
             **latest,
-            'recent_stats': {
-                'total_predictions': len(history),
-                'bullish_signals': bullish_count,
-                'bearish_signals': bearish_count,
-                'bullish_percentage': (bullish_count / len(history)) * 100,
-                'average_confidence': avg_confidence,
-                'confidence_trend': 'improving' if recent_confidences[-1] > avg_confidence else 'declining'
-            }
+            'comprehensive_stats': stats
         }
