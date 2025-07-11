@@ -173,8 +173,10 @@ def show_live_data_page():
             if hist_access_token and hist_api_key:
                 with st.spinner(f"Fetching {days_back} days of {selected_interval} data for {display_name}..."):
                     try:
-                        # Calculate date range
-                        end_date = datetime.now()
+                        # Calculate date range in IST
+                        import pytz
+                        ist = pytz.timezone('Asia/Kolkata')
+                        end_date = datetime.now(ist)
                         start_date = end_date - timedelta(days=days_back)
 
                         # Format dates for Upstox API
@@ -635,31 +637,31 @@ def show_live_data_page():
                                 st.error(f"❌ Error saving to database: {str(e)}")
         else:
             st.info("📡 Connected but no tick data received yet. Please wait...")
-            
+
             # Add debugging information
             if st.session_state.live_data_manager:
                 connection_status = st.session_state.live_data_manager.ws_client.get_connection_status()
-                
+
                 with st.expander("🔍 Connection Debug Info"):
                     col1, col2 = st.columns(2)
-                    
+
                     with col1:
                         st.write("**Connection Status:**")
                         st.write(f"• Connected: {connection_status['is_connected']}")
                         st.write(f"• Subscribed: {connection_status['total_instruments']} instruments")
                         st.write(f"• Latest ticks: {connection_status['last_tick_count']}")
-                        
+
                     with col2:
                         st.write("**WebSocket Info:**")
                         if hasattr(st.session_state.live_data_manager.ws_client, 'total_ticks_received'):
                             st.write(f"• Total ticks: {st.session_state.live_data_manager.ws_client.total_ticks_received}")
                         if hasattr(st.session_state.live_data_manager.ws_client, 'close_count'):
                             st.write(f"• Close count: {st.session_state.live_data_manager.ws_client.close_count}")
-                        
+
                         # Check if in market hours
                         is_market_hours = st.session_state.live_data_manager.ws_client._is_market_hours()
                         st.write(f"• Market hours: {'Yes' if is_market_hours else 'No'}")
-                
+
                 # Show raw connection details
                 st.json(connection_status)
     else:

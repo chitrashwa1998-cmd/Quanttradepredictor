@@ -8,6 +8,7 @@ from collections import deque
 from utils.live_data_manager import LiveDataManager
 from models.model_manager import ModelManager
 from features.direction_technical_indicators import DirectionTechnicalIndicators
+import pytz
 
 class LivePredictionPipeline:
     """Pipeline to process live OHLC data through direction model for real-time predictions."""
@@ -194,7 +195,7 @@ class LivePredictionPipeline:
             'prediction_value': int(prediction),
             'current_price': float(ohlc_row['Close']),
             'volume': int(ohlc_row['Volume']) if 'Volume' in ohlc_row else 0,
-            'generated_at': datetime.now()
+            'generated_at': datetime.now(pytz.timezone('Asia/Kolkata'))
         }
 
     def get_latest_predictions(self) -> Dict:

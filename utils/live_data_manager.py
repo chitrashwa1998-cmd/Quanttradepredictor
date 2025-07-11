@@ -8,6 +8,7 @@ import threading
 import time
 from collections import deque
 from utils.upstox_websocket import UpstoxWebSocketClient
+import pytz
 
 class LiveDataManager:
     """Manage real-time tick data and convert to OHLC format."""
@@ -74,6 +75,16 @@ class LiveDataManager:
             # Create DataFrame from ticks
             df = pd.DataFrame(ticks)
             df['timestamp'] = pd.to_datetime(df['timestamp'])
+            
+            # Ensure timestamps are in IST
+            ist = pytz.timezone('Asia/Kolkata')
+            if df['timestamp'].dt.tz is None:
+                # If no timezone info, assume UTC and convert to IST
+                df['timestamp'] = df['timestamp'].dt.tz_localize('UTC').dt.tz_convert(ist)
+            elif df['timestamp'].dt.tz != ist:
+                # If different timezone, convert to IST
+                df['timestamp'] = df['timestamp'].dt.tz_convert(ist)
+            
             df = df.set_index('timestamp')
             
             # Resample to OHLC format
