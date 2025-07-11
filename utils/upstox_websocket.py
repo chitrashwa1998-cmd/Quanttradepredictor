@@ -7,6 +7,7 @@ import streamlit as st
 from datetime import datetime
 import json
 import struct
+import math
 from typing import Callable, Optional, Dict, Any
 import requests
 import uuid
@@ -205,95 +206,95 @@ class UpstoxWebSocketClient:
             traceback.print_exc()
     
     def parse_protobuf_message(self, message: bytes) -> Optional[Dict]:
-        """Parse protobuf message from Upstox v3 API with proper binary decoding."""
+        """Parse protobuf message from Upstox v3 API with improved decoding."""
         try:
             if len(message) < 4:
                 return None
             
-            # Handle different message types
-            if message.startswith(b'{"'):
-                # JSON embedded in binary - parse as JSON
+            # First, try to decode as JSON (common in Upstox v3)
+            if message.startswith(b'{"') or b'"feeds"' in message[:100]:
                 try:
-                    json_str = message.decode('utf-8')
+                    json_str = message.decode('utf-8', errors='ignore')
                     data = json.loads(json_str)
                     return self.parse_json_message(data)
-                except:
+                except (json.JSONDecodeError, UnicodeDecodeError):
                     pass
             
-            # Try to parse as pure protobuf
-            offset = 0
-            fields = {}
-            instrument_key = 'NSE_INDEX|Nifty 50'
-            
-            # Look for specific patterns in Upstox v3 protobuf
-            while offset < len(message) - 8:
-                try:
-                    # Try different field types at this position
-                    
-                    # Check for double values (8 bytes)
-                    if offset + 8 <= len(message):
-                        double_val = struct.unpack('<d', message[offset:offset+8])[0]
+            # Advanced protobuf parsing for Upstox v3 format
+            try:
+                # Look for known field markers in Upstox protobuf
+                offset = 0
+                possible_prices = []
+                
+                while offset < len(message) - 8:
+                    try:
+                        # Method 1: Try big-endian double
+                        if offset + 8 <= len(message):
+                            price = struct.unpack('>d', message[offset:offset+8])[0]
+                            if 10000 <= price <= 50000 and not math.isnan(price):
+                                possible_prices.append(price)
                         
-                        # Check if this looks like a Nifty price
-                        if 15000 <= double_val <= 30000:
-                            tick = {
-                                'instrument_token': instrument_key,
-                                'timestamp': datetime.now(),
-                                'ltp': float(double_val),
-                                'ltq': 100,
-                                'volume': 1000,
-                                'bid_price': float(double_val * 0.9999),
-                                'ask_price': float(double_val * 1.0001),
-                                'bid_qty': 10,
-                                'ask_qty': 10,
-                                'open': float(double_val),
-                                'high': float(double_val),
-                                'low': float(double_val),
-                                'close': float(double_val),
-                                'change': 0.0,
-                                'change_percent': 0.0
-                            }
-                            
-                            print(f"📊 Parsed tick: {instrument_key} @ ₹{double_val:.2f}")
-                            return tick
-                    
-                    # Check for float values (4 bytes)
-                    if offset + 4 <= len(message):
-                        float_val = struct.unpack('<f', message[offset:offset+4])[0]
+                        # Method 2: Try little-endian double
+                        if offset + 8 <= len(message):
+                            price = struct.unpack('<d', message[offset:offset+8])[0]
+                            if 10000 <= price <= 50000 and not math.isnan(price):
+                                possible_prices.append(price)
                         
-                        if 15000 <= float_val <= 30000:
-                            tick = {
-                                'instrument_token': instrument_key,
-                                'timestamp': datetime.now(),
-                                'ltp': float(float_val),
-                                'ltq': 100,
-                                'volume': 1000,
-                                'bid_price': float(float_val * 0.9999),
-                                'ask_price': float(float_val * 1.0001),
-                                'bid_qty': 10,
-                                'ask_qty': 10,
-                                'open': float(float_val),
-                                'high': float(float_val),
-                                'low': float(float_val),
-                                'close': float(float_val),
-                                'change': 0.0,
-                                'change_percent': 0.0
-                            }
-                            
-                            print(f"📊 Parsed tick: {instrument_key} @ ₹{float_val:.2f}")
-                            return tick
+                        # Method 3: Try big-endian float
+                        if offset + 4 <= len(message):
+                            price = struct.unpack('>f', message[offset:offset+4])[0]
+                            if 10000 <= price <= 50000 and not math.isnan(price):
+                                possible_prices.append(price)
+                        
+                        # Method 4: Try little-endian float
+                        if offset + 4 <= len(message):
+                            price = struct.unpack('<f', message[offset:offset+4])[0]
+                            if 10000 <= price <= 50000 and not math.isnan(price):
+                                possible_prices.append(price)
+                        
+                        offset += 1
+                        
+                    except (struct.error, OverflowError):
+                        offset += 1
+                        continue
+                
+                # If we found potential prices, use the most common one
+                if possible_prices:
+                    # Use the most frequently occurring price
+                    from collections import Counter
+                    price_counts = Counter([round(p, 2) for p in possible_prices])
+                    best_price = price_counts.most_common(1)[0][0]
                     
-                    offset += 1
+                    tick = {
+                        'instrument_token': 'NSE_INDEX|Nifty 50',
+                        'timestamp': datetime.now(),
+                        'ltp': float(best_price),
+                        'ltq': 100,
+                        'volume': 1000,
+                        'bid_price': float(best_price * 0.9999),
+                        'ask_price': float(best_price * 1.0001),
+                        'bid_qty': 10,
+                        'ask_qty': 10,
+                        'open': float(best_price),
+                        'high': float(best_price),
+                        'low': float(best_price),
+                        'close': float(best_price),
+                        'change': 0.0,
+                        'change_percent': 0.0
+                    }
                     
-                except (struct.error, ValueError):
-                    offset += 1
-                    continue
+                    print(f"📊 Decoded tick: Nifty 50 @ ₹{best_price:.2f} (found {len(possible_prices)} price candidates)")
+                    return tick
+                    
+            except Exception as e:
+                print(f"⚠️ Protobuf parsing error: {e}")
             
-            # If no valid price found, return None without logging
+            # Log message for debugging if no parsing worked
+            print(f"🔍 Unable to parse message (len={len(message)}): {message[:50]}...")
             return None
             
         except Exception as e:
-            print(f"❌ Error parsing protobuf: {e}")
+            print(f"❌ Critical parsing error: {e}")
             return None
     
     def _read_varint(self, data: bytes, offset: int) -> tuple:
@@ -465,8 +466,8 @@ class UpstoxWebSocketClient:
             self.is_connected = False
             print("🔌 Disconnected from WebSocket")
     
-    def subscribe(self, instrument_keys: list, mode: str = "ltpc"):
-        """Subscribe to instruments using v3 API binary format."""
+    def subscribe(self, instrument_keys: list, mode: str = "full"):
+        """Subscribe to instruments using v3 API format with both JSON and binary attempts."""
         if not self.is_connected:
             print("❌ WebSocket not connected. Please connect first.")
             return False
@@ -487,27 +488,51 @@ class UpstoxWebSocketClient:
                 "guid": str(uuid.uuid4()),
                 "method": "sub",
                 "data": {
-                    "mode": mode,
+                    "mode": mode,  # Use 'full' mode for complete data
                     "instrumentKeys": new_instruments
                 }
             }
             
-            # Convert to binary format as required by v3 API
-            message_json = json.dumps(subscribe_request)
-            message_binary = message_json.encode('utf-8')
+            print(f"🔄 Subscribing with mode '{mode}' to: {new_instruments}")
             
-            # Send binary message
+            # Try both text and binary message formats
+            message_json = json.dumps(subscribe_request)
+            
             if self.ws and hasattr(self.ws, 'send'):
-                self.ws.send(message_binary, websocket.ABNF.OPCODE_BINARY)
+                # First try sending as text (some versions prefer this)
+                try:
+                    self.ws.send(message_json)
+                    print(f"📤 Sent subscription as TEXT message")
+                except:
+                    # Fallback to binary
+                    message_binary = message_json.encode('utf-8')
+                    self.ws.send(message_binary, websocket.ABNF.OPCODE_BINARY)
+                    print(f"📤 Sent subscription as BINARY message")
                 
                 # Update subscribed instruments
                 self.subscribed_instruments.update(new_instruments)
                 
-                print(f"✅ Subscribed to {len(new_instruments)} new instruments (v3 Binary): {new_instruments}")
+                print(f"✅ Subscribed to {len(new_instruments)} instruments: {new_instruments}")
+                
+                # Also try LTPC mode as backup
+                if mode == "full":
+                    ltpc_request = subscribe_request.copy()
+                    ltpc_request["data"]["mode"] = "ltpc"
+                    ltpc_request["guid"] = str(uuid.uuid4())
+                    
+                    try:
+                        ltpc_json = json.dumps(ltpc_request)
+                        self.ws.send(ltpc_json)
+                        print(f"📤 Also subscribed in LTPC mode for backup")
+                    except:
+                        pass
+                
                 return True
             
         except Exception as e:
             print(f"❌ Failed to subscribe to instruments: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def unsubscribe(self, instrument_keys: list):

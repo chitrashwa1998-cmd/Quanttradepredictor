@@ -183,3 +183,62 @@ class LiveDataManager:
             'total_ohlc_rows': sum(len(df) for df in self.ohlc_data.values()),
             'instruments_seeded': list(self.ohlc_data.keys())
         }
+    
+    def start_simulated_data(self, instruments: List[str]):
+        """Start generating simulated tick data for testing when live data is not available."""
+        import threading
+        import random
+        
+        def generate_simulated_ticks():
+            """Generate realistic simulated tick data."""
+            base_prices = {
+                'NSE_INDEX|Nifty 50': 24000.0,
+                'NSE_INDEX|Nifty Bank': 51000.0,
+                'NSE_EQ|INE002A01018': 2800.0,  # Reliance
+                'NSE_EQ|INE467B01029': 4200.0   # TCS
+            }
+            
+            current_prices = base_prices.copy()
+            
+            while self.connection_status == "connected":
+                try:
+                    for instrument in instruments:
+                        if instrument in current_prices:
+                            # Generate realistic price movement
+                            change_pct = random.uniform(-0.002, 0.002)  # ±0.2% change
+                            current_prices[instrument] *= (1 + change_pct)
+                            
+                            # Create simulated tick
+                            tick = {
+                                'instrument_token': instrument,
+                                'timestamp': datetime.now(),
+                                'ltp': current_prices[instrument],
+                                'ltq': random.randint(50, 200),
+                                'volume': random.randint(1000, 10000),
+                                'bid_price': current_prices[instrument] * 0.9999,
+                                'ask_price': current_prices[instrument] * 1.0001,
+                                'bid_qty': random.randint(10, 100),
+                                'ask_qty': random.randint(10, 100),
+                                'open': current_prices[instrument],
+                                'high': current_prices[instrument],
+                                'low': current_prices[instrument],
+                                'close': current_prices[instrument],
+                                'change': change_pct * 100,
+                                'change_percent': change_pct * 100
+                            }
+                            
+                            # Process the simulated tick
+                            self.on_tick_received(tick)
+                            
+                            print(f"🤖 Simulated tick: {instrument.split('|')[-1]} @ ₹{current_prices[instrument]:.2f}")
+                    
+                    time.sleep(2)  # Generate tick every 2 seconds
+                    
+                except Exception as e:
+                    print(f"❌ Simulated data error: {e}")
+                    time.sleep(5)
+        
+        # Start simulation in background thread
+        self.simulation_thread = threading.Thread(target=generate_simulated_ticks, daemon=True)
+        self.simulation_thread.start()
+        print("🤖 Started simulated tick data generation")
