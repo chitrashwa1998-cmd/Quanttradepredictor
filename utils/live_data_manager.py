@@ -30,6 +30,9 @@ class LiveDataManager:
         self.connection_status = "disconnected"
         self.last_update_time = None
         self.total_ticks_received = 0
+        
+        # Continuation tracking
+        self.seeded_instruments = {}  # Track which instruments were seeded from database
 
     def on_tick_received(self, tick_data: Dict):
         """Handle incoming tick data."""
@@ -100,7 +103,7 @@ class LiveDataManager:
                 # Rename columns to match existing format
                 new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
 
-                # Combine with existing live data
+                # Combine with existing data (could be seeded from database or previous live data)
                 if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
                     existing_ohlc = self.ohlc_data[instrument_key]
 
@@ -113,12 +116,19 @@ class LiveDataManager:
                     # Sort by timestamp
                     combined_ohlc = combined_ohlc.sort_index()
 
-                    # Keep last 100 rows maximum for live data
-                    if len(combined_ohlc) > 100:
-                        combined_ohlc = combined_ohlc.tail(100)
+                    # For seeded instruments, keep more data (up to 300 rows)
+                    # For fresh instruments, keep standard limit (100 rows)
+                    max_rows = 300 if instrument_key in self.seeded_instruments else 100
+                    if len(combined_ohlc) > max_rows:
+                        combined_ohlc = combined_ohlc.tail(max_rows)
 
                     self.ohlc_data[instrument_key] = combined_ohlc
-                    print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
+                    
+                    # Show continuation status
+                    if instrument_key in self.seeded_instruments:
+                        print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows (continuation active)")
+                    else:
+                        print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
                 else:
                     # First time - store new data
                     self.ohlc_data[instrument_key] = new_ohlc
@@ -137,7 +147,12 @@ class LiveDataManager:
         self.connection_status = "disconnected"
 
     def subscribe_instruments(self, instrument_keys: List[str], mode: str = "full") -> bool:
-        """Subscribe to instruments for live data."""
+        """Subscribe to instruments for live data with automatic database seeding."""
+        # First, try to seed each instrument from database
+        for instrument_key in instrument_keys:
+            self.seed_live_data_from_database(instrument_key)
+        
+        # Then subscribe for live updates
         return self.ws_client.subscribe(instrument_keys, mode)
 
     def unsubscribe_instruments(self, instrument_keys: List[str]) -> bool:
@@ -187,12 +202,71 @@ class LiveDataManager:
 
 
 
+    def seed_live_data_from_database(self, instrument_key: str) -> bool:
+        """Seed live OHLC data from database for continuation."""
+        try:
+            from utils.database_adapter import DatabaseAdapter
+            
+            # Convert instrument key to database dataset name
+            dataset_name = f"live_{instrument_key.replace('|', '_')}"
+            
+            db = DatabaseAdapter()
+            historical_data = db.load_ohlc_data(dataset_name)
+            
+            if historical_data is not None and len(historical_data) > 0:
+                # Use the most recent data (last 250 rows for performance)
+                seed_data = historical_data.tail(250).copy()
+                
+                # Ensure the data has the correct column names
+                if all(col in seed_data.columns for col in ['Open', 'High', 'Low', 'Close', 'Volume']):
+                    # Store as foundation for live data
+                    self.ohlc_data[instrument_key] = seed_data
+                    self.seeded_instruments[instrument_key] = {
+                        'seed_count': len(seed_data),
+                        'seed_date_range': f"{seed_data.index.min()} to {seed_data.index.max()}",
+                        'seeded_at': pd.Timestamp.now()
+                    }
+                    
+                    print(f"📊 Seeded {instrument_key} with {len(seed_data)} historical OHLC rows")
+                    print(f"📈 Live OHLC for {instrument_key}: {len(seed_data)} total rows (seeded from database)")
+                    return True
+                else:
+                    print(f"⚠️ Database data for {dataset_name} missing required columns")
+                    return False
+            else:
+                print(f"📊 No historical data found for {dataset_name}, starting fresh")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error seeding data for {instrument_key}: {str(e)}")
+            return False
+
     def get_seeding_status(self) -> Dict:
         """Get information about live data status."""
+        total_seeded = sum(info['seed_count'] for info in self.seeded_instruments.values())
         return {
-            'is_seeded': False,
-            'seed_count': 0,
+            'is_seeded': len(self.seeded_instruments) > 0,
+            'seed_count': total_seeded,
             'live_data_available': len(self.ohlc_data) > 0,
             'total_ohlc_rows': sum(len(df) for df in self.ohlc_data.values()),
-            'instruments_seeded': list(self.ohlc_data.keys())
+            'instruments_seeded': list(self.seeded_instruments.keys()),
+            'seeding_details': self.seeded_instruments
         }
+    
+    @staticmethod
+    def get_continuation_dataset_name(instrument_key: str) -> str:
+        """Get the dataset name needed for continuation for a given instrument."""
+        return f"live_{instrument_key.replace('|', '_')}"
+    
+    @staticmethod
+    def get_continuation_info() -> Dict[str, str]:
+        """Get continuation dataset names for common instruments."""
+        common_instruments = {
+            "NSE_INDEX|Nifty 50": "live_NSE_INDEX_Nifty_50",
+            "NSE_INDEX|Nifty Bank": "live_NSE_INDEX_Nifty_Bank", 
+            "NSE_EQ|INE002A01018": "live_NSE_EQ_INE002A01018",  # Reliance
+            "NSE_EQ|INE467B01029": "live_NSE_EQ_INE467B01029",  # TCS
+            "NSE_EQ|INE040A01034": "live_NSE_EQ_INE040A01034",  # HDFC Bank
+            "NSE_EQ|INE009A01021": "live_NSE_EQ_INE009A01021"   # Infosys
+        }
+        return common_instruments

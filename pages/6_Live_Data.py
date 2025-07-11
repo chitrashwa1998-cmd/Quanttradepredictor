@@ -313,6 +313,26 @@ def show_live_data_page():
         • Active API subscription for historical data
         """)
 
+        # Continuation feature information
+        st.success("""
+        **🌱 Live Data Continuation Feature:**
+        
+        **How it works:**
+        • Upload your historical data with name pattern: `live_NSE_INDEX_Nifty_50`
+        • When live data starts, it automatically loads your historical data as foundation
+        • Live ticks continue building OHLC from that point forward
+        • Result: 250+ rows for predictions from day 1 instead of starting with 0
+        
+        **To enable continuation:**
+        1. Go to **Data Upload** page
+        2. Upload your historical data  
+        3. Save it with name: `live_NSE_INDEX_Nifty_50` (for Nifty 50)
+        4. Return here and connect live data
+        5. System will automatically detect and use your historical data
+        
+        **Naming pattern:** `live_[INSTRUMENT_KEY_WITH_UNDERSCORES]`
+        """)
+
     # Continue with live data configuration
 
     # Connection controls for live data
@@ -392,6 +412,23 @@ def show_live_data_page():
 
         with col5:
             st.metric("Live Predictions", pipeline_status['instruments_with_predictions'])
+
+        # Show continuation status if available
+        if st.session_state.live_data_manager:
+            seeding_status = st.session_state.live_data_manager.get_seeding_status()
+            
+            if seeding_status['is_seeded']:
+                st.success(f"🌱 **Continuation Active:** {seeding_status['seed_count']} historical rows loaded from database")
+                
+                with st.expander("📊 Continuation Details"):
+                    for instrument, details in seeding_status['seeding_details'].items():
+                        display_name = instrument.split('|')[-1] if '|' in instrument else instrument
+                        st.write(f"**{display_name}:**")
+                        st.write(f"• Seeded rows: {details['seed_count']}")
+                        st.write(f"• Date range: {details['seed_date_range']}")
+                        st.write(f"• Seeded at: {details['seeded_at'].strftime('%H:%M:%S')}")
+            else:
+                st.info("📊 **Fresh Start:** No historical data found - building OHLC from live ticks only")
 
     # Live data display
     if st.session_state.is_live_connected and st.session_state.live_data_manager:

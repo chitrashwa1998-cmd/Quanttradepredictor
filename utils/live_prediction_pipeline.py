@@ -42,7 +42,7 @@ class LivePredictionPipeline:
             # Check which models are trained
             available_models = []
             model_names = ['direction', 'volatility', 'profit_probability', 'reversal']
-            
+
             for model_name in model_names:
                 if self.model_manager.is_model_trained(model_name):
                     available_models.append(model_name)
@@ -130,14 +130,20 @@ class LivePredictionPipeline:
     def _process_instrument_predictions(self, instrument_key: str):
         """Process predictions for a specific instrument using all available models."""
         try:
-            # Get live OHLC data
+            instrument_display = instrument_key  # Set default display name
+
+            # Check if we have enough OHLC data for predictions
             ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=200)
 
             if ohlc_data is None or len(ohlc_data) < self.min_ohlc_rows:
-                if ohlc_data is not None:
-                    print(f"📊 Building OHLC data for {instrument_key}: {len(ohlc_data)}/{self.min_ohlc_rows} rows needed")
+                current_rows = len(ohlc_data) if ohlc_data is not None else 0
+
+                # Show continuation status
+                seeding_status = self.live_data_manager.get_seeding_status()
+                if instrument_key in seeding_status.get('instruments_seeded', []):
+                    print(f"📊 Building OHLC data for {instrument_display}: {current_rows}/{self.min_ohlc_rows} rows (continuation active)")
                 else:
-                    print(f"📊 No OHLC data available for {instrument_key}")
+                    print(f"📊 Building OHLC data for {instrument_display}: {current_rows}/{self.min_ohlc_rows} rows needed")
                 return
 
             # Generate predictions from all available models
@@ -255,14 +261,14 @@ class LivePredictionPipeline:
             from features.custom_engineered import compute_custom_volatility_features
             from features.lagged_features import add_volatility_lagged_features
             from features.time_context_features import add_time_context_features
-            
+
             # Calculate comprehensive volatility features
             df_with_features = ohlc_data.copy()
             df_with_features = TechnicalIndicators.calculate_volatility_indicators(df_with_features)
             df_with_features = compute_custom_volatility_features(df_with_features)
             df_with_features = add_volatility_lagged_features(df_with_features)
             df_with_features = add_time_context_features(df_with_features)
-            
+
             # Use volatility model's prepare_features method
             features = self.model_manager.models['volatility'].prepare_features(df_with_features)
             return features
@@ -274,7 +280,7 @@ class LivePredictionPipeline:
         """Calculate profit probability features from OHLC data."""
         try:
             from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
-            
+
             # Calculate profit probability features using the model's prepare_features method
             features = self.model_manager.models['profit_probability'].prepare_features(ohlc_data)
             return features
@@ -351,7 +357,7 @@ class LivePredictionPipeline:
         # Check status of all models
         model_status = {}
         model_names = ['direction', 'volatility', 'profit_probability', 'reversal']
-        
+
         for model_name in model_names:
             model_status[f'{model_name}_ready'] = self.model_manager.is_model_trained(model_name)
 
@@ -394,7 +400,7 @@ class LivePredictionPipeline:
                                for p in history if 'direction' in p or 'direction' in str(p)]
             bullish_count = recent_directions.count('Bullish')
             bearish_count = recent_directions.count('Bearish')
-            
+
             stats['direction_stats'] = {
                 'bullish_signals': bullish_count,
                 'bearish_signals': bearish_count,
