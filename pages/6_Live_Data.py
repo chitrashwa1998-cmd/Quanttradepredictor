@@ -733,26 +733,60 @@ def show_live_data_page():
                     if st.button("💾 Save to Database"):
                         if export_instrument:
                             try:
-                                # Get the complete OHLC data (seeded + live combined)
                                 live_manager = st.session_state.live_data_manager
+                                db = DatabaseAdapter()
+                                dataset_name = "livenifty50"
                                 
-                                # Get the full dataset from the live manager's internal storage
+                                # Get current OHLC data from live manager
                                 if export_instrument in live_manager.ohlc_data:
-                                    complete_ohlc_data = live_manager.ohlc_data[export_instrument]
+                                    current_ohlc_data = live_manager.ohlc_data[export_instrument]
                                     
-                                    if complete_ohlc_data is not None and len(complete_ohlc_data) > 0:
-                                        # Save complete dataset (seeded + live) to database
-                                        db = DatabaseAdapter()
-                                        dataset_name = "livenifty50"
+                                    if current_ohlc_data is not None and len(current_ohlc_data) > 0:
+                                        # Load existing data from database
+                                        existing_data = db.load_ohlc_data(dataset_name)
+                                        seeding_status = live_manager.get_seeding_status()
                                         
-                                        if db.save_ohlc_data(complete_ohlc_data, dataset_name):
-                                            seeding_status = live_manager.get_seeding_status()
-                                            if export_instrument in seeding_status['instruments_seeded']:
-                                                st.success(f"✅ Saved complete dataset ({len(complete_ohlc_data)} rows) to database as '{dataset_name}' (includes seeded + live data)")
+                                        # Determine what data is NEW (live-generated only)
+                                        if export_instrument in seeding_status['instruments_seeded']:
+                                            # For seeded instruments, extract only the live-generated data
+                                            seed_count = seeding_status['seeding_details'][export_instrument]['seed_count']
+                                            
+                                            if len(current_ohlc_data) > seed_count:
+                                                # Only the rows beyond seed_count are new live data
+                                                new_live_data = current_ohlc_data.iloc[seed_count:].copy()
+                                                st.info(f"📊 Identified {len(new_live_data)} new live rows (excluding {seed_count} seeded rows)")
                                             else:
-                                                st.success(f"✅ Saved live data ({len(complete_ohlc_data)} rows) to database as '{dataset_name}'")
+                                                st.warning("No new live data generated beyond seeded data")
+                                                new_live_data = pd.DataFrame()
                                         else:
-                                            st.error("❌ Failed to save data to database")
+                                            # For non-seeded instruments, all data is new
+                                            new_live_data = current_ohlc_data.copy()
+                                            st.info(f"📊 All {len(new_live_data)} rows are new live data")
+                                        
+                                        # Perform append operation
+                                        if len(new_live_data) > 0:
+                                            if existing_data is not None and len(existing_data) > 0:
+                                                # Append new data to existing data
+                                                combined_data = pd.concat([existing_data, new_live_data])
+                                                
+                                                # Remove duplicates by timestamp (keep last)
+                                                combined_data = combined_data[~combined_data.index.duplicated(keep='last')]
+                                                combined_data = combined_data.sort_index()
+                                                
+                                                # Save combined data
+                                                if db.save_ohlc_data(combined_data, dataset_name):
+                                                    st.success(f"✅ Appended {len(new_live_data)} new rows to existing {len(existing_data)} rows")
+                                                    st.success(f"📈 Total dataset now contains {len(combined_data)} rows in '{dataset_name}'")
+                                                else:
+                                                    st.error("❌ Failed to save appended data to database")
+                                            else:
+                                                # No existing data, save new data as first dataset
+                                                if db.save_ohlc_data(new_live_data, dataset_name):
+                                                    st.success(f"✅ Created new dataset '{dataset_name}' with {len(new_live_data)} live rows")
+                                                else:
+                                                    st.error("❌ Failed to save new data to database")
+                                        else:
+                                            st.warning("⚠️ No new live data to append")
                                     else:
                                         st.warning("No data available to save")
                                 else:

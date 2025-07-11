@@ -326,6 +326,25 @@ class LiveDataManager:
             'instruments_seeded': list(self.seeded_instruments.keys()),
             'seeding_details': self.seeded_instruments
         }
+
+    def get_new_live_data_only(self, instrument_key: str) -> Optional[pd.DataFrame]:
+        """Get only the new live-generated data (excluding seeded data) for an instrument."""
+        if instrument_key not in self.ohlc_data:
+            return None
+            
+        current_data = self.ohlc_data[instrument_key]
+        
+        if instrument_key in self.seeded_instruments:
+            # For seeded instruments, return only data beyond the seed count
+            seed_count = self.seeded_instruments[instrument_key]['seed_count']
+            if len(current_data) > seed_count:
+                return current_data.iloc[seed_count:].copy()
+            else:
+                # No new data generated yet
+                return pd.DataFrame()
+        else:
+            # For non-seeded instruments, all data is new
+            return current_data.copy() if current_data is not None else None
     
     @staticmethod
     def get_continuation_dataset_name(instrument_key: str) -> str:
