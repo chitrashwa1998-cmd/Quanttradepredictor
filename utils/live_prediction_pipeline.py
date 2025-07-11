@@ -152,8 +152,8 @@ class LivePredictionPipeline:
                 # Calculate when this candle period should end
                 candle_end_time = latest_candle_timestamp + pd.Timedelta(minutes=5)
                 
-                # Only process if the candle period has ended (with 1 minute buffer for live data)
-                if current_time >= candle_end_time - pd.Timedelta(minutes=1):
+                # Only process if the candle period has ended (with 2 second buffer for live data)
+                if current_time >= candle_end_time - pd.Timedelta(seconds=2):
                     self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
                     print(f"🕐 New 5-minute candle completed for {instrument_key} at {latest_candle_timestamp}")
                     return True
