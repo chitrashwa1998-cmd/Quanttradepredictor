@@ -92,59 +92,115 @@ class LiveDataManager:
 
             df = df.set_index('timestamp')
 
-            # Resample to OHLC format
-            new_ohlc = df['ltp'].resample(timeframe).ohlc()
-            new_ohlc['volume'] = df['volume'].resample(timeframe).sum()
-
-            # Remove NaN values
-            new_ohlc = new_ohlc.dropna()
-
-            if len(new_ohlc) > 0:
-                # Rename columns to match existing format
-                new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-
-                # Combine with existing data (could be seeded from database or previous live data)
-                if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
-                    existing_ohlc = self.ohlc_data[instrument_key].copy()
-
-                    # Only add new OHLC rows that don't already exist
-                    # Check if any of the new timestamps are actually new
-                    new_timestamps = set(new_ohlc.index)
-                    existing_timestamps = set(existing_ohlc.index)
-                    truly_new_timestamps = new_timestamps - existing_timestamps
-
-                    if truly_new_timestamps:
-                        # Only add truly new data
-                        new_data_to_add = new_ohlc.loc[list(truly_new_timestamps)]
-                        combined_ohlc = pd.concat([existing_ohlc, new_data_to_add])
+            # Get existing data first
+            existing_ohlc = self.ohlc_data.get(instrument_key, pd.DataFrame())
+            
+            # If we have seeded data, use a different approach
+            if instrument_key in self.seeded_instruments and len(existing_ohlc) > 0:
+                # For seeded instruments, create live candles based on current time
+                current_time = df.index[-1]  # Latest tick time
+                
+                # Round down to nearest 5-minute interval
+                current_candle_time = current_time.floor('5T')
+                
+                # Check if we already have a candle for this time period
+                if current_candle_time in existing_ohlc.index:
+                    # Update existing candle with new tick data
+                    existing_row = existing_ohlc.loc[current_candle_time]
+                    
+                    # Get all ticks for this time period
+                    period_ticks = df[df.index >= current_candle_time]
+                    if len(period_ticks) > 0:
+                        # Update the existing candle
+                        updated_high = max(existing_row['High'], period_ticks['ltp'].max())
+                        updated_low = min(existing_row['Low'], period_ticks['ltp'].min())
+                        updated_close = period_ticks['ltp'].iloc[-1]  # Latest price
+                        updated_volume = existing_row['Volume'] + period_ticks['volume'].sum()
                         
-                        # Sort by timestamp
+                        # Update the candle
+                        existing_ohlc.loc[current_candle_time] = {
+                            'Open': existing_row['Open'],
+                            'High': updated_high,
+                            'Low': updated_low,
+                            'Close': updated_close,
+                            'Volume': updated_volume
+                        }
+                        
+                        self.ohlc_data[instrument_key] = existing_ohlc
+                        
+                        seed_count = self.seeded_instruments[instrument_key]['seed_count']
+                        live_count = len(existing_ohlc) - seed_count
+                        print(f"📈 Updated OHLC for {instrument_key}: {len(existing_ohlc)} total rows ({seed_count} seeded + {live_count} live) - continuation active")
+                else:
+                    # Create new candle for this time period
+                    period_ticks = df[df.index >= current_candle_time]
+                    if len(period_ticks) > 0:
+                        new_candle = pd.DataFrame({
+                            'Open': [period_ticks['ltp'].iloc[0]],
+                            'High': [period_ticks['ltp'].max()],
+                            'Low': [period_ticks['ltp'].min()],
+                            'Close': [period_ticks['ltp'].iloc[-1]],
+                            'Volume': [period_ticks['volume'].sum()]
+                        }, index=[current_candle_time])
+                        
+                        # Append to existing data
+                        combined_ohlc = pd.concat([existing_ohlc, new_candle])
                         combined_ohlc = combined_ohlc.sort_index()
-
-                        # For seeded instruments, keep more data (up to 300 rows)
-                        # For fresh instruments, keep standard limit (100 rows)
+                        
+                        # Keep reasonable limits
                         max_rows = 300 if instrument_key in self.seeded_instruments else 100
                         if len(combined_ohlc) > max_rows:
                             combined_ohlc = combined_ohlc.tail(max_rows)
-
+                            # Update seed count if we trimmed seeded data
+                            if instrument_key in self.seeded_instruments:
+                                original_seed_count = self.seeded_instruments[instrument_key]['seed_count']
+                                remaining_seed_count = max(0, max_rows - 1)  # -1 for the new candle
+                                self.seeded_instruments[instrument_key]['seed_count'] = min(original_seed_count, remaining_seed_count)
+                        
                         self.ohlc_data[instrument_key] = combined_ohlc
                         
-                        # Show continuation status with proper counts
-                        if instrument_key in self.seeded_instruments:
-                            seed_count = self.seeded_instruments[instrument_key]['seed_count']
-                            live_count = len(combined_ohlc) - seed_count
-                            print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows ({seed_count} seeded + {live_count} live) - continuation active")
-                        else:
+                        seed_count = self.seeded_instruments[instrument_key]['seed_count']
+                        live_count = len(combined_ohlc) - seed_count
+                        print(f"📈 NEW CANDLE for {instrument_key}: {len(combined_ohlc)} total rows ({seed_count} seeded + {live_count} live) - continuation active")
+                
+            else:
+                # Standard resampling for non-seeded instruments
+                new_ohlc = df['ltp'].resample(timeframe).ohlc()
+                new_ohlc['volume'] = df['volume'].resample(timeframe).sum()
+
+                # Remove NaN values
+                new_ohlc = new_ohlc.dropna()
+
+                if len(new_ohlc) > 0:
+                    # Rename columns to match existing format
+                    new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+
+                    # Combine with existing data
+                    if len(existing_ohlc) > 0:
+                        # Only add new OHLC rows that don't already exist
+                        new_timestamps = set(new_ohlc.index)
+                        existing_timestamps = set(existing_ohlc.index)
+                        truly_new_timestamps = new_timestamps - existing_timestamps
+
+                        if truly_new_timestamps:
+                            # Only add truly new data
+                            new_data_to_add = new_ohlc.loc[list(truly_new_timestamps)]
+                            combined_ohlc = pd.concat([existing_ohlc, new_data_to_add])
+                            
+                            # Sort by timestamp
+                            combined_ohlc = combined_ohlc.sort_index()
+
+                            # Keep standard limit
+                            max_rows = 100
+                            if len(combined_ohlc) > max_rows:
+                                combined_ohlc = combined_ohlc.tail(max_rows)
+
+                            self.ohlc_data[instrument_key] = combined_ohlc
                             print(f"📈 Live OHLC for {instrument_key}: {len(combined_ohlc)} total rows")
                     else:
-                        # No new data, just update the display count
-                        if instrument_key in self.seeded_instruments:
-                            seed_count = self.seeded_instruments[instrument_key]['seed_count']
-                            print(f"📈 Live OHLC for {instrument_key}: {len(existing_ohlc)} total rows ({seed_count} seeded) - continuation active")
-                else:
-                    # First time - store new data only if we don't have seeded data
-                    self.ohlc_data[instrument_key] = new_ohlc
-                    print(f"📈 Initial OHLC for {instrument_key}: {len(new_ohlc)} rows")
+                        # First time - store new data
+                        self.ohlc_data[instrument_key] = new_ohlc
+                        print(f"📈 Initial OHLC for {instrument_key}: {len(new_ohlc)} rows")
 
         except Exception as e:
             print(f"Error updating OHLC data: {e}")
