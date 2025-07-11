@@ -253,7 +253,6 @@ def show_live_data_page():
                                     # Option to save to database
                                     if st.button("💾 Save to Database"):
                                         try:
-                                            from utils.database_adapter import DatabaseAdapter
                                             db = DatabaseAdapter()
                                             dataset_name = f"upstox_{display_name.replace(' ', '_').lower()}_{interval_options[selected_interval]}"
 
