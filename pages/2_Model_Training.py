@@ -30,7 +30,7 @@ with col2:
                             help="Maximum depth of decision trees")
 
 with col3:
-    n_estimators = st.selectbox("Number of Estimators", [50, 100, 150, 200, 250, 300], index=1,
+    n_estimators = st.selectbox("Number of Estimators", [50, 100, 150, 200, 250, 300, 350, 400, 450, 500], index=1,
                                help="Number of trees in the ensemble")
 
 col1, col2 = st.columns(2)
