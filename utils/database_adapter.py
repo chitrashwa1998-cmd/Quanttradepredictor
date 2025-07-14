@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any
 class DatabaseAdapter:
     """PostgreSQL database interface with support for both blob-based and row-based storage."""
     
-    def __init__(self, use_row_based: bool = False):
+    def __init__(self, use_row_based: bool = True):
         """Initialize database adapter with PostgreSQL."""
         self.use_row_based = use_row_based
         self.db_type = "postgresql_row_based" if use_row_based else "postgresql"
