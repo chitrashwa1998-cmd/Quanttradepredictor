@@ -293,6 +293,7 @@ class LiveDataManager:
 
     def seed_live_data_from_database(self, instrument_key: str) -> bool:
         """Seed live OHLC data from database for continuation."""
+        print(f"🔍 SEEDING ATTEMPT for {instrument_key}")
         try:
             from utils.database_adapter import DatabaseAdapter
             
@@ -305,17 +306,24 @@ class LiveDataManager:
             
             # Try each possible dataset name
             for dataset_name in possible_datasets:
+                print(f"🔍 Trying dataset: {dataset_name}")
                 try:
                     historical_data = db.load_ohlc_data(dataset_name)
                     if historical_data is not None and len(historical_data) > 0:
+                        print(f"✅ Found {len(historical_data)} rows in {dataset_name}")
+                        print(f"📊 Columns: {list(historical_data.columns)}")
                         used_dataset = dataset_name
                         break
+                    else:
+                        print(f"❌ No data in {dataset_name}")
                 except Exception as e:
+                    print(f"❌ Error with {dataset_name}: {e}")
                     continue
             
             if historical_data is not None and len(historical_data) > 0:
                 # Use the most recent data (last 250 rows for performance)
                 seed_data = historical_data.tail(250).copy()
+                print(f"📊 Using last {len(seed_data)} rows for seeding")
                 
                 # Ensure the data has the correct column names
                 if all(col in seed_data.columns for col in ['Open', 'High', 'Low', 'Close', 'Volume']):
@@ -331,7 +339,7 @@ class LiveDataManager:
                     print(f"📈 Foundation set: {len(seed_data)} rows ready for live continuation")
                     return True
                 else:
-                    print(f"⚠️ Database data for {used_dataset} missing required columns")
+                    print(f"⚠️ Database data for {used_dataset} missing required columns: {list(seed_data.columns)}")
                     return False
             else:
                 print(f"📊 No historical data found in any dataset ({possible_datasets}), starting fresh")
