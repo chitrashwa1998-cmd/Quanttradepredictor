@@ -124,8 +124,9 @@ class LiveDataManager:
                         self.ohlc_data[instrument_key].loc[current_candle_time, 'Volume'] = updated_volume
                         
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
-                        live_count = len(existing_ohlc) - seed_count
-                        print(f"📈 Updated OHLC for {instrument_key}: {len(existing_ohlc)} total rows ({seed_count} seeded + {live_count} live) - continuation active")
+                        current_total = len(self.ohlc_data[instrument_key])
+                        live_count = current_total - seed_count
+                        print(f"📈 Updated OHLC for {instrument_key}: {current_total} total rows ({seed_count} seeded + {live_count} live) - continuation active")
                 else:
                     # Create new candle for this time period
                     period_ticks = df[df.index >= current_candle_time]
