@@ -417,6 +417,174 @@ class RowBasedPostgresDatabase:
                 'supports_range_queries': True
             }
     
+    def save_model_results(self, model_name: str, results: Dict[str, Any]) -> bool:
+        """Save model training results."""
+        try:
+            with self.conn.cursor() as cursor:
+                # Create table if it doesn't exist
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS model_results (
+                    model_name VARCHAR(255) PRIMARY KEY,
+                    results JSONB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+                
+                cursor.execute("""
+                INSERT INTO model_results (model_name, results, updated_at)
+                VALUES (%s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (model_name) DO UPDATE SET
+                    results = EXCLUDED.results,
+                    updated_at = CURRENT_TIMESTAMP
+                """, (model_name, json.dumps(results)))
+            return True
+        except Exception as e:
+            print(f"Failed to save model results: {str(e)}")
+            return False
+    
+    def load_model_results(self, model_name: str) -> Optional[Dict[str, Any]]:
+        """Load model training results."""
+        try:
+            with self.conn.cursor() as cursor:
+                cursor.execute("SELECT results FROM model_results WHERE model_name = %s", (model_name,))
+                result = cursor.fetchone()
+                
+                if result:
+                    return json.loads(result[0])
+                return None
+        except Exception as e:
+            print(f"Failed to load model results: {str(e)}")
+            return None
+    
+    def save_trained_models(self, models_dict: Dict[str, Any]) -> bool:
+        """Save trained model objects for persistence."""
+        try:
+            import pickle
+            serialized_models = pickle.dumps(models_dict)
+            
+            with self.conn.cursor() as cursor:
+                # Create table if it doesn't exist
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS trained_models (
+                    id SERIAL PRIMARY KEY,
+                    models_data BYTEA NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+                
+                # Clear existing models and insert new ones
+                cursor.execute("DELETE FROM trained_models")
+                cursor.execute("""
+                INSERT INTO trained_models (models_data, updated_at)
+                VALUES (%s, CURRENT_TIMESTAMP)
+                """, (serialized_models,))
+            return True
+        except Exception as e:
+            print(f"Failed to save trained models: {str(e)}")
+            return False
+    
+    def load_trained_models(self) -> Optional[Dict[str, Any]]:
+        """Load trained model objects from database."""
+        try:
+            import pickle
+            with self.conn.cursor() as cursor:
+                cursor.execute("SELECT models_data FROM trained_models ORDER BY updated_at DESC LIMIT 1")
+                result = cursor.fetchone()
+                
+                if result:
+                    return pickle.loads(result[0])
+                return None
+        except Exception as e:
+            print(f"Failed to load trained models: {str(e)}")
+            return None
+    
+    def save_predictions(self, predictions: pd.DataFrame, model_name: str) -> bool:
+        """Save model predictions."""
+        try:
+            import pickle
+            serialized_predictions = pickle.dumps(predictions)
+            
+            with self.conn.cursor() as cursor:
+                # Create table if it doesn't exist
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS predictions (
+                    model_name VARCHAR(255) PRIMARY KEY,
+                    predictions_data BYTEA NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+                
+                cursor.execute("""
+                INSERT INTO predictions (model_name, predictions_data, updated_at)
+                VALUES (%s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (model_name) DO UPDATE SET
+                    predictions_data = EXCLUDED.predictions_data,
+                    updated_at = CURRENT_TIMESTAMP
+                """, (model_name, serialized_predictions))
+            return True
+        except Exception as e:
+            print(f"Failed to save predictions: {str(e)}")
+            return False
+    
+    def load_predictions(self, model_name: str) -> Optional[pd.DataFrame]:
+        """Load model predictions."""
+        try:
+            import pickle
+            with self.conn.cursor() as cursor:
+                cursor.execute("SELECT predictions_data FROM predictions WHERE model_name = %s", (model_name,))
+                result = cursor.fetchone()
+                
+                if result:
+                    return pickle.loads(result[0])
+                return None
+        except Exception as e:
+            print(f"Failed to load predictions: {str(e)}")
+            return None
+    
+    def recover_data(self) -> Optional[pd.DataFrame]:
+        """Try to recover any available OHLC data from database."""
+        try:
+            datasets = self.get_dataset_list()
+            if datasets:
+                # Return the most recently updated dataset
+                return self.load_ohlc_data(datasets[0]['name'])
+            return None
+        except Exception as e:
+            print(f"Failed to recover data: {str(e)}")
+            return None
+    
+    def clear_all_data(self) -> bool:
+        """Clear all data from database."""
+        try:
+            with self.conn.cursor() as cursor:
+                print("Clearing predictions...")
+                cursor.execute("DROP TABLE IF EXISTS predictions CASCADE")
+                
+                print("Clearing trained models...")
+                cursor.execute("DROP TABLE IF EXISTS trained_models CASCADE")
+                
+                print("Clearing model results...")
+                cursor.execute("DROP TABLE IF EXISTS model_results CASCADE")
+                
+                print("Clearing OHLC data...")
+                cursor.execute("DROP TABLE IF EXISTS ohlc_data CASCADE")
+                
+                print("Clearing dataset metadata...")
+                cursor.execute("DROP TABLE IF EXISTS dataset_metadata CASCADE")
+                
+                # Recreate tables
+                self._create_row_based_tables()
+                
+                print("✅ Database cleared and recreated successfully")
+                return True
+                
+        except Exception as e:
+            print(f"Failed to clear database: {str(e)}")
+            return False
+
     def close(self):
         """Close database connection."""
         if hasattr(self, 'conn'):
