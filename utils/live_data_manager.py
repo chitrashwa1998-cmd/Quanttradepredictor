@@ -117,16 +117,11 @@ class LiveDataManager:
                         updated_close = period_ticks['ltp'].iloc[-1]  # Latest price
                         updated_volume = existing_row['Volume'] + period_ticks['volume'].sum()
                         
-                        # Update the candle
-                        existing_ohlc.loc[current_candle_time] = {
-                            'Open': existing_row['Open'],
-                            'High': updated_high,
-                            'Low': updated_low,
-                            'Close': updated_close,
-                            'Volume': updated_volume
-                        }
-                        
-                        self.ohlc_data[instrument_key] = existing_ohlc
+                        # Update the candle in place to preserve the full DataFrame
+                        self.ohlc_data[instrument_key].loc[current_candle_time, 'High'] = updated_high
+                        self.ohlc_data[instrument_key].loc[current_candle_time, 'Low'] = updated_low
+                        self.ohlc_data[instrument_key].loc[current_candle_time, 'Close'] = updated_close
+                        self.ohlc_data[instrument_key].loc[current_candle_time, 'Volume'] = updated_volume
                         
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
                         live_count = len(existing_ohlc) - seed_count
