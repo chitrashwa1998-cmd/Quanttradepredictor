@@ -43,7 +43,14 @@ class LiveDataManager:
             # Initialize buffer for new instrument
             if instrument_key not in self.tick_buffer:
                 self.tick_buffer[instrument_key] = deque(maxlen=self.buffer_size)
-                self.ohlc_data[instrument_key] = pd.DataFrame()
+                # Only initialize empty DataFrame if no seeded data exists
+                if instrument_key not in self.ohlc_data:
+                    # Try to seed from database first
+                    print(f"🔍 New instrument detected: {instrument_key}, attempting auto-seeding...")
+                    if not self.seed_live_data_from_database(instrument_key):
+                        # If seeding fails, create empty DataFrame
+                        self.ohlc_data[instrument_key] = pd.DataFrame()
+                        print(f"⚠️ Auto-seeding failed for {instrument_key}, starting with empty data")
 
             # Add tick to buffer
             self.tick_buffer[instrument_key].append(tick_data)
