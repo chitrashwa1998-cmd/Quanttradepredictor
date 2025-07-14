@@ -284,8 +284,18 @@ class LiveDataManager:
             # Convert instrument key to database dataset name
             dataset_name = "livenifty50"
             
-            db = DatabaseAdapter()
-            historical_data = db.load_ohlc_data(dataset_name)
+            # Use row-based storage for better performance
+            db = DatabaseAdapter(use_row_based=True)
+            
+            # Try row-based first, fallback to blob-based
+            try:
+                historical_data = db.get_latest_rows(dataset_name, 250)
+            except:
+                # Fallback to blob-based storage
+                db = DatabaseAdapter(use_row_based=False)
+                historical_data = db.load_ohlc_data(dataset_name)
+                if historical_data is not None and len(historical_data) > 250:
+                    historical_data = historical_data.tail(250)
             
             if historical_data is not None and len(historical_data) > 0:
                 # Use the most recent data (last 250 rows for performance)

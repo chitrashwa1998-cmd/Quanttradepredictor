@@ -7,21 +7,29 @@ import os
 from typing import Dict, List, Optional, Any
 
 class DatabaseAdapter:
-    """PostgreSQL-only database interface for the trading application."""
+    """PostgreSQL database interface with support for both blob-based and row-based storage."""
     
-    def __init__(self):
-        """Initialize database adapter with PostgreSQL only."""
-        self.db_type = "postgresql"
+    def __init__(self, use_row_based: bool = False):
+        """Initialize database adapter with PostgreSQL."""
+        self.use_row_based = use_row_based
+        self.db_type = "postgresql_row_based" if use_row_based else "postgresql"
         
         # Check for PostgreSQL environment variable
         if not os.getenv('DATABASE_URL'):
             raise ValueError("DATABASE_URL environment variable not set. Please create a PostgreSQL database in Replit first.")
         
         try:
-            from utils.postgres_database import PostgresTradingDatabase
-            self.db = PostgresTradingDatabase()
+            if use_row_based:
+                from utils.row_based_database import RowBasedPostgresDatabase
+                self.db = RowBasedPostgresDatabase()
+                storage_type = "Row-Based PostgreSQL"
+            else:
+                from utils.postgres_database import PostgresTradingDatabase
+                self.db = PostgresTradingDatabase()
+                storage_type = "Blob-Based PostgreSQL"
+            
             if self._test_connection():
-                print("✅ Using PostgreSQL database")
+                print(f"✅ Using {storage_type} database")
             else:
                 raise ConnectionError("Failed to connect to PostgreSQL")
         except Exception as e:
@@ -39,6 +47,39 @@ class DatabaseAdapter:
     def save_ohlc_data(self, data, dataset_name: str = "main_dataset", preserve_full_data: bool = False) -> bool:
         """Save OHLC dataframe to database."""
         return self.db.save_ohlc_data(data, dataset_name, preserve_full_data)
+    
+    def append_ohlc_data(self, new_data, dataset_name: str = "main_dataset") -> bool:
+        """Append new OHLC data to existing dataset (only available in row-based storage)."""
+        if self.use_row_based and hasattr(self.db, 'append_ohlc_data'):
+            return self.db.append_ohlc_data(new_data, dataset_name)
+        else:
+            # Fallback to save_ohlc_data for blob-based storage
+            return self.save_ohlc_data(new_data, dataset_name, preserve_full_data=True)
+    
+    def get_latest_rows(self, dataset_name: str = "main_dataset", count: int = 250):
+        """Get latest N rows (only available in row-based storage)."""
+        if self.use_row_based and hasattr(self.db, 'get_latest_rows'):
+            return self.db.get_latest_rows(dataset_name, count)
+        else:
+            # Fallback: load all data and get tail
+            data = self.load_ohlc_data(dataset_name)
+            return data.tail(count) if data is not None else None
+    
+    def load_ohlc_data_range(self, dataset_name: str = "main_dataset", start_date: str = None, end_date: str = None, limit: int = None):
+        """Load OHLC data with date range filtering (only available in row-based storage)."""
+        if self.use_row_based and hasattr(self.db, 'load_ohlc_data'):
+            return self.db.load_ohlc_data(dataset_name, limit=limit, start_date=start_date, end_date=end_date)
+        else:
+            # Fallback: load all data and filter
+            data = self.load_ohlc_data(dataset_name)
+            if data is not None and (start_date or end_date):
+                if start_date:
+                    data = data[data.index >= start_date]
+                if end_date:
+                    data = data[data.index <= end_date]
+                if limit:
+                    data = data.tail(limit)
+            return data
     
     def load_ohlc_data(self, dataset_name: str = "main_dataset"):
         """Load OHLC dataframe from database."""
