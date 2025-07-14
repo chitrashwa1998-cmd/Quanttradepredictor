@@ -38,7 +38,19 @@ trading_db = DatabaseAdapter()
 # Database overview
 st.header("📊 Database Overview")
 
-db_info = trading_db.get_database_info()
+# Force refresh database info
+try:
+    db_info = trading_db.get_database_info()
+    
+    # Debug information
+    st.write("**Debug Info:**")
+    st.write(f"Database Type: {db_info.get('database_type', 'Unknown')}")
+    st.write(f"Backend: {db_info.get('backend', 'Unknown')}")
+    st.write(f"Storage Type: {db_info.get('storage_type', 'Unknown')}")
+    
+except Exception as e:
+    st.error(f"Error getting database info: {str(e)}")
+    db_info = {'total_datasets': 0, 'datasets': []}
 
 col1, col2, col3 = st.columns(3)
 
@@ -46,7 +58,7 @@ with col1:
     st.metric("Total Datasets", db_info.get('total_datasets', 0))
 
 with col2:
-    st.metric("Total Keys", db_info.get('total_keys', 0))
+    st.metric("Total Records", db_info.get('total_records', 0))
 
 with col3:
     if st.button("🔄 Refresh", help="Refresh database information"):
@@ -55,7 +67,43 @@ with col3:
 # Datasets management
 st.header("📈 Saved Datasets")
 
-datasets = db_info.get('datasets', [])
+# Get datasets with error handling
+try:
+    datasets = db_info.get('datasets', [])
+    
+    # Also try direct database call as backup
+    if not datasets:
+        st.warning("No datasets found via database info, trying direct query...")
+        if hasattr(trading_db.db, 'get_dataset_list'):
+            datasets = trading_db.db.get_dataset_list()
+        
+except Exception as e:
+    st.error(f"Error retrieving datasets: {str(e)}")
+    datasets = []
+
+# Test if main_dataset exists directly
+if not datasets:
+    st.info("No datasets found in metadata, checking for data directly...")
+    
+    # Try to load main_dataset directly
+    test_data = trading_db.load_ohlc_data("main_dataset")
+    if test_data is not None and len(test_data) > 0:
+        st.warning(f"⚠️ Found data in 'main_dataset' ({len(test_data)} rows) but it's not showing in dataset list!")
+        st.info("This might be a metadata sync issue. The data exists but metadata is missing.")
+        
+        # Create a manual dataset entry
+        datasets = [{
+            'name': 'main_dataset',
+            'rows': len(test_data),
+            'start_date': test_data.index[0].strftime('%Y-%m-%d') if len(test_data) > 0 else None,
+            'end_date': test_data.index[-1].strftime('%Y-%m-%d') if len(test_data) > 0 else None,
+            'updated_at': 'Unknown'
+        }]
+        
+        # Try to fix metadata
+        if hasattr(trading_db.db, '_update_dataset_metadata'):
+            trading_db.db._update_dataset_metadata("main_dataset")
+            st.success("✅ Attempted to fix dataset metadata")
 
 if len(datasets) > 0:
     st.success(f"Found {len(datasets)} dataset(s) in database")
