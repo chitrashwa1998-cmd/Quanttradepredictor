@@ -37,6 +37,26 @@ trading_db = DatabaseAdapter()
 # Database overview
 st.header("📊 Database Overview")
 
+# Add data-only mode toggle
+col1, col2 = st.columns(2)
+with col1:
+    st.subheader("Your Data Only")
+    if st.button("🧹 Clean Data Mode", help="Show only your uploaded data, remove all metadata overhead"):
+        with st.spinner("Activating clean data mode..."):
+            # Get your main dataset
+            your_data = trading_db.load_ohlc_data("main_dataset")
+            if your_data is not None and len(your_data) > 0:
+                # Clear everything and save only your data
+                trading_db.clear_all_data()
+                trading_db.save_ohlc_data(your_data, "main_dataset", preserve_full_data=True)
+                st.success(f"✅ Clean mode activated! Only your {len(your_data)} data points remain.")
+                st.rerun()
+            else:
+                st.warning("No main dataset found to preserve")
+
+with col2:
+    st.subheader("Database Status")
+
 # Force refresh database info
 try:
     db_info = trading_db.get_database_info()

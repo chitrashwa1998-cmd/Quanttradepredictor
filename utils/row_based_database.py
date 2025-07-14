@@ -117,11 +117,16 @@ class RowBasedPostgresDatabase:
         except Exception:
             return False
 
-    def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset", preserve_full_data: bool = False) -> bool:
+    def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset", preserve_full_data: bool = False, data_only_mode: bool = True) -> bool:
         """Save OHLC dataframe to row-based storage with append capability."""
         try:
             if data is None or len(data) == 0:
                 return False
+
+            # In data-only mode, clear all existing data first to ensure only your uploaded data exists
+            if data_only_mode:
+                self.clear_all_data()
+                print("🧹 Cleared all existing data - keeping only your uploaded data")
 
             # Prepare data for insertion
             data_copy = data.copy()
@@ -205,10 +210,13 @@ class RowBasedPostgresDatabase:
                     if cursor.rowcount > 0:
                         insert_count += 1
 
-                # Update metadata
-                self._update_dataset_metadata(dataset_name)
+                # Update metadata only if not in data-only mode
+                if not data_only_mode:
+                    self._update_dataset_metadata(dataset_name)
+                else:
+                    print("📊 Skipping metadata tracking - data-only mode active")
 
-                print(f"✅ Saved {insert_count} rows to dataset '{dataset_name}'")
+                print(f"✅ Saved {insert_count} rows to dataset '{dataset_name}' (data-only mode)")
                 return True
 
         except Exception as e:
@@ -452,7 +460,12 @@ class RowBasedPostgresDatabase:
                 # Force refresh connection to avoid stale data
                 self.conn.commit()
 
-                # Get actual data counts per dataset
+                # Get ONLY your actual trading data counts (not metadata)
+                cursor.execute("SELECT dataset_name, COUNT(*) FROM ohlc_data WHERE dataset_name = 'main_dataset'")
+                result = cursor.fetchone()
+                your_data_count = result[1] if result else 0
+                
+                # For data-only mode, show only your actual data
                 cursor.execute("SELECT dataset_name, COUNT(*) FROM ohlc_data GROUP BY dataset_name")
                 dataset_counts = cursor.fetchall()
                 total_records = sum(count for _, count in dataset_counts) if dataset_counts else 0
