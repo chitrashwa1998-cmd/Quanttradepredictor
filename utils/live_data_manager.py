@@ -115,10 +115,10 @@ class LiveDataManager:
                         updated_volume = existing_row['Volume'] + period_ticks['volume'].sum()
                         
                         # Update the candle in place to preserve the full DataFrame
-                        self.ohlc_data[instrument_key].loc[current_candle_time, 'High'] = updated_high
-                        self.ohlc_data[instrument_key].loc[current_candle_time, 'Low'] = updated_low
-                        self.ohlc_data[instrument_key].loc[current_candle_time, 'Close'] = updated_close
-                        self.ohlc_data[instrument_key].loc[current_candle_time, 'Volume'] = updated_volume
+                        self.ohlc_data[instrument_key].at[current_candle_time, 'High'] = updated_high
+                        self.ohlc_data[instrument_key].at[current_candle_time, 'Low'] = updated_low
+                        self.ohlc_data[instrument_key].at[current_candle_time, 'Close'] = updated_close
+                        self.ohlc_data[instrument_key].at[current_candle_time, 'Volume'] = updated_volume
                         
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
                         current_total = len(self.ohlc_data[instrument_key])
@@ -136,16 +136,17 @@ class LiveDataManager:
                             'Volume': [period_ticks['volume'].sum()]
                         }, index=[current_candle_time])
                         
-                        # Append to existing data
-                        combined_ohlc = pd.concat([self.ohlc_data[instrument_key], new_candle])
-                        combined_ohlc = combined_ohlc.sort_index()
+                        # Append to existing data without overwriting
+                        original_data = self.ohlc_data[instrument_key].copy()
+                        self.ohlc_data[instrument_key] = pd.concat([original_data, new_candle]).sort_index()
                         
                         # Keep reasonable limits
                         max_rows = 300 if instrument_key in self.seeded_instruments else 100
-                        if len(combined_ohlc) > max_rows:
+                        current_len = len(self.ohlc_data[instrument_key])
+                        if current_len > max_rows:
                             # Calculate how many rows we're removing from the beginning
-                            rows_to_remove = len(combined_ohlc) - max_rows
-                            combined_ohlc = combined_ohlc.tail(max_rows)
+                            rows_to_remove = current_len - max_rows
+                            self.ohlc_data[instrument_key] = self.ohlc_data[instrument_key].tail(max_rows)
                             
                             # Update seed count if we trimmed seeded data
                             if instrument_key in self.seeded_instruments:
@@ -153,8 +154,6 @@ class LiveDataManager:
                                 # Reduce seed count by the number of rows we removed
                                 new_seed_count = max(0, original_seed_count - rows_to_remove)
                                 self.seeded_instruments[instrument_key]['seed_count'] = new_seed_count
-                        
-                        self.ohlc_data[instrument_key] = combined_ohlc
                         
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
                         live_count = len(combined_ohlc) - seed_count
