@@ -47,15 +47,15 @@ col1, col2 = st.columns(2)
 with col1:
     preserve_full_data = st.checkbox(
         "Preserve Full Dataset", 
-        value=False,
-        help="Keep all data points without sampling. Use for datasets under 100k rows."
+        value=True,
+        help="Keep all data points without sampling. Recommended for most datasets."
     )
 
 with col2:
     if preserve_full_data:
-        st.info("Full dataset will be preserved")
+        st.info("✅ Full dataset will be preserved")
     else:
-        st.info("Large datasets will be intelligently sampled (50k rows max)")
+        st.info("⚠️ Large datasets will be intelligently sampled (50k rows max)")
 
 if uploaded_file is not None:
     try:
@@ -151,7 +151,9 @@ if uploaded_file is not None:
                             time.sleep(1)
                             continue
                         
-                        save_success = trading_db.save_ohlc_data(df, "main_dataset", preserve_full_data)
+                        # Always preserve full data for datasets under 100k rows
+                        preserve_setting = preserve_full_data or len(df) < 100000
+                        save_success = trading_db.save_ohlc_data(df, "main_dataset", preserve_setting)
                         if save_success:
                             break
                         elif attempt < max_retries - 1:
@@ -169,14 +171,17 @@ if uploaded_file is not None:
                     # Verify data was actually saved by trying to load it back
                     verification_data = trading_db.load_ohlc_data("main_dataset")
                     if verification_data is not None and len(verification_data) > 0:
-                        if preserve_full_data:
-                            st.success(f"✅ {message} & Full dataset saved to database!")
-                        else:
-                            st.success(f"✅ {message} & Auto-saved to database!")
+                        actual_rows = len(verification_data)
+                        original_rows = len(df)
                         
-                        # Show database info
+                        if actual_rows == original_rows:
+                            st.success(f"✅ {message} & Full dataset saved to database! ({actual_rows} rows)")
+                        else:
+                            st.warning(f"⚠️ {message} & Dataset saved but may have been processed: {actual_rows} rows saved from {original_rows} original rows")
+                        
+                        # Show detailed database info
                         db_info = trading_db.get_database_info()
-                        st.info(f"📊 Database now contains {db_info['total_datasets']} dataset(s)")
+                        st.info(f"📊 Database now contains {db_info['total_datasets']} dataset(s) with {db_info['total_records']} total records")
                     else:
                         st.error("❌ Data save verification failed. Data was not properly stored.")
                         st.stop()
