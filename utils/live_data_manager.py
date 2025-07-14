@@ -92,11 +92,8 @@ class LiveDataManager:
 
             df = df.set_index('timestamp')
 
-            # Get existing data first
-            existing_ohlc = self.ohlc_data.get(instrument_key, pd.DataFrame())
-            
             # If we have seeded data, use a different approach
-            if instrument_key in self.seeded_instruments and len(existing_ohlc) > 0:
+            if instrument_key in self.seeded_instruments and instrument_key in self.ohlc_data:
                 # For seeded instruments, create live candles based on current time
                 current_time = df.index[-1]  # Latest tick time
                 
@@ -104,9 +101,9 @@ class LiveDataManager:
                 current_candle_time = current_time.floor('5T')
                 
                 # Check if we already have a candle for this time period
-                if current_candle_time in existing_ohlc.index:
+                if current_candle_time in self.ohlc_data[instrument_key].index:
                     # Update existing candle with new tick data
-                    existing_row = existing_ohlc.loc[current_candle_time]
+                    existing_row = self.ohlc_data[instrument_key].loc[current_candle_time]
                     
                     # Get all ticks for this time period
                     period_ticks = df[df.index >= current_candle_time]
@@ -140,7 +137,7 @@ class LiveDataManager:
                         }, index=[current_candle_time])
                         
                         # Append to existing data
-                        combined_ohlc = pd.concat([existing_ohlc, new_candle])
+                        combined_ohlc = pd.concat([self.ohlc_data[instrument_key], new_candle])
                         combined_ohlc = combined_ohlc.sort_index()
                         
                         # Keep reasonable limits
@@ -176,16 +173,16 @@ class LiveDataManager:
                     new_ohlc.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
 
                     # Combine with existing data
-                    if len(existing_ohlc) > 0:
+                    if instrument_key in self.ohlc_data and len(self.ohlc_data[instrument_key]) > 0:
                         # Only add new OHLC rows that don't already exist
                         new_timestamps = set(new_ohlc.index)
-                        existing_timestamps = set(existing_ohlc.index)
+                        existing_timestamps = set(self.ohlc_data[instrument_key].index)
                         truly_new_timestamps = new_timestamps - existing_timestamps
 
                         if truly_new_timestamps:
                             # Only add truly new data
                             new_data_to_add = new_ohlc.loc[list(truly_new_timestamps)]
-                            combined_ohlc = pd.concat([existing_ohlc, new_data_to_add])
+                            combined_ohlc = pd.concat([self.ohlc_data[instrument_key], new_data_to_add])
                             
                             # Sort by timestamp
                             combined_ohlc = combined_ohlc.sort_index()
