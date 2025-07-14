@@ -97,11 +97,45 @@ class RowBasedPostgresDatabase:
             # Prepare data for insertion
             data_copy = data.copy()
             
-            # Ensure proper column names
+            # Map common column name variations to standard names
+            column_mapping = {
+                'open': 'Open', 'OPEN': 'Open', 'o': 'Open',
+                'high': 'High', 'HIGH': 'High', 'h': 'High',
+                'low': 'Low', 'LOW': 'Low', 'l': 'Low',
+                'close': 'Close', 'CLOSE': 'Close', 'c': 'Close',
+                'volume': 'Volume', 'VOLUME': 'Volume', 'v': 'Volume', 'vol': 'Volume'
+            }
+            
+            # Apply column mapping
+            for old_name, new_name in column_mapping.items():
+                if old_name in data_copy.columns and new_name not in data_copy.columns:
+                    data_copy = data_copy.rename(columns={old_name: new_name})
+            
+            # Check for required columns and create missing ones
             required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-            if not all(col in data_copy.columns for col in required_columns):
-                print(f"Missing required columns: {required_columns}")
-                return False
+            missing_columns = [col for col in required_columns if col not in data_copy.columns]
+            
+            if missing_columns:
+                print(f"Missing columns: {missing_columns}")
+                
+                # Try to create missing columns from available data
+                if 'Close' in data_copy.columns:
+                    # Use Close price as fallback for missing OHLC values
+                    for col in ['Open', 'High', 'Low']:
+                        if col not in data_copy.columns:
+                            data_copy[col] = data_copy['Close']
+                            print(f"✅ Created {col} column using Close price")
+                
+                # Always ensure Volume exists
+                if 'Volume' not in data_copy.columns:
+                    data_copy['Volume'] = 0
+                    print("✅ Created Volume column with default value 0")
+                
+                # Final check
+                still_missing = [col for col in required_columns if col not in data_copy.columns]
+                if still_missing:
+                    print(f"❌ Cannot proceed - still missing: {still_missing}")
+                    return False
             
             # Ensure Volume column exists and has proper values
             if 'Volume' not in data_copy.columns:
@@ -150,6 +184,10 @@ class RowBasedPostgresDatabase:
                 
         except Exception as e:
             print(f"Failed to save OHLC data: {str(e)}")
+            print(f"Data shape: {data_copy.shape if 'data_copy' in locals() else 'Unknown'}")
+            print(f"Data columns: {list(data_copy.columns) if 'data_copy' in locals() else 'Unknown'}")
+            import traceback
+            print(f"Full error: {traceback.format_exc()}")
             return False
     
     def append_ohlc_data(self, new_data: pd.DataFrame, dataset_name: str = "main_dataset") -> bool:
