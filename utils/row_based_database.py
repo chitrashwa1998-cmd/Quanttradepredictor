@@ -461,9 +461,9 @@ class RowBasedPostgresDatabase:
                 self.conn.commit()
 
                 # Get ONLY your actual trading data counts (not metadata)
-                cursor.execute("SELECT dataset_name, COUNT(*) FROM ohlc_data WHERE dataset_name = 'main_dataset'")
+                cursor.execute("SELECT COUNT(*) FROM ohlc_data WHERE dataset_name = 'main_dataset'")
                 result = cursor.fetchone()
-                your_data_count = result[1] if result else 0
+                your_data_count = result[0] if result else 0
                 
                 # For data-only mode, show only your actual data
                 cursor.execute("SELECT dataset_name, COUNT(*) FROM ohlc_data GROUP BY dataset_name")
