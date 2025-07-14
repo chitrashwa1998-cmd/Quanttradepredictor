@@ -72,6 +72,36 @@ class RowBasedPostgresDatabase:
                 )
                 """)
 
+                # Model results table
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS model_results (
+                    model_name VARCHAR(255) PRIMARY KEY,
+                    results JSONB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+
+                # Trained models table
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS trained_models (
+                    id SERIAL PRIMARY KEY,
+                    models_data BYTEA NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+
+                # Predictions table
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS predictions (
+                    model_name VARCHAR(255) PRIMARY KEY,
+                    predictions_data BYTEA NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+
                 print("✅ Row-based database tables initialized successfully")
 
         except Exception as e:
@@ -432,18 +462,31 @@ class RowBasedPostgresDatabase:
                 result = cursor.fetchone()
                 total_records = result[0] if result else 0
 
-                # Get model counts
-                cursor.execute("SELECT COUNT(*) FROM model_results")
-                result = cursor.fetchone()
-                model_count = result[0] if result else 0
+                # Get model counts with table existence check
+                model_count = 0
+                trained_model_count = 0
+                prediction_count = 0
 
-                cursor.execute("SELECT COUNT(*) FROM trained_models")
-                result = cursor.fetchone()
-                trained_model_count = result[0] if result else 0
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM model_results")
+                    result = cursor.fetchone()
+                    model_count = result[0] if result else 0
+                except Exception:
+                    model_count = 0
 
-                cursor.execute("SELECT COUNT(*) FROM predictions")
-                result = cursor.fetchone()
-                prediction_count = result[0] if result else 0
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM trained_models")
+                    result = cursor.fetchone()
+                    trained_model_count = result[0] if result else 0
+                except Exception:
+                    trained_model_count = 0
+
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM predictions")
+                    result = cursor.fetchone()
+                    prediction_count = result[0] if result else 0
+                except Exception:
+                    prediction_count = 0
 
                 # Get datasets list
                 datasets = self.get_dataset_list()
@@ -468,19 +511,37 @@ class RowBasedPostgresDatabase:
             print(f"Failed to get database info: {str(e)}")
             import traceback
             print(f"Full traceback: {traceback.format_exc()}")
-            return {
-                'database_type': 'postgresql_row_based',
-                'total_datasets': 0,
-                'total_records': 0,
-                'total_models': 0,
-                'total_trained_models': 0,
-                'total_predictions': 0,
-                'datasets': [],
-                'backend': 'PostgreSQL (Row-Based)',
-                'storage_type': 'Row-Based',
-                'supports_append': True,
-                'supports_range_queries': True
-            }
+            
+            # Fallback: Try to get at least dataset info
+            try:
+                datasets = self.get_dataset_list()
+                return {
+                    'database_type': 'postgresql_row_based',
+                    'total_datasets': len(datasets),
+                    'total_records': sum(d.get('rows', 0) for d in datasets),
+                    'total_models': 0,
+                    'total_trained_models': 0,
+                    'total_predictions': 0,
+                    'datasets': datasets,
+                    'backend': 'PostgreSQL (Row-Based)',
+                    'storage_type': 'Row-Based',
+                    'supports_append': True,
+                    'supports_range_queries': True
+                }
+            except Exception:
+                return {
+                    'database_type': 'postgresql_row_based',
+                    'total_datasets': 0,
+                    'total_records': 0,
+                    'total_models': 0,
+                    'total_trained_models': 0,
+                    'total_predictions': 0,
+                    'datasets': [],
+                    'backend': 'PostgreSQL (Row-Based)',
+                    'storage_type': 'Row-Based',
+                    'supports_append': True,
+                    'supports_range_queries': True
+                }
 
     def save_model_results(self, model_name: str, results: Dict[str, Any]) -> bool:
         """Save model training results."""
