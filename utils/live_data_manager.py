@@ -120,6 +120,9 @@ class LiveDataManager:
                         self.ohlc_data[instrument_key].at[current_candle_time, 'Close'] = updated_close
                         self.ohlc_data[instrument_key].at[current_candle_time, 'Volume'] = updated_volume
                         
+                        # Recalibrate seed count if needed
+                        self.recalibrate_seed_count(instrument_key)
+                        
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
                         current_total = len(self.ohlc_data[instrument_key])
                         live_count = current_total - seed_count
@@ -140,24 +143,40 @@ class LiveDataManager:
                         original_data = self.ohlc_data[instrument_key].copy()
                         self.ohlc_data[instrument_key] = pd.concat([original_data, new_candle]).sort_index()
                         
-                        # Keep reasonable limits
+                        # Keep reasonable limits - but preserve seeded data properly
                         max_rows = 300 if instrument_key in self.seeded_instruments else 100
                         current_len = len(self.ohlc_data[instrument_key])
+                        
                         if current_len > max_rows:
-                            # Calculate how many rows we're removing from the beginning
-                            rows_to_remove = current_len - max_rows
-                            self.ohlc_data[instrument_key] = self.ohlc_data[instrument_key].tail(max_rows)
-                            
-                            # Update seed count if we trimmed seeded data
+                            # For seeded instruments, be more careful about trimming
                             if instrument_key in self.seeded_instruments:
                                 original_seed_count = self.seeded_instruments[instrument_key]['seed_count']
-                                # Reduce seed count by the number of rows we removed
-                                new_seed_count = max(0, original_seed_count - rows_to_remove)
-                                self.seeded_instruments[instrument_key]['seed_count'] = new_seed_count
+                                
+                                # Try to preserve at least some seeded data
+                                min_seed_to_keep = min(original_seed_count, 50)  # Keep at least 50 seeded rows
+                                max_live_rows = max_rows - min_seed_to_keep
+                                
+                                # Calculate how many rows we're removing from the beginning
+                                rows_to_remove = current_len - max_rows
+                                
+                                # Only trim if we have excessive data
+                                if rows_to_remove > 0:
+                                    self.ohlc_data[instrument_key] = self.ohlc_data[instrument_key].tail(max_rows)
+                                    
+                                    # Update seed count properly
+                                    new_seed_count = max(0, original_seed_count - rows_to_remove)
+                                    self.seeded_instruments[instrument_key]['seed_count'] = new_seed_count
+                            else:
+                                # For non-seeded instruments, simple trimming
+                                self.ohlc_data[instrument_key] = self.ohlc_data[instrument_key].tail(max_rows)
+                        
+                        # Recalibrate seed count if needed
+                        self.recalibrate_seed_count(instrument_key)
                         
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
-                        live_count = len(combined_ohlc) - seed_count
-                        print(f"📈 NEW CANDLE for {instrument_key}: {len(combined_ohlc)} total rows ({seed_count} seeded + {live_count} live) - continuation active")
+                        current_total = len(self.ohlc_data[instrument_key])
+                        live_count = current_total - seed_count
+                        print(f"📈 NEW CANDLE for {instrument_key}: {current_total} total rows ({seed_count} seeded + {live_count} live) - continuation active")
                 
             else:
                 # Standard resampling for non-seeded instruments
@@ -309,6 +328,24 @@ class LiveDataManager:
                 
         except Exception as e:
             print(f"❌ Error seeding data for {instrument_key}: {str(e)}")
+            return False
+
+    def recalibrate_seed_count(self, instrument_key: str) -> bool:
+        """Recalibrate seed count to match actual OHLC data."""
+        try:
+            if instrument_key in self.seeded_instruments and instrument_key in self.ohlc_data:
+                current_rows = len(self.ohlc_data[instrument_key])
+                old_seed_count = self.seeded_instruments[instrument_key]['seed_count']
+                
+                # If current rows is less than stored seed count, update it
+                if current_rows < old_seed_count:
+                    self.seeded_instruments[instrument_key]['seed_count'] = current_rows
+                    print(f"🔧 RECALIBRATED {instrument_key}: seed count {old_seed_count} → {current_rows}")
+                    return True
+                    
+            return False
+        except Exception as e:
+            print(f"❌ Error recalibrating seed count for {instrument_key}: {str(e)}")
             return False
 
     def get_seeding_status(self) -> Dict:
