@@ -1,0 +1,114 @@
+Looking at your codebase, here's how data is currently loaded across different components:
+
+1. Database Loading (PostgreSQL)
+In utils/postgres_database.py:
+
+def load_ohlc_data(self, dataset_name: str = "main_dataset") -> Optional[pd.DataFrame]:
+    """Load OHLC dataframe from database."""
+    try:
+        with self.conn.cursor() as cursor:
+            cursor.execute("SELECT data FROM ohlc_datasets WHERE name = %s", (dataset_name,))
+            result = cursor.fetchone()
+            
+            if result:
+                return pickle.loads(result[0])  # ← UNPICKLE serialized DataFrame
+            return None
+    except Exception as e:
+        print(f"Failed to load OHLC data: {str(e)}")
+        return None
+Key Points:
+
+Data is stored as pickled (serialized) binary blobs in PostgreSQL
+pickle.loads() deserializes the entire DataFrame from database
+Returns None if dataset doesn't exist
+2. Live Data Seeding Logic
+In utils/live_data_manager.py:
+
+def seed_live_data_from_database(self, instrument_key: str) -> bool:
+    """Seed live OHLC data from database for continuation."""
+    try:
+        from utils.database_adapter import DatabaseAdapter
+        
+        # Convert instrument key to database dataset name
+        dataset_name = "livenifty50"  # ← HARDCODED!
+        
+        db = DatabaseAdapter()
+        historical_data = db.load_ohlc_data(dataset_name)  # ← Uses PostgreSQL loader
+        
+        if historical_data is not None and len(historical_data) > 0:
+            # Use the most recent data (last 250 rows for performance)
+            seed_data = historical_data.tail(250).copy()
+            
+            # Ensure the data has the correct column names
+            if all(col in seed_data.columns for col in ['Open', 'High', 'Low', 'Close', 'Volume']):
+                # Store as foundation for live data
+                self.ohlc_data[instrument_key] = seed_data
+                self.seeded_instruments[instrument_key] = {
+                    'seed_count': len(seed_data),
+                    'seed_date_range': f"{seed_data.index.min()} to {seed_data.index.max()}",
+                    'seeded_at': pd.Timestamp.now()
+                }
+                
+                print(f"🌱 SEEDED {instrument_key} with {len(seed_data)} historical OHLC rows from database")
+                return True
+3. File Upload Data Loading
+In utils/data_processing.py:
+
+@staticmethod
+def load_and_process_data(uploaded_file) -> Tuple[pd.DataFrame, str]:
+    """Load and process uploaded OHLC data."""
+    try:
+        # Reset file pointer to beginning
+        uploaded_file.seek(0)
+        
+        # Multiple CSV parsing configurations
+        configs = [
+            {'sep': ',', 'parse_dates': True, 'index_col': 0, 'infer_datetime_format': True},
+            {'sep': ',', 'parse_dates': [0], 'index_col': 0},
+            {'sep': ',', 'parse_dates': False, 'index_col': None},
+            {'sep': ';', 'parse_dates': True, 'index_col': 0},
+            {'sep': '\t', 'parse_dates': True, 'index_col': 0}
+        ]
+        
+        for i, config in enumerate(configs):
+            try:
+                uploaded_file.seek(0)  # Reset file pointer
+                df = pd.read_csv(uploaded_file, **config)
+                
+                # Data validation and processing logic here...
+                
+                success_msg = f"Data loaded successfully using config {i+1}"
+                return df, success_msg
+                
+            except Exception as config_error:
+                continue  # Try next config
+4. Database Adapter Interface
+In utils/database_adapter.py:
+
+def load_ohlc_data(self, dataset_name: str = "main_dataset"):
+    """Load OHLC dataframe from database"""
+    return self.db.load_ohlc_data(dataset_name)  # ← Calls PostgreSQL loader
+5. Live Data Append Logic
+In pages/6_Live_Data.py:
+
+# Load existing data from database
+existing_data = db.load_ohlc_data(dataset_name)
+if existing_data is not None and len(existing_data) > 0:
+    # Append new data to existing data
+    combined_data = pd.concat([existing_data, new_live_data])
+    
+    # Remove duplicates by timestamp (keep last)
+    combined_data = combined_data[~combined_data.index.duplicated(keep='last')]
+    combined_data = combined_data.sort_index()
+    
+    # Save combined data (REPLACES entire dataset)
+    if db.save_ohlc_data(combined_data, dataset_name):
+        st.success(f"✅ Appended {len(new_live_data)} new rows to existing {len(existing_data)} rows")
+Summary of Current Data Loading Architecture:
+Database Storage: All data stored as pickled binary blobs in PostgreSQL
+Loading Process: pickle.loads() deserializes entire DataFrame from database
+Performance: Loads complete dataset into memory every time
+Seeding: Live data manager loads last 250 rows for historical continuation
+Append Logic: Loads full dataset, combines in memory, saves everything back
+No Incremental Loading: Cannot load specific date ranges or partial data efficiently
+Key Limitation: The serialized storage means every data operation requires loading the entire dataset into memory, making it inefficient for large datasets or frequent updates.
