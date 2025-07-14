@@ -176,23 +176,3 @@ class DatabaseAdapter:
 def get_trading_database():
     """Get the trading database instance."""
     return DatabaseAdapter()
-```def recover_data(self):
-        """Try to recover any available OHLC data from database."""
-        return self.db.recover_data()
-
-    def clear_all_data(self) -> bool:
-        """Clear all data from database."""
-        return self.db.clear_all_data()
-
-    def get_connection_status(self) -> Dict[str, Any]:
-        """Get database connection status."""
-        return {
-            'type': self.db_type,
-            'connected': self._test_connection(),
-            'has_data': len(self.get_dataset_list()) > 0
-        }
-
-# Create a global instance
-def get_trading_database():
-    """Get the trading database instance."""
-    return DatabaseAdapter()
