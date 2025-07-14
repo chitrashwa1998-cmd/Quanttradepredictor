@@ -452,28 +452,20 @@ class RowBasedPostgresDatabase:
                 # Force refresh connection to avoid stale data
                 self.conn.commit()
 
-                # Get dataset count and details
-                cursor.execute("SELECT COUNT(*) FROM dataset_metadata")
-                result = cursor.fetchone()
-                dataset_count = result[0] if result else 0
-
-                # Get total record count from ohlc_data for this specific dataset counting
+                # Get actual data counts per dataset
                 cursor.execute("SELECT dataset_name, COUNT(*) FROM ohlc_data GROUP BY dataset_name")
                 dataset_counts = cursor.fetchall()
                 total_records = sum(count for _, count in dataset_counts) if dataset_counts else 0
                 
-                # Debug: Print actual counts per dataset
-                print(f"Actual data counts per dataset:")
-                for dataset_name, count in dataset_counts:
-                    print(f"  {dataset_name}: {count} rows")
-                print(f"Total across all datasets: {total_records}")
+                # Fix metadata for each dataset found in actual data
+                for dataset_name, actual_count in dataset_counts:
+                    print(f"🔄 Syncing metadata for {dataset_name}: {actual_count} rows")
+                    self._update_dataset_metadata(dataset_name)
                 
-                # Also get metadata counts for comparison
-                cursor.execute("SELECT dataset_name, total_rows FROM dataset_metadata")
-                metadata_counts = cursor.fetchall()
-                print(f"Metadata counts:")
-                for dataset_name, count in metadata_counts:
-                    print(f"  {dataset_name}: {count} rows (metadata)")
+                # Get updated dataset count after metadata sync
+                cursor.execute("SELECT COUNT(*) FROM dataset_metadata")
+                result = cursor.fetchone()
+                dataset_count = result[0] if result else 0
 
                 # Get model counts with table existence check
                 model_count = 0
@@ -501,11 +493,10 @@ class RowBasedPostgresDatabase:
                 except Exception:
                     prediction_count = 0
 
-                # Get datasets list
+                # Get datasets list (now should be synced)
                 datasets = self.get_dataset_list()
 
-                # Debug print
-                print(f"Database info - Datasets: {dataset_count}, Records: {total_records}, Models: {model_count}")
+                print(f"✅ Database info - Datasets: {dataset_count}, Records: {total_records}, Models: {model_count}")
 
                 return {
                     'database_type': 'postgresql_row_based',
@@ -694,6 +685,45 @@ class RowBasedPostgresDatabase:
         except Exception as e:
             print(f"Failed to recover data: {str(e)}")
             return None
+
+    def sync_all_metadata(self) -> Dict[str, Any]:
+        """Sync all metadata and return detailed information about actual vs stored data."""
+        try:
+            with self.conn.cursor() as cursor:
+                # Get all actual datasets
+                cursor.execute("SELECT dataset_name, COUNT(*) FROM ohlc_data GROUP BY dataset_name")
+                actual_datasets = cursor.fetchall()
+                
+                sync_results = {}
+                
+                print("🔄 Syncing all dataset metadata...")
+                for dataset_name, actual_count in actual_datasets:
+                    # Update metadata for each dataset
+                    self._update_dataset_metadata(dataset_name)
+                    
+                    # Get date range
+                    cursor.execute("""
+                    SELECT MIN(timestamp), MAX(timestamp) 
+                    FROM ohlc_data 
+                    WHERE dataset_name = %s
+                    """, (dataset_name,))
+                    date_result = cursor.fetchone()
+                    start_date = date_result[0] if date_result and date_result[0] else None
+                    end_date = date_result[1] if date_result and date_result[1] else None
+                    
+                    sync_results[dataset_name] = {
+                        'actual_rows': actual_count,
+                        'start_date': start_date.strftime('%Y-%m-%d') if start_date else None,
+                        'end_date': end_date.strftime('%Y-%m-%d') if end_date else None
+                    }
+                    
+                    print(f"✅ {dataset_name}: {actual_count} rows ({start_date} to {end_date})")
+                
+                return sync_results
+                
+        except Exception as e:
+            print(f"Failed to sync metadata: {str(e)}")
+            return {}
 
     def keep_only_dataset(self, dataset_name: str = "main_dataset") -> bool:
         """Keep only the specified dataset and remove all other data."""

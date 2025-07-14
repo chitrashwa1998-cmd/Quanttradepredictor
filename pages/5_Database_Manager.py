@@ -392,6 +392,20 @@ with col2:
         if st.button("🗑️ Clear All Data", type="secondary", key="clear_all_button"):
             st.session_state.confirm_clear_all = True
     with col4:
+        if st.button("🔄 Sync Metadata", help="Fix metadata inconsistencies"):
+            with st.spinner("Syncing metadata..."):
+                if hasattr(trading_db.db, 'sync_all_metadata'):
+                    sync_results = trading_db.db.sync_all_metadata()
+                    if sync_results:
+                        st.success("✅ Metadata synced successfully!")
+                        for dataset_name, info in sync_results.items():
+                            st.info(f"📊 {dataset_name}: {info['actual_rows']} rows ({info['start_date']} to {info['end_date']})")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to sync metadata")
+                else:
+                    st.error("❌ Metadata sync not available for this database type")
+
         if st.button("🧹 Clean Database", help="Remove inconsistent data and keep only main dataset"):
             with st.spinner("Cleaning database..."):
                 if trading_db.keep_only_dataset("main_dataset"):
