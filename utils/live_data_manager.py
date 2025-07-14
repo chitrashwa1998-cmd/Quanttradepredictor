@@ -296,11 +296,22 @@ class LiveDataManager:
         try:
             from utils.database_adapter import DatabaseAdapter
             
-            # Convert instrument key to database dataset name
-            dataset_name = "livenifty50"
+            # Try multiple possible dataset names
+            possible_datasets = ["livenifty50", "main_dataset", "nifty50", "nifty"]
             
             db = DatabaseAdapter()
-            historical_data = db.load_ohlc_data(dataset_name)
+            historical_data = None
+            used_dataset = None
+            
+            # Try each possible dataset name
+            for dataset_name in possible_datasets:
+                try:
+                    historical_data = db.load_ohlc_data(dataset_name)
+                    if historical_data is not None and len(historical_data) > 0:
+                        used_dataset = dataset_name
+                        break
+                except Exception as e:
+                    continue
             
             if historical_data is not None and len(historical_data) > 0:
                 # Use the most recent data (last 250 rows for performance)
@@ -316,14 +327,14 @@ class LiveDataManager:
                         'seeded_at': pd.Timestamp.now()
                     }
                     
-                    print(f"🌱 SEEDED {instrument_key} with {len(seed_data)} historical OHLC rows from database")
+                    print(f"🌱 SEEDED {instrument_key} with {len(seed_data)} historical OHLC rows from database (dataset: {used_dataset})")
                     print(f"📈 Foundation set: {len(seed_data)} rows ready for live continuation")
                     return True
                 else:
-                    print(f"⚠️ Database data for {dataset_name} missing required columns")
+                    print(f"⚠️ Database data for {used_dataset} missing required columns")
                     return False
             else:
-                print(f"📊 No historical data found for {dataset_name}, starting fresh")
+                print(f"📊 No historical data found in any dataset ({possible_datasets}), starting fresh")
                 return False
                 
         except Exception as e:
