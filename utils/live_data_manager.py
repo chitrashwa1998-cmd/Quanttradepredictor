@@ -150,12 +150,16 @@ class LiveDataManager:
                         # Keep reasonable limits
                         max_rows = 300 if instrument_key in self.seeded_instruments else 100
                         if len(combined_ohlc) > max_rows:
+                            # Calculate how many rows we're removing from the beginning
+                            rows_to_remove = len(combined_ohlc) - max_rows
                             combined_ohlc = combined_ohlc.tail(max_rows)
+                            
                             # Update seed count if we trimmed seeded data
                             if instrument_key in self.seeded_instruments:
                                 original_seed_count = self.seeded_instruments[instrument_key]['seed_count']
-                                remaining_seed_count = max(0, max_rows - 1)  # -1 for the new candle
-                                self.seeded_instruments[instrument_key]['seed_count'] = min(original_seed_count, remaining_seed_count)
+                                # Reduce seed count by the number of rows we removed
+                                new_seed_count = max(0, original_seed_count - rows_to_remove)
+                                self.seeded_instruments[instrument_key]['seed_count'] = new_seed_count
                         
                         self.ohlc_data[instrument_key] = combined_ohlc
                         
