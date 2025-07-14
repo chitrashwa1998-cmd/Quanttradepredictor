@@ -83,11 +83,6 @@ class LivePredictionPipeline:
 
     def subscribe_instruments(self, instrument_keys: List[str]) -> bool:
         """Subscribe to instruments for live predictions."""
-        # Force seeding even if connection fails
-        print("🔍 Forcing seeding for all instruments...")
-        for instrument_key in instrument_keys:
-            self.live_data_manager.seed_live_data_from_database(instrument_key)
-        
         return self.live_data_manager.subscribe_instruments(instrument_keys)
 
     def _processing_loop(self):
