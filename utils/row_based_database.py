@@ -457,10 +457,23 @@ class RowBasedPostgresDatabase:
                 result = cursor.fetchone()
                 dataset_count = result[0] if result else 0
 
-                # Get total record count from ohlc_data
-                cursor.execute("SELECT COUNT(*) FROM ohlc_data")
-                result = cursor.fetchone()
-                total_records = result[0] if result else 0
+                # Get total record count from ohlc_data for this specific dataset counting
+                cursor.execute("SELECT dataset_name, COUNT(*) FROM ohlc_data GROUP BY dataset_name")
+                dataset_counts = cursor.fetchall()
+                total_records = sum(count for _, count in dataset_counts) if dataset_counts else 0
+                
+                # Debug: Print actual counts per dataset
+                print(f"Actual data counts per dataset:")
+                for dataset_name, count in dataset_counts:
+                    print(f"  {dataset_name}: {count} rows")
+                print(f"Total across all datasets: {total_records}")
+                
+                # Also get metadata counts for comparison
+                cursor.execute("SELECT dataset_name, total_rows FROM dataset_metadata")
+                metadata_counts = cursor.fetchall()
+                print(f"Metadata counts:")
+                for dataset_name, count in metadata_counts:
+                    print(f"  {dataset_name}: {count} rows (metadata)")
 
                 # Get model counts with table existence check
                 model_count = 0
@@ -681,6 +694,47 @@ class RowBasedPostgresDatabase:
         except Exception as e:
             print(f"Failed to recover data: {str(e)}")
             return None
+
+    def keep_only_dataset(self, dataset_name: str = "main_dataset") -> bool:
+        """Keep only the specified dataset and remove all other data."""
+        try:
+            with self.conn.cursor() as cursor:
+                print(f"Keeping only dataset: {dataset_name}")
+                
+                # Get count before cleanup
+                cursor.execute("SELECT COUNT(*) FROM ohlc_data WHERE dataset_name = %s", (dataset_name,))
+                target_count = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT COUNT(*) FROM ohlc_data")
+                total_before = cursor.fetchone()[0]
+                
+                print(f"Before cleanup: {total_before} total records, {target_count} in {dataset_name}")
+                
+                # Delete all data except the target dataset
+                cursor.execute("DELETE FROM ohlc_data WHERE dataset_name != %s", (dataset_name,))
+                deleted_records = cursor.rowcount
+                
+                # Delete metadata for other datasets
+                cursor.execute("DELETE FROM dataset_metadata WHERE dataset_name != %s", (dataset_name,))
+                deleted_metadata = cursor.rowcount
+                
+                # Update metadata for the remaining dataset
+                self._update_dataset_metadata(dataset_name)
+                
+                # Verify final count
+                cursor.execute("SELECT COUNT(*) FROM ohlc_data")
+                total_after = cursor.fetchone()[0]
+                
+                print(f"✅ Cleanup complete:")
+                print(f"  - Deleted {deleted_records} records from other datasets")
+                print(f"  - Deleted {deleted_metadata} metadata entries")
+                print(f"  - Remaining records: {total_after}")
+                
+                return True
+                
+        except Exception as e:
+            print(f"Failed to clean up database: {str(e)}")
+            return False
 
     def clear_all_data(self) -> bool:
         """Clear all data from database."""
