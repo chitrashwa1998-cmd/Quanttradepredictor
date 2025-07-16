@@ -62,10 +62,19 @@ uploaded_file = st.file_uploader(
 st.subheader("📊 Data Storage Options")
 col1, col2 = st.columns(2)
 
-# Show current dataset configuration
-st.sidebar.subheader("📋 Current Datasets")
+# Show current dataset configuration with refresh button
+col1, col2 = st.sidebar.columns([3, 1])
+with col1:
+    st.subheader("📋 Current Datasets")
+with col2:
+    if st.button("🔄", help="Refresh dataset list"):
+        st.rerun()
+
 try:
-    all_datasets = trading_db.get_database_info()['datasets']
+    # Force a fresh database connection and info retrieval
+    trading_db._test_connection()
+    db_info = trading_db.get_database_info()
+    all_datasets = db_info.get('datasets', [])
 
     if all_datasets:
         # Group by purpose
@@ -82,7 +91,15 @@ try:
                 st.sidebar.success(f"📊 {dataset['name']} ({dataset['rows']} rows)")
     else:
         st.sidebar.info("📊 No datasets uploaded yet")
-except:
+        
+    # Show database status
+    st.sidebar.markdown("---")
+    st.sidebar.write(f"**Database Status:**")
+    st.sidebar.write(f"Total Datasets: {db_info.get('total_datasets', 0)}")
+    st.sidebar.write(f"Total Records: {db_info.get('total_records', 0)}")
+    
+except Exception as e:
+    st.sidebar.error(f"❌ Database connection issue: {str(e)}")
     st.sidebar.info("📊 Upload datasets to see configuration")
 
 with col1:
@@ -201,9 +218,23 @@ if uploaded_file is not None:
             st.session_state.direction_predictions = None
             st.session_state.direction_probabilities = None
 
-            # Check if dataset already exists
-            existing_datasets = trading_db.get_database_info()['datasets']
-            dataset_exists = any(d['name'] == auto_dataset_name for d in existing_datasets)
+            # Check if dataset already exists with proper error handling
+            try:
+                db_info = trading_db.get_database_info()
+                existing_datasets = db_info.get('datasets', [])
+                dataset_exists = any(d['name'] == auto_dataset_name for d in existing_datasets) if existing_datasets else False
+                
+                # Additional verification: try to actually load the dataset
+                if dataset_exists:
+                    verification_data = trading_db.load_ohlc_data(auto_dataset_name)
+                    if verification_data is None or len(verification_data) == 0:
+                        # Dataset metadata exists but no actual data - treat as non-existent
+                        dataset_exists = False
+                        print(f"Dataset '{auto_dataset_name}' metadata found but no data - treating as new dataset")
+            except Exception as e:
+                print(f"Error checking dataset existence: {e}")
+                dataset_exists = False
+                existing_datasets = []
 
             if dataset_exists:
                 st.warning(f"⚠️ Dataset '{auto_dataset_name}' already exists!")

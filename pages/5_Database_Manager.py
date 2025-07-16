@@ -472,7 +472,7 @@ with col2:
                         'trained_models', 'direction_features', 'direction_trained_models',
                         'direction_predictions', 'direction_probabilities', 'volatility_predictions',
                         'auto_recovery_done', 'backtest_results', 'backtest_signals',
-                        'confirm_clear_all'
+                        'confirm_clear_all', 'dataset_cache', 'db_info_cache'
                     ]
                     for key in keys_to_clear:
                         if key in st.session_state:
@@ -480,7 +480,7 @@ with col2:
 
                     # Also clear any other prediction-related keys
                     for key in list(st.session_state.keys()):
-                        if any(term in key.lower() for term in ['prediction', 'model', 'feature', 'train']):
+                        if any(term in key.lower() for term in ['prediction', 'model', 'feature', 'train', 'dataset', 'cache']):
                             del st.session_state[key]
 
                     # Reset models dictionary
@@ -488,6 +488,9 @@ with col2:
 
                     # Reset confirmation state
                     st.session_state.confirm_clear_all = False
+                    
+                    # Clear any cached dataset information
+                    st.cache_data.clear()
 
                     # Force page refresh
                     st.rerun()
