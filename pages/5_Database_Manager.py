@@ -126,17 +126,31 @@ if not datasets:
 
 if len(datasets) > 0:
     st.success(f"Found {len(datasets)} dataset(s) in database")
-    for i, dataset in enumerate(datasets):
-        with st.expander(f"📊 {dataset['name']} ({dataset['rows']} rows)"):
-            col1, col2, col3 = st.columns(3)
+    
+    # Group datasets by purpose
+    purposes = {}
+    for dataset in datasets:
+        purpose = dataset.get('purpose', 'unknown')
+        if purpose not in purposes:
+            purposes[purpose] = []
+        purposes[purpose].append(dataset)
+    
+    # Display datasets grouped by purpose
+    for purpose, purpose_datasets in purposes.items():
+        st.subheader(f"📁 {purpose.title()} Datasets ({len(purpose_datasets)})")
+        
+        for i, dataset in enumerate(purpose_datasets):
+            with st.expander(f"📊 {dataset['name']} ({dataset['rows']} rows) - {dataset.get('purpose', 'unknown')}"):
+                col1, col2, col3 = st.columns(3)
 
-            with col1:
-                st.write(f"**Rows:** {dataset['rows']}")
-                # Handle date range display safely
-                if dataset.get('start_date') and dataset.get('end_date'):
-                    st.write(f"**Date Range:** {dataset['start_date']} to {dataset['end_date']}")
-                else:
-                    st.write(f"**Date Range:** Not available")
+                with col1:
+                    st.write(f"**Rows:** {dataset['rows']}")
+                    st.write(f"**Purpose:** {dataset.get('purpose', 'unknown')}")
+                    # Handle date range display safely
+                    if dataset.get('start_date') and dataset.get('end_date'):
+                        st.write(f"**Date Range:** {dataset['start_date']} to {dataset['end_date']}")
+                    else:
+                        st.write(f"**Date Range:** Not available")
 
                 # Handle saved/created timestamp
                 if dataset.get('updated_at'):

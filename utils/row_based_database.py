@@ -72,6 +72,18 @@ class RowBasedPostgresDatabase:
                 )
                 """)
 
+                # Dataset configuration table for multi-dataset support
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS dataset_config (
+                    dataset_name VARCHAR(255) PRIMARY KEY,
+                    purpose VARCHAR(50) NOT NULL CHECK (purpose IN ('training', 'pre_seed', 'validation', 'testing')),
+                    description TEXT,
+                    is_active BOOLEAN DEFAULT true,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+
                 # Model results table
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS model_results (
@@ -117,7 +129,7 @@ class RowBasedPostgresDatabase:
         except Exception:
             return False
 
-    def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset", preserve_full_data: bool = False, data_only_mode: bool = True) -> bool:
+    def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset", preserve_full_data: bool = False, data_only_mode: bool = True, dataset_purpose: str = "training") -> bool:
         """Save OHLC dataframe to row-based storage with append capability."""
         try:
             if data is None or len(data) == 0:
@@ -210,13 +222,16 @@ class RowBasedPostgresDatabase:
                     if cursor.rowcount > 0:
                         insert_count += 1
 
-                # Update metadata only if not in data-only mode
+                # Update metadata and configuration
                 if not data_only_mode:
                     self._update_dataset_metadata(dataset_name)
+                    self._update_dataset_config(dataset_name, dataset_purpose)
                 else:
+                    # Even in data-only mode, update config for dataset purpose tracking
+                    self._update_dataset_config(dataset_name, dataset_purpose)
                     print("📊 Skipping metadata tracking - data-only mode active")
 
-                print(f"✅ Saved {insert_count} rows to dataset '{dataset_name}' (data-only mode)")
+                print(f"✅ Saved {insert_count} rows to dataset '{dataset_name}' ({dataset_purpose} purpose)")
                 return True
 
         except Exception as e:
@@ -360,6 +375,94 @@ class RowBasedPostgresDatabase:
 
         except Exception as e:
             print(f"Failed to update metadata: {str(e)}")
+
+    def _update_dataset_config(self, dataset_name: str, purpose: str = "training", description: str = None):
+        """Update configuration for a dataset."""
+        try:
+            with self.conn.cursor() as cursor:
+                cursor.execute("""
+                INSERT INTO dataset_config 
+                (dataset_name, purpose, description, updated_at)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (dataset_name) 
+                DO UPDATE SET
+                    purpose = EXCLUDED.purpose,
+                    description = EXCLUDED.description,
+                    updated_at = CURRENT_TIMESTAMP
+                """, (dataset_name, purpose, description))
+
+        except Exception as e:
+            print(f"Failed to update dataset config: {str(e)}")
+
+    def get_datasets_by_purpose(self, purpose: str = None) -> List[Dict[str, Any]]:
+        """Get list of datasets filtered by purpose."""
+        try:
+            with self.conn.cursor() as cursor:
+                if purpose:
+                    cursor.execute("""
+                    SELECT 
+                        dm.dataset_name, 
+                        dm.total_rows, 
+                        dm.start_date, 
+                        dm.end_date, 
+                        dm.created_at, 
+                        dm.updated_at,
+                        dc.purpose,
+                        dc.description,
+                        dc.is_active
+                    FROM dataset_metadata dm
+                    LEFT JOIN dataset_config dc ON dm.dataset_name = dc.dataset_name
+                    WHERE dc.purpose = %s AND dc.is_active = true
+                    ORDER BY dm.updated_at DESC
+                    """, (purpose,))
+                else:
+                    cursor.execute("""
+                    SELECT 
+                        dm.dataset_name, 
+                        dm.total_rows, 
+                        dm.start_date, 
+                        dm.end_date, 
+                        dm.created_at, 
+                        dm.updated_at,
+                        dc.purpose,
+                        dc.description,
+                        dc.is_active
+                    FROM dataset_metadata dm
+                    LEFT JOIN dataset_config dc ON dm.dataset_name = dc.dataset_name
+                    ORDER BY dm.updated_at DESC
+                    """)
+
+                results = cursor.fetchall()
+                datasets = []
+
+                for row in results:
+                    datasets.append({
+                        'name': row[0],
+                        'rows': row[1],
+                        'start_date': row[2].strftime('%Y-%m-%d') if row[2] else None,
+                        'end_date': row[3].strftime('%Y-%m-%d') if row[3] else None,
+                        'created_at': row[4].strftime('%Y-%m-%d %H:%M:%S') if row[4] else None,
+                        'updated_at': row[5].strftime('%Y-%m-%d %H:%M:%S') if row[5] else None,
+                        'purpose': row[6] if row[6] else 'unknown',
+                        'description': row[7],
+                        'is_active': row[8] if row[8] is not None else True
+                    })
+
+                return datasets
+
+        except Exception as e:
+            print(f"Failed to get datasets by purpose: {str(e)}")
+            return []
+
+    def get_training_dataset(self) -> str:
+        """Get the primary training dataset name."""
+        training_datasets = self.get_datasets_by_purpose('training')
+        return training_datasets[0]['name'] if training_datasets else "main_dataset"
+
+    def get_pre_seed_dataset(self) -> str:
+        """Get the pre-seed dataset name."""
+        pre_seed_datasets = self.get_datasets_by_purpose('pre_seed')
+        return pre_seed_datasets[0]['name'] if pre_seed_datasets else None
 
     def get_dataset_list(self) -> List[Dict[str, Any]]:
         """Get list of datasets with metadata."""

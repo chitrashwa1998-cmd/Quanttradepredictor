@@ -43,9 +43,17 @@ class DatabaseAdapter:
             print(f"Database connection test failed: {str(e)}")
             return False
 
-    def save_ohlc_data(self, data, dataset_name: str = "main_dataset", preserve_full_data: bool = False) -> bool:
+    def save_ohlc_data(self, data, dataset_name: str = "main_dataset", preserve_full_data: bool = False, dataset_purpose: str = "training") -> bool:
         """Save OHLC dataframe to database."""
-        return self.db.save_ohlc_data(data, dataset_name, preserve_full_data)
+        if hasattr(self.db, 'save_ohlc_data'):
+            # Check if the method supports dataset_purpose parameter
+            import inspect
+            sig = inspect.signature(self.db.save_ohlc_data)
+            if 'dataset_purpose' in sig.parameters:
+                return self.db.save_ohlc_data(data, dataset_name, preserve_full_data, dataset_purpose=dataset_purpose)
+            else:
+                return self.db.save_ohlc_data(data, dataset_name, preserve_full_data)
+        return False
 
     def append_ohlc_data(self, new_data, dataset_name: str = "main_dataset") -> bool:
         """Append new OHLC data to existing dataset (only available in row-based storage)."""
@@ -87,6 +95,26 @@ class DatabaseAdapter:
     def get_dataset_list(self) -> List[Dict[str, Any]]:
         """Get list of saved datasets."""
         return self.db.get_dataset_list()
+
+    def get_datasets_by_purpose(self, purpose: str = None) -> List[Dict[str, Any]]:
+        """Get datasets filtered by purpose."""
+        if hasattr(self.db, 'get_datasets_by_purpose'):
+            return self.db.get_datasets_by_purpose(purpose)
+        else:
+            # Fallback for databases without purpose support
+            return self.get_dataset_list()
+
+    def get_training_dataset(self) -> str:
+        """Get the primary training dataset name."""
+        if hasattr(self.db, 'get_training_dataset'):
+            return self.db.get_training_dataset()
+        return "main_dataset"
+
+    def get_pre_seed_dataset(self) -> str:
+        """Get the pre-seed dataset name."""
+        if hasattr(self.db, 'get_pre_seed_dataset'):
+            return self.db.get_pre_seed_dataset()
+        return None
 
     def get_dataset_metadata(self, dataset_name: str = "main_dataset") -> Optional[Dict[str, Any]]:
         """Get metadata for a dataset."""

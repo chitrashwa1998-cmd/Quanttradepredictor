@@ -40,13 +40,33 @@ uploaded_file = st.file_uploader(
     help="Upload a CSV file with OHLC data"
 )
 
-# Data preservation options
+# Data storage and purpose options
 st.subheader("📊 Data Storage Options")
 col1, col2 = st.columns(2)
 
 with col1:
     preserve_full_data = st.checkbox(
         "Preserve Full Dataset", 
+
+# Show current dataset configuration
+st.sidebar.subheader("📋 Current Datasets")
+try:
+    training_datasets = trading_db.get_datasets_by_purpose('training')
+    pre_seed_datasets = trading_db.get_datasets_by_purpose('pre_seed')
+    
+    if training_datasets:
+        st.sidebar.success(f"🎯 Training: {training_datasets[0]['name']} ({training_datasets[0]['rows']} rows)")
+    else:
+        st.sidebar.info("🎯 No training dataset")
+        
+    if pre_seed_datasets:
+        st.sidebar.success(f"🌱 Pre-seed: {pre_seed_datasets[0]['name']} ({pre_seed_datasets[0]['rows']} rows)")
+    else:
+        st.sidebar.info("🌱 No pre-seed dataset")
+except:
+    st.sidebar.info("📊 Upload datasets to see configuration")
+
+
         value=True,
         help="Keep all data points without sampling. Recommended for most datasets."
     )
@@ -56,6 +76,36 @@ with col2:
         st.info("✅ Full dataset will be preserved")
     else:
         st.info("⚠️ Large datasets will be intelligently sampled (50k rows max)")
+
+# Dataset purpose selection
+st.subheader("🎯 Dataset Purpose")
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    dataset_purpose = st.selectbox(
+        "Dataset Purpose",
+        ["training", "pre_seed", "validation", "testing"],
+        index=0,
+        help="Select the purpose of this dataset"
+    )
+
+with col2:
+    if dataset_purpose == "training":
+        st.info("🎯 Used for model training")
+    elif dataset_purpose == "pre_seed":
+        st.info("🌱 Used for live data seeding")
+    elif dataset_purpose == "validation":
+        st.info("✅ Used for model validation")
+    else:
+        st.info("🧪 Used for model testing")
+
+with col3:
+    # Auto-generate dataset name based on purpose
+    auto_dataset_name = st.text_input(
+        "Dataset Name",
+        value=f"{dataset_purpose}_dataset",
+        help="Name for this dataset"
+    )
 
 if uploaded_file is not None:
     try:
@@ -153,7 +203,7 @@ if uploaded_file is not None:
                         
                         # Always preserve full data for datasets under 100k rows
                         preserve_setting = preserve_full_data or len(df) < 100000
-                        save_success = trading_db.save_ohlc_data(df, "main_dataset", preserve_setting)
+                        save_success = trading_db.save_ohlc_data(df, auto_dataset_name, preserve_setting, dataset_purpose)
                         if save_success:
                             break
                         elif attempt < max_retries - 1:
@@ -169,15 +219,15 @@ if uploaded_file is not None:
                 
                 if save_success:
                     # Verify data was actually saved by trying to load it back
-                    verification_data = trading_db.load_ohlc_data("main_dataset")
+                    verification_data = trading_db.load_ohlc_data(auto_dataset_name)
                     if verification_data is not None and len(verification_data) > 0:
                         actual_rows = len(verification_data)
                         original_rows = len(df)
                         
                         if actual_rows == original_rows:
-                            st.success(f"✅ {message} & Full dataset saved to database! ({actual_rows} rows)")
+                            st.success(f"✅ {message} & Full dataset '{auto_dataset_name}' saved for {dataset_purpose}! ({actual_rows} rows)")
                         else:
-                            st.warning(f"⚠️ {message} & Dataset saved but may have been processed: {actual_rows} rows saved from {original_rows} original rows")
+                            st.warning(f"⚠️ {message} & Dataset '{auto_dataset_name}' saved for {dataset_purpose} but may have been processed: {actual_rows} rows saved from {original_rows} original rows")
                         
                         # Show detailed database info
                         db_info = trading_db.get_database_info()
