@@ -44,10 +44,6 @@ uploaded_file = st.file_uploader(
 st.subheader("📊 Data Storage Options")
 col1, col2 = st.columns(2)
 
-with col1:
-    preserve_full_data = st.checkbox(
-        "Preserve Full Dataset", 
-
 # Show current dataset configuration
 st.sidebar.subheader("📋 Current Datasets")
 try:
