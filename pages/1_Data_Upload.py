@@ -66,7 +66,9 @@ try:
 except:
     st.sidebar.info("📊 Upload datasets to see configuration")
 
-
+with col1:
+    preserve_full_data = st.checkbox(
+        "Preserve Full Dataset",
         value=True,
         help="Keep all data points without sampling. Recommended for most datasets."
     )
