@@ -282,7 +282,15 @@ class LiveDataManager:
             from utils.database_adapter import DatabaseAdapter
             
             # Convert instrument key to database dataset name
-            dataset_name = "livenifty50"
+            # Use pre_seed_dataset if available, fallback to livenifty50
+            db_test = DatabaseAdapter(use_row_based=True)
+            datasets = db_test.get_dataset_list()
+            dataset_names = [d['name'] for d in datasets]
+            
+            if "pre_seed_dataset" in dataset_names:
+                dataset_name = "pre_seed_dataset"
+            else:
+                dataset_name = "livenifty50"
             
             # Use row-based storage for better performance
             db = DatabaseAdapter(use_row_based=True)
