@@ -74,12 +74,43 @@ def show_predictions_page():
             st.error(f"❌ Database initialization failed: {str(e)}")
             st.stop()
 
-    # Get fresh data from database instead of session state
-    fresh_data = db.load_ohlc_data()
-
-    # Check if database has data
-    if fresh_data is None or len(fresh_data) == 0:
-        st.error("⚠️ No data available in database. Please upload data first in the Data Upload page.")
+    # Get fresh data from database - try multiple datasets
+    fresh_data = None
+    dataset_tried = None
+    
+    # Try to load data from available datasets
+    try:
+        datasets = db.get_dataset_list()
+        if datasets:
+            # Try training_dataset first, then livenifty50, then any available
+            for preferred_name in ['training_dataset', 'livenifty50']:
+                dataset_names = [d['name'] for d in datasets]
+                if preferred_name in dataset_names:
+                    fresh_data = db.load_ohlc_data(preferred_name)
+                    dataset_tried = preferred_name
+                    if fresh_data is not None and len(fresh_data) > 0:
+                        st.info(f"📊 Loaded data from dataset: **{preferred_name}** ({len(fresh_data)} rows)")
+                        break
+            
+            # If no preferred dataset worked, try the first available
+            if fresh_data is None or len(fresh_data) == 0:
+                first_dataset = datasets[0]['name']
+                fresh_data = db.load_ohlc_data(first_dataset)
+                dataset_tried = first_dataset
+                if fresh_data is not None and len(fresh_data) > 0:
+                    st.info(f"📊 Loaded data from dataset: **{first_dataset}** ({len(fresh_data)} rows)")
+        
+        # Final check
+        if fresh_data is None or len(fresh_data) == 0:
+            st.error("⚠️ No data available in database. Please upload data first in the Data Upload page.")
+            if datasets:
+                st.write("**Available datasets:**")
+                for dataset in datasets:
+                    st.write(f"• {dataset['name']}: {dataset['rows']} rows")
+            st.stop()
+            
+    except Exception as e:
+        st.error(f"❌ Error loading data from database: {str(e)}")
         st.stop()
 
     # Validate that data contains authentic datetime data
