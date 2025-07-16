@@ -16,13 +16,7 @@ class RowBasedPostgresDatabase:
         if not self.database_url:
             raise ValueError("DATABASE_URL environment variable not found")
 
-        try:
-            self.conn = psycopg.connect(self.database_url)
-            self.conn.autocommit = True
-            self._create_row_based_tables()
-        except Exception as e:
-            print(f"PostgreSQL connection failed: {str(e)}")
-            raise e
+        self._connect_with_retry()
 
     def _create_row_based_tables(self):
         """Create row-based tables for efficient data operations."""
@@ -120,12 +114,59 @@ class RowBasedPostgresDatabase:
             print(f"Row-based table creation failed: {str(e)}")
             raise e
 
+    def _connect_with_retry(self, max_retries: int = 3):
+        """Connect to database with retry logic for AdminShutdown errors."""
+        for attempt in range(max_retries):
+            try:
+                if hasattr(self, 'conn'):
+                    try:
+                        self.conn.close()
+                    except:
+                        pass
+                
+                print(f"🔄 Connecting to PostgreSQL (attempt {attempt + 1}/{max_retries})...")
+                self.conn = psycopg.connect(self.database_url)
+                self.conn.autocommit = True
+                self._create_row_based_tables()
+                print("✅ PostgreSQL connection established")
+                return
+                
+            except Exception as e:
+                error_str = str(e).lower()
+                if "adminshutdown" in error_str or "terminating connection" in error_str:
+                    if attempt < max_retries - 1:
+                        print(f"⚠️ Database connection terminated, retrying in 2 seconds... ({attempt + 1}/{max_retries})")
+                        import time
+                        time.sleep(2)
+                        continue
+                print(f"❌ PostgreSQL connection failed: {str(e)}")
+                raise e
+        
+        raise ConnectionError("Failed to establish database connection after retries")
+
+    def _ensure_connection(self):
+        """Ensure database connection is active, reconnect if needed."""
+        try:
+            if not hasattr(self, 'conn') or self.conn.closed:
+                self._connect_with_retry()
+                return
+                
+            # Test connection
+            with self.conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+        except Exception as e:
+            error_str = str(e).lower()
+            if "adminshutdown" in error_str or "terminating connection" in error_str or "closed" in error_str:
+                print("🔄 Database connection lost, reconnecting...")
+                self._connect_with_retry()
+            else:
+                raise e
+
     def test_connection(self) -> bool:
         """Test database connection."""
         try:
-            with self.conn.cursor() as cursor:
-                cursor.execute("SELECT 1")
-                return True
+            self._ensure_connection()
+            return True
         except Exception:
             return False
 
@@ -134,6 +175,9 @@ class RowBasedPostgresDatabase:
         try:
             if data is None or len(data) == 0:
                 return False
+
+            # Ensure connection is active
+            self._ensure_connection()
 
             # In data-only mode, clear all existing data first to ensure only your uploaded data exists
             if data_only_mode:
@@ -259,6 +303,9 @@ class RowBasedPostgresDatabase:
                        start_date: Optional[str] = None, end_date: Optional[str] = None) -> Optional[pd.DataFrame]:
         """Load OHLC dataframe from row-based storage with optional filtering."""
         try:
+            # Ensure connection is active
+            self._ensure_connection()
+            
             with self.conn.cursor() as cursor:
                 # Build query with optional filters
                 query = """
@@ -559,6 +606,9 @@ class RowBasedPostgresDatabase:
     def get_database_info(self) -> Dict[str, Any]:
         """Get information about stored data."""
         try:
+            # Ensure connection is active
+            self._ensure_connection()
+            
             with self.conn.cursor() as cursor:
                 # Force refresh connection to avoid stale data
                 self.conn.commit()

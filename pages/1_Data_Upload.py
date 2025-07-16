@@ -6,8 +6,26 @@ from utils.data_processing import DataProcessor
 from features.technical_indicators import TechnicalIndicators
 from utils.database_adapter import DatabaseAdapter
 
-# Initialize database
-trading_db = DatabaseAdapter()
+# Initialize database adapter with error handling
+try:
+    trading_db = DatabaseAdapter()
+except Exception as e:
+    error_str = str(e).lower()
+    if "adminshutdown" in error_str or "terminating connection" in error_str or "database connection was terminated" in error_str:
+        st.error("🔌 Database connection was terminated due to inactivity")
+        st.info("💡 **Solution**: This is normal for idle PostgreSQL databases. Please refresh the page to reconnect.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Refresh Page", type="primary"):
+                st.rerun()
+        with col2:
+            if st.button("🔍 Check Database Status"):
+                st.switch_page("pages/5_Database_Manager.py")
+        st.stop()
+    else:
+        st.error(f"❌ Database initialization failed: {str(e)}")
+        st.info("Please check your database configuration.")
+        st.stop()
 
 st.set_page_config(page_title="Data Upload", page_icon="📊", layout="wide")
 
@@ -48,7 +66,7 @@ col1, col2 = st.columns(2)
 st.sidebar.subheader("📋 Current Datasets")
 try:
     all_datasets = trading_db.get_database_info()['datasets']
-    
+
     if all_datasets:
         # Group by purpose
         purposes = {}
@@ -57,7 +75,7 @@ try:
             if purpose not in purposes:
                 purposes[purpose] = []
             purposes[purpose].append(dataset)
-        
+
         for purpose, datasets in purposes.items():
             st.sidebar.markdown(f"**{purpose.title()} ({len(datasets)}):**")
             for dataset in datasets:
@@ -139,7 +157,7 @@ if uploaded_file is not None:
         with st.spinner("Loading and processing data..."):
             # Reset file pointer before processing
             uploaded_file.seek(0)
-            
+
             # Add try-catch specifically for file processing
             try:
                 df, message = DataProcessor.load_and_process_data(uploaded_file)
@@ -169,7 +187,7 @@ if uploaded_file is not None:
                 any(pattern in sample_datetime_str for pattern in ['Data_', 'Point_']) or
                 (sample_datetime_str == '09:15:00')  # Time only without date
             )
-            
+
             if is_synthetic:
                 st.error("❌ Invalid datetime values detected. Please upload data with proper datetime format (YYYY-MM-DD HH:MM:SS).")
                 st.stop()
@@ -186,18 +204,18 @@ if uploaded_file is not None:
             # Check if dataset already exists
             existing_datasets = trading_db.get_database_info()['datasets']
             dataset_exists = any(d['name'] == auto_dataset_name for d in existing_datasets)
-            
+
             if dataset_exists:
                 st.warning(f"⚠️ Dataset '{auto_dataset_name}' already exists!")
                 col1, col2 = st.columns(2)
-                
+
                 with col1:
                     if st.button("🔄 Replace Dataset", type="primary"):
                         # Proceed with replacement
                         pass
                     else:
                         st.stop()
-                
+
                 with col2:
                     new_name = st.text_input("Or use different name:", value=f"{auto_dataset_name}_v2")
                     if st.button("💾 Save with New Name") and new_name:
@@ -209,15 +227,15 @@ if uploaded_file is not None:
             try:
                 from utils.database_adapter import DatabaseAdapter
                 import time
-                
+
                 # Retry logic for database save (handles table creation timing issues)
                 max_retries = 3
                 save_success = False
-                
+
                 for attempt in range(max_retries):
                     try:
                         trading_db = DatabaseAdapter()
-                        
+
                         # Test database connection first
                         if not trading_db._test_connection():
                             if attempt == max_retries - 1:
@@ -225,7 +243,7 @@ if uploaded_file is not None:
                                 st.stop()
                             time.sleep(1)
                             continue
-                        
+
                         # Always preserve full data for datasets under 100k rows
                         preserve_setting = preserve_full_data or len(df) < 100000
                         save_success = trading_db.save_ohlc_data(df, auto_dataset_name, preserve_setting, dataset_purpose)
@@ -241,19 +259,19 @@ if uploaded_file is not None:
                             continue
                         elif attempt == max_retries - 1:
                             raise retry_error
-                
+
                 if save_success:
                     # Verify data was actually saved by trying to load it back
                     verification_data = trading_db.load_ohlc_data(auto_dataset_name)
                     if verification_data is not None and len(verification_data) > 0:
                         actual_rows = len(verification_data)
                         original_rows = len(df)
-                        
+
                         if actual_rows == original_rows:
                             st.success(f"✅ {message} & Full dataset '{auto_dataset_name}' saved for {dataset_purpose}! ({actual_rows} rows)")
                         else:
                             st.warning(f"⚠️ {message} & Dataset '{auto_dataset_name}' saved for {dataset_purpose} but may have been processed: {actual_rows} rows saved from {original_rows} original rows")
-                        
+
                         # Show detailed database info
                         db_info = trading_db.get_database_info()
                         st.info(f"📊 Database now contains {db_info['total_datasets']} dataset(s) with {db_info['total_records']} total records")
@@ -263,7 +281,7 @@ if uploaded_file is not None:
                 else:
                     st.error("❌ Failed to save data to database. Please try again.")
                     st.stop()
-                    
+
             except Exception as db_error:
                 st.error(f"❌ Database error: {str(db_error)}")
                 st.error("💡 **Try these solutions:**")
@@ -271,7 +289,7 @@ if uploaded_file is not None:
                 st.error("• Verify DATABASE_URL environment variable is set")
                 st.error("• Try refreshing the page and uploading again")
                 st.stop()
-            
+
             st.rerun()
     except Exception as upload_error:
         st.error(f"❌ Upload failed: {str(upload_error)}")

@@ -32,6 +32,9 @@ class DatabaseAdapter:
             else:
                 raise ConnectionError("Failed to connect to PostgreSQL")
         except Exception as e:
+            error_str = str(e).lower()
+            if "adminshutdown" in error_str or "terminating connection" in error_str:
+                raise ConnectionError("Database connection was terminated. This is normal for idle connections. Please refresh the page to reconnect.")
             print(f"❌ PostgreSQL initialization failed: {str(e)}")
             raise e
 
