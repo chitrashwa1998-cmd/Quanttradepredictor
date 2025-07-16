@@ -61,11 +61,15 @@ with col2:
 try:
     db_info = trading_db.get_database_info()
 
-    # Debug information
-    st.write("**Debug Info:**")
-    st.write(f"Database Type: {db_info.get('database_type', 'Unknown')}")
-    st.write(f"Backend: {db_info.get('backend', 'Unknown')}")
-    st.write(f"Storage Type: {db_info.get('storage_type', 'Unknown')}")
+    # Show current database connection status
+    if db_info.get('database_type') == 'postgresql_row_based':
+        st.success("🟢 **PostgreSQL Row-Based Connected**")
+    else:
+        st.info(f"📊 **Database Type:** {db_info.get('database_type', 'Unknown')}")
+    
+    st.write(f"**Backend:** {db_info.get('backend', 'PostgreSQL (Row-Based)')}")
+    st.write(f"**Storage Type:** {db_info.get('storage_type', 'Row-Based')}")
+    st.write(f"**Supports Append:** {db_info.get('supports_append', True)}")
 
 except Exception as e:
     st.error(f"Error getting database info: {str(e)}")

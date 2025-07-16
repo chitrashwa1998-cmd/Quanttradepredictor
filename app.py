@@ -62,6 +62,14 @@ def initialize_session_state():
             from features.technical_indicators import TechnicalIndicators
 
             trading_db = get_trading_database()
+            
+            # Show correct database status
+            try:
+                db_info = trading_db.get_database_info()
+                if db_info.get('database_type') == 'postgresql_row_based':
+                    print("✅ PostgreSQL Row-Based Database Active")
+            except:
+                pass
 
             # Recover OHLC data
             if st.session_state.data is None:
