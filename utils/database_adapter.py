@@ -75,7 +75,7 @@ class DatabaseAdapter:
     def load_ohlc_data_range(self, dataset_name: str = "main_dataset", start_date: str = None, end_date: str = None, limit: int = None):
         """Load OHLC data with date range filtering (only available in row-based storage)."""
         if self.use_row_based and hasattr(self.db, 'load_ohlc_data'):
-            return self.db.load_ohlc_data(dataset_name, limit=limit, start_date=start_date, end_date=end_date)
+            return self.db.load_ohlc_data((dataset_name, limit=limit, start_date=start_date, end_date=end_date)
         else:
             # Fallback: load all data and filter
             data = self.load_ohlc_data(dataset_name)

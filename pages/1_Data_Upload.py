@@ -47,18 +47,23 @@ col1, col2 = st.columns(2)
 # Show current dataset configuration
 st.sidebar.subheader("📋 Current Datasets")
 try:
-    training_datasets = trading_db.get_datasets_by_purpose('training')
-    pre_seed_datasets = trading_db.get_datasets_by_purpose('pre_seed')
+    all_datasets = trading_db.get_database_info()['datasets']
     
-    if training_datasets:
-        st.sidebar.success(f"🎯 Training: {training_datasets[0]['name']} ({training_datasets[0]['rows']} rows)")
-    else:
-        st.sidebar.info("🎯 No training dataset")
+    if all_datasets:
+        # Group by purpose
+        purposes = {}
+        for dataset in all_datasets:
+            purpose = dataset.get('purpose', 'unknown')
+            if purpose not in purposes:
+                purposes[purpose] = []
+            purposes[purpose].append(dataset)
         
-    if pre_seed_datasets:
-        st.sidebar.success(f"🌱 Pre-seed: {pre_seed_datasets[0]['name']} ({pre_seed_datasets[0]['rows']} rows)")
+        for purpose, datasets in purposes.items():
+            st.sidebar.markdown(f"**{purpose.title()} ({len(datasets)}):**")
+            for dataset in datasets:
+                st.sidebar.success(f"📊 {dataset['name']} ({dataset['rows']} rows)")
     else:
-        st.sidebar.info("🌱 No pre-seed dataset")
+        st.sidebar.info("📊 No datasets uploaded yet")
 except:
     st.sidebar.info("📊 Upload datasets to see configuration")
 
@@ -177,6 +182,28 @@ if uploaded_file is not None:
             st.session_state.volatility_predictions = None
             st.session_state.direction_predictions = None
             st.session_state.direction_probabilities = None
+
+            # Check if dataset already exists
+            existing_datasets = trading_db.get_database_info()['datasets']
+            dataset_exists = any(d['name'] == auto_dataset_name for d in existing_datasets)
+            
+            if dataset_exists:
+                st.warning(f"⚠️ Dataset '{auto_dataset_name}' already exists!")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("🔄 Replace Dataset", type="primary"):
+                        # Proceed with replacement
+                        pass
+                    else:
+                        st.stop()
+                
+                with col2:
+                    new_name = st.text_input("Or use different name:", value=f"{auto_dataset_name}_v2")
+                    if st.button("💾 Save with New Name") and new_name:
+                        auto_dataset_name = new_name
+                    elif new_name:
+                        st.stop()
 
             # Automatically save to database with error handling and retry logic
             try:
