@@ -9,10 +9,68 @@ st.set_page_config(page_title="Model Training", page_icon="🧠", layout="wide")
 st.title("🧠 Model Training")
 st.markdown("Train prediction models using your processed data.")
 
-# Check if data is available
+# Dataset Selection
+st.header("📊 Dataset Selection")
+
+try:
+    from utils.database_adapter import get_trading_database
+    db = get_trading_database()
+    datasets = db.get_dataset_list()
+    
+    if datasets:
+        dataset_names = [d['name'] for d in datasets]
+        dataset_info = {d['name']: f"{d['name']} ({d['rows']} rows)" for d in datasets}
+        
+        # Default to training_dataset if available, otherwise first dataset
+        default_index = 0
+        if "training_dataset" in dataset_names:
+            default_index = dataset_names.index("training_dataset")
+        
+        selected_dataset = st.selectbox(
+            "Select Dataset for Training:",
+            options=dataset_names,
+            format_func=lambda x: dataset_info[x],
+            index=default_index,
+            help="Choose which dataset to use for model training"
+        )
+        
+        # Load selected dataset
+        if st.button("🔄 Load Selected Dataset", type="primary"):
+            selected_data = db.load_ohlc_data(selected_dataset)
+            if selected_data is not None:
+                st.session_state.data = selected_data
+                st.success(f"✅ Loaded {selected_dataset}: {len(selected_data)} rows")
+                st.rerun()
+            else:
+                st.error(f"❌ Failed to load {selected_dataset}")
+        
+        # Show current dataset info
+        if hasattr(st.session_state, 'data') and st.session_state.data is not None:
+            st.info(f"📈 Current dataset: {len(st.session_state.data)} rows loaded")
+        
+    else:
+        st.warning("⚠️ No datasets found in database.")
+        
+except Exception as e:
+    st.error(f"❌ Error loading datasets: {str(e)}")
+
+# Check if data is available and prioritize training dataset
 if 'data' not in st.session_state or st.session_state.data is None:
-    st.error("❌ No data available. Please upload data first in the Data Upload page.")
-    st.stop()
+    # Try to load the training dataset automatically
+    try:
+        from utils.database_adapter import get_trading_database
+        db = get_trading_database()
+        training_data = db.load_ohlc_data("training_dataset")
+        
+        if training_data is not None and len(training_data) > 0:
+            st.session_state.data = training_data
+            st.info(f"✅ Automatically loaded training dataset: {len(training_data)} rows")
+        else:
+            st.error("❌ No training data available. Please upload data first in the Data Upload page.")
+            st.stop()
+    except Exception as e:
+        st.error("❌ Could not load training data. Please upload data first in the Data Upload page.")
+        st.stop()
 
 # Feature Engineering Section will be handled within each model tab
 
