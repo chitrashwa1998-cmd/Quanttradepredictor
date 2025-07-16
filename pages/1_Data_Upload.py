@@ -246,7 +246,7 @@ if uploaded_file is not None:
 
                         # Always preserve full data for datasets under 100k rows
                         preserve_setting = preserve_full_data or len(df) < 100000
-                        save_success = trading_db.save_ohlc_data(df, auto_dataset_name, preserve_setting, dataset_purpose)
+                        save_success = trading_db.save_ohlc_data(df, auto_dataset_name, preserve_setting, data_only_mode=False, dataset_purpose=dataset_purpose)
                         if save_success:
                             break
                         elif attempt < max_retries - 1:

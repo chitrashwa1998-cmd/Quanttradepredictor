@@ -46,13 +46,15 @@ class DatabaseAdapter:
             print(f"Database connection test failed: {str(e)}")
             return False
 
-    def save_ohlc_data(self, data, dataset_name: str = "main_dataset", preserve_full_data: bool = False, dataset_purpose: str = "training") -> bool:
+    def save_ohlc_data(self, data, dataset_name: str = "main_dataset", preserve_full_data: bool = False, data_only_mode: bool = False, dataset_purpose: str = "training") -> bool:
         """Save OHLC dataframe to database."""
         if hasattr(self.db, 'save_ohlc_data'):
             # Check if the method supports dataset_purpose parameter
             import inspect
             sig = inspect.signature(self.db.save_ohlc_data)
-            if 'dataset_purpose' in sig.parameters:
+            if 'data_only_mode' in sig.parameters and 'dataset_purpose' in sig.parameters:
+                return self.db.save_ohlc_data(data, dataset_name, preserve_full_data, data_only_mode, dataset_purpose)
+            elif 'dataset_purpose' in sig.parameters:
                 return self.db.save_ohlc_data(data, dataset_name, preserve_full_data, dataset_purpose=dataset_purpose)
             else:
                 return self.db.save_ohlc_data(data, dataset_name, preserve_full_data)

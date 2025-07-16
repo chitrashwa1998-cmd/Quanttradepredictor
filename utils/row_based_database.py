@@ -170,7 +170,7 @@ class RowBasedPostgresDatabase:
         except Exception:
             return False
 
-    def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset", preserve_full_data: bool = False, data_only_mode: bool = True, dataset_purpose: str = "training") -> bool:
+    def save_ohlc_data(self, data: pd.DataFrame, dataset_name: str = "main_dataset", preserve_full_data: bool = False, data_only_mode: bool = False, dataset_purpose: str = "training") -> bool:
         """Save OHLC dataframe to row-based storage with append capability."""
         try:
             if data is None or len(data) == 0:
@@ -179,7 +179,7 @@ class RowBasedPostgresDatabase:
             # Ensure connection is active
             self._ensure_connection()
 
-            # In data-only mode, clear all existing data first to ensure only your uploaded data exists
+            # Only clear data if explicitly requested (disabled by default to allow coexistence)
             if data_only_mode:
                 self.clear_all_data()
                 print("🧹 Cleared all existing data - keeping only your uploaded data")
