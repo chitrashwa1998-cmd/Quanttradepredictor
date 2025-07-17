@@ -30,7 +30,7 @@ class LivePredictionPipeline:
         self.update_interval = 15  # Check for new candles every 15 seconds
 
         # Minimum data requirements
-        self.min_ohlc_rows = 50  # Minimum OHLC rows needed for predictions (reduced since we have pre-seeded data)
+        self.min_ohlc_rows = 100  # Minimum OHLC rows needed for predictions
         
         # Candle completion tracking
         self.last_candle_timestamps = {}  # Track last processed candle for each instrument
