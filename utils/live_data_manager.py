@@ -134,10 +134,18 @@ class LiveDataManager:
                         
                         self.ohlc_data[instrument_key] = existing_ohlc
                         
-                        seed_count = self.seeded_instruments[instrument_key]['seed_count']
-                        total_rows = len(existing_ohlc)
-                        live_count = max(0, total_rows - seed_count)
-                        print(f"📈 Updated OHLC for {instrument_key}: {total_rows} total rows ({seed_count} seeded + {live_count} live) - continuation active")
+                        # Only show update message occasionally to reduce noise
+                        if not hasattr(self, '_update_counter'):
+                            self._update_counter = {}
+                        if instrument_key not in self._update_counter:
+                            self._update_counter[instrument_key] = 0
+                        self._update_counter[instrument_key] += 1
+                        
+                        if self._update_counter[instrument_key] % 10 == 0:  # Show every 10th update
+                            seed_count = self.seeded_instruments[instrument_key]['seed_count']
+                            total_rows = len(existing_ohlc)
+                            live_count = max(0, total_rows - seed_count)
+                            print(f"📈 Updated candle for {instrument_key}: {total_rows} total rows ({seed_count} seeded + {live_count} live)")
                 else:
                     # Create new candle for this time period
                     period_ticks = df[df.index >= current_candle_time]
@@ -173,8 +181,9 @@ class LiveDataManager:
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
                         total_rows = len(combined_ohlc)
                         live_count = max(0, total_rows - seed_count)
-                        print(f"📈 NEW CANDLE CREATED for {instrument_key}: {total_rows} total rows ({seed_count} seeded + {live_count} live)")
-                        print(f"🕐 New candle timestamp: {current_candle_time}")
+                        print(f"🕐 NEW 5-MINUTE CANDLE CREATED for {instrument_key}: {current_candle_time}")
+                        print(f"📈 Total data: {total_rows} rows ({seed_count} seeded + {live_count} live)")
+                        print(f"💡 This candle is now ready for prediction processing!")
                 
             else:
                 # Standard resampling for non-seeded instruments
