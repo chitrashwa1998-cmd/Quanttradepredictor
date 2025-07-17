@@ -97,9 +97,9 @@ class LiveDataManager:
             
             # If we have seeded data, use a different approach
             if instrument_key in self.seeded_instruments and len(existing_ohlc) > 0:
-                # For seeded instruments, create live candles based on current actual time
-                # Use current system time instead of tick time for proper progression
-                current_time = pd.Timestamp.now()
+                # For seeded instruments, create live candles based on latest tick time
+                # Use latest tick time to maintain consistent timezone
+                current_time = df.index[-1]  # Latest tick time
                 
                 # Round down to nearest 5-minute interval
                 current_candle_time = current_time.floor('5T')
@@ -110,11 +110,22 @@ class LiveDataManager:
                 # Check if we need to create a new candle (time progressed to next 5-minute interval)
                 last_candle_time = existing_ohlc.index[-1] if len(existing_ohlc) > 0 else None
                 if last_candle_time:
-                    print(f"📊 Last candle: {last_candle_time}, Current candle: {current_candle_time}")
+                    # Convert both timestamps to naive for comparison (remove timezone info)
+                    if hasattr(last_candle_time, 'tz_localize'):
+                        last_candle_time_naive = last_candle_time.tz_localize(None) if last_candle_time.tz is not None else last_candle_time
+                    else:
+                        last_candle_time_naive = last_candle_time
+                    
+                    if hasattr(current_candle_time, 'tz_localize'):
+                        current_candle_time_naive = current_candle_time.tz_localize(None) if current_candle_time.tz is not None else current_candle_time
+                    else:
+                        current_candle_time_naive = current_candle_time
+                    
+                    print(f"📊 Last candle: {last_candle_time_naive}, Current candle: {current_candle_time_naive}")
                     
                     # If current candle time is newer than last candle, create new candle
-                    if current_candle_time > last_candle_time:
-                        print(f"🆕 Time for new candle: {current_candle_time} > {last_candle_time}")
+                    if current_candle_time_naive > last_candle_time_naive:
+                        print(f"🆕 Time for new candle: {current_candle_time_naive} > {last_candle_time_naive}")
                         should_create_new_candle = True
                     else:
                         should_create_new_candle = False
@@ -126,6 +137,12 @@ class LiveDataManager:
                     # Re-seed if data was lost
                     self.seed_live_data_from_database(instrument_key)
                     existing_ohlc = self.ohlc_data.get(instrument_key, pd.DataFrame())
+                    
+                # Fix timezone issue: Convert seeded data to naive timestamps if needed
+                if len(existing_ohlc) > 0 and hasattr(existing_ohlc.index[0], 'tz') and existing_ohlc.index[0].tz is not None:
+                    existing_ohlc.index = existing_ohlc.index.tz_localize(None)
+                    self.ohlc_data[instrument_key] = existing_ohlc
+                    print(f"🔧 Fixed timezone for existing data: {len(existing_ohlc)} rows")
                 
                 # Check if we already have a candle for this time period or if we should create a new one
                 if current_candle_time in existing_ohlc.index and not should_create_new_candle:
