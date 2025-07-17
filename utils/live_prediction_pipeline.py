@@ -46,12 +46,33 @@ class LivePredictionPipeline:
             available_models = []
             model_names = ['direction', 'volatility', 'profit_probability', 'reversal']
 
+            print(f"🔍 Checking model availability...")
+            print(f"🔍 ModelManager.trained_models keys: {list(self.model_manager.trained_models.keys())}")
+            
             for model_name in model_names:
-                if self.model_manager.is_model_trained(model_name):
+                is_trained = self.model_manager.is_model_trained(model_name)
+                if is_trained:
                     available_models.append(model_name)
                     print(f"✅ {model_name} model ready for live predictions")
+                    
+                    # Check if model has all required components
+                    model_data = self.model_manager.trained_models.get(model_name, {})
+                    has_model = 'model' in model_data or 'ensemble' in model_data
+                    has_scaler = 'scaler' in model_data
+                    has_features = 'feature_names' in model_data
+                    print(f"   - Has model: {has_model}, Has scaler: {has_scaler}, Has features: {has_features}")
                 else:
                     print(f"⚠️ {model_name} model not trained")
+                    
+                    # Check what's in session state for this model
+                    if hasattr(st, 'session_state'):
+                        if hasattr(st.session_state, f'{model_name}_trained_models'):
+                            session_models = getattr(st.session_state, f'{model_name}_trained_models', {})
+                            print(f"   - Found in session state: {list(session_models.keys())}")
+                        else:
+                            print(f"   - No session state found for {model_name}")
+            
+            print(f"🎯 Total available models: {len(available_models)} out of {len(model_names)}")
 
             if not available_models:
                 print("❌ No trained models available. Please train at least one model first.")
@@ -210,9 +231,13 @@ class LivePredictionPipeline:
             print(f"🤖 Trained models detected: {trained_models}")
             print(f"🔍 Model Manager trained models: {list(self.model_manager.trained_models.keys())}")
 
+            # Check all 4 models explicitly
+            for model_name in ['direction', 'volatility', 'profit_probability', 'reversal']:
+                is_trained = self.model_manager.is_model_trained(model_name)
+                print(f"🔍 {model_name} model trained status: {is_trained}")
+
             # Direction Model
             direction_trained = self.model_manager.is_model_trained('direction')
-            print(f"🔍 Direction model trained status: {direction_trained}")
             
             if direction_trained:
                 print(f"🔧 Calculating direction features for {instrument_key}...")
