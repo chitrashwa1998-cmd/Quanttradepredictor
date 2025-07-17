@@ -103,6 +103,12 @@ class LiveDataManager:
                 # Round down to nearest 5-minute interval
                 current_candle_time = current_time.floor('5T')
                 
+                # Ensure we're working with the full seeded dataset
+                if len(existing_ohlc) < self.seeded_instruments[instrument_key]['seed_count']:
+                    # Re-seed if data was lost
+                    self.seed_live_data_from_database(instrument_key)
+                    existing_ohlc = self.ohlc_data.get(instrument_key, pd.DataFrame())
+                
                 # Check if we already have a candle for this time period
                 if current_candle_time in existing_ohlc.index:
                     # Update existing candle with new tick data
@@ -129,8 +135,9 @@ class LiveDataManager:
                         self.ohlc_data[instrument_key] = existing_ohlc
                         
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
-                        live_count = len(existing_ohlc) - seed_count
-                        print(f"📈 Updated OHLC for {instrument_key}: {len(existing_ohlc)} total rows ({seed_count} seeded + {live_count} live) - continuation active")
+                        total_rows = len(existing_ohlc)
+                        live_count = max(0, total_rows - seed_count)
+                        print(f"📈 Updated OHLC for {instrument_key}: {total_rows} total rows ({seed_count} seeded + {live_count} live) - continuation active")
                 else:
                     # Create new candle for this time period
                     period_ticks = df[df.index >= current_candle_time]
@@ -147,21 +154,26 @@ class LiveDataManager:
                         combined_ohlc = pd.concat([existing_ohlc, new_candle])
                         combined_ohlc = combined_ohlc.sort_index()
                         
-                        # Keep reasonable limits
-                        max_rows = 300 if instrument_key in self.seeded_instruments else 100
-                        if len(combined_ohlc) > max_rows:
-                            combined_ohlc = combined_ohlc.tail(max_rows)
-                            # Update seed count if we trimmed seeded data
-                            if instrument_key in self.seeded_instruments:
-                                original_seed_count = self.seeded_instruments[instrument_key]['seed_count']
-                                remaining_seed_count = max(0, max_rows - 1)  # -1 for the new candle
-                                self.seeded_instruments[instrument_key]['seed_count'] = min(original_seed_count, remaining_seed_count)
+                        # Keep reasonable limits but protect seeded data
+                        if instrument_key in self.seeded_instruments:
+                            original_seed_count = self.seeded_instruments[instrument_key]['seed_count']
+                            max_rows = max(300, original_seed_count + 50)  # Allow 50 new live candles beyond seed
+                            
+                            if len(combined_ohlc) > max_rows:
+                                # Only trim if we exceed reasonable limits, but keep all seeded data
+                                trim_to_rows = max(original_seed_count + 10, max_rows - 20)
+                                combined_ohlc = combined_ohlc.tail(trim_to_rows)
+                        else:
+                            max_rows = 100
+                            if len(combined_ohlc) > max_rows:
+                                combined_ohlc = combined_ohlc.tail(max_rows)
                         
                         self.ohlc_data[instrument_key] = combined_ohlc
                         
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
-                        live_count = len(combined_ohlc) - seed_count
-                        print(f"📈 NEW CANDLE for {instrument_key}: {len(combined_ohlc)} total rows ({seed_count} seeded + {live_count} live) - continuation active")
+                        total_rows = len(combined_ohlc)
+                        live_count = max(0, total_rows - seed_count)
+                        print(f"📈 NEW CANDLE for {instrument_key}: {total_rows} total rows ({seed_count} seeded + {live_count} live) - continuation active")
                 
             else:
                 # Standard resampling for non-seeded instruments
