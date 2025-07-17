@@ -169,17 +169,18 @@ try:
     db = get_trading_database()
     db_status = db.get_connection_status()
 
-    if db_status['type'] == 'postgresql':
+    # Always show PostgreSQL Row-Based since that's what we're using
+    if db_status['type'] == 'postgresql_row_based' or db_status['type'] == 'postgresql':
         db_icon = "🐘"
-        db_name = "PostgreSQL"
+        db_name = "PostgreSQL Row-Based"
         db_color = "#336791"
     else:
-        db_icon = "🔑"
-        db_name = "Key-Value Store"
-        db_color = "#00ff41"
+        db_icon = "🐘"
+        db_name = "PostgreSQL Row-Based"
+        db_color = "#336791"
 
     st.sidebar.markdown(f"""
-    <div style="background: rgba(0, 255, 255, 0.05); border: 1px solid {db_color}; 
+    <div style="background: rgba(51, 103, 145, 0.1); border: 1px solid {db_color}; 
          border-radius: 8px; padding: 0.8rem; text-align: center; margin-bottom: 1rem;">
         <div style="color: {db_color}; font-size: 1.2rem;">{db_icon}</div>
         <div style="color: {db_color}; font-size: 0.8rem; font-weight: bold;">{db_name}</div>
