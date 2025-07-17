@@ -104,6 +104,7 @@ TribexAlpha is a comprehensive trading analytics platform built with Streamlit t
 - Database backup for long-term persistence
 
 ## Changelog
+- July 17, 2025: Fixed predictions not updating after 5-minute candle close - improved candle detection logic and added forced prediction updates
 - July 17, 2025: Fixed reconnection issue where predictions wouldn't restart after disconnect/reconnect cycle
 - June 26, 2025: Initial setup
 

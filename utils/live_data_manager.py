@@ -173,7 +173,8 @@ class LiveDataManager:
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
                         total_rows = len(combined_ohlc)
                         live_count = max(0, total_rows - seed_count)
-                        print(f"📈 NEW CANDLE for {instrument_key}: {total_rows} total rows ({seed_count} seeded + {live_count} live) - continuation active")
+                        print(f"📈 NEW CANDLE CREATED for {instrument_key}: {total_rows} total rows ({seed_count} seeded + {live_count} live)")
+                        print(f"🕐 New candle timestamp: {current_candle_time}")
                 
             else:
                 # Standard resampling for non-seeded instruments

@@ -27,13 +27,15 @@ class LivePredictionPipeline:
         # Processing state
         self.is_processing = False
         self.processing_thread = None
-        self.update_interval = 15  # Check for new candles every 15 seconds
+        self.update_interval = 10  # Check for new candles every 10 seconds
 
         # Minimum data requirements
         self.min_ohlc_rows = 100  # Minimum OHLC rows needed for predictions
         
         # Candle completion tracking
         self.last_candle_timestamps = {}  # Track last processed candle for each instrument
+        self.last_prediction_times = {}  # Track when predictions were last generated
+        self.force_prediction_interval = 300  # Force prediction every 5 minutes regardless
 
     def start_pipeline(self) -> bool:
         """Start the live prediction pipeline."""
@@ -123,6 +125,7 @@ class LivePredictionPipeline:
 
         # Reset candle tracking so predictions can restart on reconnection
         self.last_candle_timestamps = {}
+        self.last_prediction_times = {}
         self.live_predictions = {}
         self.prediction_history = {}
 
@@ -211,42 +214,45 @@ class LivePredictionPipeline:
                     return True
                 return False
             
-            # Check if we have a new candle
+            # Check if we have a new candle timestamp (this means a new candle was formed)
             if latest_candle_timestamp > self.last_candle_timestamps[instrument_key]:
-                # New candle detected - for live trading, be more responsive
-                current_time = pd.Timestamp.now()
+                print(f"🕐 NEW CANDLE DETECTED for {instrument_key}!")
+                print(f"   Previous candle: {self.last_candle_timestamps[instrument_key]}")
+                print(f"   New candle: {latest_candle_timestamp}")
                 
-                # Calculate when this candle period should end
-                candle_end_time = latest_candle_timestamp + pd.Timedelta(minutes=5)
+                # Update our tracking and trigger prediction
+                self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
+                return True
+            
+            # If no new candle, check if enough time has passed for a forced prediction update
+            current_time = pd.Timestamp.now()
+            
+            # Check if we need to force a prediction update based on time elapsed
+            if instrument_key in self.last_prediction_times:
+                time_since_last_prediction = (current_time - self.last_prediction_times[instrument_key]).total_seconds()
                 
-                # More responsive timing - check if we're in the last 30 seconds of the candle OR if it's already past
-                time_until_close = (candle_end_time - current_time).total_seconds()
-                
-                if time_until_close <= 30 or current_time >= candle_end_time:
-                    self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
-                    print(f"🕐 New 5-minute candle ready for prediction - {instrument_key} at {latest_candle_timestamp}")
-                    return True
-                else:
-                    # Only show waiting message every 60 seconds to reduce spam
-                    if not hasattr(self, '_last_wait_log') or instrument_key not in self._last_wait_log:
-                        self._last_wait_log = {}
+                if time_since_last_prediction >= self.force_prediction_interval:
+                    print(f"🕐 FORCE PREDICTION UPDATE for {instrument_key} - {time_since_last_prediction:.0f}s since last prediction")
+                    print(f"   Latest data timestamp: {latest_candle_timestamp}")
                     
-                    now = current_time.timestamp()
-                    if instrument_key not in self._last_wait_log or (now - self._last_wait_log[instrument_key]) > 60:
-                        self._last_wait_log[instrument_key] = now
-                        print(f"⏳ Candle forming for {instrument_key}, {int(time_until_close)}s until close...")
-                    return False
-            else:
-                # Check if we're within the current candle period and it's time to predict
-                current_time = pd.Timestamp.now()
-                candle_end_time = latest_candle_timestamp + pd.Timedelta(minutes=5)
-                time_until_close = (candle_end_time - current_time).total_seconds()
-                
-                # If we're close to candle close and haven't processed this timestamp yet, allow prediction
-                if time_until_close <= 30 and self.last_candle_timestamps[instrument_key] < latest_candle_timestamp:
+                    # Update timestamp to prevent immediate re-triggering
                     self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
-                    print(f"🕐 Candle about to close for prediction - {instrument_key} at {latest_candle_timestamp}")
                     return True
+            
+            # Additional check: if candle is overdue based on expected 5-minute intervals
+            last_candle_time = self.last_candle_timestamps[instrument_key]
+            expected_next_candle = (last_candle_time + pd.Timedelta(minutes=5)).floor('5T')
+            
+            # If we're significantly past the expected next candle time, force update
+            if current_time >= expected_next_candle + pd.Timedelta(minutes=1):
+                print(f"🕐 CANDLE OVERDUE for {instrument_key} - forcing prediction update")
+                print(f"   Expected next candle: {expected_next_candle}")
+                print(f"   Current time: {current_time}")
+                print(f"   Latest data timestamp: {latest_candle_timestamp}")
+                
+                # Update timestamp to prevent immediate re-triggering
+                self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
+                return True
             
             return False
             
@@ -428,6 +434,9 @@ class LivePredictionPipeline:
                 self.prediction_history[instrument_key] = deque(maxlen=self.max_history)
 
             self.prediction_history[instrument_key].append(latest_prediction)
+            
+            # Update last prediction time for forced updates
+            self.last_prediction_times[instrument_key] = pd.Timestamp.now()
 
             # Log summary with candle completion info
             model_count = len(all_predictions)
