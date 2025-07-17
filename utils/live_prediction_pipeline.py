@@ -129,6 +129,7 @@ class LivePredictionPipeline:
 
     def _processing_loop(self):
         """Main processing loop for generating live predictions."""
+        print(f"🚀 Prediction processing loop started - will check every {self.update_interval} seconds")
         consecutive_errors = 0
         max_consecutive_errors = 5
 
@@ -147,8 +148,18 @@ class LivePredictionPipeline:
 
                 if tick_stats:
                     for instrument_key, stats in tick_stats.items():
+                        # Debug: Show processing attempt
+                        if not hasattr(self, '_debug_counter'):
+                            self._debug_counter = 0
+                        self._debug_counter += 1
+                        
+                        # Only show debug every 20 iterations to avoid spam
+                        if self._debug_counter % 20 == 0:
+                            print(f"🔍 Processing loop #{self._debug_counter} - checking {instrument_key}")
+                        
                         # Check if a new candle has closed before processing predictions
                         if self._has_new_candle_closed(instrument_key):
+                            print(f"🎯 New candle detected for {instrument_key}, processing predictions...")
                             self._process_instrument_predictions(instrument_key)
 
                 # Reset error counter on successful processing
@@ -587,8 +598,16 @@ class LivePredictionPipeline:
 
         # Direction model statistics
         if 'direction' in latest:
-            recent_directions = [p.get('direction', {}).get('prediction', p.get('direction', 'Unknown')) 
-                               for p in history if 'direction' in p or 'direction' in str(p)]
+            recent_directions = []
+            for p in history:
+                if isinstance(p, dict) and 'direction' in p:
+                    direction_data = p.get('direction', {})
+                    if isinstance(direction_data, dict):
+                        prediction = direction_data.get('prediction', 'Unknown')
+                    else:
+                        prediction = str(direction_data)
+                    recent_directions.append(prediction)
+            
             bullish_count = recent_directions.count('Bullish')
             bearish_count = recent_directions.count('Bearish')
 
@@ -600,8 +619,16 @@ class LivePredictionPipeline:
 
         # Volatility model statistics
         if 'volatility' in latest:
-            recent_volatility = [p.get('volatility', {}).get('prediction', 'Unknown') 
-                               for p in history if 'volatility' in p]
+            recent_volatility = []
+            for p in history:
+                if isinstance(p, dict) and 'volatility' in p:
+                    volatility_data = p.get('volatility', {})
+                    if isinstance(volatility_data, dict):
+                        prediction = volatility_data.get('prediction', 'Unknown')
+                    else:
+                        prediction = str(volatility_data)
+                    recent_volatility.append(prediction)
+            
             if recent_volatility:
                 high_vol_count = sum(1 for v in recent_volatility if v in ['High', 'Very High'])
                 stats['volatility_stats'] = {
@@ -610,8 +637,16 @@ class LivePredictionPipeline:
 
         # Profit probability statistics
         if 'profit_probability' in latest:
-            recent_profit = [p.get('profit_probability', {}).get('prediction', 'Unknown') 
-                           for p in history if 'profit_probability' in p]
+            recent_profit = []
+            for p in history:
+                if isinstance(p, dict) and 'profit_probability' in p:
+                    profit_data = p.get('profit_probability', {})
+                    if isinstance(profit_data, dict):
+                        prediction = profit_data.get('prediction', 'Unknown')
+                    else:
+                        prediction = str(profit_data)
+                    recent_profit.append(prediction)
+            
             if recent_profit:
                 high_profit_count = recent_profit.count('High')
                 stats['profit_stats'] = {
