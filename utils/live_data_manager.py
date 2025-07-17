@@ -97,11 +97,29 @@ class LiveDataManager:
             
             # If we have seeded data, use a different approach
             if instrument_key in self.seeded_instruments and len(existing_ohlc) > 0:
-                # For seeded instruments, create live candles based on current time
-                current_time = df.index[-1]  # Latest tick time
+                # For seeded instruments, create live candles based on current actual time
+                # Use current system time instead of tick time for proper progression
+                current_time = pd.Timestamp.now()
                 
                 # Round down to nearest 5-minute interval
                 current_candle_time = current_time.floor('5T')
+                
+                # Debug: Show current candle time calculation
+                print(f"🕐 Current time: {current_time}, Candle time: {current_candle_time}")
+                
+                # Check if we need to create a new candle (time progressed to next 5-minute interval)
+                last_candle_time = existing_ohlc.index[-1] if len(existing_ohlc) > 0 else None
+                if last_candle_time:
+                    print(f"📊 Last candle: {last_candle_time}, Current candle: {current_candle_time}")
+                    
+                    # If current candle time is newer than last candle, create new candle
+                    if current_candle_time > last_candle_time:
+                        print(f"🆕 Time for new candle: {current_candle_time} > {last_candle_time}")
+                        should_create_new_candle = True
+                    else:
+                        should_create_new_candle = False
+                else:
+                    should_create_new_candle = True
                 
                 # Ensure we're working with the full seeded dataset
                 if len(existing_ohlc) < self.seeded_instruments[instrument_key]['seed_count']:
@@ -109,8 +127,8 @@ class LiveDataManager:
                     self.seed_live_data_from_database(instrument_key)
                     existing_ohlc = self.ohlc_data.get(instrument_key, pd.DataFrame())
                 
-                # Check if we already have a candle for this time period
-                if current_candle_time in existing_ohlc.index:
+                # Check if we already have a candle for this time period or if we should create a new one
+                if current_candle_time in existing_ohlc.index and not should_create_new_candle:
                     # Update existing candle with new tick data
                     existing_row = existing_ohlc.loc[current_candle_time]
                     
