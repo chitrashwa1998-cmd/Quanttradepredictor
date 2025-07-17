@@ -30,7 +30,7 @@ class LivePredictionPipeline:
         self.update_interval = 15  # Check for new candles every 15 seconds
 
         # Minimum data requirements
-        self.min_ohlc_rows = 100  # Minimum OHLC rows needed for predictions
+        self.min_ohlc_rows = 50  # Minimum OHLC rows needed for predictions (reduced since we have pre-seeded data)
         
         # Candle completion tracking
         self.last_candle_timestamps = {}  # Track last processed candle for each instrument
@@ -171,8 +171,8 @@ class LivePredictionPipeline:
     def _has_new_candle_closed(self, instrument_key: str) -> bool:
         """Check if a new 5-minute candle has closed for the instrument."""
         try:
-            # Get latest OHLC data
-            ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=3)
+            # Get latest OHLC data - fetch more rows to check for new candles
+            ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=200)
             
             if ohlc_data is None or len(ohlc_data) < 1:
                 return False
@@ -182,8 +182,14 @@ class LivePredictionPipeline:
             
             # Check if this is a new candle compared to last processed
             if instrument_key not in self.last_candle_timestamps:
-                # First time processing this instrument - if we have enough data, process immediately
-                if len(ohlc_data) >= self.min_ohlc_rows:
+                # First time processing this instrument - with pre-seeded data, we can predict immediately
+                seeding_status = self.live_data_manager.get_seeding_status()
+                if instrument_key in seeding_status.get('instruments_seeded', []):
+                    print(f"🎯 First prediction for {instrument_key} with pre-seeded data - processing immediately")
+                    print(f"📊 Available OHLC data: {len(ohlc_data)} rows")
+                    self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
+                    return True
+                elif len(ohlc_data) >= self.min_ohlc_rows:
                     self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
                     print(f"🎯 First prediction for {instrument_key} - sufficient data available ({len(ohlc_data)} rows)")
                     return True
@@ -214,6 +220,17 @@ class LivePredictionPipeline:
                         self._last_wait_log[instrument_key] = now
                         print(f"⏳ Candle forming for {instrument_key}, {int(time_until_close)}s until close...")
                     return False
+            else:
+                # Check if we're within the current candle period and it's time to predict
+                current_time = pd.Timestamp.now()
+                candle_end_time = latest_candle_timestamp + pd.Timedelta(minutes=5)
+                time_until_close = (candle_end_time - current_time).total_seconds()
+                
+                # If we're close to candle close and haven't processed this timestamp yet, allow prediction
+                if time_until_close <= 30 and self.last_candle_timestamps[instrument_key] < latest_candle_timestamp:
+                    self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
+                    print(f"🕐 Candle about to close for prediction - {instrument_key} at {latest_candle_timestamp}")
+                    return True
             
             return False
             
@@ -229,15 +246,18 @@ class LivePredictionPipeline:
             # Check if we have enough OHLC data for predictions
             ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=200)
 
-            if ohlc_data is None or len(ohlc_data) < self.min_ohlc_rows:
+            # Check if we have pre-seeded data
+            seeding_status = self.live_data_manager.get_seeding_status()
+            is_seeded = instrument_key in seeding_status.get('instruments_seeded', [])
+            
+            if ohlc_data is None or len(ohlc_data) < 1:
+                print(f"📊 No OHLC data available for {instrument_display}")
+                return
+                
+            # If we have pre-seeded data, we can proceed with any amount of data
+            if not is_seeded and len(ohlc_data) < self.min_ohlc_rows:
                 current_rows = len(ohlc_data) if ohlc_data is not None else 0
-
-                # Show continuation status
-                seeding_status = self.live_data_manager.get_seeding_status()
-                if instrument_key in seeding_status.get('instruments_seeded', []):
-                    print(f"📊 Building OHLC data for {instrument_display}: {current_rows}/{self.min_ohlc_rows} rows (continuation active)")
-                else:
-                    print(f"📊 Building OHLC data for {instrument_display}: {current_rows}/{self.min_ohlc_rows} rows needed")
+                print(f"📊 Building OHLC data for {instrument_display}: {current_rows}/{self.min_ohlc_rows} rows needed")
                 return
 
             # Generate predictions from all available models
