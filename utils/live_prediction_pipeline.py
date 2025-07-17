@@ -130,7 +130,7 @@ class LivePredictionPipeline:
         """Check if a new 5-minute candle has closed for the instrument."""
         try:
             # Get latest OHLC data
-            ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=2)
+            ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=3)
             
             if ohlc_data is None or len(ohlc_data) < 1:
                 return False
@@ -140,25 +140,37 @@ class LivePredictionPipeline:
             
             # Check if this is a new candle compared to last processed
             if instrument_key not in self.last_candle_timestamps:
-                # First time processing this instrument
-                self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
-                return True
+                # First time processing this instrument - if we have enough data, process immediately
+                if len(ohlc_data) >= self.min_ohlc_rows:
+                    self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
+                    print(f"🎯 First prediction for {instrument_key} - sufficient data available ({len(ohlc_data)} rows)")
+                    return True
+                return False
             
             # Check if we have a new candle
             if latest_candle_timestamp > self.last_candle_timestamps[instrument_key]:
-                # New candle detected - check if it's complete
+                # New candle detected - for live trading, be more responsive
                 current_time = pd.Timestamp.now()
                 
                 # Calculate when this candle period should end
                 candle_end_time = latest_candle_timestamp + pd.Timedelta(minutes=5)
                 
-                # Only process if the candle period has ended (with 2 second buffer for live data)
-                if current_time >= candle_end_time - pd.Timedelta(seconds=2):
+                # More responsive timing - check if we're in the last 30 seconds of the candle OR if it's already past
+                time_until_close = (candle_end_time - current_time).total_seconds()
+                
+                if time_until_close <= 30 or current_time >= candle_end_time:
                     self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
-                    print(f"🕐 New 5-minute candle completed for {instrument_key} at {latest_candle_timestamp}")
+                    print(f"🕐 New 5-minute candle ready for prediction - {instrument_key} at {latest_candle_timestamp}")
                     return True
                 else:
-                    print(f"⏳ Candle still forming for {instrument_key}, waiting for completion...")
+                    # Only show waiting message every 60 seconds to reduce spam
+                    if not hasattr(self, '_last_wait_log') or instrument_key not in self._last_wait_log:
+                        self._last_wait_log = {}
+                    
+                    now = current_time.timestamp()
+                    if instrument_key not in self._last_wait_log or (now - self._last_wait_log[instrument_key]) > 60:
+                        self._last_wait_log[instrument_key] = now
+                        print(f"⏳ Candle forming for {instrument_key}, {int(time_until_close)}s until close...")
                     return False
             
             return False
