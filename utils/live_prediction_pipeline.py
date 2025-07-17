@@ -9,6 +9,7 @@ from utils.live_data_manager import LiveDataManager
 from models.model_manager import ModelManager
 from features.direction_technical_indicators import DirectionTechnicalIndicators
 import pytz
+import streamlit as st
 
 class LivePredictionPipeline:
     """Pipeline to process live OHLC data through direction model for real-time predictions."""
@@ -42,12 +43,25 @@ class LivePredictionPipeline:
                 print("❌ Failed to connect to live data feed")
                 return False
 
+            # Force refresh of model manager to ensure latest models are loaded
+            print(f"🔄 Refreshing ModelManager to load latest trained models...")
+            self.model_manager._load_existing_models()
+            
             # Check which models are trained
             available_models = []
             model_names = ['direction', 'volatility', 'profit_probability', 'reversal']
 
-            print(f"🔍 Checking model availability...")
+            print(f"🔍 Checking model availability after refresh...")
             print(f"🔍 ModelManager.trained_models keys: {list(self.model_manager.trained_models.keys())}")
+            
+            # Also check database directly
+            try:
+                from utils.database_adapter import get_trading_database
+                db = get_trading_database()
+                db_models = db.load_trained_models()
+                print(f"🔍 Direct database check - available models: {list(db_models.keys()) if db_models else 'None'}")
+            except Exception as e:
+                print(f"❌ Could not check database directly: {e}")
             
             for model_name in model_names:
                 is_trained = self.model_manager.is_model_trained(model_name)
@@ -66,16 +80,23 @@ class LivePredictionPipeline:
                     
                     # Check what's in session state for this model
                     if hasattr(st, 'session_state'):
+                        # Check main trained_models
+                        if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
+                            if model_name in st.session_state.trained_models:
+                                print(f"   - Found {model_name} in session_state.trained_models")
+                        
+                        # Check individual model session states
                         if hasattr(st.session_state, f'{model_name}_trained_models'):
                             session_models = getattr(st.session_state, f'{model_name}_trained_models', {})
-                            print(f"   - Found in session state: {list(session_models.keys())}")
+                            print(f"   - Found in {model_name}_trained_models: {list(session_models.keys())}")
                         else:
-                            print(f"   - No session state found for {model_name}")
+                            print(f"   - No session state found for {model_name}_trained_models")
             
             print(f"🎯 Total available models: {len(available_models)} out of {len(model_names)}")
 
             if not available_models:
                 print("❌ No trained models available. Please train at least one model first.")
+                print("💡 Hint: Go to Model Training page and train at least one model, then try reconnecting.")
                 return False
 
             print(f"🎯 Starting live prediction pipeline with {len(available_models)} models: {available_models}")
