@@ -374,9 +374,13 @@ def show_live_data_page():
         if st.button("🔌 Disconnect", disabled=not st.session_state.is_live_connected):
             if st.session_state.live_prediction_pipeline:
                 st.session_state.live_prediction_pipeline.stop_pipeline()
-                st.session_state.is_live_connected = False
-                st.session_state.is_prediction_pipeline_active = False
-                st.info("🔌 Disconnected from live data feed and prediction pipeline")
+                
+            # Clear session state completely
+            st.session_state.live_prediction_pipeline = None
+            st.session_state.live_data_manager = None
+            st.session_state.is_live_connected = False
+            st.session_state.is_prediction_pipeline_active = False
+            st.info("🔌 Disconnected from live data feed and prediction pipeline")
 
     with col3:
         if st.button("🔄 Refresh Status"):

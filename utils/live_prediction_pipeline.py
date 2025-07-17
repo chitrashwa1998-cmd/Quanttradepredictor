@@ -121,6 +121,11 @@ class LivePredictionPipeline:
         if self.processing_thread:
             self.processing_thread.join(timeout=5)
 
+        # Reset candle tracking so predictions can restart on reconnection
+        self.last_candle_timestamps = {}
+        self.live_predictions = {}
+        self.prediction_history = {}
+
         print("🔌 Live prediction pipeline stopped")
 
     def subscribe_instruments(self, instrument_keys: List[str]) -> bool:
