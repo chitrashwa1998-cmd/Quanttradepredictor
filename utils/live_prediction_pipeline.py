@@ -222,9 +222,6 @@ class LivePredictionPipeline:
                 # More responsive timing - check if we're in the last 30 seconds of the candle OR if it's already past
                 time_until_close = (candle_end_time - current_time).total_seconds()
                 
-                # Debug timing calculation
-                print(f"🔍 Timing check: candle_end={candle_end_time}, current={current_time}, until_close={time_until_close}s")
-                
                 if time_until_close <= 30 or current_time >= candle_end_time:
                     self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
                     print(f"🕐 New 5-minute candle ready for prediction - {instrument_key} at {latest_candle_timestamp}")
