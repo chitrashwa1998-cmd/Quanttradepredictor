@@ -202,11 +202,23 @@ class LivePredictionPipeline:
             all_predictions = {}
             timestamp = ohlc_data.index[-1]
             ohlc_row = ohlc_data.iloc[-1]
+            
+            # Debug: Show which models are detected as trained
+            trained_models = self.model_manager.get_trained_models()
+            print(f"🎯 Starting prediction generation for {instrument_key}")
+            print(f"📊 Data: {len(ohlc_data)} OHLC rows available")
+            print(f"🤖 Trained models detected: {trained_models}")
+            print(f"🔍 Model Manager trained models: {list(self.model_manager.trained_models.keys())}")
 
             # Direction Model
-            if self.model_manager.is_model_trained('direction'):
+            direction_trained = self.model_manager.is_model_trained('direction')
+            print(f"🔍 Direction model trained status: {direction_trained}")
+            
+            if direction_trained:
+                print(f"🔧 Calculating direction features for {instrument_key}...")
                 direction_features = self._calculate_direction_features(ohlc_data)
                 if direction_features is not None and len(direction_features) > 0:
+                    print(f"✅ Direction features calculated: {direction_features.shape}")
                     try:
                         predictions, probabilities = self.model_manager.predict('direction', direction_features)
                         if predictions is not None:
@@ -217,14 +229,30 @@ class LivePredictionPipeline:
                                 'confidence': confidence,
                                 'value': int(predictions[-1])
                             }
+                            print(f"✅ Direction prediction successful: {direction}")
+                        else:
+                            print(f"❌ Direction model returned None predictions")
                     except Exception as e:
                         print(f"❌ Direction prediction error for {instrument_key}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print(f"❌ Direction features calculation failed")
+            else:
+                print(f"⚠️ Direction model not detected as trained")
 
             # Volatility Model
-            if self.model_manager.is_model_trained('volatility'):
+            volatility_trained = self.model_manager.is_model_trained('volatility')
+            print(f"🔍 Volatility model trained status: {volatility_trained}")
+            
+            if volatility_trained:
+                print(f"🔧 Calculating volatility features for {instrument_key}...")
                 volatility_features = self._calculate_volatility_features(ohlc_data)
+                
                 if volatility_features is not None and len(volatility_features) > 0:
+                    print(f"✅ Volatility features calculated: {volatility_features.shape}")
                     try:
+                        print(f"🎯 Making volatility prediction...")
                         predictions, _ = self.model_manager.predict('volatility', volatility_features)
                         if predictions is not None:
                             volatility_level = self._categorize_volatility(predictions[-1])
@@ -232,13 +260,27 @@ class LivePredictionPipeline:
                                 'prediction': volatility_level,
                                 'value': float(predictions[-1])
                             }
+                            print(f"✅ Volatility prediction successful: {volatility_level}")
+                        else:
+                            print(f"❌ Volatility model returned None predictions")
                     except Exception as e:
                         print(f"❌ Volatility prediction error for {instrument_key}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print(f"❌ Volatility features calculation failed or returned empty: {volatility_features}")
+            else:
+                print(f"⚠️ Volatility model not detected as trained")
 
             # Profit Probability Model
-            if self.model_manager.is_model_trained('profit_probability'):
+            profit_trained = self.model_manager.is_model_trained('profit_probability')
+            print(f"🔍 Profit probability model trained status: {profit_trained}")
+            
+            if profit_trained:
+                print(f"🔧 Calculating profit probability features for {instrument_key}...")
                 profit_features = self._calculate_profit_probability_features(ohlc_data)
                 if profit_features is not None and len(profit_features) > 0:
+                    print(f"✅ Profit probability features calculated: {profit_features.shape}")
                     try:
                         predictions, probabilities = self.model_manager.predict('profit_probability', profit_features)
                         if predictions is not None:
@@ -249,13 +291,25 @@ class LivePredictionPipeline:
                                 'confidence': confidence,
                                 'value': int(predictions[-1])
                             }
+                            print(f"✅ Profit probability prediction successful: {profit_likely}")
+                        else:
+                            print(f"❌ Profit probability model returned None predictions")
                     except Exception as e:
                         print(f"❌ Profit probability prediction error for {instrument_key}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print(f"❌ Profit probability features calculation failed")
 
             # Reversal Model
-            if self.model_manager.is_model_trained('reversal'):
+            reversal_trained = self.model_manager.is_model_trained('reversal')
+            print(f"🔍 Reversal model trained status: {reversal_trained}")
+            
+            if reversal_trained:
+                print(f"🔧 Calculating reversal features for {instrument_key}...")
                 reversal_features = self._calculate_reversal_features(ohlc_data)
                 if reversal_features is not None and len(reversal_features) > 0:
+                    print(f"✅ Reversal features calculated: {reversal_features.shape}")
                     try:
                         predictions, probabilities = self.model_manager.predict('reversal', reversal_features)
                         if predictions is not None:
@@ -266,8 +320,15 @@ class LivePredictionPipeline:
                                 'confidence': confidence,
                                 'value': int(predictions[-1])
                             }
+                            print(f"✅ Reversal prediction successful: {reversal_expected}")
+                        else:
+                            print(f"❌ Reversal model returned None predictions")
                     except Exception as e:
                         print(f"❌ Reversal prediction error for {instrument_key}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print(f"❌ Reversal features calculation failed")
 
             if not all_predictions:
                 print(f"❌ No predictions generated for {instrument_key}")
