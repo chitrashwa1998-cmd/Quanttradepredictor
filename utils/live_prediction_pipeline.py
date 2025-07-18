@@ -429,40 +429,32 @@ class LivePredictionPipeline:
             return features
         except Exception as e:
             print(f"❌ Error calculating direction features: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def _calculate_volatility_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
         """Calculate volatility-specific features from OHLC data."""
         try:
-            from features.technical_indicators import TechnicalIndicators
-            from features.custom_engineered import compute_custom_volatility_features
-            from features.lagged_features import add_volatility_lagged_features
-            from features.time_context_features import add_time_context_features
-
-            # Calculate comprehensive volatility features
-            df_with_features = ohlc_data.copy()
-            df_with_features = TechnicalIndicators.calculate_volatility_indicators(df_with_features)
-            df_with_features = compute_custom_volatility_features(df_with_features)
-            df_with_features = add_volatility_lagged_features(df_with_features)
-            df_with_features = add_time_context_features(df_with_features)
-
-            # Use volatility model's prepare_features method
-            features = self.model_manager.models['volatility'].prepare_features(df_with_features)
+            # Use volatility model's prepare_features method directly
+            features = self.model_manager.models['volatility'].prepare_features(ohlc_data)
             return features
         except Exception as e:
             print(f"❌ Error calculating volatility features: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def _calculate_profit_probability_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
         """Calculate profit probability features from OHLC data."""
         try:
-            from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
-
-            # Calculate profit probability features using the model's prepare_features method
+            # Use profit probability model's prepare_features method directly
             features = self.model_manager.models['profit_probability'].prepare_features(ohlc_data)
             return features
         except Exception as e:
             print(f"❌ Error calculating profit probability features: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def _calculate_reversal_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
@@ -473,6 +465,8 @@ class LivePredictionPipeline:
             return features
         except Exception as e:
             print(f"❌ Error calculating reversal features: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def _categorize_volatility(self, volatility_value: float) -> str:
