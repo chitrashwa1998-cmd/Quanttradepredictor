@@ -14,7 +14,15 @@ def add_time_context_features_profit_prob(df: pd.DataFrame) -> pd.DataFrame:
         df = df.reset_index()
     elif 'timestamp' not in df.columns:
         # If no timestamp column, create one from index
-        df['timestamp'] = df.index
+        # Check if index is datetime-like
+        if hasattr(df.index, 'strftime') or pd.api.types.is_datetime64_any_dtype(df.index):
+            df['timestamp'] = df.index
+        else:
+            # If index is not datetime, create a simple timestamp sequence
+            # This handles the case where we have a RangeIndex
+            print(f"Warning: Index is not datetime-like ({type(df.index)}), creating sequential timestamps")
+            base_time = pd.Timestamp('2025-01-01 09:15:00')
+            df['timestamp'] = pd.date_range(start=base_time, periods=len(df), freq='5min')
     
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     

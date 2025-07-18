@@ -120,18 +120,27 @@ class ProfitProbabilityTechnicalIndicators:
 
         # Create a copy to avoid modifying original data
         result_df = df.copy()
+        
+        # Preserve original index for later restoration
+        original_index = result_df.index.copy()
+        print(f"Original index type: {type(original_index)}")
+        print(f"Original index range: {original_index.min()} to {original_index.max()}")
 
         # Calculate profit probability indicators
         print("Step 1: Calculating basic profit probability indicators...")
         result_df = ProfitProbabilityTechnicalIndicators.calculate_profit_probability_indicators(result_df)
         basic_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
         print(f"After basic indicators: {len(basic_features)} features")
+        
+        # Ensure index is preserved
+        result_df.index = original_index
 
         # Add custom engineered features for profit probability
         print("Step 2: Adding custom profit probability features...")
         from features.profit_probability_custom_engineered import add_custom_profit_features
         try:
             result_df = add_custom_profit_features(result_df)
+            result_df.index = original_index  # Preserve index
             custom_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
             print(f"After custom features: {len(custom_features)} features")
         except Exception as e:
@@ -142,6 +151,7 @@ class ProfitProbabilityTechnicalIndicators:
         from features.profit_probability_lagged_features import add_lagged_features_profit_prob
         try:
             result_df = add_lagged_features_profit_prob(result_df)
+            result_df.index = original_index  # Preserve index
             lagged_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
             print(f"After lagged features: {len(lagged_features)} features")
         except Exception as e:
@@ -152,6 +162,7 @@ class ProfitProbabilityTechnicalIndicators:
         try:
             from features.profit_probability_time_context import add_time_context_features_profit_prob
             result_df = add_time_context_features_profit_prob(result_df)
+            result_df.index = original_index  # Preserve index
             time_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
             print(f"After time features: {len(time_features)} features")
         except Exception as e:
