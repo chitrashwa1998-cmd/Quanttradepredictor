@@ -59,10 +59,28 @@ class DirectionModel:
         
         # Get all available features excluding OHLC and timestamp columns
         ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-        timestamp_cols = ['timestamp', 'date', 'datetime', 'time']
+        timestamp_cols = ['timestamp', 'date', 'datetime', 'time', 'Timestamp', 'Date', 'DateTime', 'Time']
         exclude_cols = ohlc_cols + timestamp_cols
         
-        available_features = [col for col in result_df.columns if col not in exclude_cols]
+        # Filter out non-numeric columns by checking data types
+        available_features = []
+        for col in result_df.columns:
+            if col in exclude_cols:
+                continue
+            # Check if column has datetime or object dtype
+            if pd.api.types.is_datetime64_any_dtype(result_df[col]):
+                print(f"Excluding datetime column: {col}")
+                continue
+            if pd.api.types.is_object_dtype(result_df[col]):
+                # Try to convert to numeric - if it fails, exclude it
+                try:
+                    pd.to_numeric(result_df[col], errors='raise')
+                    available_features.append(col)
+                except (ValueError, TypeError):
+                    print(f"Excluding non-numeric object column: {col}")
+                    continue
+            else:
+                available_features.append(col)
         
         if len(available_features) == 0:
             raise ValueError(f"No direction features found. Available columns: {list(result_df.columns)}")
