@@ -223,10 +223,17 @@ class PostgresTradingDatabase:
     def save_trained_models(self, models_dict: Dict[str, Any]) -> bool:
         """Save trained model objects for persistence."""
         try:
-            serialized_models = pickle.dumps(models_dict)
+            # Load existing models first
+            existing_models = self.load_trained_models() or {}
+            
+            # Merge new models with existing ones
+            existing_models.update(models_dict)
+            
+            # Serialize the merged models
+            serialized_models = pickle.dumps(existing_models)
             
             with self.conn.cursor() as cursor:
-                # Clear existing models and insert new ones
+                # Clear existing models and insert merged ones
                 cursor.execute("DELETE FROM trained_models")
                 cursor.execute("""
                 INSERT INTO trained_models (models_data, updated_at)
