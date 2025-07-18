@@ -194,6 +194,7 @@ class ProfitProbabilityTechnicalIndicators:
         result_df = result_df.dropna(subset=non_ohlc_cols, how='all')
         
         print(f"Data points after cleanup: {len(result_df)} (dropped {empty_rows} completely empty rows)")
+        print(f"Feature data index after cleanup: {result_df.index.min()} to {result_df.index.max()}")
 
         feature_cols = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
         print(f"✅ Final result: {len(feature_cols)} profit probability indicators")

@@ -509,6 +509,17 @@ with tab3:
                     
                     st.info(f"📊 Profit probability data: {len(profit_prob_features)} samples with {len(profit_prob_features.columns)} features")
                     
+                    # Fix index alignment - ensure both have the same index
+                    # Since features might have been reset to integer index, align them properly
+                    if not profit_prob_features.index.equals(profit_prob_target.index):
+                        st.info("Aligning feature and target indices...")
+                        # Use the minimum length to ensure both have the same size
+                        min_len = min(len(profit_prob_features), len(profit_prob_target))
+                        # Use the target's index (datetime) as the authoritative one
+                        profit_prob_features = profit_prob_features.iloc[:min_len].copy()
+                        profit_prob_features.index = profit_prob_target.index[:min_len]
+                        profit_prob_target = profit_prob_target.iloc[:min_len]
+                    
                     # Train profit probability model with configuration parameters
                     training_result = profit_prob_model.train(
                         profit_prob_features, 
