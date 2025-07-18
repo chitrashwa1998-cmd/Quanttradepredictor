@@ -97,23 +97,39 @@ class ProfitProbabilityModel:
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:
         """Train profit probability prediction model."""
+        print(f"Training data input: X shape={X.shape}, y shape={y.shape}")
+        print(f"X index range: {X.index.min()} to {X.index.max()}")
+        print(f"y index range: {y.index.min()} to {y.index.max()}")
+        
         # Align data
         common_index = X.index.intersection(y.index)
+        print(f"Common index size: {len(common_index)}")
+        
+        if len(common_index) == 0:
+            raise ValueError("No common indices between features and targets")
+        
         X_aligned = X.loc[common_index]
         y_aligned = y.loc[common_index]
+        print(f"After alignment: X shape={X_aligned.shape}, y shape={y_aligned.shape}")
+
+        # Check target distribution before cleaning
+        print(f"Target distribution before cleaning: {y_aligned.value_counts().to_dict()}")
 
         # Clean data
         mask = ~(X_aligned.isna().any(axis=1) | y_aligned.isna())
         X_clean = X_aligned[mask]
         y_clean = y_aligned[mask]
+        print(f"After NaN removal: X shape={X_clean.shape}, y shape={y_clean.shape}")
 
         # Remove invalid targets
         valid_targets = ~np.isinf(y_clean) & (y_clean >= 0)
         X_clean = X_clean[valid_targets]
         y_clean = y_clean[valid_targets]
+        print(f"After invalid target removal: X shape={X_clean.shape}, y shape={y_clean.shape}")
 
         # Ensure we have at least 2 classes
         unique_targets = y_clean.unique()
+        print(f"Final unique targets: {unique_targets}")
         if len(unique_targets) < 2:
             raise ValueError(f"Insufficient target classes. Found classes: {unique_targets}")
 
