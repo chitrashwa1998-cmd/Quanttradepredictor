@@ -222,24 +222,6 @@ class LivePredictionPipeline:
                 self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
                 return True
             
-            # For live trading, also generate predictions periodically even if no new candle
-            # This ensures we get predictions based on the current candle data
-            if not hasattr(self, '_last_prediction_time'):
-                self._last_prediction_time = {}
-            
-            current_time = datetime.now()
-            if instrument_key not in self._last_prediction_time:
-                self._last_prediction_time[instrument_key] = current_time
-                print(f"🎯 Generating initial prediction for {instrument_key}")
-                return True
-            
-            # Generate predictions every 2 minutes for live updates
-            time_since_last = (current_time - self._last_prediction_time[instrument_key]).total_seconds()
-            if time_since_last > 120:  # 2 minutes
-                self._last_prediction_time[instrument_key] = current_time
-                print(f"🔄 Generating periodic prediction for {instrument_key} (last: {time_since_last:.0f}s ago)")
-                return True
-            
             # No new candle detected
             return False
             
@@ -322,11 +304,11 @@ class LivePredictionPipeline:
             
             if volatility_trained:
                 print(f"🔧 Calculating volatility features for {instrument_key}...")
-                try:
-                    volatility_features = self._calculate_volatility_features(ohlc_data)
-                    
-                    if volatility_features is not None and len(volatility_features) > 0:
-                        print(f"✅ Volatility features calculated: {volatility_features.shape}")
+                volatility_features = self._calculate_volatility_features(ohlc_data)
+                
+                if volatility_features is not None and len(volatility_features) > 0:
+                    print(f"✅ Volatility features calculated: {volatility_features.shape}")
+                    try:
                         print(f"🎯 Making volatility prediction...")
                         predictions, _ = self.model_manager.predict('volatility', volatility_features)
                         if predictions is not None:
@@ -338,12 +320,12 @@ class LivePredictionPipeline:
                             print(f"✅ Volatility prediction successful: {volatility_level}")
                         else:
                             print(f"❌ Volatility model returned None predictions")
-                    else:
-                        print(f"❌ Volatility features calculation failed or returned empty: {volatility_features}")
-                except Exception as e:
-                    print(f"❌ Volatility prediction error for {instrument_key}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    except Exception as e:
+                        print(f"❌ Volatility prediction error for {instrument_key}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print(f"❌ Volatility features calculation failed or returned empty: {volatility_features}")
             else:
                 print(f"⚠️ Volatility model not detected as trained")
 
@@ -353,10 +335,10 @@ class LivePredictionPipeline:
             
             if profit_trained:
                 print(f"🔧 Calculating profit probability features for {instrument_key}...")
-                try:
-                    profit_features = self._calculate_profit_probability_features(ohlc_data)
-                    if profit_features is not None and len(profit_features) > 0:
-                        print(f"✅ Profit probability features calculated: {profit_features.shape}")
+                profit_features = self._calculate_profit_probability_features(ohlc_data)
+                if profit_features is not None and len(profit_features) > 0:
+                    print(f"✅ Profit probability features calculated: {profit_features.shape}")
+                    try:
                         predictions, probabilities = self.model_manager.predict('profit_probability', profit_features)
                         if predictions is not None:
                             profit_likely = 'High' if predictions[-1] == 1 else 'Low'
@@ -369,12 +351,12 @@ class LivePredictionPipeline:
                             print(f"✅ Profit probability prediction successful: {profit_likely}")
                         else:
                             print(f"❌ Profit probability model returned None predictions")
-                    else:
-                        print(f"❌ Profit probability features calculation failed")
-                except Exception as e:
-                    print(f"❌ Profit probability prediction error for {instrument_key}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    except Exception as e:
+                        print(f"❌ Profit probability prediction error for {instrument_key}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print(f"❌ Profit probability features calculation failed")
 
             # Reversal Model
             reversal_trained = self.model_manager.is_model_trained('reversal')
