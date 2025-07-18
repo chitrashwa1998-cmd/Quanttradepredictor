@@ -207,6 +207,13 @@ with tab1:
                     st.session_state.trained_models['volatility'] = training_results.get('volatility')
                     st.session_state.volatility_trainer = model_trainer
                     
+                    # Auto-save to database after training
+                    try:
+                        model_trainer._save_models_to_database()
+                        st.info("✅ Volatility model automatically saved to database")
+                    except Exception as e:
+                        st.warning(f"⚠️ Auto-save failed: {str(e)}")
+                    
                     # Display results
                     if training_results.get('volatility') is not None:
                         result = training_results['volatility']
@@ -369,6 +376,30 @@ with tab2:
                     if 'direction_trained_models' not in st.session_state:
                         st.session_state.direction_trained_models = {}
                     st.session_state.direction_trained_models['direction'] = direction_model
+                    
+                    # Auto-save to database after training
+                    try:
+                        from utils.database_adapter import get_trading_database
+                        db = get_trading_database()
+                        
+                        models_to_save = {
+                            'direction': {
+                                'ensemble': direction_model.model,
+                                'scaler': direction_model.scaler,
+                                'feature_names': getattr(direction_model, 'feature_names', []),
+                                'task_type': 'classification',
+                                'metrics': training_result.get('metrics', {}),
+                                'feature_importance': training_result.get('feature_importance', {})
+                            }
+                        }
+                        
+                        success = db.save_trained_models(models_to_save)
+                        if success:
+                            st.info("✅ Direction model automatically saved to database")
+                        else:
+                            st.warning("⚠️ Failed to save direction model to database")
+                    except Exception as e:
+                        st.warning(f"⚠️ Auto-save failed: {str(e)}")
                     
                     # Display results
                     if training_result is not None:
@@ -537,6 +568,30 @@ with tab3:
                         st.session_state.profit_prob_trained_models = {}
                     st.session_state.profit_prob_trained_models['profit_probability'] = profit_prob_model
                     
+                    # Auto-save to database after training
+                    try:
+                        from utils.database_adapter import get_trading_database
+                        db = get_trading_database()
+                        
+                        models_to_save = {
+                            'profit_probability': {
+                                'ensemble': profit_prob_model.model,
+                                'scaler': profit_prob_model.scaler,
+                                'feature_names': getattr(profit_prob_model, 'feature_names', []),
+                                'task_type': 'classification',
+                                'metrics': training_result.get('metrics', {}),
+                                'feature_importance': training_result.get('feature_importance', {})
+                            }
+                        }
+                        
+                        success = db.save_trained_models(models_to_save)
+                        if success:
+                            st.info("✅ Profit probability model automatically saved to database")
+                        else:
+                            st.warning("⚠️ Failed to save profit probability model to database")
+                    except Exception as e:
+                        st.warning(f"⚠️ Auto-save failed: {str(e)}")
+                    
                     # Display results
                     if training_result is not None:
                         metrics = training_result.get('metrics', {})
@@ -684,6 +739,30 @@ with tab4:
                     if 'reversal_trained_models' not in st.session_state:
                         st.session_state.reversal_trained_models = {}
                     st.session_state.reversal_trained_models['reversal'] = reversal_model
+                    
+                    # Auto-save to database after training
+                    try:
+                        from utils.database_adapter import get_trading_database
+                        db = get_trading_database()
+                        
+                        models_to_save = {
+                            'reversal': {
+                                'ensemble': reversal_model.model,
+                                'scaler': reversal_model.scaler,
+                                'feature_names': getattr(reversal_model, 'feature_names', []),
+                                'task_type': 'classification',
+                                'metrics': training_result.get('metrics', {}),
+                                'feature_importance': training_result.get('feature_importance', {})
+                            }
+                        }
+                        
+                        success = db.save_trained_models(models_to_save)
+                        if success:
+                            st.info("✅ Reversal model automatically saved to database")
+                        else:
+                            st.warning("⚠️ Failed to save reversal model to database")
+                    except Exception as e:
+                        st.warning(f"⚠️ Auto-save failed: {str(e)}")
                     
                     # Display results
                     if training_result is not None:
