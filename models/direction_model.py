@@ -178,6 +178,7 @@ class DirectionModel:
         
         # Store selected feature names
         self.selected_features = numeric_columns
+        self.feature_names = numeric_columns  # Also store as feature_names for compatibility
         print(f"Using {len(self.selected_features)} numeric direction features")
         print(f"Features: {self.selected_features}")
         

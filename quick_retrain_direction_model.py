@@ -46,11 +46,14 @@ def retrain_direction_model():
     
     # Save to database
     print("💾 Saving to database...")
+    feature_names = getattr(direction_model, 'feature_names', [])
+    print(f"Features to save: {len(feature_names)} - {feature_names[:5] if feature_names else 'None'}")
+    
     models_to_save = {
         'direction': {
             'ensemble': direction_model.model,
             'scaler': direction_model.scaler,
-            'feature_names': getattr(direction_model, 'feature_names', []),
+            'feature_names': feature_names,
             'task_type': 'classification',
             'metrics': training_result.get('metrics', {}),
             'feature_importance': training_result.get('feature_importance', {})
