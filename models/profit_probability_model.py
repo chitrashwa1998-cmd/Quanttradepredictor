@@ -19,8 +19,6 @@ class ProfitProbabilityModel:
 
     def create_target(self, df: pd.DataFrame) -> pd.Series:
         """Create profit probability target based on next 5 periods."""
-        returns = df['Close'].pct_change().dropna()
-
         # More realistic profit threshold for 5-min scalping
         base_profit_threshold = 0.001  # 0.1% minimum profit target
 
@@ -40,10 +38,14 @@ class ProfitProbabilityModel:
 
         target = (max_future_return > profit_threshold).astype(int)
 
+        # Ensure target has the same index as the input dataframe
+        target.index = df.index
+
         # Debug information
         profit_prob_stats = target.value_counts()
         print(f"Profit Probability Target Distribution: {profit_prob_stats.to_dict()}")
         print(f"Profit threshold used: {profit_threshold:.4f}")
+        print(f"Target index range: {target.index.min()} to {target.index.max()}")
 
         return target
 
@@ -90,7 +92,14 @@ class ProfitProbabilityModel:
         if result_df.empty:
             raise ValueError("DataFrame is empty after removing NaN values")
 
+        # Ensure we preserve the original dataframe's index for alignment with targets
+        # The features should have the same index as the input df for proper alignment
+        if not result_df.index.equals(df.index[:len(result_df)]):
+            # If indices don't match, use the original df's index
+            result_df.index = df.index[:len(result_df)]
+
         print(f"Profit probability model using {len(feature_columns)} features: {feature_columns}")
+        print(f"Feature data index range: {result_df.index.min()} to {result_df.index.max()}")
 
         self.feature_names = feature_columns
         return result_df
