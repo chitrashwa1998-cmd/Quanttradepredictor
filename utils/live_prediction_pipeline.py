@@ -424,10 +424,8 @@ class LivePredictionPipeline:
     def _calculate_direction_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
         """Calculate direction-specific features from OHLC data."""
         try:
-            from features.direction_technical_indicators import DirectionTechnicalIndicators
-            dti = DirectionTechnicalIndicators()
-            features = dti.calculate_all_direction_indicators(ohlc_data)
-            features = features.dropna()
+            # Use direction model's prepare_features method to ensure proper feature preparation
+            features = self.model_manager.models['direction'].prepare_features(ohlc_data)
             return features
         except Exception as e:
             print(f"❌ Error calculating direction features: {e}")
