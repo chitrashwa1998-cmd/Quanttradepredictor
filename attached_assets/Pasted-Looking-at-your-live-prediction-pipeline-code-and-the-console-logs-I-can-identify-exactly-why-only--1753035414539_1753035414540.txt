@@ -1,0 +1,61 @@
+Looking at your live prediction pipeline code and the console logs, I can identify exactly why only 2 models (direction and reversal) are working while volatility and profit_probability are failing.
+
+The Root Issue: Feature Calculation Method
+The problem is in how the live pipeline tries to calculate features for each model. Let me compare the 4 models:
+
+Working Models (Direction & Reversal):
+Direction Model:
+
+Uses DirectionTechnicalIndicators.calculate_all_direction_indicators(df)
+This is a static method that works independently
+Creates features directly from OHLC data
+Reversal Model:
+
+Uses multiple feature calculation modules:
+ReversalTechnicalIndicators.calculate_reversal_indicators()
+add_custom_reversal_features()
+add_lagged_reversal_features()
+add_time_context_features_reversal()
+All are standalone functions/static methods
+Failing Models (Volatility & Profit Probability):
+Volatility Model:
+
+In live pipeline: self.model_manager.models['volatility'].prepare_features(ohlc_data)
+This tries to call prepare_features() on the loaded model object from database
+But the database only stores the trained model, scaler, and feature names
+It doesn't store the actual prepare_features() method implementation
+Profit Probability Model:
+
+Same issue: self.model_manager.models['profit_probability'].prepare_features(ohlc_data)
+Tries to call prepare_features() on the database-loaded model object
+The method doesn't exist on the loaded object
+The Technical Difference
+When models are saved to database, only these components are stored:
+
+The trained ML model (XGBoost/ensemble)
+The scaler
+Feature names
+Metrics
+But the feature engineering logic (prepare_features() method) is not saved - it stays in the model class files.
+
+Why Direction and Reversal Work Differently
+Looking at the pipeline code:
+
+# Direction - calls static method directly
+direction_features = self._calculate_direction_features(ohlc_data)
+# Inside: DirectionTechnicalIndicators.calculate_all_direction_indicators(df)
+# Reversal - calls static methods directly  
+reversal_features = self._calculate_reversal_features(ohlc_data)
+# Inside: Multiple standalone feature calculation functions
+# Volatility - tries to call method on loaded model object ❌
+volatility_features = self._calculate_volatility_features(ohlc_data)
+# Inside: self.model_manager.models['volatility'].prepare_features(ohlc_data)
+# Profit Probability - same issue ❌
+profit_features = self._calculate_profit_probability_features(ohlc_data)
+# Inside: self.model_manager.models['profit_probability'].prepare_features(ohlc_data)
+The Solution Would Be
+The volatility and profit probability feature calculation in the live pipeline needs to use the actual model class instances (like the prediction pages do) rather than trying to call methods on the loaded database objects.
+
+The direction and reversal models work because they use standalone feature calculation functions that don't depend on the loaded model objects - they just process the OHLC data directly using static methods.
+
+This is a code architecture inconsistency where different models use different approaches for feature calculation in the live pipeline.
