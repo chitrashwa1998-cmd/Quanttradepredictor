@@ -31,7 +31,7 @@ class LivePredictionPipeline:
 
         # Minimum data requirements
         self.min_ohlc_rows = 100  # Minimum OHLC rows needed for predictions
-
+        
         # Candle completion tracking
         self.last_candle_timestamps = {}  # Track last processed candle for each instrument
 
@@ -46,14 +46,14 @@ class LivePredictionPipeline:
             # Force refresh of model manager to ensure latest models are loaded
             print(f"🔄 Refreshing ModelManager to load latest trained models...")
             self.model_manager._load_existing_models()
-
+            
             # Check which models are trained
             available_models = []
             model_names = ['direction', 'volatility', 'profit_probability', 'reversal']
 
             print(f"🔍 Checking model availability after refresh...")
             print(f"🔍 ModelManager.trained_models keys: {list(self.model_manager.trained_models.keys())}")
-
+            
             # Also check database directly
             try:
                 from utils.database_adapter import get_trading_database
@@ -62,13 +62,13 @@ class LivePredictionPipeline:
                 print(f"🔍 Direct database check - available models: {list(db_models.keys()) if db_models else 'None'}")
             except Exception as e:
                 print(f"❌ Could not check database directly: {e}")
-
+            
             for model_name in model_names:
                 is_trained = self.model_manager.is_model_trained(model_name)
                 if is_trained:
                     available_models.append(model_name)
                     print(f"✅ {model_name} model ready for live predictions")
-
+                    
                     # Check if model has all required components
                     model_data = self.model_manager.trained_models.get(model_name, {})
                     has_model = 'model' in model_data or 'ensemble' in model_data
@@ -77,21 +77,21 @@ class LivePredictionPipeline:
                     print(f"   - Has model: {has_model}, Has scaler: {has_scaler}, Has features: {has_features}")
                 else:
                     print(f"⚠️ {model_name} model not trained")
-
+                    
                     # Check what's in session state for this model
                     if hasattr(st, 'session_state'):
                         # Check main trained_models
                         if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
                             if model_name in st.session_state.trained_models:
                                 print(f"   - Found {model_name} in session_state.trained_models")
-
+                        
                         # Check individual model session states
                         if hasattr(st.session_state, f'{model_name}_trained_models'):
                             session_models = getattr(st.session_state, f'{model_name}_trained_models', {})
                             print(f"   - Found in {model_name}_trained_models: {list(session_models.keys())}")
                         else:
                             print(f"   - No session state found for {model_name}_trained_models")
-
+            
             print(f"🎯 Total available models: {len(available_models)} out of {len(model_names)}")
 
             if not available_models:
@@ -157,11 +157,11 @@ class LivePredictionPipeline:
                         if not hasattr(self, '_debug_counter'):
                             self._debug_counter = 0
                         self._debug_counter += 1
-
+                        
                         # Only show debug every 20 iterations to avoid spam
                         if self._debug_counter % 20 == 0:
                             print(f"🔍 Processing loop #{self._debug_counter} - checking {instrument_key}")
-
+                        
                         # Check if a new candle has closed before processing predictions
                         if self._has_new_candle_closed(instrument_key):
                             print(f"🎯 New candle detected for {instrument_key}, processing predictions...")
@@ -189,13 +189,13 @@ class LivePredictionPipeline:
         try:
             # Get latest OHLC data
             ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=200)
-
+            
             if ohlc_data is None or len(ohlc_data) < 1:
                 return False
-
+            
             # Get the latest candle timestamp
             latest_candle_timestamp = ohlc_data.index[-1]
-
+            
             # Check if this is a new candle compared to last processed
             if instrument_key not in self.last_candle_timestamps:
                 # First time processing this instrument
@@ -210,21 +210,21 @@ class LivePredictionPipeline:
                     print(f"🎯 First prediction for {instrument_key} - sufficient data available ({len(ohlc_data)} rows)")
                     return True
                 return False
-
+            
             # Check if we have a new candle timestamp (this means a new candle was formed)
             if latest_candle_timestamp > self.last_candle_timestamps[instrument_key]:
                 print(f"🕐 NEW 5-MINUTE CANDLE CLOSED for {instrument_key}!")
                 print(f"   Previous candle: {self.last_candle_timestamps[instrument_key]}")
                 print(f"   New candle: {latest_candle_timestamp}")
                 print(f"   Processing prediction immediately...")
-
+                
                 # Update our tracking and trigger prediction
                 self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
                 return True
-
+            
             # No new candle detected
             return False
-
+            
         except Exception as e:
             print(f"❌ Error checking candle completion for {instrument_key}: {e}")
             return False
@@ -240,11 +240,11 @@ class LivePredictionPipeline:
             # Check if we have pre-seeded data
             seeding_status = self.live_data_manager.get_seeding_status()
             is_seeded = instrument_key in seeding_status.get('instruments_seeded', [])
-
+            
             if ohlc_data is None or len(ohlc_data) < 1:
                 print(f"📊 No OHLC data available for {instrument_display}")
                 return
-
+                
             # If we have pre-seeded data, we can proceed with any amount of data
             if not is_seeded and len(ohlc_data) < self.min_ohlc_rows:
                 current_rows = len(ohlc_data) if ohlc_data is not None else 0
@@ -255,7 +255,7 @@ class LivePredictionPipeline:
             all_predictions = {}
             timestamp = ohlc_data.index[-1]
             ohlc_row = ohlc_data.iloc[-1]
-
+            
             # Debug: Show which models are detected as trained
             trained_models = self.model_manager.get_trained_models()
             print(f"🎯 Starting prediction generation for {instrument_key}")
@@ -270,7 +270,7 @@ class LivePredictionPipeline:
 
             # Direction Model
             direction_trained = self.model_manager.is_model_trained('direction')
-
+            
             if direction_trained:
                 print(f"🔧 Calculating direction features for {instrument_key}...")
                 direction_features = self._calculate_direction_features(ohlc_data)
@@ -301,11 +301,11 @@ class LivePredictionPipeline:
             # Volatility Model
             volatility_trained = self.model_manager.is_model_trained('volatility')
             print(f"🔍 Volatility model trained status: {volatility_trained}")
-
+            
             if volatility_trained:
                 print(f"🔧 Calculating volatility features for {instrument_key}...")
                 volatility_features = self._calculate_volatility_features(ohlc_data)
-
+                
                 if volatility_features is not None and len(volatility_features) > 0:
                     print(f"✅ Volatility features calculated: {volatility_features.shape}")
                     try:
@@ -332,7 +332,7 @@ class LivePredictionPipeline:
             # Profit Probability Model
             profit_trained = self.model_manager.is_model_trained('profit_probability')
             print(f"🔍 Profit probability model trained status: {profit_trained}")
-
+            
             if profit_trained:
                 print(f"🔧 Calculating profit probability features for {instrument_key}...")
                 profit_features = self._calculate_profit_probability_features(ohlc_data)
@@ -361,7 +361,7 @@ class LivePredictionPipeline:
             # Reversal Model
             reversal_trained = self.model_manager.is_model_trained('reversal')
             print(f"🔍 Reversal model trained status: {reversal_trained}")
-
+            
             if reversal_trained:
                 print(f"🔧 Calculating reversal features for {instrument_key}...")
                 reversal_features = self._calculate_reversal_features(ohlc_data)
@@ -409,7 +409,7 @@ class LivePredictionPipeline:
             model_names = list(all_predictions.keys())
             print(f"✅ Generated {model_count} live predictions for {instrument_key} on CANDLE CLOSE: {model_names}")
             print(f"🕐 Prediction timestamp: {timestamp} (Complete 5-minute candle)")
-
+            
             # Show clear indication that this is a candle-close prediction
             seeding_status = self.live_data_manager.get_seeding_status()
             if instrument_key in seeding_status.get('instruments_seeded', []):
@@ -422,11 +422,10 @@ class LivePredictionPipeline:
             print(f"❌ Error processing predictions for {instrument_key}: {e}")
 
     def _calculate_direction_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Calculate direction-specific features from OHLC data."""
         try:
-            # Use actual DirectionModel class instance for feature calculation
-            from models.direction_model import DirectionModel
-            direction_model = DirectionModel()
-            features = direction_model.prepare_features(ohlc_data)
+            # Use direction model's prepare_features method to ensure proper feature preparation
+            features = self.model_manager.models['direction'].prepare_features(ohlc_data)
             return features
         except Exception as e:
             print(f"❌ Error calculating direction features: {e}")
@@ -435,11 +434,10 @@ class LivePredictionPipeline:
             return None
 
     def _calculate_volatility_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Calculate volatility-specific features from OHLC data."""
         try:
-            # Use actual VolatilityModel class instance for feature calculation
-            from models.volatility_model import VolatilityModel
-            volatility_model = VolatilityModel()
-            features = volatility_model.prepare_features(ohlc_data)
+            # Use volatility model's prepare_features method directly
+            features = self.model_manager.models['volatility'].prepare_features(ohlc_data)
             return features
         except Exception as e:
             print(f"❌ Error calculating volatility features: {e}")
@@ -448,11 +446,10 @@ class LivePredictionPipeline:
             return None
 
     def _calculate_profit_probability_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Calculate profit probability features from OHLC data."""
         try:
-            # Use actual ProfitProbabilityModel class instance for feature calculation
-            from models.profit_probability_model import ProfitProbabilityModel
-            profit_prob_model = ProfitProbabilityModel()
-            features = profit_prob_model.prepare_features(ohlc_data)
+            # Use profit probability model's prepare_features method directly
+            features = self.model_manager.models['profit_probability'].prepare_features(ohlc_data)
             return features
         except Exception as e:
             print(f"❌ Error calculating profit probability features: {e}")
@@ -461,11 +458,10 @@ class LivePredictionPipeline:
             return None
 
     def _calculate_reversal_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Calculate reversal detection features from OHLC data."""
         try:
-            # Use actual ReversalModel class instance for feature calculation
-            from models.reversal_model import ReversalModel
-            reversal_model = ReversalModel()
-            features = reversal_model.prepare_features(ohlc_data)
+            # Use reversal model's prepare_features method which includes all feature types
+            features = self.model_manager.models['reversal'].prepare_features(ohlc_data)
             return features
         except Exception as e:
             print(f"❌ Error calculating reversal features: {e}")
@@ -583,7 +579,7 @@ class LivePredictionPipeline:
                     else:
                         prediction = str(direction_data)
                     recent_directions.append(prediction)
-
+            
             bullish_count = recent_directions.count('Bullish')
             bearish_count = recent_directions.count('Bearish')
 
@@ -604,7 +600,7 @@ class LivePredictionPipeline:
                     else:
                         prediction = str(volatility_data)
                     recent_volatility.append(prediction)
-
+            
             if recent_volatility:
                 high_vol_count = sum(1 for v in recent_volatility if v in ['High', 'Very High'])
                 stats['volatility_stats'] = {
@@ -622,7 +618,7 @@ class LivePredictionPipeline:
                     else:
                         prediction = str(profit_data)
                     recent_profit.append(prediction)
-
+            
             if recent_profit:
                 high_profit_count = recent_profit.count('High')
                 stats['profit_stats'] = {
