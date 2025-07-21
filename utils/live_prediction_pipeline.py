@@ -436,9 +436,43 @@ class LivePredictionPipeline:
     def _calculate_volatility_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
         """Calculate volatility-specific features from OHLC data."""
         try:
+            # Get expected features from trained model
+            model_data = self.model_manager.trained_models.get('volatility', {})
+            expected_features = model_data.get('feature_names', [])
+            
+            if not expected_features:
+                print(f"❌ No feature names found for volatility model")
+                return None
+            
             # Use volatility model's prepare_features method directly
             features = self.model_manager.models['volatility'].prepare_features(ohlc_data)
-            return features
+            
+            if features is None:
+                return None
+            
+            # Ensure we have all expected features
+            missing_features = [col for col in expected_features if col not in features.columns]
+            available_features = [col for col in expected_features if col in features.columns]
+            
+            if missing_features:
+                print(f"⚠️ Missing features for volatility: {missing_features}")
+                
+                # Add missing OHLC features if they exist in original data
+                for missing_col in missing_features:
+                    if missing_col in ['Open', 'High', 'Low', 'Close', 'Volume'] and missing_col in ohlc_data.columns:
+                        features[missing_col] = ohlc_data[missing_col]
+                        available_features.append(missing_col)
+                        print(f"✅ Added missing OHLC feature: {missing_col}")
+            
+            # Use only available features that match training
+            final_features = [col for col in expected_features if col in features.columns]
+            
+            if len(final_features) < len(expected_features) * 0.8:
+                print(f"❌ Too many missing features for volatility. Available: {len(final_features)}, Expected: {len(expected_features)}")
+                return None
+            
+            return features[final_features]
+            
         except Exception as e:
             print(f"❌ Error calculating volatility features: {e}")
             import traceback
@@ -448,9 +482,43 @@ class LivePredictionPipeline:
     def _calculate_profit_probability_features(self, ohlc_data: pd.DataFrame) -> Optional[pd.DataFrame]:
         """Calculate profit probability features from OHLC data."""
         try:
+            # Get expected features from trained model
+            model_data = self.model_manager.trained_models.get('profit_probability', {})
+            expected_features = model_data.get('feature_names', [])
+            
+            if not expected_features:
+                print(f"❌ No feature names found for profit probability model")
+                return None
+            
             # Use profit probability model's prepare_features method directly
             features = self.model_manager.models['profit_probability'].prepare_features(ohlc_data)
-            return features
+            
+            if features is None:
+                return None
+            
+            # Ensure we have all expected features
+            missing_features = [col for col in expected_features if col not in features.columns]
+            available_features = [col for col in expected_features if col in features.columns]
+            
+            if missing_features:
+                print(f"⚠️ Missing features for profit probability: {missing_features}")
+                
+                # Add missing OHLC features if they exist in original data
+                for missing_col in missing_features:
+                    if missing_col in ['Open', 'High', 'Low', 'Close', 'Volume'] and missing_col in ohlc_data.columns:
+                        features[missing_col] = ohlc_data[missing_col]
+                        available_features.append(missing_col)
+                        print(f"✅ Added missing OHLC feature: {missing_col}")
+            
+            # Use only available features that match training
+            final_features = [col for col in expected_features if col in features.columns]
+            
+            if len(final_features) < len(expected_features) * 0.8:
+                print(f"❌ Too many missing features for profit probability. Available: {len(final_features)}, Expected: {len(expected_features)}")
+                return None
+            
+            return features[final_features]
+            
         except Exception as e:
             print(f"❌ Error calculating profit probability features: {e}")
             import traceback

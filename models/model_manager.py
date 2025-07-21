@@ -143,20 +143,25 @@ class ModelManager:
             if len(available_features) < len(expected_features) * 0.8:
                 raise ValueError(f"Too many missing features for {model_name}. Available: {len(available_features)}, Expected: {len(expected_features)}")
 
-            # Use only available features that match training
-            features = features[available_features]
+            # Use only available features that match training, in the exact order expected
+            ordered_features = [col for col in expected_features if col in features.columns]
+            features = features[ordered_features]
 
-            # Update scaler features if needed
+            # Ensure scaler features match exactly
             if hasattr(scaler, 'feature_names_in_') and scaler.feature_names_in_ is not None:
                 scaler_features = list(scaler.feature_names_in_)
-                if scaler_features != available_features:
-                    print(f"Feature mismatch detected for {model_name}")
-                    # Reorder features to match scaler expectations
+                if list(features.columns) != scaler_features:
+                    print(f"Feature order mismatch detected for {model_name}")
+                    print(f"Expected: {scaler_features[:5]}...")
+                    print(f"Got: {list(features.columns)[:5]}...")
+                    
+                    # Reorder features to match scaler expectations exactly
                     common_features = [f for f in scaler_features if f in features.columns]
-                    if len(common_features) >= len(scaler_features) * 0.8:
+                    if len(common_features) >= len(scaler_features) * 0.9:
                         features = features[common_features]
+                        print(f"✅ Reordered features for {model_name}: {len(common_features)} features")
                     else:
-                        raise ValueError(f"Cannot align features for {model_name}")
+                        raise ValueError(f"Cannot align features for {model_name}. Need {len(scaler_features)}, got {len(common_features)}")
 
         # Scale features
         features_scaled = scaler.transform(features)
