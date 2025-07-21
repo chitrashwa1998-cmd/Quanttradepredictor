@@ -1,4 +1,3 @@
-# Applying the provided changes to the original code to update the prediction display and pipeline status based on candle completion.
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -374,7 +373,7 @@ def show_live_data_page():
         if st.button("🔌 Disconnect", disabled=not st.session_state.is_live_connected):
             if st.session_state.live_prediction_pipeline:
                 st.session_state.live_prediction_pipeline.stop_pipeline()
-                
+
             # Clear session state completely
             st.session_state.live_prediction_pipeline = None
             st.session_state.live_data_manager = None
@@ -747,7 +746,7 @@ def show_live_data_page():
 
                                 # Get current OHLC data from live manager
                                 if export_instrument in live_manager.ohlc_data:
-                                    current_ohlc_data = live_manager.ohlc_data[export_instrument]
+                                    current_ohlc_data =live_manager.ohlc_data[export_instrument]
 
                                     if current_ohlc_data is not None and len(current_ohlc_data) > 0:
                                         # Load existing data from database

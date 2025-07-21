@@ -281,9 +281,11 @@ class LivePredictionPipeline:
                         if predictions is not None:
                             direction = 'Bullish' if predictions[-1] == 1 else 'Bearish'
                             confidence = np.max(probabilities[-1]) if probabilities is not None else 0.5
+                            confidence_level = self._categorize_confidence(confidence)
                             all_predictions['direction'] = {
                                 'prediction': direction,
                                 'confidence': confidence,
+                                'confidence_level': confidence_level,
                                 'value': int(predictions[-1])
                             }
                             print(f"✅ Direction prediction successful: {direction}")
@@ -343,9 +345,11 @@ class LivePredictionPipeline:
                         if predictions is not None:
                             profit_likely = 'High' if predictions[-1] == 1 else 'Low'
                             confidence = np.max(probabilities[-1]) if probabilities is not None else 0.5
+                            confidence_level = self._categorize_confidence(confidence)
                             all_predictions['profit_probability'] = {
                                 'prediction': profit_likely,
                                 'confidence': confidence,
+                                'confidence_level': confidence_level,
                                 'value': int(predictions[-1])
                             }
                             print(f"✅ Profit probability prediction successful: {profit_likely}")
@@ -372,9 +376,11 @@ class LivePredictionPipeline:
                         if predictions is not None:
                             reversal_expected = 'Yes' if predictions[-1] == 1 else 'No'
                             confidence = np.max(probabilities[-1]) if probabilities is not None else 0.5
+                            confidence_level = self._categorize_confidence(confidence)
                             all_predictions['reversal'] = {
                                 'prediction': reversal_expected,
                                 'confidence': confidence,
+                                'confidence_level': confidence_level,
                                 'value': int(predictions[-1])
                             }
                             print(f"✅ Reversal prediction successful: {reversal_expected}")
@@ -547,6 +553,15 @@ class LivePredictionPipeline:
             return 'High'
         else:
             return 'Very High'
+
+    def _categorize_confidence(self, confidence_value: float) -> str:
+        """Categorize confidence value into Low/Medium/High."""
+        if confidence_value < 0.6:
+            return 'Low'
+        elif confidence_value < 0.8:
+            return 'Medium'
+        else:
+            return 'High'
 
     def _format_comprehensive_prediction(self, instrument_key: str, timestamp: pd.Timestamp, 
                                         all_predictions: Dict, ohlc_row: pd.Series) -> Dict:
