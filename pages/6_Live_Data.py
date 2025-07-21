@@ -17,15 +17,6 @@ st.set_page_config(page_title="Live Data", page_icon="📡", layout="wide")
 with open('style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
-def categorize_confidence(confidence_value: float) -> str:
-    """Categorize confidence value into Low, Medium, High."""
-    if confidence_value >= 0.75:
-        return "High"
-    elif confidence_value >= 0.60:
-        return "Medium"
-    else:
-        return "Low"
-
 def show_live_data_page():
     """Main live data page."""
 
@@ -521,10 +512,7 @@ def show_live_data_page():
                                             confidence = prediction.get('confidence', 0.5)
 
                                         direction_color = "🟢" if direction == 'Bullish' else "🔴"
-                                        confidence_category = categorize_confidence(confidence)
-                                        confidence_icon = "🔥" if confidence_category == "High" else "⚡" if confidence_category == "Medium" else "⚠️"
-                                        st.markdown(f"**{direction_color} Direction:** {direction}")
-                                        st.markdown(f"**{confidence_icon} Confidence:** {confidence_category} ({confidence:.1%})")
+                                        st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
 
                                 with col2:
                                     # Volatility prediction
@@ -542,10 +530,7 @@ def show_live_data_page():
                                         profit_level = profit_data.get('prediction', 'Unknown')
                                         profit_conf = profit_data.get('confidence', 0.5)
                                         profit_color = "💰" if profit_level == 'High' else "⚠️"
-                                        profit_conf_category = categorize_confidence(profit_conf)
-                                        profit_conf_icon = "🔥" if profit_conf_category == "High" else "⚡" if profit_conf_category == "Medium" else "⚠️"
-                                        st.markdown(f"**{profit_color} Profit:** {profit_level}")
-                                        st.markdown(f"**{profit_conf_icon} Confidence:** {profit_conf_category} ({profit_conf:.1%})")
+                                        st.markdown(f"**{profit_color} Profit:** {profit_level} ({profit_conf:.1%})")
 
                                 with col3:
                                     # Reversal prediction
@@ -554,10 +539,7 @@ def show_live_data_page():
                                         reversal_expected = reversal_data.get('prediction', 'Unknown')
                                         reversal_conf = reversal_data.get('confidence', 0.5)
                                         reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
-                                        reversal_conf_category = categorize_confidence(reversal_conf)
-                                        reversal_conf_icon = "🔥" if reversal_conf_category == "High" else "⚡" if reversal_conf_category == "Medium" else "⚠️"
-                                        st.markdown(f"**{reversal_color} Reversal:** {reversal_expected}")
-                                        st.markdown(f"**{reversal_conf_icon} Confidence:** {reversal_conf_category} ({reversal_conf:.1%})")
+                                        st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
 
                                     # Models used
                                     models_used = prediction.get('models_used', [])
