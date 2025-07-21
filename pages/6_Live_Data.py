@@ -512,7 +512,8 @@ def show_live_data_page():
                                             confidence = prediction.get('confidence', 0.5)
 
                                         direction_color = "🟢" if direction == 'Bullish' else "🔴"
-                                        st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
+                                        st.markdown(f"**{direction_color} Direction:** {direction}")
+                                        st.markdown(f"**🎯 Confidence:** {confidence:.1%}")
 
                                 with col2:
                                     # Volatility prediction
@@ -521,8 +522,13 @@ def show_live_data_page():
                                         vol_level = vol_data.get('prediction', 'Unknown')
                                         vol_value = vol_data.get('value', 0.0)
                                         vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
+                                        
+                                        # Calculate volatility percentile (0-100 scale)
+                                        vol_percentile = min(100, max(0, (vol_value / 0.05) * 100))  # Normalize to 0-100 scale assuming max vol ~5%
+                                        
                                         st.markdown(f"**{vol_color} Volatility:** {vol_level}")
                                         st.markdown(f"**📊 Predicted Vol:** {vol_value:.4f} ({vol_value*100:.2f}%)")
+                                        st.markdown(f"**📈 Percentile:** {vol_percentile:.0f}%")
 
                                     # Profit probability
                                     if 'profit_probability' in prediction:
@@ -530,7 +536,8 @@ def show_live_data_page():
                                         profit_level = profit_data.get('prediction', 'Unknown')
                                         profit_conf = profit_data.get('confidence', 0.5)
                                         profit_color = "💰" if profit_level == 'High' else "⚠️"
-                                        st.markdown(f"**{profit_color} Profit:** {profit_level} ({profit_conf:.1%})")
+                                        st.markdown(f"**{profit_color} Profit:** {profit_level}")
+                                        st.markdown(f"**🎯 Confidence:** {profit_conf:.1%}")
 
                                 with col3:
                                     # Reversal prediction
@@ -539,7 +546,8 @@ def show_live_data_page():
                                         reversal_expected = reversal_data.get('prediction', 'Unknown')
                                         reversal_conf = reversal_data.get('confidence', 0.5)
                                         reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
-                                        st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
+                                        st.markdown(f"**{reversal_color} Reversal:** {reversal_expected}")
+                                        st.markdown(f"**🎯 Confidence:** {reversal_conf:.1%}")
 
                                     # Models used
                                     models_used = prediction.get('models_used', [])
