@@ -615,30 +615,143 @@ def show_live_data_page():
             with overview_tab:
                 st.subheader("💹 Real-time Price Dashboard")
 
+                # Show connection status and total tick count first
+                col1, col2, col3, col4 = st.columns(4)
+                
+                # Get WebSocket connection details
+                if st.session_state.live_data_manager:
+                    ws_status = st.session_state.live_data_manager.ws_client.get_connection_status()
+                    total_ticks = st.session_state.live_data_manager.total_ticks_received
+                    
+                    with col1:
+                        connection_status = "🟢 Connected" if ws_status['is_connected'] else "🔴 Disconnected"
+                        st.metric("WebSocket Status", connection_status)
+                    
+                    with col2:
+                        st.metric("Total Ticks Received", f"{total_ticks:,}")
+                    
+                    with col3:
+                        st.metric("Subscribed Instruments", ws_status['total_instruments'])
+                    
+                    with col4:
+                        last_pong = ws_status.get('last_pong_time', 0)
+                        if last_pong:
+                            import time
+                            seconds_ago = int(time.time() - last_pong)
+                            st.metric("Last Heartbeat", f"{seconds_ago}s ago")
+                        else:
+                            st.metric("Last Heartbeat", "N/A")
+
+                st.divider()
+
                 # Display live prices in a grid
-                cols = st.columns(min(3, len(tick_stats)))
+                if tick_stats:
+                    cols = st.columns(min(3, len(tick_stats)))
 
-                for i, (instrument, stats) in enumerate(tick_stats.items()):
-                    with cols[i % len(cols)]:
-                        # Get instrument display name
+                    for i, (instrument, stats) in enumerate(tick_stats.items()):
+                        with cols[i % len(cols)]:
+                            # Get instrument display name
+                            display_name = instrument.split('|')[-1] if '|' in instrument else instrument
+
+                            # Color based on change
+                            change_pct = stats.get('change_percent', 0)
+                            color = "🟢" if change_pct >= 0 else "🔴"
+
+                            # Get latest tick timestamp
+                            last_update = stats.get('last_update', 'Unknown')
+                            if hasattr(last_update, 'strftime'):
+                                time_str = last_update.strftime('%H:%M:%S')
+                            else:
+                                time_str = str(last_update)
+
+                            st.markdown(f"""
+                            <div class="metric-container">
+                                <h4 style="color: #00ffff; margin: 0;">{color} {display_name}</h4>
+                                <h2 style="margin: 0.5rem 0; color: #00ff41;">₹{stats['latest_price']:.2f}</h2>
+                                <p style="color: #9ca3af; margin: 0;">
+                                    {change_pct:+.2f}% | Vol: {stats['latest_volume']:,}
+                                </p>
+                                <p style="color: #6b7280; font-size: 0.8rem; margin: 0;">
+                                    Ticks: {stats['tick_count']:,} | OHLC: {stats['ohlc_rows']}
+                                </p>
+                                <p style="color: #6b7280; font-size: 0.75rem; margin: 0;">
+                                    Last: {time_str}
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                    # Show raw tick buffer information
+                    st.subheader("🔍 Live Tick Buffer Details")
+                    
+                    for instrument, stats in tick_stats.items():
                         display_name = instrument.split('|')[-1] if '|' in instrument else instrument
+                        
+                        with st.expander(f"📊 {display_name} - Detailed Tick Info"):
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                st.write("**Live Statistics:**")
+                                st.write(f"• Tick Count: {stats['tick_count']:,}")
+                                st.write(f"• OHLC Candles: {stats['ohlc_rows']}")
+                                st.write(f"• Latest Price: ₹{stats['latest_price']:.2f}")
+                                st.write(f"• Latest Volume: {stats['latest_volume']:,}")
+                            
+                            with col2:
+                                st.write("**Change Metrics:**")
+                                st.write(f"• Change %: {stats.get('change_percent', 0):+.2f}%")
+                                st.write(f"• Last Update: {stats.get('last_update', 'N/A')}")
+                                
+                                # Get actual latest tick data
+                                latest_tick = st.session_state.live_data_manager.get_latest_tick(instrument)
+                                if latest_tick:
+                                    st.write(f"• LTP: ₹{latest_tick.get('ltp', 0):.2f}")
+                                    st.write(f"• Bid: ₹{latest_tick.get('bid_price', 0):.2f}")
+                                    st.write(f"• Ask: ₹{latest_tick.get('ask_price', 0):.2f}")
+                            
+                            with col3:
+                                st.write("**Buffer Status:**")
+                                if instrument in st.session_state.live_data_manager.tick_buffer:
+                                    buffer = st.session_state.live_data_manager.tick_buffer[instrument]
+                                    st.write(f"• Buffer Size: {len(buffer)}")
+                                    st.write(f"• Max Buffer: {st.session_state.live_data_manager.buffer_size}")
+                                    st.write(f"• Buffer Usage: {len(buffer)/st.session_state.live_data_manager.buffer_size*100:.1f}%")
+                                
+                                # Show if seeded
+                                if instrument in st.session_state.live_data_manager.seeded_instruments:
+                                    seed_info = st.session_state.live_data_manager.seeded_instruments[instrument]
+                                    st.write(f"• Seeded: ✅ ({seed_info['seed_count']} rows)")
+                                else:
+                                    st.write("• Seeded: ❌ (Fresh start)")
 
-                        # Color based on change
-                        change_pct = stats.get('change_percent', 0)
-                        color = "🟢" if change_pct >= 0 else "🔴"
+                else:
+                    st.info("📡 Connected but no tick data received yet. Please wait...")
+                    
+                    # Show debugging information
+                    if st.session_state.live_data_manager:
+                        st.subheader("🔍 Connection Debug Info")
+                        
+                        connection_status = st.session_state.live_data_manager.ws_client.get_connection_status()
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write("**WebSocket Status:**")
+                            st.write(f"• Connected: {connection_status['is_connected']}")
+                            st.write(f"• Subscribed Instruments: {connection_status['total_instruments']}")
+                            st.write(f"• WebSocket URL: {connection_status['websocket_url'][:50]}...")
+                        
+                        with col2:
+                            st.write("**Live Manager Status:**")
+                            st.write(f"• Total Ticks: {st.session_state.live_data_manager.total_ticks_received}")
+                            st.write(f"• Instruments with Data: {len(st.session_state.live_data_manager.ohlc_data)}")
+                            st.write(f"• Connection Status: {st.session_state.live_data_manager.connection_status}")
+                        
+                        # Show raw connection details
+                        with st.expander("🔍 Raw Connection Details"):
+                            st.json(connection_status)
 
-                        st.markdown(f"""
-                        <div class="metric-container">
-                            <h4 style="color: #00ffff; margin: 0;">{color} {display_name}</h4>
-                            <h2 style="margin: 0.5rem 0; color: #00ff41;">₹{stats['latest_price']:.2f}</h2>
-                            <p style="color: #9ca3af; margin: 0;">
-                                {change_pct:+.2f}% | Vol: {stats['latest_volume']:,}
-                            </p>
-                            <p style="color: #6b7280; font-size: 0.8rem; margin: 0;">
-                                Ticks: {stats['tick_count']:,}
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                # Auto-refresh note
+                st.info("💡 **Tip:** This page auto-refreshes to show live data. Your WebSocket is receiving ticks in the background!")
 
             with charts_tab:
                 st.subheader("📈 Real-time Price Charts")
