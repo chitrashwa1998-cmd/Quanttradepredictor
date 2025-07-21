@@ -519,10 +519,8 @@ def show_live_data_page():
                                     if 'volatility' in prediction:
                                         vol_data = prediction['volatility']
                                         vol_level = vol_data.get('prediction', 'Unknown')
-                                        vol_value = vol_data.get('value', 0.0)
                                         vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
                                         st.markdown(f"**{vol_color} Volatility:** {vol_level}")
-                                        st.markdown(f"**📊 Predicted Vol:** {vol_value:.4f} ({vol_value*100:.2f}%)")
 
                                     # Profit probability
                                     if 'profit_probability' in prediction:
