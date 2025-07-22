@@ -12,6 +12,7 @@ from models.direction_model import DirectionModel
 from models.profit_probability_model import ProfitProbabilityModel
 from models.reversal_model import ReversalModel
 from utils.database_adapter import DatabaseAdapter
+from utils.gemini_analysis import GeminiAnalyzer, test_gemini_connection
 
 def show_predictions_page():
     """Main predictions page with all 4 models - NO FALLBACK LOGIC"""
@@ -168,6 +169,36 @@ def show_predictions_page():
 
     with reversal_tab:
         show_reversal_predictions(db, fresh_data)
+    
+    # Add Gemini AI Analysis Section
+    st.divider()
+    st.header("🤖 AI-Powered Market Analysis")
+    
+    # Check Gemini connection
+    gemini_available = False
+    try:
+        if test_gemini_connection():
+            gemini_available = True
+        else:
+            st.warning("⚠️ Gemini AI connection not available. Please check your API key.")
+    except Exception:
+        st.warning("⚠️ Gemini AI service currently unavailable.")
+    
+    if gemini_available:
+        ai_tab1, ai_tab2, ai_tab3 = st.tabs([
+            "🧠 Market Intelligence", 
+            "💡 Trading Insights", 
+            "⚠️ Risk Analysis"
+        ])
+        
+        with ai_tab1:
+            show_gemini_market_analysis(db, fresh_data)
+        
+        with ai_tab2:
+            show_gemini_trading_insights(db, fresh_data)
+        
+        with ai_tab3:
+            show_gemini_risk_analysis(db, fresh_data)
 
 def show_volatility_predictions(db, fresh_data):
     """Volatility predictions with authentic data only"""
@@ -2962,6 +2993,294 @@ def show_reversal_predictions(db, fresh_data):
 
     except Exception as e:
         st.error(f"Error generating reversal predictions: {str(e)}")
+
+
+def show_gemini_market_analysis(db, fresh_data):
+    """Display Gemini AI market analysis"""
+    st.subheader("🧠 AI Market Intelligence")
+    
+    try:
+        # Get recent predictions from all models
+        from models.model_manager import ModelManager
+        model_manager = ModelManager()
+        predictions = {}
+        
+        # Collect predictions from trained models
+        for model_name in ['volatility', 'direction', 'profit_probability', 'reversal']:
+            if model_manager.is_model_trained(model_name):
+                try:
+                    # Get latest prediction for this model
+                    from features.technical_indicators import TechnicalIndicators
+                    ti = TechnicalIndicators()
+                    features = ti.calculate_all_indicators(fresh_data)
+                    
+                    if model_name == 'volatility':
+                        model = model_manager.get_model('volatility')
+                        if model and len(features) > 0:
+                            pred = model.predict(features.tail(1))
+                            if len(pred) > 0:
+                                predictions[model_name] = float(pred[-1])
+                    elif model_name == 'direction':
+                        model = model_manager.get_model('direction')
+                        if model and len(features) > 0:
+                            pred = model.predict(features.tail(1))
+                            if len(pred) > 0:
+                                predictions[model_name] = int(pred[-1])
+                    elif model_name == 'profit_probability':
+                        model = model_manager.get_model('profit_probability')
+                        if model and len(features) > 0:
+                            pred = model.predict_proba(features.tail(1))
+                            if len(pred) > 0:
+                                predictions[model_name] = float(pred[-1])
+                    elif model_name == 'reversal':
+                        model = model_manager.get_model('reversal')
+                        if model and len(features) > 0:
+                            pred = model.predict(features.tail(1))
+                            if len(pred) > 0:
+                                predictions[model_name] = int(pred[-1])
+                except Exception:
+                    continue
+        
+        if not predictions:
+            st.warning("No model predictions available for analysis")
+            return
+        
+        # Initialize Gemini analyzer
+        analyzer = GeminiAnalyzer()
+        
+        # Generate market analysis
+        with st.spinner("Analyzing market conditions with AI..."):
+            analysis = analyzer.analyze_market_data(fresh_data, predictions)
+            
+        # Display analysis results
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            sentiment_color = "green" if analysis.sentiment_score > 0 else "red" if analysis.sentiment_score < 0 else "gray"
+            st.metric("Market Sentiment", f"{analysis.sentiment_score:.2f}", 
+                     delta=f"{abs(analysis.sentiment_score):.2f} {'Bullish' if analysis.sentiment_score > 0 else 'Bearish'}")
+            
+        with col2:
+            st.metric("AI Confidence", f"{analysis.confidence:.1%}")
+            
+        with col3:
+            risk_colors = {"low": "green", "medium": "orange", "high": "red"}
+            st.markdown(f"**Risk Level:** :{risk_colors.get(analysis.risk_level.lower(), 'gray')}[{analysis.risk_level.title()}]")
+        
+        # Key factors
+        st.subheader("🔍 Key Market Factors")
+        for factor in analysis.key_factors:
+            st.write(f"• {factor}")
+        
+        # Recommendation
+        st.subheader("💡 AI Recommendation")
+        st.info(analysis.recommendation)
+        
+        # ML Model Explanation
+        st.subheader("🤖 Model Prediction Analysis")
+        with st.spinner("Generating model explanation..."):
+            explanation = analyzer.explain_model_predictions(predictions)
+            st.write(explanation)
+            
+    except Exception as e:
+        st.error(f"AI analysis unavailable: {str(e)}")
+        st.info("Please ensure your Gemini API key is properly configured")
+
+
+def show_gemini_trading_insights(db, fresh_data):
+    """Display Gemini AI trading insights"""
+    st.subheader("💡 AI Trading Insights")
+    
+    try:
+        # Get model predictions
+        from models.model_manager import ModelManager
+        model_manager = ModelManager()
+        predictions = {}
+        
+        # Collect available predictions
+        for model_name in ['volatility', 'direction', 'profit_probability', 'reversal']:
+            if model_manager.is_model_trained(model_name):
+                try:
+                    from features.technical_indicators import TechnicalIndicators
+                    ti = TechnicalIndicators()
+                    features = ti.calculate_all_indicators(fresh_data)
+                    
+                    if model_name == 'direction':
+                        model = model_manager.get_model('direction')
+                        if model and len(features) > 0:
+                            pred = model.predict(features.tail(1))
+                            if len(pred) > 0:
+                                predictions[model_name] = "Bullish" if pred[-1] == 1 else "Bearish"
+                    elif model_name == 'volatility':
+                        model = model_manager.get_model('volatility')
+                        if model and len(features) > 0:
+                            pred = model.predict(features.tail(1))
+                            if len(pred) > 0:
+                                predictions[model_name] = f"{pred[-1]:.6f}"
+                    elif model_name == 'profit_probability':
+                        model = model_manager.get_model('profit_probability')
+                        if model and len(features) > 0:
+                            pred = model.predict_proba(features.tail(1))
+                            if len(pred) > 0:
+                                predictions[model_name] = f"{pred[-1]:.2%}"
+                    elif model_name == 'reversal':
+                        model = model_manager.get_model('reversal')
+                        if model and len(features) > 0:
+                            pred = model.predict(features.tail(1))
+                            if len(pred) > 0:
+                                predictions[model_name] = "Yes" if pred[-1] == 1 else "No"
+                except Exception:
+                    continue
+        
+        if not predictions:
+            st.warning("No predictions available for trading insights")
+            return
+            
+        # Initialize Gemini analyzer
+        analyzer = GeminiAnalyzer()
+        
+        # Generate trading insights
+        with st.spinner("Generating trading insights..."):
+            insight = analyzer.generate_trading_insights(fresh_data, predictions)
+            
+        # Display insights
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            direction_colors = {"bullish": "green", "bearish": "red", "neutral": "gray"}
+            st.markdown(f"**Direction:** :{direction_colors[insight.direction]}[{insight.direction.title()}]")
+            
+        with col2:
+            st.metric("Signal Strength", f"{insight.strength:.1%}")
+            
+        with col3:
+            st.write(f"**Time Horizon:** {insight.time_horizon.title()}")
+        
+        # Reasoning
+        st.subheader("🎯 Trading Rationale")
+        for reason in insight.reasoning:
+            st.write(f"• {reason}")
+            
+        # Current market state
+        st.subheader("📊 Current Market State")
+        current_price = fresh_data['close'].iloc[-1]
+        price_change_1d = ((fresh_data['close'].iloc[-1] / fresh_data['close'].iloc[-2]) - 1) * 100
+        volume = fresh_data['volume'].iloc[-1]
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Current Price", f"₹{current_price:.2f}", 
+                     delta=f"{price_change_1d:+.2f}%")
+        with col2:
+            st.metric("Volume", f"{volume:,.0f}")
+        with col3:
+            volatility = fresh_data['close'].pct_change().tail(20).std() * 100
+            st.metric("20-Period Volatility", f"{volatility:.2f}%")
+            
+    except Exception as e:
+        st.error(f"Trading insights unavailable: {str(e)}")
+
+
+def show_gemini_risk_analysis(db, fresh_data):
+    """Display Gemini AI risk analysis"""
+    st.subheader("⚠️ AI Risk Analysis")
+    
+    try:
+        # Get model predictions for risk assessment
+        from models.model_manager import ModelManager
+        model_manager = ModelManager()
+        predictions = {}
+        
+        for model_name in ['volatility', 'direction', 'profit_probability', 'reversal']:
+            if model_manager.is_model_trained(model_name):
+                try:
+                    from features.technical_indicators import TechnicalIndicators
+                    ti = TechnicalIndicators()
+                    features = ti.calculate_all_indicators(fresh_data)
+                    
+                    if model_name == 'volatility':
+                        model = model_manager.get_model('volatility')
+                        if model and len(features) > 0:
+                            pred = model.predict(features.tail(1))
+                            if len(pred) > 0:
+                                predictions[model_name] = float(pred[-1])
+                except Exception:
+                    continue
+        
+        # Initialize Gemini analyzer
+        analyzer = GeminiAnalyzer()
+        
+        # Generate risk analysis
+        with st.spinner("Analyzing risk factors..."):
+            risk_analysis = analyzer.analyze_risk_factors(fresh_data, predictions)
+            
+        # Display risk metrics
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            risk_score = risk_analysis['volatility_score']
+            risk_color = "red" if risk_score > 7 else "orange" if risk_score > 4 else "green"
+            st.metric("Risk Score", f"{risk_score:.1f}/10")
+            
+        with col2:
+            drawdown = risk_analysis['drawdown_risk']
+            st.metric("Max Drawdown", f"{drawdown:.2f}%")
+            
+        with col3:
+            st.write(f"**Analysis Time:** {risk_analysis['timestamp'][:19]}")
+        
+        # Risk analysis text
+        st.subheader("📋 Detailed Risk Assessment")
+        st.write(risk_analysis['analysis'])
+        
+        # Risk visualization
+        st.subheader("📈 Risk Visualization")
+        
+        # Calculate risk metrics over time
+        recent_data = fresh_data.tail(100)
+        returns = recent_data['close'].pct_change().dropna()
+        rolling_vol = returns.rolling(20).std() * np.sqrt(252) * 100  # Annualized volatility
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=recent_data.index[-len(rolling_vol):],
+            y=rolling_vol,
+            mode='lines',
+            name='Rolling Volatility (20-day)',
+            line=dict(color='red', width=2)
+        ))
+        
+        fig.update_layout(
+            title="Rolling Volatility Risk",
+            xaxis_title="Date",
+            yaxis_title="Annualized Volatility %",
+            height=400,
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Risk recommendations
+        st.subheader("💡 Risk Management Recommendations")
+        
+        if risk_score > 7:
+            st.error("🔴 High Risk Environment")
+            st.write("• Consider reducing position sizes")
+            st.write("• Use tighter stop-losses")
+            st.write("• Avoid leveraged trades")
+        elif risk_score > 4:
+            st.warning("🟡 Medium Risk Environment")
+            st.write("• Maintain standard position sizing")
+            st.write("• Monitor positions closely")
+            st.write("• Consider partial profit-taking")
+        else:
+            st.success("🟢 Low Risk Environment")
+            st.write("• Normal position sizing acceptable")
+            st.write("• Good environment for trend following")
+            st.write("• Consider swing trading strategies")
+            
+    except Exception as e:
+        st.error(f"Risk analysis unavailable: {str(e)}")
+
 
 if __name__ == "__main__":
     show_predictions_page()
