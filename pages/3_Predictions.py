@@ -170,29 +170,30 @@ def show_predictions_page():
     with reversal_tab:
         show_reversal_predictions(db, fresh_data)
     
-    # Add Gemini AI Analysis Section
+    # GEMINI AI ANALYSIS SECTION - ALWAYS VISIBLE
     st.divider()
     st.header("🤖 AI-Powered Market Analysis")
-    
+    st.info("Gemini AI analysis is now available!")
+
     # Simple AI tabs - always show them
     ai_tab1, ai_tab2, ai_tab3 = st.tabs([
         "🧠 Market Intelligence", 
         "💡 Trading Insights", 
         "⚠️ Risk Analysis"
     ])
-    
+
     with ai_tab1:
         try:
             show_gemini_market_analysis(db, fresh_data)
         except Exception as e:
             st.error(f"AI Market Analysis error: {str(e)}")
-    
+
     with ai_tab2:
         try:
             show_gemini_trading_insights(db, fresh_data)
         except Exception as e:
             st.error(f"AI Trading Insights error: {str(e)}")
-    
+
     with ai_tab3:
         try:
             show_gemini_risk_analysis(db, fresh_data)
