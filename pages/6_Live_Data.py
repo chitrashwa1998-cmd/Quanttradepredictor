@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from utils.live_data_manager import LiveDataManager
 from utils.live_prediction_pipeline import LivePredictionPipeline
 from utils.database_adapter import DatabaseAdapter
+from utils.gemini_analysis import GeminiAnalyzer, test_gemini_connection
 import json
 
 # Page configuration
@@ -577,6 +578,92 @@ def show_live_data_page():
                         if auto_refresh_predictions:
                             time.sleep(30)
                             st.rerun()
+
+                        # Add AI Analysis for Live Predictions
+                        st.divider()
+                        st.subheader("🤖 AI Market Analysis")
+                        
+                        # Check Gemini availability
+                        try:
+                            if test_gemini_connection():
+                                # Get live OHLC data for analysis
+                                live_ohlc_data = None
+                                current_predictions = {}
+                                
+                                # Extract OHLC data and predictions for analysis
+                                for instrument_key, prediction in live_predictions.items():
+                                    # Get OHLC data from live data manager
+                                    if hasattr(st.session_state.live_data_manager, 'ohlc_data'):
+                                        instrument_ohlc = st.session_state.live_data_manager.ohlc_data.get(instrument_key)
+                                        if instrument_ohlc is not None and len(instrument_ohlc) > 20:
+                                            live_ohlc_data = instrument_ohlc
+                                            
+                                            # Format predictions for Gemini
+                                            for model_type, model_pred in prediction.items():
+                                                if model_type in ['direction', 'volatility', 'profit_probability', 'reversal']:
+                                                    if isinstance(model_pred, dict):
+                                                        current_predictions[model_type] = model_pred.get('prediction', 'Unknown')
+                                                    else:
+                                                        current_predictions[model_type] = model_pred
+                                            break
+                                
+                                if live_ohlc_data is not None and current_predictions:
+                                    analyzer = GeminiAnalyzer()
+                                    
+                                    col1, col2 = st.columns(2)
+                                    
+                                    with col1:
+                                        with st.spinner("Generating AI market insights..."):
+                                            try:
+                                                # Generate market analysis
+                                                analysis = analyzer.analyze_market_data(live_ohlc_data, current_predictions)
+                                                
+                                                st.markdown("**🧠 Market Intelligence**")
+                                                st.metric("AI Sentiment", f"{analysis.sentiment_score:.2f}", 
+                                                         delta=f"{'Bullish' if analysis.sentiment_score > 0 else 'Bearish'}")
+                                                st.metric("Confidence", f"{analysis.confidence:.1%}")
+                                                
+                                                # Risk level with color
+                                                risk_colors = {"low": "green", "medium": "orange", "high": "red"}
+                                                st.markdown(f"**Risk Level:** :{risk_colors.get(analysis.risk_level.lower(), 'gray')}[{analysis.risk_level.title()}]")
+                                                
+                                                # Show key factors
+                                                if analysis.key_factors:
+                                                    st.markdown("**Key Factors:**")
+                                                    for factor in analysis.key_factors[:3]:  # Show top 3
+                                                        st.write(f"• {factor}")
+                                                        
+                                            except Exception as e:
+                                                st.warning(f"AI analysis unavailable: {str(e)}")
+                                    
+                                    with col2:
+                                        with st.spinner("Generating trading insights..."):
+                                            try:
+                                                # Generate trading insights
+                                                insight = analyzer.generate_trading_insights(live_ohlc_data, current_predictions)
+                                                
+                                                st.markdown("**💡 Trading Insights**")
+                                                direction_colors = {"bullish": "green", "bearish": "red", "neutral": "gray"}
+                                                st.markdown(f"**Direction:** :{direction_colors[insight.direction]}[{insight.direction.title()}]")
+                                                st.metric("Signal Strength", f"{insight.strength:.1%}")
+                                                st.write(f"**Horizon:** {insight.time_horizon.title()}")
+                                                
+                                                # Show reasoning
+                                                if insight.reasoning:
+                                                    st.markdown("**AI Reasoning:**")
+                                                    for reason in insight.reasoning[:2]:  # Show top 2
+                                                        st.write(f"• {reason}")
+                                                        
+                                            except Exception as e:
+                                                st.warning(f"Trading insights unavailable: {str(e)}")
+                                else:
+                                    st.info("AI analysis requires sufficient live data. Please wait for more market data to accumulate.")
+                                    
+                            else:
+                                st.warning("Gemini AI service currently unavailable.")
+                                
+                        except Exception as e:
+                            st.warning(f"AI analysis error: {str(e)}")
 
                     else:
                         st.info("🎯 Prediction pipeline is active but no predictions generated yet. Please wait for sufficient OHLC data to accumulate...")
