@@ -326,8 +326,8 @@ with col1:
                 <span style="color: #b8bcc8;">Advanced price movement forecasting with 94% accuracy</span>
             </div>
             <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(139, 92, 246, 0.05); border-radius: 8px;">
-                <strong style="color: #8b5cf6;">📈 Magnitude Analysis</strong><br>
-                <span style="color: #b8bcc8;">Precise percentage change estimation algorithms</span>
+                <strong style="color: #8b5cf6;">🔄 Reversal Detection</strong><br>
+                <span style="color: #b8bcc8;">Advanced market reversal point identification</span>
             </div>
             <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(255, 0, 128, 0.05); border-radius: 8px;">
                 <strong style="color: #ff0080;">💰 Profit Probability</strong><br>
