@@ -1,8 +1,240 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+/* Import futuristic fonts */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* CSS Variables - Cyberpunk Theme */
+:root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #151520;
+    --bg-tertiary: #1a1a2e;
+    --card-bg: rgba(25, 25, 45, 0.9);
+    --card-bg-hover: rgba(35, 35, 55, 0.95);
+    
+    --accent-cyan: #00ffff;
+    --accent-electric: #00ff41;
+    --accent-purple: #8b5cf6;
+    --accent-pink: #ff0080;
+    --accent-gold: #ffd700;
+    --accent-orange: #ff6b35;
+    
+    --text-primary: #ffffff;
+    --text-secondary: #b8bcc8;
+    --text-accent: #00ffff;
+    --text-muted: #6b7280;
+    
+    --border: rgba(0, 255, 255, 0.2);
+    --border-hover: rgba(0, 255, 255, 0.5);
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --shadow-glow: 0 0 20px rgba(0, 255, 255, 0.1);
+    
+    --font-primary: 'Space Grotesk', sans-serif;
+    --font-display: 'Orbitron', monospace;
+    --font-mono: 'JetBrains Mono', monospace;
+    
+    --gradient-primary: linear-gradient(135deg, #00ffff, #8b5cf6, #ff0080);
+    --gradient-card: linear-gradient(145deg, rgba(25, 25, 45, 0.9), rgba(35, 35, 55, 0.6));
+    --gradient-button: linear-gradient(45deg, #00ffff, #00ff41);
+    --gradient-danger: linear-gradient(45deg, #ff0080, #ff6b35);
+}
+
+/* Global Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    background: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    font-family: var(--font-primary) !important;
+    overflow-x: hidden;
+}
+
+/* Animated Background */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: 
+        radial-gradient(ellipse at 20% 50%, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(255, 0, 128, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 40% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: -1;
+    animation: backgroundShift 20s ease-in-out infinite;
+}
+
+@keyframes backgroundShift {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Typography */
+h1 {
+    font-family: var(--font-display) !important;
+    font-size: 4rem !important;
+    font-weight: 900 !important;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+    margin-bottom: 1rem !important;
+    text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+    animation: titleGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes titleGlow {
+    from { filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.3)); }
+    to { filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.6)); }
+}
+
+h2 {
+    font-family: var(--font-display) !important;
+    font-size: 2.5rem !important;
+    color: var(--accent-cyan) !important;
+    font-weight: 700 !important;
+    margin-bottom: 1.5rem !important;
+}
+
+h3 {
+    font-family: var(--font-display) !important;
+    font-size: 1.8rem !important;
+    color: var(--accent-electric) !important;
+    font-weight: 600 !important;
+    margin-bottom: 1rem !important;
+}
+
+h4 {
+    font-family: var(--font-primary) !important;
+    font-size: 1.4rem !important;
+    color: var(--text-accent) !important;
+    font-weight: 600 !important;
+}
+
+/* Status Indicators */
+.status-online {
+    color: var(--accent-electric) !important;
+    animation: statusPulse 2s ease-in-out infinite;
+}
+
+.status-warning {
+    color: var(--accent-gold) !important;
+}
+
+.status-error {
+    color: var(--accent-pink) !important;
+}
+
+@keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Page Transitions */
+@keyframes pageLoad {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Card Components */
+.metric-container {
+    background: var(--gradient-card);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin: 1rem 0;
+    box-shadow: var(--shadow);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.metric-container:hover {
+    border-color: var(--border-hover);
+    background: var(--card-bg-hover);
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px rgba(0, 255, 255, 0.2);
+}
+
+.metric-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-primary);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.metric-container:hover::before {
+    opacity: 1;
+}
+
+/* Feature Cards */
+.feature-card {
+    background: var(--gradient-card);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin: 1rem 0;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.feature-card:hover {
+    border-color: var(--accent-cyan);
+    transform: scale(1.02);
+    box-shadow: 0 12px 40px rgba(0, 255, 255, 0.2);
+}
+
+.feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: var(--gradient-primary);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.feature-card:hover::before {
+    transform: scaleX(1);
+}
+
+/* Success/Error States */
+.success-state {
+    border-left: 4px solid var(--accent-electric) !important;
+    background: rgba(0, 255, 65, 0.1) !important;
+}
+
+.error-state {
+    border-left: 4px solid var(--accent-pink) !important;
+    background: rgba(255, 0, 128, 0.1) !important;
+}
+
+.warning-state {
+    border-left: 4px solid var(--accent-gold) !important;
+    background: rgba(255, 215, 0, 0.1) !important;
+}
 
 :root {
   font-family: 'JetBrains Mono', monospace;

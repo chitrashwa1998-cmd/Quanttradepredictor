@@ -1,16 +1,23 @@
 /**
- * Main layout component wrapping all pages
+ * Layout component with original Streamlit styling
  */
 
 import Header from './Header';
 
-export default function Layout({ children }) {
+const Layout = ({ children }) => {
   return (
-    <div className="min-h-screen bg-cyber-dark">
+    <div className="min-h-screen" style={{background: 'var(--bg-primary)', color: 'var(--text-primary)'}}>
       <Header />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main style={{
+        maxWidth: '1400px',
+        margin: '0 auto',
+        padding: '2rem 3rem',
+        background: 'transparent'
+      }}>
         {children}
       </main>
     </div>
   );
-}
+};
+
+export default Layout;
