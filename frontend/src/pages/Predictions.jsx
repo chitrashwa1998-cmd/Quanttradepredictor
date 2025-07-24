@@ -1,234 +1,581 @@
 /**
- * Predictions page - Generate and view model predictions
+ * Predictions page - Complete Streamlit functionality migration with 4 model tabs
  */
 
-import { useState, useEffect } from 'react';
-import { predictionsAPI, dataAPI } from '../services/api';
+import { useState, useEffect, useCallback } from 'react';
+import Card from '../components/common/Card';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { dataAPI, predictionsAPI } from '../services/api';
 
-export default function Predictions() {
-  const [models, setModels] = useState([]);
+const Predictions = () => {
   const [datasets, setDatasets] = useState([]);
-  const [selectedModel, setSelectedModel] = useState('');
-  const [selectedDataset, setSelectedDataset] = useState('');
-  const [predicting, setPredicting] = useState(false);
-  const [predictions, setPredictions] = useState(null);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [modelStatus, setModelStatus] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('volatility');
+  const [predictions, setPredictions] = useState({});
+  const [predictionStatus, setPredictionStatus] = useState('');
+  const [freshData, setFreshData] = useState(null);
+  const [livePredictionsAvailable, setLivePredictionsAvailable] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [modelsResponse, datasetsResponse] = await Promise.all([
-          predictionsAPI.getModelsStatus(),
-          dataAPI.listDatasets()
-        ]);
-        
-        if (modelsResponse.status?.models) {
-          const availableModels = Object.entries(modelsResponse.status.models)
-            .filter(([_, info]) => info.loaded)
-            .map(([name, info]) => ({ name, ...info }));
-          setModels(availableModels);
-          if (availableModels.length > 0) {
-            setSelectedModel(availableModels[0].name);
+  // Load initial data
+  const loadInitialData = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // Load datasets and model status in parallel
+      const [datasetsResponse, modelsResponse] = await Promise.all([
+        dataAPI.getDatasets(),
+        predictionsAPI.getModelsStatus()
+      ]);
+
+      setDatasets(datasetsResponse.data || []);
+      setModelStatus(modelsResponse.data || {});
+
+      // Try to load fresh data from preferred datasets
+      const datasetList = datasetsResponse.data || [];
+      if (datasetList.length > 0) {
+        // Prefer training_dataset or livenifty50
+        const preferredDatasets = ['training_dataset', 'livenifty50'];
+        let datasetToLoad = null;
+
+        for (const preferred of preferredDatasets) {
+          const found = datasetList.find(d => d.name === preferred);
+          if (found) {
+            datasetToLoad = preferred;
+            break;
           }
         }
-        
-        setDatasets(datasetsResponse);
-        if (datasetsResponse.length > 0) {
-          setSelectedDataset(datasetsResponse[0].name);
-        }
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    fetchData();
+        // If no preferred dataset, use the first available
+        if (!datasetToLoad && datasetList.length > 0) {
+          datasetToLoad = datasetList[0].name;
+        }
+
+        if (datasetToLoad) {
+          const dataResponse = await dataAPI.loadDataset(datasetToLoad);
+          setFreshData(dataResponse.data);
+          setPredictionStatus(`✅ Using authentic data with ${dataResponse.data?.length || 0} records from ${datasetToLoad}`);
+        }
+      }
+
+      // Check for live predictions
+      try {
+        const liveStatus = await predictionsAPI.getLivePredictionStatus();
+        if (liveStatus.data?.pipeline_active && liveStatus.data?.instruments_with_predictions > 0) {
+          setLivePredictionsAvailable(true);
+        }
+      } catch (error) {
+        // Live predictions not available, which is fine
+        setLivePredictionsAvailable(false);
+      }
+
+    } catch (error) {
+      setPredictionStatus(`❌ Error initializing: ${error.response?.data?.detail || error.message}`);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handlePrediction = async () => {
-    if (!selectedModel || !selectedDataset) {
-      setError('Please select both a model and dataset');
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
+
+  // Generate predictions for a specific model
+  const generatePredictions = async (modelType) => {
+    if (!freshData || freshData.length === 0) {
+      setPredictionStatus('❌ No data available for predictions');
+      return;
+    }
+
+    if (!modelStatus[modelType]?.loaded) {
+      setPredictionStatus(`❌ ${modelType} model not trained. Please train the model first.`);
       return;
     }
 
     try {
-      setPredicting(true);
-      setError(null);
-      setPredictions(null);
+      setLoading(true);
+      setPredictionStatus(`🔮 Generating ${modelType} predictions...`);
 
-      // Get latest data from dataset for prediction
-      const datasetResponse = await dataAPI.getDataset(selectedDataset, 10);
-      const latestData = datasetResponse.data[datasetResponse.data.length - 1];
+      const response = await predictionsAPI.generatePredictions({
+        model_type: modelType,
+        data: freshData.slice(-100) // Use last 100 records for prediction
+      });
 
-      const result = await predictionsAPI.predict(selectedModel, latestData);
-      setPredictions(result);
-    } catch (err) {
-      setError(err.response?.data?.error || err.message);
+      setPredictions(prev => ({
+        ...prev,
+        [modelType]: response.data
+      }));
+
+      setPredictionStatus(`✅ ${modelType.charAt(0).toUpperCase() + modelType.slice(1)} predictions generated successfully!`);
+    } catch (error) {
+      setPredictionStatus(`❌ Prediction failed: ${error.response?.data?.detail || error.message}`);
     } finally {
-      setPredicting(false);
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner size="lg" text="Loading prediction options..." />
-      </div>
-    );
-  }
+  // Clear cached data
+  const clearCache = async () => {
+    try {
+      setLoading(true);
+      setPredictionStatus('🗑️ Clearing all cached data...');
+      
+      // Clear local state
+      setPredictions({});
+      setFreshData(null);
+      
+      // Reload fresh data
+      await loadInitialData();
+      
+      setPredictionStatus('✅ Cleared all cached data. Page reloaded with fresh database data.');
+    } catch (error) {
+      setPredictionStatus(`❌ Error clearing cache: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const modelTabs = [
+    { 
+      id: 'volatility', 
+      name: 'Volatility Predictions', 
+      icon: '📊', 
+      description: 'Forecasts the magnitude of price movements without predicting direction.',
+      color: '#00ffff'
+    },
+    { 
+      id: 'direction', 
+      name: 'Direction Predictions', 
+      icon: '📈', 
+      description: 'Predicts whether prices will move up or down.',
+      color: '#00ff41'
+    },
+    { 
+      id: 'profit_probability', 
+      name: 'Profit Probability', 
+      icon: '💰', 
+      description: 'Estimates the likelihood of profitable trades with risk assessment.',
+      color: '#ff0080'
+    },
+    { 
+      id: 'reversal', 
+      name: 'Reversal Detection', 
+      icon: '🔄', 
+      description: 'Identifies potential market reversal points.',
+      color: '#8b5cf6'
+    }
+  ];
 
   return (
-    <div className="space-y-8">
+    <div className="container mx-auto px-6 py-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold cyber-text mb-4">Model Predictions</h1>
-        <p className="text-gray-300">
-          Generate predictions using your trained models
+      <div className="trading-header mb-8">
+        <h1 style={{
+          margin: '0',
+          background: 'var(--gradient-primary)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          fontFamily: 'var(--font-display)',
+          fontSize: '2.5rem'
+        }}>
+          🔮 REAL-TIME PREDICTIONS
+        </h1>
+        <p style={{
+          fontSize: '1.2rem',
+          margin: '1rem 0 0 0',
+          color: 'rgba(255,255,255,0.8)',
+          fontFamily: 'var(--font-primary)'
+        }}>
+          Advanced ML Model Predictions - Authentic Data Only
         </p>
       </div>
 
-      {/* Prediction Configuration */}
-      <div className="cyber-bg cyber-border rounded-lg p-6">
-        <h2 className="text-xl font-semibold cyber-blue mb-6">Prediction Setup</h2>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Model Selection */}
-          <div>
-            <label className="block text-sm font-semibold text-cyber-yellow mb-3">
-              Select Model
-            </label>
-            {models.length > 0 ? (
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white focus:border-cyber-blue focus:outline-none"
-              >
-                {models.map((model) => (
-                  <option key={model.name} value={model.name}>
-                    {model.name.charAt(0).toUpperCase() + model.name.slice(1)} 
-                    ({model.features?.length || 0} features)
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="text-center py-4 text-gray-400">
-                <p>No trained models available. Please train models first.</p>
-              </div>
-            )}
+      {/* Live Predictions Banner */}
+      {livePredictionsAvailable && (
+        <Card style={{ marginBottom: '2rem', background: 'rgba(0, 255, 0, 0.05)', border: '1px solid rgba(0, 255, 0, 0.2)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ color: '#51cf66', margin: '0 0 0.5rem 0', fontSize: '1.2rem' }}>
+                🎯 Live Predictions Available!
+              </h3>
+              <p style={{ color: 'var(--text-primary)', margin: '0' }}>
+                Real-time direction predictions are being generated from live market data.
+              </p>
+            </div>
+            <button
+              onClick={() => window.location.href = '/live'}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: 'var(--gradient-primary)',
+                border: 'none',
+                borderRadius: '8px',
+                color: 'white',
+                fontFamily: 'var(--font-primary)',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              📡 View Live Data Page
+            </button>
           </div>
+        </Card>
+      )}
 
-          {/* Dataset Selection */}
+      {/* Controls */}
+      <Card style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <label className="block text-sm font-semibold text-cyber-yellow mb-3">
-              Select Data Source
-            </label>
-            {datasets.length > 0 ? (
-              <select
-                value={selectedDataset}
-                onChange={(e) => setSelectedDataset(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white focus:border-cyber-blue focus:outline-none"
-              >
-                {datasets.map((dataset) => (
-                  <option key={dataset.name} value={dataset.name}>
-                    {dataset.name} ({dataset.rows?.toLocaleString()} rows)
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="text-center py-4 text-gray-400">
-                <p>No datasets available. Please upload data first.</p>
-              </div>
-            )}
+            <h3 style={{ color: 'var(--accent-cyan)', margin: '0 0 0.5rem 0' }}>
+              Data Status
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', margin: '0', fontSize: '0.9rem' }}>
+              {freshData ? `${freshData.length} records loaded` : 'No data loaded'}
+            </p>
           </div>
-        </div>
-
-        {/* Prediction Button */}
-        <div className="mt-8 text-center">
           <button
-            onClick={handlePrediction}
-            disabled={predicting || !selectedModel || !selectedDataset || models.length === 0}
-            className="cyber-border rounded-md py-3 px-8 text-cyber-green hover:cyber-glow transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={clearCache}
+            disabled={loading}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: loading ? 'var(--bg-secondary)' : '#ff6b6b',
+              border: '1px solid #ff6b6b',
+              borderRadius: '8px',
+              color: 'white',
+              fontFamily: 'var(--font-primary)',
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer'
+            }}
+            title="Click if you see synthetic datetime warnings"
           >
-            {predicting ? 'Generating Prediction...' : 'Generate Prediction'}
+            {loading ? '⏳ Clearing...' : '🗑️ Clear All Cached Data'}
           </button>
         </div>
-      </div>
+      </Card>
 
-      {/* Prediction Progress */}
-      {predicting && (
-        <div className="cyber-bg cyber-border rounded-lg p-6 slide-in-up">
-          <div className="text-center">
-            <LoadingSpinner size="lg" text="Generating prediction..." />
-          </div>
+      {/* Model Status Overview */}
+      <Card style={{ marginBottom: '2rem' }}>
+        <h3 style={{ color: 'var(--accent-cyan)', marginBottom: '1rem' }}>
+          🤖 Model Status
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {modelTabs.map((tab) => (
+            <div key={tab.id} style={{
+              background: modelStatus[tab.id]?.loaded 
+                ? 'rgba(0, 255, 0, 0.05)' 
+                : 'rgba(255, 0, 0, 0.05)',
+              border: `1px solid ${modelStatus[tab.id]?.loaded ? '#00ff00' : '#ff0000'}`,
+              borderRadius: '8px',
+              padding: '1rem',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{tab.icon}</div>
+              <div style={{
+                color: modelStatus[tab.id]?.loaded ? '#51cf66' : '#ff6b6b',
+                fontWeight: '600',
+                fontSize: '0.9rem'
+              }}>
+                {modelStatus[tab.id]?.loaded ? '✅ Ready' : '❌ Not Trained'}
+              </div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                {tab.name}
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+      </Card>
 
-      {/* Prediction Results */}
-      {predictions && (
-        <div className="cyber-bg cyber-border rounded-lg p-6 slide-in-up">
-          <h2 className="text-xl font-semibold text-cyber-green mb-4">
-            🔮 Prediction Results
-          </h2>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <h3 className="font-semibold text-cyber-blue mb-2">Model Info</h3>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Model:</span>
-                    <span className="text-white capitalize">{predictions.model_name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Timestamp:</span>
-                    <span className="text-white font-mono">
-                      {new Date(predictions.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Status:</span>
-                    <span className={predictions.success ? 'text-cyber-green' : 'text-cyber-red'}>
-                      {predictions.success ? 'Success' : 'Failed'}
-                    </span>
-                  </div>
+      {/* Prediction Tabs */}
+      <Card>
+        {/* Tab Navigation */}
+        <div style={{
+          display: 'flex',
+          borderBottom: '2px solid var(--border)',
+          marginBottom: '2rem',
+          overflowX: 'auto'
+        }}>
+          {modelTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: '1rem 1.5rem',
+                background: activeTab === tab.id ? tab.color + '20' : 'transparent',
+                border: 'none',
+                borderBottom: activeTab === tab.id ? `3px solid ${tab.color}` : '3px solid transparent',
+                color: activeTab === tab.id ? tab.color : 'var(--text-primary)',
+                fontFamily: 'var(--font-primary)',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {tab.icon} {tab.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        {modelTabs.map((tab) => (
+          activeTab === tab.id && (
+            <div key={tab.id}>
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div className="lg:col-span-3">
+                  <h3 style={{
+                    color: tab.color,
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '1.5rem',
+                    marginBottom: '1rem'
+                  }}>
+                    {tab.icon} {tab.name}
+                  </h3>
+                  <p style={{
+                    color: 'var(--text-primary)',
+                    marginBottom: '1.5rem',
+                    lineHeight: '1.6'
+                  }}>
+                    {tab.description}
+                  </p>
+
+                  {/* Model Status Check */}
+                  {!modelStatus[tab.id]?.loaded && (
+                    <div style={{
+                      background: 'rgba(255, 0, 0, 0.05)',
+                      border: '1px solid #ff0000',
+                      borderRadius: '8px',
+                      padding: '1.5rem',
+                      marginBottom: '1.5rem',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ color: '#ff6b6b', fontSize: '1.2rem', marginBottom: '0.5rem' }}>
+                        ⚠️ Model Not Trained
+                      </div>
+                      <p style={{ color: 'var(--text-secondary)', margin: '0 0 1rem 0' }}>
+                        Please train the {tab.name.toLowerCase()} first in the Model Training page.
+                      </p>
+                      <button
+                        onClick={() => window.location.href = '/training'}
+                        style={{
+                          padding: '0.75rem 1.5rem',
+                          background: 'var(--gradient-primary)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          color: 'white',
+                          fontFamily: 'var(--font-primary)',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🧠 Go to Model Training
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Predictions Results */}
+                  {predictions[tab.id] && modelStatus[tab.id]?.loaded && (
+                    <div style={{
+                      background: `${tab.color}10`,
+                      border: `1px solid ${tab.color}40`,
+                      borderRadius: '12px',
+                      padding: '1.5rem',
+                      marginBottom: '1.5rem'
+                    }}>
+                      <h4 style={{ color: tab.color, marginBottom: '1rem' }}>
+                        📊 Latest {tab.name}
+                      </h4>
+                      
+                      {/* Prediction Visualization */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        {predictions[tab.id].summary && Object.entries(predictions[tab.id].summary).map(([key, value]) => (
+                          <div key={key} style={{
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            borderRadius: '8px',
+                            padding: '1rem',
+                            textAlign: 'center'
+                          }}>
+                            <div style={{
+                              color: tab.color,
+                              fontSize: '1.5rem',
+                              fontWeight: '700',
+                              marginBottom: '0.25rem'
+                            }}>
+                              {typeof value === 'number' ? value.toFixed(4) : value}
+                            </div>
+                            <div style={{
+                              color: 'var(--text-secondary)',
+                              fontSize: '0.9rem',
+                              textTransform: 'capitalize'
+                            }}>
+                              {key.replace('_', ' ')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Prediction Table */}
+                      {predictions[tab.id].data && (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{
+                            width: '100%',
+                            borderCollapse: 'collapse',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.9rem'
+                          }}>
+                            <thead>
+                              <tr style={{ background: `${tab.color}20` }}>
+                                <th style={{
+                                  padding: '0.75rem',
+                                  textAlign: 'left',
+                                  color: tab.color,
+                                  borderBottom: '1px solid var(--border)'
+                                }}>
+                                  Timestamp
+                                </th>
+                                <th style={{
+                                  padding: '0.75rem',
+                                  textAlign: 'left',
+                                  color: tab.color,
+                                  borderBottom: '1px solid var(--border)'
+                                }}>
+                                  Prediction
+                                </th>
+                                <th style={{
+                                  padding: '0.75rem',
+                                  textAlign: 'left',
+                                  color: tab.color,
+                                  borderBottom: '1px solid var(--border)'
+                                }}>
+                                  Confidence
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {predictions[tab.id].data.slice(0, 10).map((row, index) => (
+                                <tr key={index}>
+                                  <td style={{
+                                    padding: '0.75rem',
+                                    color: 'var(--text-primary)',
+                                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+                                  }}>
+                                    {row.timestamp}
+                                  </td>
+                                  <td style={{
+                                    padding: '0.75rem',
+                                    color: tab.color,
+                                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                                    fontWeight: '600'
+                                  }}>
+                                    {row.prediction}
+                                  </td>
+                                  <td style={{
+                                    padding: '0.75rem',
+                                    color: 'var(--text-primary)',
+                                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+                                  }}>
+                                    {row.confidence}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <button
+                    onClick={() => generatePredictions(tab.id)}
+                    disabled={loading || !modelStatus[tab.id]?.loaded || !freshData}
+                    style={{
+                      width: '100%',
+                      padding: '1rem',
+                      background: loading || !modelStatus[tab.id]?.loaded || !freshData
+                        ? 'var(--bg-secondary)' 
+                        : tab.color,
+                      border: `2px solid ${tab.color}`,
+                      borderRadius: '8px',
+                      color: 'white',
+                      fontFamily: 'var(--font-primary)',
+                      fontWeight: '600',
+                      fontSize: '1rem',
+                      cursor: loading || !modelStatus[tab.id]?.loaded || !freshData ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    {loading ? '⏳ Generating...' : `🔮 Generate ${tab.name}`}
+                  </button>
+
+                  {predictions[tab.id] && (
+                    <div style={{
+                      marginTop: '1rem',
+                      padding: '1rem',
+                      background: `${tab.color}10`,
+                      border: `1px solid ${tab.color}40`,
+                      borderRadius: '8px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{
+                        color: tab.color,
+                        fontSize: '1.5rem',
+                        marginBottom: '0.5rem'
+                      }}>
+                        ✅
+                      </div>
+                      <div style={{
+                        color: tab.color,
+                        fontSize: '0.9rem',
+                        fontWeight: '600'
+                      }}>
+                        Predictions Generated
+                      </div>
+                      <div style={{
+                        color: 'var(--text-secondary)',
+                        fontSize: '0.8rem',
+                        marginTop: '0.25rem'
+                      }}>
+                        {predictions[tab.id].data?.length || 0} predictions
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              {predictions.prediction && (
-                <div>
-                  <h3 className="font-semibold text-cyber-purple mb-2">Prediction Values</h3>
-                  <div className="bg-gray-800 rounded-lg p-3">
-                    <pre className="text-sm text-gray-300 overflow-auto">
-                      {JSON.stringify(predictions.prediction, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              )}
             </div>
-          </div>
-        </div>
-      )}
+          )
+        ))}
+      </Card>
 
-      {/* Recent Predictions */}
-      <div className="cyber-bg cyber-border rounded-lg p-6">
-        <h2 className="text-xl font-semibold cyber-text mb-6">Recent Predictions</h2>
-        <div className="text-center text-gray-400 py-8">
-          <p>Recent predictions history will be displayed here</p>
-          <p className="text-sm mt-2">Generate your first prediction to see results</p>
-        </div>
-      </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="cyber-bg border border-cyber-red rounded-lg p-6 slide-in-up">
-          <h2 className="text-xl font-semibold text-cyber-red mb-4">
-            ❌ Prediction Failed
-          </h2>
-          <p className="text-gray-300">{error}</p>
+      {/* Status Message */}
+      {predictionStatus && (
+        <div style={{
+          position: 'fixed',
+          bottom: '2rem',
+          right: '2rem',
+          padding: '1rem 1.5rem',
+          background: predictionStatus.includes('❌') 
+            ? 'rgba(255, 0, 0, 0.9)' 
+            : predictionStatus.includes('✅')
+            ? 'rgba(0, 255, 0, 0.9)'
+            : 'rgba(0, 255, 255, 0.9)',
+          border: `1px solid ${
+            predictionStatus.includes('❌') ? '#ff0000' : 
+            predictionStatus.includes('✅') ? '#00ff00' : '#00ffff'
+          }`,
+          borderRadius: '8px',
+          color: 'white',
+          fontFamily: 'var(--font-primary)',
+          fontWeight: '600',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+          zIndex: 1000,
+          maxWidth: '400px'
+        }}>
+          {predictionStatus}
         </div>
       )}
     </div>
   );
-}
+};
+
+export default Predictions;
