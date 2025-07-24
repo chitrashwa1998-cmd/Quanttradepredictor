@@ -1,4 +1,4 @@
-# Applying the provided changes to fix date formatting error when data index is not datetime.
+# Applying the provided changes to fix date formatting error when data index is not datetime and updating interface text to reflect XGBoost ensemble models.
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -243,7 +243,7 @@ with col2:
         <h3 style="color: #00ff41; margin: 0; font-family: 'Orbitron', monospace;">🤖 AI MODELS</h3>
         <h2 style="margin: 0.5rem 0; color: {progress_color}; font-weight: 800;">{model_count}/7</h2>
         <p style="color: #9ca3af; margin: 0; font-family: 'JetBrains Mono', monospace;">
-            Neural networks trained
+            XGBoost ensemble models trained
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -380,7 +380,7 @@ st.markdown("""
 # Enhanced Steps
 steps = [
     ("📊", "DATA INTEGRATION", "Market Data Ingestion", "Load OHLC data with advanced preprocessing", "#00ffff"),
-    ("🔬", "AI TRAINING", "Neural Network Training", "Deploy XGBoost ML prediction models", "#00ff41"),
+    ("🔬", "AI TRAINING", "XGBoost Training", "Train XGBoost ensemble models", "#00ff41"),
     ("🎯", "SIGNAL GENERATION", "Trading Signal Engine", "Real-time prediction and analysis", "#8b5cf6"),
     ("📈", "STRATEGY VALIDATION", "Performance Analytics", "Comprehensive backtesting framework", "#ff0080")
 ]
