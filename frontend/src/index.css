@@ -271,6 +271,77 @@ h4 {
     background: var(--accent-electric);
 }
 
+/* Original Streamlit Component Styles */
+.trading-header {
+    background: var(--gradient-card);
+    border: 2px solid var(--border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-glow);
+    position: relative;
+    overflow: hidden;
+}
+
+.metric-container {
+    background: var(--gradient-card);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.metric-container:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-glow);
+}
+
+.feature-card {
+    background: var(--gradient-card);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.feature-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-glow);
+}
+
+.glow-animation {
+    animation: glowPulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes glowPulse {
+    0% {
+        box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+    }
+    100% {
+        box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+    }
+}
+
+@keyframes titleGlow {
+    0% {
+        text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+    }
+    100% {
+        text-shadow: 0 0 40px rgba(0, 255, 255, 0.8), 0 0 60px rgba(139, 92, 246, 0.3);
+    }
+}
+
+@keyframes pageLoad {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 :root {
   font-family: 'JetBrains Mono', monospace;
   line-height: 1.5;

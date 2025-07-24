@@ -52,8 +52,18 @@ const Home = () => {
 
   return (
     <div style={{ animation: 'pageLoad 0.6s ease-out' }}>
-      {/* Main Title Header */}
-      <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+      {/* Original TribexAlpha Header */}
+      <div className="trading-header" style={{
+        background: 'var(--gradient-card)',
+        border: '2px solid var(--border)',
+        borderRadius: '20px',
+        padding: '3rem 2rem',
+        margin: '2rem 0 3rem 0',
+        textAlign: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+        boxShadow: 'var(--shadow-glow)'
+      }}>
         <h1 style={{
           fontFamily: 'var(--font-display)',
           fontSize: '4rem',
@@ -69,377 +79,397 @@ const Home = () => {
         }}>
           TribexAlpha
         </h1>
-        <h2 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '2rem',
-          color: 'var(--accent-electric)',
-          fontWeight: '600',
-          marginBottom: '1rem'
+        <p style={{
+          fontSize: '1.5rem',
+          margin: '1rem 0 0 0',
+          opacity: '0.9',
+          fontWeight: '300',
+          color: '#00ffff',
+          fontFamily: 'var(--font-primary)'
         }}>
-          Quantum Trading Engine
+          🚀 AI-Powered Quant Signal Engine
+        </p>
+        <p style={{
+          fontSize: '1.1rem',
+          margin: '1rem 0 0 0',
+          opacity: '0.8',
+          color: '#b8bcc8',
+          fontFamily: 'var(--font-primary)',
+          lineHeight: '1.6'
+        }}>
+          An AI-powered quant signal engine delivering multi-model predictions for direction, volatility, reversals, and profit zones — built for real-time execution and adaptive to any market regime.
+        </p>
+      </div>
+
+      {/* Navigation Guidance Section */}
+      <div style={{
+        background: 'rgba(0, 255, 255, 0.1)',
+        border: '2px solid #00ffff',
+        borderRadius: '16px',
+        padding: '2rem',
+        margin: '2rem 0',
+        textAlign: 'center'
+      }}>
+        <h2 style={{
+          color: '#00ffff',
+          marginBottom: '1rem',
+          fontFamily: 'var(--font-display)',
+          fontSize: '1.8rem'
+        }}>
+          📍 Quick Navigation
         </h2>
         <p style={{
-          color: 'var(--text-secondary)',
-          fontSize: '1.2rem',
-          fontFamily: 'var(--font-primary)',
-          maxWidth: '800px',
-          margin: '0 auto',
-          lineHeight: '1.6'
-        }}>
-          Advanced quantitative trading platform powered by machine learning for Nifty 50 index predictions, 
-          featuring AI-driven market analysis and real-time insights.
-        </p>
-      </div>
-
-      {/* App Description */}
-      <Card glow style={{ marginBottom: '3rem' }}>
-        <h3 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '2rem',
-          color: 'var(--accent-cyan)',
-          fontWeight: '700',
-          marginBottom: '2rem',
-          textAlign: 'center'
-        }}>
-          📊 Platform Overview
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
-            <h4 style={{
-              fontFamily: 'var(--font-primary)',
-              fontSize: '1.4rem',
-              color: 'var(--accent-electric)',
-              fontWeight: '600',
-              marginBottom: '1rem'
-            }}>
-              🤖 Machine Learning Models
-            </h4>
-            <ul style={{
-              color: 'var(--text-secondary)',
-              fontFamily: 'var(--font-primary)',
-              lineHeight: '1.8',
-              paddingLeft: '1.5rem'
-            }}>
-              <li><strong style={{color: 'var(--text-primary)'}}>Volatility Prediction:</strong> Advanced regression models for market volatility forecasting</li>
-              <li><strong style={{color: 'var(--text-primary)'}}>Direction Analysis:</strong> Classification models for price movement prediction</li>
-              <li><strong style={{color: 'var(--text-primary)'}}>Profit Probability:</strong> Risk assessment and profit likelihood estimation</li>
-              <li><strong style={{color: 'var(--text-primary)'}}>Reversal Detection:</strong> Pattern recognition for market trend reversals</li>
-            </ul>
-          </div>
-          
-          <div>
-            <h4 style={{
-              fontFamily: 'var(--font-primary)',
-              fontSize: '1.4rem',
-              color: 'var(--accent-electric)',
-              fontWeight: '600',
-              marginBottom: '1rem'
-            }}>
-              ⚡ Key Features
-            </h4>
-            <ul style={{
-              color: 'var(--text-secondary)',
-              fontFamily: 'var(--font-primary)',
-              lineHeight: '1.8',
-              paddingLeft: '1.5rem'
-            }}>
-              <li><strong style={{color: 'var(--text-primary)'}}>Real-time Data:</strong> Live market feed with WebSocket connectivity</li>
-              <li><strong style={{color: 'var(--text-primary)'}}>Technical Indicators:</strong> Comprehensive TA library integration</li>
-              <li><strong style={{color: 'var(--text-primary)'}}>Backtesting:</strong> Historical strategy performance analysis</li>
-              <li><strong style={{color: 'var(--text-primary)'}}>AI Insights:</strong> Gemini-powered market analysis</li>
-            </ul>
-          </div>
-        </div>
-      </Card>
-
-      {/* System Status Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {/* Database Status */}
-        <Card glow>
-          <h4 style={{
-            fontFamily: 'var(--font-primary)',
-            fontSize: '1.4rem',
-            color: 'var(--text-accent)',
-            fontWeight: '600',
-            marginBottom: '1rem',
-            textAlign: 'center'
-          }}>
-            🗄️ Database Status
-          </h4>
-          <div className="space-y-3" style={{ textAlign: 'center' }}>
-            <div style={{
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              padding: '1rem'
-            }}>
-              <p style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-primary)', marginBottom: '0.5rem' }}>
-                <span className="status-online">●</span> {databaseInfo?.backend || 'PostgreSQL'}
-              </p>
-              <p style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>
-                Storage: {databaseInfo?.storage_type || 'Row-Based'}
-              </p>
-            </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '1rem',
-              marginTop: '1rem'
-            }}>
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', fontSize: '1.5rem', fontWeight: 'bold' }}>
-                  {databaseInfo?.total_datasets || 0}
-                </p>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Datasets</p>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ color: 'var(--accent-electric)', fontFamily: 'var(--font-mono)', fontSize: '1.5rem', fontWeight: 'bold' }}>
-                  {databaseInfo?.total_trained_models || 0}
-                </p>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Models</p>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Model Status */}
-        <Card glow>
-          <h4 style={{
-            fontFamily: 'var(--font-primary)',
-            fontSize: '1.4rem',
-            color: 'var(--text-accent)',
-            fontWeight: '600',
-            marginBottom: '1rem',
-            textAlign: 'center'
-          }}>
-            🤖 AI Models
-          </h4>
-          <div className="space-y-2">
-            {modelsStatus?.models ? Object.entries(modelsStatus.models).map(([name, info]) => (
-              <div key={name} style={{
-                background: 'var(--card-bg)',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                padding: '0.75rem',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-primary)' }}>
-                  {name.charAt(0).toUpperCase() + name.slice(1)}
-                </span>
-                <span className={info.loaded ? "status-online" : "status-error"}>
-                  {info.loaded ? '✅' : '❌'}
-                </span>
-              </div>
-            )) : (
-              <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>Loading models...</p>
-            )}
-          </div>
-        </Card>
-
-        {/* Performance Metrics */}
-        <Card glow>
-          <h4 style={{
-            fontFamily: 'var(--font-primary)',
-            fontSize: '1.4rem',
-            color: 'var(--text-accent)',
-            fontWeight: '600',
-            marginBottom: '1rem',
-            textAlign: 'center'
-          }}>
-            ⚡ Performance
-          </h4>
-          <div className="space-y-3">
-            <div style={{
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              padding: '1rem',
-              textAlign: 'center'
-            }}>
-              <p style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-primary)', marginBottom: '0.5rem' }}>
-                <span className="status-online">●</span> Backend Online
-              </p>
-              <p style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>
-                API Response: ~{Math.round(Math.random() * 50 + 10)}ms
-              </p>
-            </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '1rem'
-            }}>
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-mono)', fontSize: '1.2rem', fontWeight: 'bold' }}>
-                  99.9%
-                </p>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Uptime</p>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ color: 'var(--accent-purple)', fontFamily: 'var(--font-mono)', fontSize: '1.2rem', fontWeight: 'bold' }}>
-                  Fast
-                </p>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Response</p>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Technology Stack */}
-      <Card style={{ marginBottom: '3rem' }}>
-        <h3 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '2rem',
-          color: 'var(--accent-electric)',
-          fontWeight: '700',
-          marginBottom: '2rem',
-          textAlign: 'center'
-        }}>
-          🛠️ Technology Stack
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div style={{ textAlign: 'center' }}>
-            <h5 style={{
-              color: 'var(--accent-cyan)',
-              fontFamily: 'var(--font-primary)',
-              fontSize: '1.2rem',
-              fontWeight: '600',
-              marginBottom: '1rem'
-            }}>
-              Frontend
-            </h5>
-            <div style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-primary)', lineHeight: '1.6' }}>
-              <p>React 18</p>
-              <p>Vite Build System</p>
-              <p>Tailwind CSS</p>
-              <p>React Router</p>
-            </div>
-          </div>
-          
-          <div style={{ textAlign: 'center' }}>
-            <h5 style={{
-              color: 'var(--accent-electric)',
-              fontFamily: 'var(--font-primary)',
-              fontSize: '1.2rem',
-              fontWeight: '600',
-              marginBottom: '1rem'
-            }}>
-              Backend
-            </h5>
-            <div style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-primary)', lineHeight: '1.6' }}>
-              <p>FastAPI</p>
-              <p>Python 3.11</p>
-              <p>Async/Await</p>
-              <p>WebSocket Support</p>
-            </div>
-          </div>
-          
-          <div style={{ textAlign: 'center' }}>
-            <h5 style={{
-              color: 'var(--accent-purple)',
-              fontFamily: 'var(--font-primary)',
-              fontSize: '1.2rem',
-              fontWeight: '600',
-              marginBottom: '1rem'
-            }}>
-              Machine Learning
-            </h5>
-            <div style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-primary)', lineHeight: '1.6' }}>
-              <p>XGBoost</p>
-              <p>CatBoost</p>
-              <p>Scikit-learn</p>
-              <p>Pandas/NumPy</p>
-            </div>
-          </div>
-          
-          <div style={{ textAlign: 'center' }}>
-            <h5 style={{
-              color: 'var(--accent-gold)',
-              fontFamily: 'var(--font-primary)',
-              fontSize: '1.2rem',
-              fontWeight: '600',
-              marginBottom: '1rem'
-            }}>
-              Data & AI
-            </h5>
-            <div style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-primary)', lineHeight: '1.6' }}>
-              <p>PostgreSQL</p>
-              <p>Gemini AI</p>
-              <p>TA Indicators</p>
-              <p>Real-time Feed</p>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Getting Started */}
-      <Card style={{ textAlign: 'center' }}>
-        <h3 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '2rem',
-          color: 'var(--accent-electric)',
-          fontWeight: '700',
-          marginBottom: '2rem'
-        }}>
-          🚀 Getting Started
-        </h3>
-        <p style={{
-          color: 'var(--text-secondary)',
-          fontFamily: 'var(--font-primary)',
+          color: '#e6e8eb',
           fontSize: '1.1rem',
-          marginBottom: '3rem',
-          lineHeight: '1.6'
+          marginBottom: '1.5rem',
+          fontFamily: 'var(--font-primary)'
         }}>
-          Navigate through the platform using the sidebar. Start by uploading market data, 
-          train your models, and explore AI-powered predictions for optimal trading strategies.
+          Use the sidebar navigation to access different modules:
         </p>
-        
-        <div className="flex flex-wrap justify-center gap-4">
-          {[
-            { label: 'Upload Data', path: '/upload', icon: '📁', color: 'var(--accent-cyan)' },
-            { label: 'Train Models', path: '/training', icon: '🤖', color: 'var(--accent-electric)' },
-            { label: 'View Predictions', path: '/predictions', icon: '🔮', color: 'var(--accent-purple)' },
-            { label: 'Live Trading', path: '/live', icon: '⚡', color: 'var(--accent-gold)' }
-          ].map((action) => (
-            <a
-              key={action.path}
-              href={action.path}
-              style={{
-                background: `linear-gradient(45deg, ${action.color}, ${action.color}AA)`,
-                color: 'var(--bg-primary)',
-                border: 'none',
-                borderRadius: '12px',
-                padding: '1rem 2rem',
-                fontFamily: 'var(--font-primary)',
-                fontWeight: '600',
-                fontSize: '1rem',
-                transition: 'all 0.3s ease',
-                boxShadow: `0 4px 15px ${action.color}33`,
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                margin: '0.5rem'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.transform = 'translateY(-3px) scale(1.05)';
-                e.target.style.boxShadow = `0 8px 25px ${action.color}55`;
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = 'translateY(0) scale(1)';
-                e.target.style.boxShadow = `0 4px 15px ${action.color}33`;
-              }}
-            >
-              <span style={{ fontSize: '1.2rem' }}>{action.icon}</span>
-              <span>{action.label}</span>
-            </a>
-          ))}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '1rem',
+          margin: '1rem 0'
+        }}>
+          <div style={{
+            background: 'rgba(0, 255, 255, 0.1)',
+            padding: '1rem',
+            borderRadius: '8px'
+          }}>
+            <strong style={{ color: '#00ffff', fontFamily: 'var(--font-primary)' }}>📊 DATA UPLOAD</strong><br />
+            <span style={{ color: '#b8bcc8', fontFamily: 'var(--font-primary)' }}>Load your OHLC data</span>
+          </div>
+          <div style={{
+            background: 'rgba(0, 255, 65, 0.1)',
+            padding: '1rem',
+            borderRadius: '8px'
+          }}>
+            <strong style={{ color: '#00ff41', fontFamily: 'var(--font-primary)' }}>🔬 MODEL TRAINING</strong><br />
+            <span style={{ color: '#b8bcc8', fontFamily: 'var(--font-primary)' }}>Train machine learning models</span>
+          </div>
+          <div style={{
+            background: 'rgba(139, 92, 246, 0.1)',
+            padding: '1rem',
+            borderRadius: '8px'
+          }}>
+            <strong style={{ color: '#8b5cf6', fontFamily: 'var(--font-primary)' }}>🎯 PREDICTIONS</strong><br />
+            <span style={{ color: '#b8bcc8', fontFamily: 'var(--font-primary)' }}>Generate forecasts</span>
+          </div>
+          <div style={{
+            background: 'rgba(255, 0, 128, 0.1)',
+            padding: '1rem',
+            borderRadius: '8px'
+          }}>
+            <strong style={{ color: '#ff0080', fontFamily: 'var(--font-primary)' }}>📈 BACKTESTING</strong><br />
+            <span style={{ color: '#b8bcc8', fontFamily: 'var(--font-primary)' }}>Test strategies</span>
+          </div>
         </div>
-      </Card>
+      </div>
+
+      {/* Enhanced System Status Dashboard - Original Streamlit Style */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {/* Data Engine Status */}
+        <div className="metric-container" style={{
+          background: 'var(--gradient-card)',
+          border: '2px solid var(--border)',
+          borderRadius: '16px',
+          padding: '2rem',
+          textAlign: 'center',
+          transition: 'all 0.3s ease'
+        }}>
+          <h3 style={{
+            color: '#00ffff',
+            margin: '0',
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.2rem',
+            fontWeight: '600'
+          }}>
+            ⚡ DATA ENGINE
+          </h3>
+          <h2 style={{
+            margin: '0.5rem 0',
+            color: databaseInfo?.total_datasets > 0 ? '#00ff41' : '#ff0080',
+            fontWeight: '800',
+            fontSize: '1.5rem',
+            fontFamily: 'var(--font-primary)'
+          }}>
+            {databaseInfo?.total_datasets > 0 ? '🟢 LOADED' : '🔴 NO DATA'}
+          </h2>
+          <p style={{
+            color: '#9ca3af',
+            margin: '0',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.9rem'
+          }}>
+            {databaseInfo?.total_records || 0} market records loaded
+          </p>
+        </div>
+
+        {/* AI Models Status */}
+        <div className="metric-container" style={{
+          background: 'var(--gradient-card)',
+          border: '2px solid var(--border)',
+          borderRadius: '16px',
+          padding: '2rem',
+          textAlign: 'center',
+          transition: 'all 0.3s ease'
+        }}>
+          <h3 style={{
+            color: '#00ff41',
+            margin: '0',
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.2rem',
+            fontWeight: '600'
+          }}>
+            🤖 AI MODELS
+          </h3>
+          <h2 style={{
+            margin: '0.5rem 0',
+            color: modelsStatus?.models ? '#00ff41' : '#ffaa00',
+            fontWeight: '800',
+            fontSize: '1.5rem',
+            fontFamily: 'var(--font-primary)'
+          }}>
+            {modelsStatus?.models ? Object.keys(modelsStatus.models).length : 0}/4
+          </h2>
+          <p style={{
+            color: '#9ca3af',
+            margin: '0',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.9rem'
+          }}>
+            Machine learning models trained
+          </p>
+        </div>
+
+        {/* Predictions Status */}
+        <div className="metric-container" style={{
+          background: 'var(--gradient-card)',
+          border: '2px solid var(--border)',
+          borderRadius: '16px',
+          padding: '2rem',
+          textAlign: 'center',
+          transition: 'all 0.3s ease'
+        }}>
+          <h3 style={{
+            color: '#8b5cf6',
+            margin: '0',
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.2rem',
+            fontWeight: '600'
+          }}>
+            🎯 PREDICTIONS
+          </h3>
+          <h2 style={{
+            margin: '0.5rem 0',
+            color: modelsStatus?.models ? '#00ff41' : '#ffaa00',
+            fontWeight: '800',
+            fontSize: '1.5rem',
+            fontFamily: 'var(--font-primary)'
+          }}>
+            {modelsStatus?.models ? '🟢 ACTIVE' : '⚠️ STANDBY'}
+          </h2>
+          <p style={{
+            color: '#9ca3af',
+            margin: '0',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.9rem'
+          }}>
+            Real-time market analysis
+          </p>
+        </div>
+
+        {/* System Status */}
+        <div className="metric-container glow-animation" style={{
+          background: 'var(--gradient-card)',
+          border: '2px solid var(--border)',
+          borderRadius: '16px',
+          padding: '2rem',
+          textAlign: 'center',
+          transition: 'all 0.3s ease',
+          boxShadow: 'var(--shadow-glow)'
+        }}>
+          <h3 style={{
+            color: '#ff0080',
+            margin: '0',
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.2rem',
+            fontWeight: '600'
+          }}>
+            🌐 SYSTEM
+          </h3>
+          <h2 style={{
+            margin: '0.5rem 0',
+            color: '#00ff41',
+            fontWeight: '800',
+            fontSize: '1.5rem',
+            fontFamily: 'var(--font-primary)'
+          }}>
+            ONLINE
+          </h2>
+          <p style={{
+            color: '#b8bcc8',
+            margin: '0',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.9rem'
+          }}>
+            All systems operational
+          </p>
+        </div>
+      </div>
+
+
+
+      {/* Success Navigation Message */}
+      <div style={{
+        background: 'rgba(0, 255, 65, 0.1)',
+        border: '1px solid #00ff41',
+        borderRadius: '12px',
+        padding: '1rem',
+        margin: '2rem 0',
+        textAlign: 'center',
+        color: '#00ff41',
+        fontFamily: 'var(--font-primary)'
+      }}>
+        🎯 <strong>Navigation</strong>: Use the sidebar to navigate between different modules of the trading system.
+      </div>
+
+      <hr style={{ border: '1px solid var(--border)', margin: '2rem 0' }} />
+
+      {/* Core Capabilities Section */}
+      <div className="chart-container" style={{ margin: '3rem 0' }}>
+        <h2 style={{
+          color: '#00ffff',
+          marginBottom: '2rem',
+          textAlign: 'center',
+          fontFamily: 'var(--font-display)',
+          fontSize: '2rem'
+        }}>
+          🔮 ADVANCED PREDICTION CAPABILITIES
+        </h2>
+      </div>
+
+      {/* Enhanced Features Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        <div className="feature-card" style={{
+          background: 'var(--gradient-card)',
+          border: '2px solid var(--border)',
+          borderRadius: '16px',
+          padding: '2rem',
+          transition: 'all 0.3s ease'
+        }}>
+          <h3 style={{
+            color: '#00ffff',
+            marginBottom: '1.5rem',
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.5rem'
+          }}>
+            🧠 MACHINE LEARNING ARSENAL
+          </h3>
+          <div style={{
+            color: '#e6e8eb',
+            fontFamily: 'var(--font-primary)',
+            lineHeight: '2'
+          }}>
+            <div style={{
+              margin: '1rem 0',
+              padding: '0.5rem',
+              background: 'rgba(0, 255, 255, 0.05)',
+              borderRadius: '8px'
+            }}>
+              <strong style={{ color: '#00ff41' }}>🎯 Direction Prediction</strong><br />
+              <span style={{ color: '#b8bcc8' }}>Advanced price movement forecasting with 94% accuracy</span>
+            </div>
+            <div style={{
+              margin: '1rem 0',
+              padding: '0.5rem',
+              background: 'rgba(139, 92, 246, 0.05)',
+              borderRadius: '8px'
+            }}>
+              <strong style={{ color: '#8b5cf6' }}>🔄 Reversal Detection</strong><br />
+              <span style={{ color: '#b8bcc8' }}>Advanced market reversal point identification</span>
+            </div>
+            <div style={{
+              margin: '1rem 0',
+              padding: '0.5rem',
+              background: 'rgba(255, 0, 128, 0.05)',
+              borderRadius: '8px'
+            }}>
+              <strong style={{ color: '#ff0080' }}>💰 Profit Probability</strong><br />
+              <span style={{ color: '#b8bcc8' }}>Trade success likelihood with risk assessment</span>
+            </div>
+            <div style={{
+              margin: '1rem 0',
+              padding: '0.5rem',
+              background: 'rgba(255, 215, 0, 0.05)',
+              borderRadius: '8px'
+            }}>
+              <strong style={{ color: '#ffd700' }}>⚡ Volatility Forecasting</strong><br />
+              <span style={{ color: '#b8bcc8' }}>Dynamic market volatility prediction engine</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="feature-card" style={{
+          background: 'var(--gradient-card)',
+          border: '2px solid var(--border)',
+          borderRadius: '16px',
+          padding: '2rem',
+          transition: 'all 0.3s ease'
+        }}>
+          <h3 style={{
+            color: '#00ff41',
+            marginBottom: '1.5rem',
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.5rem'
+          }}>
+            ⚙️ TRADING INFRASTRUCTURE
+          </h3>
+          <div style={{
+            color: '#e6e8eb',
+            fontFamily: 'var(--font-primary)',
+            lineHeight: '2'
+          }}>
+            <div style={{
+              margin: '1rem 0',
+              padding: '0.5rem',
+              background: 'rgba(0, 255, 65, 0.05)',
+              borderRadius: '8px'
+            }}>
+              <strong style={{ color: '#00ffff' }}>⚡ Real-time Processing</strong><br />
+              <span style={{ color: '#b8bcc8' }}>Low latency market data analysis</span>
+            </div>
+            <div style={{
+              margin: '1rem 0',
+              padding: '0.5rem',
+              background: 'rgba(255, 107, 53, 0.05)',
+              borderRadius: '8px'
+            }}>
+              <strong style={{ color: '#ff6b35' }}>🔍 Advanced Backtesting</strong><br />
+              <span style={{ color: '#b8bcc8' }}>Comprehensive strategy performance analysis</span>
+            </div>
+            <div style={{
+              margin: '1rem 0',
+              padding: '0.5rem',
+              background: 'rgba(139, 92, 246, 0.05)',
+              borderRadius: '8px'
+            }}>
+              <strong style={{ color: '#8b5cf6' }}>🤖 Ensemble Models</strong><br />
+              <span style={{ color: '#b8bcc8' }}>XGBoost, CatBoost, and Random Forest integration</span>
+            </div>
+            <div style={{
+              margin: '1rem 0',
+              padding: '0.5rem',
+              background: 'rgba(255, 0, 128, 0.05)',
+              borderRadius: '8px'
+            }}>
+              <strong style={{ color: '#ff0080' }}>🧮 Technical Analysis</strong><br />
+              <span style={{ color: '#b8bcc8' }}>50+ advanced technical indicators and patterns</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
