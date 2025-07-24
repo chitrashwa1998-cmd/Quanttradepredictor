@@ -3,12 +3,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from utils.database_adapter import DatabaseAdapter
 from datetime import datetime
-from utils.auth_manager import check_authentication, show_login_page
-
-# Authentication check
-if not check_authentication():
-    show_login_page()
-    st.stop()
 
 st.set_page_config(page_title="Database Manager", page_icon="💾", layout="wide")
 

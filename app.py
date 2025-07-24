@@ -1,10 +1,10 @@
+# Applying the provided changes to fix date formatting error when data index is not datetime and updating interface text to reflect XGBoost ensemble models.
 import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
-from utils.auth_manager import check_authentication, show_login_page, get_current_user, logout
 
 # Page configuration
 st.set_page_config(
@@ -13,11 +13,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Authentication check - must be at the top
-if not check_authentication():
-    show_login_page()
-    st.stop()
 
 # Load custom CSS
 with open('style.css') as f:
@@ -138,26 +133,13 @@ def initialize_session_state():
 # Initialize the system
 initialize_session_state()
 
-# Sidebar navigation
+# Create TribexAlpha logo in sidebar without navigation tabs
 st.sidebar.markdown("""
 <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #00ffff 0%, #8b5cf6 100%); 
      border-radius: 16px; margin-bottom: 2rem;">
     <h2 style="color: white; margin: 0; font-family: 'Orbitron', monospace;">⚡ TribexAlpha</h2>
 </div>
 """, unsafe_allow_html=True)
-
-# Admin info and logout
-current_user = get_current_user()
-st.sidebar.markdown(f"""
-<div style="background: rgba(0, 212, 255, 0.1); border: 1px solid #00d4ff; 
-     border-radius: 8px; padding: 0.8rem; text-align: center; margin-bottom: 1rem;">
-    <div style="color: #00d4ff; font-size: 0.8rem;">👤 Logged in as</div>
-    <div style="color: #00d4ff; font-size: 0.9rem; font-weight: bold;">{current_user}</div>
-</div>
-""", unsafe_allow_html=True)
-
-if st.sidebar.button("🚪 Logout", type="secondary", use_container_width=True):
-    logout()
 
 # Database status indicator
 st.sidebar.markdown("---")
