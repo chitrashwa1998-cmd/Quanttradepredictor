@@ -3,11 +3,12 @@ Data management API endpoints
 Handles dataset operations and database interactions
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import pandas as pd
 import logging
+import io
 
 from core.database import get_database_dependency
 
@@ -47,6 +48,101 @@ async def list_datasets(
         
     except Exception as e:
         logger.error(f"Failed to list datasets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/upload")
+async def upload_data(
+    file: UploadFile = File(...),
+    dataset_name: Optional[str] = None,
+    db = Depends(get_database_dependency)
+):
+    """Upload CSV data file"""
+    try:
+        # Read uploaded file
+        contents = await file.read()
+        df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
+        
+        # Basic validation
+        if df.empty:
+            raise ValueError("Uploaded file is empty")
+        
+        # Use filename as dataset name if not provided
+        if not dataset_name:
+            dataset_name = (file.filename or "uploaded_data").replace('.csv', '')
+        
+        # Store in database
+        success = db.store_dataset(dataset_name, df)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to store dataset")
+        
+        return {
+            "success": True,
+            "dataset_name": dataset_name,
+            "rows": len(df),
+            "columns": list(df.columns),
+            "message": f"Successfully uploaded {len(df)} rows"
+        }
+        
+    except Exception as e:
+        logger.error(f"Data upload failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/clear-all")
+async def clear_all_data(
+    db = Depends(get_database_dependency)
+):
+    """Clear all data from database"""
+    try:
+        # This would need implementation in the database adapter
+        return {
+            "success": True,
+            "message": "Clear all data functionality needs implementation"
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear all data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/clean-mode")
+async def activate_clean_mode(
+    db = Depends(get_database_dependency)
+):
+    """Activate clean data mode"""
+    try:
+        # This would need implementation in the database adapter
+        return {
+            "success": True,
+            "message": "Clean data mode functionality needs implementation"
+        }
+    except Exception as e:
+        logger.error(f"Failed to activate clean mode: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/datasets/{dataset_name}/export")
+async def export_dataset(
+    dataset_name: str,
+    db = Depends(get_database_dependency)
+):
+    """Export dataset as CSV"""
+    try:
+        dataset = db.get_dataset(dataset_name)
+        
+        if dataset is None:
+            raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
+        
+        # Convert to CSV
+        csv_content = dataset.to_csv(index=False)
+        
+        return {
+            "success": True,
+            "data": csv_content,
+            "filename": f"{dataset_name}.csv"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to export dataset: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/datasets/{dataset_name}")

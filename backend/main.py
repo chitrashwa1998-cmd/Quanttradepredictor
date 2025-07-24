@@ -14,7 +14,7 @@ import logging
 # Add backend directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from api.routes import predictions, models, data, websocket
+from api.routes import predictions, models, data, websocket, live_data
 from core.config import settings
 from core.database import get_database
 from core.model_manager import ModelManager
@@ -81,6 +81,7 @@ app.include_router(predictions.router, prefix="/api/predictions", tags=["predict
 app.include_router(models.router, prefix="/api/models", tags=["models"])
 app.include_router(data.router, prefix="/api/data", tags=["data"])
 app.include_router(websocket.router, prefix="/api/ws", tags=["websocket"])
+app.include_router(live_data.router, prefix="/api/live-data", tags=["live-data"])
 
 # Health check endpoint
 @app.get("/health")
