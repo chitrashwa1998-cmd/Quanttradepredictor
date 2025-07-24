@@ -1,0 +1,50 @@
+Looking at your TribexAlpha codebase, here's your complete tech stack:
+
+Frontend & UI Framework
+Streamlit - Primary web application framework for the dashboard
+HTML/CSS - Custom styling via style.css with advanced animations and gradients
+Plotly - Interactive charting and data visualization library
+JavaScript (embedded in Streamlit) - For dynamic UI interactions
+Backend & Core Application
+Python 3.11+ - Main programming language
+Streamlit Multi-page Architecture - Page-based navigation system
+Session State Management - In-memory data persistence
+Database & Data Storage
+PostgreSQL - Primary database (Row-Based architecture)
+psycopg2-binary - PostgreSQL database adapter
+Custom Database Adapter Layer - Unified database interface
+Machine Learning & AI Stack
+XGBoost - Gradient boosting models
+CatBoost - Categorical boosting algorithms
+LightGBM - Light gradient boosting machine
+scikit-learn - General ML utilities and preprocessing
+Google Gemini AI - Natural language market analysis
+Ensemble Models - Combined prediction approach
+Data Processing & Analysis
+pandas - Data manipulation and analysis
+NumPy - Numerical computing
+Technical Analysis Libraries:
+TA-Lib (ta) - Technical indicator calculations
+pandas-ta - Pandas-based technical analysis
+FINTA - Financial technical analysis
+Financial Data & Market Integration
+yfinance - Yahoo Finance data
+Upstox Python SDK - Live market data streaming
+WebSocket connections - Real-time data feeds
+Custom live data pipeline - Real-time prediction system
+Development & Infrastructure
+Replit - Development and hosting platform
+Nix - Package management (via Replit)
+Git - Version control
+Auto-restore system - Custom session recovery
+Key Architecture Patterns
+Multi-page Streamlit App - Modular page structure
+Model Manager Pattern - Centralized ML model handling
+Database Adapter Pattern - Abstracted data persistence
+Feature Engineering Pipeline - Automated technical indicator calculation
+Real-time Prediction Pipeline - Live market analysis
+External APIs & Services
+Google Gemini 2.5 - AI-powered market insights
+Upstox Market API - Live trading data
+PostgreSQL Database - Persistent data storage
+Your TribexAlpha webapp is a sophisticated Python-based quantitative trading platform built on Streamlit with advanced ML capabilities, real-time data processing, and comprehensive financial analysis tools.
