@@ -135,7 +135,7 @@ initialize_session_state()
 
 # Navigation
 nav_pages = {
-    "🏠 HOME": "home",
+    "home": "home",
     "📊 DATA UPLOAD": "data",
     "🔬 MODEL TRAINING": "training", 
     "🎯 PREDICTIONS": "predictions",
