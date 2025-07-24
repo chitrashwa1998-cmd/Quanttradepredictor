@@ -398,7 +398,7 @@ st.markdown("""
                     <li><span style="color: #ffd700;">Formats:</span> CSV, Excel, JSON</li>
                     <li><span style="color: #ffd700;">Min Records:</span> 500+ for optimal training</li>
                     <li><span style="color: #ffd700;">Processing:</span> Real-time streaming</li>
-                    <li><span style="color: #ffd700;">Latency:</span> < 50ms response time</li>
+                    <li><span style="color: #ffd700;">Latency:</span> 200-500ms prediction response</li>
                     <li><span style="color: #ffd700;">Accuracy:</span> 94%+ prediction rate</li>
                 </ul>
             </div>
