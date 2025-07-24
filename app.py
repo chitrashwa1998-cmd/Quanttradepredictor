@@ -243,7 +243,7 @@ with col2:
         <h3 style="color: #00ff41; margin: 0; font-family: 'Orbitron', monospace;">🤖 AI MODELS</h3>
         <h2 style="margin: 0.5rem 0; color: {progress_color}; font-weight: 800;">{model_count}/7</h2>
         <p style="color: #9ca3af; margin: 0; font-family: 'JetBrains Mono', monospace;">
-            XGBoost ensemble models trained
+            Machine learning models trained
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -290,7 +290,7 @@ st.markdown("""
         </div>
         <div style="background: rgba(0, 255, 65, 0.1); padding: 1rem; border-radius: 8px;">
             <strong style="color: #00ff41;">🔬 MODEL TRAINING</strong><br>
-            <span style="color: #b8bcc8;">Train XGBoost ensemble models</span>
+            <span style="color: #b8bcc8;">Train machine learning models</span>
         </div>
         <div style="background: rgba(139, 92, 246, 0.1); padding: 1rem; border-radius: 8px;">
             <strong style="color: #8b5cf6;">🎯 PREDICTIONS</strong><br>
@@ -380,7 +380,7 @@ st.markdown("""
 # Enhanced Steps
 steps = [
     ("📊", "DATA INTEGRATION", "Market Data Ingestion", "Load OHLC data with advanced preprocessing", "#00ffff"),
-    ("🔬", "AI TRAINING", "XGBoost Training", "Train XGBoost ensemble models", "#00ff41"),
+    ("🔬", "AI TRAINING", "Machine Learning Training", "Train machine learning ensemble models", "#00ff41"),
     ("🎯", "SIGNAL GENERATION", "Trading Signal Engine", "Real-time prediction and analysis", "#8b5cf6"),
     ("📈", "STRATEGY VALIDATION", "Performance Analytics", "Comprehensive backtesting framework", "#ff0080")
 ]
