@@ -21,9 +21,10 @@ const Home = () => {
           dataAPI.getDatabaseInfo(),
           predictionsAPI.getModelsStatus()
         ]);
-        setDatabaseInfo(dbInfo);
-        setModelsStatus(modelStatus);
+        setDatabaseInfo(dbInfo.data || dbInfo);
+        setModelsStatus(modelStatus.data || modelStatus);
       } catch (err) {
+        console.error('Home data fetch error:', err);
         setError(err.message);
       } finally {
         setLoading(false);
