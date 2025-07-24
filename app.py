@@ -133,34 +133,13 @@ def initialize_session_state():
 # Initialize the system
 initialize_session_state()
 
-# Navigation
-nav_pages = {
-    "🏠 HOME": "home",
-    "📊 DATA UPLOAD": "data",
-    "🔬 MODEL TRAINING": "training", 
-    "🎯 PREDICTIONS": "predictions",
-    "📈 BACKTESTING": "backtesting",
-    "📡 LIVE DATA": "live_data",
-    "💾 DATABASE": "database",
-    "📋 ABOUT US": "about",
-    "📞 CONTACT": "contact"
-}
-
-# Create navigation in sidebar
+# Create TribexAlpha logo in sidebar without navigation tabs
 st.sidebar.markdown("""
 <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #00ffff 0%, #8b5cf6 100%); 
      border-radius: 16px; margin-bottom: 2rem;">
     <h2 style="color: white; margin: 0; font-family: 'Orbitron', monospace;">⚡ TribexAlpha</h2>
 </div>
 """, unsafe_allow_html=True)
-
-# Page selection
-if 'current_page' not in st.session_state:
-    st.session_state.current_page = "home"
-
-for page_name, page_key in nav_pages.items():
-    if st.sidebar.button(page_name, key=f"nav_{page_key}", use_container_width=True):
-        st.session_state.current_page = page_key
 
 # Database status indicator
 st.sidebar.markdown("---")
@@ -195,15 +174,7 @@ except Exception:
     </div>
     """, unsafe_allow_html=True)
 
-# Current page indicator
-current_page_display = [k for k, v in nav_pages.items() if v == st.session_state.current_page][0]
-st.sidebar.markdown(f"""
-<div style="background: rgba(0, 255, 255, 0.1); border: 1px solid #00ffff; 
-     border-radius: 8px; padding: 1rem; text-align: center;">
-    <strong style="color: #00ffff;">CURRENT PAGE</strong><br>
-    <span style="color: #00ff41; font-family: 'JetBrains Mono', monospace;">{current_page_display}</span>
-</div>
-""", unsafe_allow_html=True)
+
 
 # Display navigation guidance for multi-page structure
 st.markdown("""
