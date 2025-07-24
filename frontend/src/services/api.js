@@ -5,7 +5,26 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// For Replit environment, use the same domain with port 8000
+const getAPIBaseURL = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    
+    if (hostname.includes('replit.dev')) {
+      // For Replit, use the same host but port 8000
+      return `${protocol}//${hostname.replace(/:\d+/, '')}:8000`;
+    }
+  }
+  
+  return 'http://localhost:8000';
+};
+
+const API_BASE_URL = getAPIBaseURL();
 
 // Create axios instance with default config
 const api = axios.create({
