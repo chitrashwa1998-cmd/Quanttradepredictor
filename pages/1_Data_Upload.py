@@ -5,6 +5,12 @@ from plotly.subplots import make_subplots
 from utils.data_processing import DataProcessor
 from features.technical_indicators import TechnicalIndicators
 from utils.database_adapter import DatabaseAdapter
+from utils.auth_manager import check_authentication, show_login_page
+
+# Authentication check
+if not check_authentication():
+    show_login_page()
+    st.stop()
 
 # Initialize database adapter with error handling
 try:
