@@ -210,10 +210,10 @@ st.markdown("""
 <div class="trading-header">
     <h1>TribexAlpha</h1>
     <p style="font-size: 1.5rem; margin: 1rem 0 0 0; opacity: 0.9; font-weight: 300; color: #00ffff;">
-        🚀 Advanced Machine Learning for Quantitative Trading Excellence
+        🚀 Advanced Market Volatility Forecasting & Analysis Platform
     </p>
     <p style="font-size: 1.1rem; margin: 1rem 0 0 0; opacity: 0.8; color: #b8bcc8;">
-        Harness the power of AI-driven market prediction and algorithmic trading strategies
+        Ensemble machine learning models for price movement prediction and market analysis
     </p>
 </div>
 """, unsafe_allow_html=True)
