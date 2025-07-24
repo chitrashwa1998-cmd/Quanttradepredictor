@@ -236,6 +236,41 @@ h4 {
     background: rgba(255, 215, 0, 0.1) !important;
 }
 
+/* Responsive Design for Sidebar */
+@media (max-width: 768px) {
+    .sidebar-mobile {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+    
+    .sidebar-mobile.open {
+        transform: translateX(0);
+    }
+    
+    .main-content-mobile {
+        margin-left: 0 !important;
+        padding: 2rem 1rem !important;
+    }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--accent-cyan);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-electric);
+}
+
 :root {
   font-family: 'JetBrains Mono', monospace;
   line-height: 1.5;

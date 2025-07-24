@@ -8,6 +8,7 @@ import Layout from './components/Layout/Layout';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Import page components
+import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import DataUpload from './pages/DataUpload';
 import ModelTraining from './pages/ModelTraining';
@@ -22,7 +23,8 @@ function App() {
       <Router>
         <Layout>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Home />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/upload" element={<DataUpload />} />
             <Route path="/training" element={<ModelTraining />} />
             <Route path="/predictions" element={<Predictions />} />
