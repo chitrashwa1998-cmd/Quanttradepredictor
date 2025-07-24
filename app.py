@@ -210,10 +210,10 @@ st.markdown("""
 <div class="trading-header">
     <h1>TribexAlpha</h1>
     <p style="font-size: 1.5rem; margin: 1rem 0 0 0; opacity: 0.9; font-weight: 300; color: #00ffff;">
-        🚀 Advanced Market Volatility Forecasting & Analysis Platform
+        🚀 AI-Powered Quant Signal Engine
     </p>
     <p style="font-size: 1.1rem; margin: 1rem 0 0 0; opacity: 0.8; color: #b8bcc8;">
-        Ensemble machine learning models for price movement prediction and market analysis
+        An AI-powered quant signal engine delivering multi-model predictions for direction, volatility, reversals, and profit zones — built for real-time execution and adaptive to any market regime.
     </p>
 </div>
 """, unsafe_allow_html=True)
