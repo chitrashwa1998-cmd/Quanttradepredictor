@@ -236,11 +236,18 @@ h4 {
     background: rgba(255, 215, 0, 0.1) !important;
 }
 
+/* Streamlit-style Sidebar */
+.sidebar-desktop {
+    background: var(--bg-secondary) !important;
+    border-right: 1px solid var(--border) !important;
+}
+
 /* Responsive Design for Sidebar */
 @media (max-width: 768px) {
     .sidebar-mobile {
         transform: translateX(-100%);
         transition: transform 0.3s ease;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
     }
     
     .sidebar-mobile.open {
@@ -251,6 +258,28 @@ h4 {
         margin-left: 0 !important;
         padding: 2rem 1rem !important;
     }
+}
+
+/* Sidebar scrollbar styling */
+.sidebar-desktop ::-webkit-scrollbar,
+.sidebar-mobile ::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar-desktop ::-webkit-scrollbar-track,
+.sidebar-mobile ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-desktop ::-webkit-scrollbar-thumb,
+.sidebar-mobile ::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 255, 0.3);
+    border-radius: 2px;
+}
+
+.sidebar-desktop ::-webkit-scrollbar-thumb:hover,
+.sidebar-mobile ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 255, 255, 0.5);
 }
 
 /* Scrollbar Styling */
