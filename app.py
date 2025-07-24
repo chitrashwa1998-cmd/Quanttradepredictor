@@ -348,7 +348,7 @@ with col2:
         <div style="color: #e6e8eb; font-family: 'Space Grotesk', sans-serif; line-height: 2;">
             <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(0, 255, 65, 0.05); border-radius: 8px;">
                 <strong style="color: #00ffff;">⚡ Real-time Processing</strong><br>
-                <span style="color: #b8bcc8;">Ultra-low latency market data analysis</span>
+                <span style="color: #b8bcc8;">Low latency market data analysis</span>
             </div>
             <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(255, 107, 53, 0.05); border-radius: 8px;">
                 <strong style="color: #ff6b35;">🔍 Advanced Backtesting</strong><br>
@@ -360,7 +360,7 @@ with col2:
             </div>
             <div style="margin: 1rem 0; padding: 0.5rem; background: rgba(255, 215, 0, 0.05); border-radius: 8px;">
                 <strong style="color: #ffd700;">📊 Technical Indicators</strong><br>
-                <span style="color: #b8bcc8;">50+ built-in technical analysis tools</span>
+                <span style="color: #b8bcc8;">25+ built-in technical analysis tools</span>
             </div>
         </div>
     </div>
