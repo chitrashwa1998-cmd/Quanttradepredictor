@@ -62,7 +62,7 @@ def initialize_session_state():
             from features.technical_indicators import TechnicalIndicators
 
             trading_db = get_trading_database()
-            
+
             # Show correct database status
             try:
                 db_info = trading_db.get_database_info()
@@ -290,7 +290,7 @@ st.markdown("""
         </div>
         <div style="background: rgba(0, 255, 65, 0.1); padding: 1rem; border-radius: 8px;">
             <strong style="color: #00ff41;">🔬 MODEL TRAINING</strong><br>
-            <span style="color: #b8bcc8;">Train AI models</span>
+            <span style="color: #b8bcc8;">Train XGBoost ensemble models</span>
         </div>
         <div style="background: rgba(139, 92, 246, 0.1); padding: 1rem; border-radius: 8px;">
             <strong style="color: #8b5cf6;">🎯 PREDICTIONS</strong><br>
