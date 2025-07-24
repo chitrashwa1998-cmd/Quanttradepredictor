@@ -241,7 +241,7 @@ with col2:
     st.markdown(f"""
     <div class="metric-container">
         <h3 style="color: #00ff41; margin: 0; font-family: 'Orbitron', monospace;">🤖 AI MODELS</h3>
-        <h2 style="margin: 0.5rem 0; color: {progress_color}; font-weight: 800;">{model_count}/7</h2>
+        <h2 style="margin: 0.5rem 0; color: {progress_color}; font-weight: 800;">{model_count}/4</h2>
         <p style="color: #9ca3af; margin: 0; font-family: 'JetBrains Mono', monospace;">
             Machine learning models trained
         </p>
