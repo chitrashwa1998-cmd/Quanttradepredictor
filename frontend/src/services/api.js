@@ -14,16 +14,16 @@ const getAPIBaseURL = () => {
 const API_BASE_URL = getAPIBaseURL();
 
 // Create axios instance with default config
-const api = axios.create({
+const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 120000, // 2 minutes for uploads
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
 // Request interceptor for logging
-api.interceptors.request.use(
+axiosInstance.interceptors.request.use(
   (config) => {
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
     return config;
@@ -35,7 +35,7 @@ api.interceptors.request.use(
 );
 
 // Response interceptor for error handling
-api.interceptors.response.use(
+axiosInstance.interceptors.response.use(
   (response) => {
     return response;
   },
@@ -48,6 +48,8 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+const api = axiosInstance;
 
 // Health check
 export const healthCheck = async () => {

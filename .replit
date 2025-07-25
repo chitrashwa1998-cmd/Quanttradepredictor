@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Project"
+runButton = "Backend Server"
 
 [[workflows.workflow]]
 name = "Streamlit App"
@@ -108,6 +108,27 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd frontend && npm run dev -- --host 0.0.0.0 --port 5000"
+
+[[workflows.workflow]]
+name = "Backend Server"
+author = 40743738
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"python.*simple_main.py\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"python.*run_backend.py\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "sleep 2"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python simple_main.py"
 
 [[ports]]
 localPort = 5000

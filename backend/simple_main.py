@@ -16,7 +16,10 @@ import json
 from utils.row_based_database import RowBasedPostgresDatabase
 from utils.data_processing import DataProcessor
 
-app = FastAPI(title="TribexAlpha Simple Backend")
+app = FastAPI(
+    title="TribexAlpha Simple Backend",
+    timeout=60  # 60 second timeout
+)
 
 # Add CORS middleware
 app.add_middleware(
