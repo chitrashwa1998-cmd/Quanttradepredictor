@@ -10,17 +10,17 @@ const getAPIBaseURL = () => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
-  
+
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     const protocol = window.location.protocol;
-    
+
     if (hostname.includes('replit.dev')) {
       // For Replit, use the same host but port 8000
       return `${protocol}//${hostname.replace(/:\d+/, '')}:8000`;
     }
   }
-  
+
   return 'http://localhost:8000';
 };
 
@@ -171,7 +171,7 @@ export const dataAPI = {
   getDataset: async (datasetName, limit = null, offset = 0) => {
     const params = { offset };
     if (limit) params.limit = limit;
-    
+
     const response = await api.get(`/api/data/datasets/${datasetName}`, { params });
     return response.data;
   },
@@ -179,7 +179,68 @@ export const dataAPI = {
   // Delete dataset
   deleteDataset: async (datasetName) => {
     const response = await api.delete(`/api/data/datasets/${datasetName}`);
-    return response.data;
+    return response;
+  },
+
+  // Rename dataset
+  renameDataset: async (oldName, newName) => {
+    const response = await api.post(`/api/data/datasets/${oldName}/rename`, { new_name: newName });
+    return response;
+  },
+
+  // Load dataset with options
+  loadDataset: async (datasetName, options = {}) => {
+    const params = new URLSearchParams();
+    if (options.limit) params.append('limit', options.limit);
+    if (options.start_date) params.append('start_date', options.start_date);
+    if (options.end_date) params.append('end_date', options.end_date);
+
+    const response = await api.get(`/api/data/datasets/${datasetName}/load?${params}`);
+    return response;
+  },
+
+  // Export dataset
+  exportDataset: async (datasetName) => {
+    const response = await api.get(`/api/data/datasets/${datasetName}/export`, {
+      responseType: 'text'
+    });
+    return response;
+  },
+
+  // Clean data mode
+  cleanDataMode: async () => {
+    const response = await api.post('/api/data/clean-mode');
+    return response;
+  },
+
+  // Sync metadata
+  syncMetadata: async () => {
+    const response = await api.post('/api/data/sync-metadata');
+    return response;
+  },
+
+  // Clean database
+  cleanDatabase: async () => {
+    const response = await api.post('/api/data/clean-database');
+    return response;
+  },
+
+  // Delete model results
+  deleteModelResults: async (modelName) => {
+    const response = await api.delete(`/api/models/results/${modelName}`);
+    return response;
+  },
+
+  // Delete predictions
+  deletePredictions: async (modelName) => {
+    const response = await api.delete(`/api/predictions/${modelName}`);
+    return response;
+  },
+
+  // Get key content (for debug view)
+  getKeyContent: async (key) => {
+    const response = await api.get(`/api/data/debug/key/${key}`);
+    return response;
   },
 
   // Get database info
@@ -219,20 +280,6 @@ export const dataAPI = {
     const response = await api.delete('/api/data/datasets');
     return response.data;
   },
-
-  // Clean data mode
-  cleanDataMode: async () => {
-    const response = await api.post('/api/data/clean-mode');
-    return response.data;
-  },
-
-  // Export dataset
-  exportDataset: async (datasetName) => {
-    const response = await api.get(`/api/data/datasets/${datasetName}/export`, {
-      responseType: 'blob'
-    });
-    return response;
-  }
 };
 
 // WebSocket API
