@@ -151,6 +151,16 @@ export const modelsAPI = {
 
 // Data API
 export const dataAPI = {
+  // Upload data
+  uploadData: async (formData) => {
+    const response = await api.post('/api/data/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response;
+  },
+
   // List datasets
   listDatasets: async () => {
     const response = await api.get('/api/data/datasets');
