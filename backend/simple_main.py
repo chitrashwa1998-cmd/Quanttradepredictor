@@ -149,6 +149,45 @@ async def get_database_info():
             'error': str(e)
         }
 
+@app.get("/api/data/database/info")
+async def get_database_info():
+    """Get database information"""
+    try:
+        if not db:
+            return {
+                'database_type': 'postgresql_row_based',
+                'total_datasets': 0,
+                'total_records': 0,
+                'total_models': 0,
+                'total_trained_models': 0,
+                'total_predictions': 0,
+                'datasets': [],
+                'backend': 'PostgreSQL (Row-Based)',
+                'storage_type': 'Row-Based',
+                'supports_append': True,
+                'supports_range_queries': True,
+                'error': 'Database not connected'
+            }
+
+        info = db.get_database_info()
+        return info
+    except Exception as e:
+        print(f"Error getting database info: {e}")
+        return {
+            'database_type': 'postgresql_row_based',
+            'total_datasets': 0,
+            'total_records': 0,
+            'total_models': 0,
+            'total_trained_models': 0,
+            'total_predictions': 0,
+            'datasets': [],
+            'backend': 'PostgreSQL (Row-Based)',
+            'storage_type': 'Row-Based',
+            'supports_append': True,
+            'supports_range_queries': True,
+            'error': str(e)
+        }
+
 @app.get("/api/data/datasets")
 async def list_datasets():
     """List all datasets"""

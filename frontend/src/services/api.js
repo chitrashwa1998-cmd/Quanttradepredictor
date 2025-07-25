@@ -241,6 +241,24 @@ export const dataAPI = {
   getKeyContent: async (key) => {
     const response = await api.get(`/api/data/keys/${key}`);
     return response;
+  },
+
+  // Get database info
+  getDatabaseInfo: async () => {
+    const response = await api.get('/api/data/database/info');
+    return response.data;
+  },
+
+  // Get datasets (alias for listDatasets for compatibility)
+  getDatasets: async () => {
+    const response = await api.get('/api/data/datasets');
+    return response;
+  },
+
+  // Clear all data
+  clearAllData: async () => {
+    const response = await api.delete('/api/data/datasets');
+    return response.data;
   }
 };
 
