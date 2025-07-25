@@ -207,431 +207,284 @@ export default function LiveTrading() {
   }, [isLiveConnected]);
 
   return (
-    <div style={{ animation: 'pageLoad 0.6s ease-out' }}>
-      {/* Header - matching original Streamlit design */}
-      <div className="trading-header" style={{
-        background: 'var(--gradient-card)',
-        border: '2px solid var(--border)',
-        borderRadius: '20px',
-        padding: '3rem 2rem',
-        margin: '2rem 0 3rem 0',
-        textAlign: 'center',
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-glow)'
-      }}>
-        <h1 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '4rem',
-          fontWeight: '900',
-          background: 'var(--gradient-primary)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          textAlign: 'center',
-          margin: '0 0 1rem 0',
-          textShadow: '0 0 30px rgba(0, 255, 255, 0.5)'
-        }}>
-          📡 LIVE MARKET DATA
-        </h1>
-        <p style={{
-          fontSize: '1.2rem',
-          margin: '1rem 0 0 0',
-          color: 'rgba(255,255,255,0.8)'
-        }}>
-          Real-time Upstox WebSocket Integration
-        </p>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold cyber-text mb-4">📡 Live Data</h1>
+          <p className="text-gray-300">
+            Real-time Upstox WebSocket Integration with Live Predictions
+          </p>
+        </div>
+        
+        {/* Connection Status */}
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <div
+              className={`w-3 h-3 rounded-full ${
+                isLiveConnected ? 'bg-cyber-green animate-pulse' : 'bg-cyber-red'
+              }`}
+            />
+            <span className="text-sm text-gray-400">
+              {connectionStatus}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Status Display */}
       {status && (
-        <Card className="mb-6">
-          <p style={{ color: 'var(--text-accent)', textAlign: 'center', margin: 0 }}>
-            {status}
-          </p>
+        <Card>
+          <p className="text-center text-cyber-green">{status}</p>
         </Card>
       )}
 
       {/* Configuration Tabs */}
-      <div className="cyber-tabs mb-8">
-        <div className="flex space-x-1 mb-6">
+      <div className="cyber-bg cyber-border rounded-lg overflow-hidden">
+        <div className="flex border-b border-gray-700">
           <button
             onClick={() => setActiveTab('config')}
-            className={`tab-button ${activeTab === 'config' ? 'active' : ''}`}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: activeTab === 'config' ? 'var(--accent-cyan)' : 'transparent',
-              color: activeTab === 'config' ? 'var(--bg-primary)' : 'var(--text-secondary)',
-              border: '2px solid var(--border)',
-              borderRadius: '8px 8px 0 0',
-              fontWeight: '600'
-            }}
+            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'config'
+                ? 'bg-cyber-blue text-black'
+                : 'text-gray-400 hover:text-white'
+            }`}
           >
             🔌 Live Data Config
           </button>
           <button
             onClick={() => setActiveTab('historical')}
-            className={`tab-button ${activeTab === 'historical' ? 'active' : ''}`}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: activeTab === 'historical' ? 'var(--accent-cyan)' : 'transparent',
-              color: activeTab === 'historical' ? 'var(--bg-primary)' : 'var(--text-secondary)',
-              border: '2px solid var(--border)',
-              borderRadius: '8px 8px 0 0',
-              fontWeight: '600'
-            }}
+            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'historical'
+                ? 'bg-cyber-blue text-black'
+                : 'text-gray-400 hover:text-white'
+            }`}
           >
             📊 Historical Data Fetch
           </button>
         </div>
 
-        {/* Live Data Configuration Tab */}
-        {activeTab === 'config' && (
-          <Card>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-              {/* Credentials Section */}
-              <div>
-                <h3 style={{ color: 'var(--accent-electric)', marginBottom: '1rem' }}>
-                  📱 Upstox API Credentials
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
-                      Access Token
-                    </label>
-                    <input
-                      type="password"
-                      value={credentials.access_token}
-                      onChange={(e) => setCredentials(prev => ({ ...prev, access_token: e.target.value }))}
-                      placeholder="Your Upstox access token"
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        background: 'var(--bg-secondary)',
-                        border: '2px solid var(--border)',
-                        borderRadius: '8px',
-                        color: 'var(--text-primary)'
-                      }}
-                    />
+        <div className="p-6">
+          {/* Live Data Configuration Tab */}
+          {activeTab === 'config' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Credentials Section */}
+                <div>
+                  <h3 className="text-xl font-semibold cyber-blue mb-4">
+                    📱 Upstox API Credentials
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Access Token
+                      </label>
+                      <input
+                        type="password"
+                        value={credentials.access_token}
+                        onChange={(e) => setCredentials(prev => ({ ...prev, access_token: e.target.value }))}
+                        placeholder="Your Upstox access token"
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyber-blue"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        API Key
+                      </label>
+                      <input
+                        type="password"
+                        value={credentials.api_key}
+                        onChange={(e) => setCredentials(prev => ({ ...prev, api_key: e.target.value }))}
+                        placeholder="Your Upstox API key"
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyber-blue"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
-                      API Key
-                    </label>
-                    <input
-                      type="password"
-                      value={credentials.api_key}
-                      onChange={(e) => setCredentials(prev => ({ ...prev, api_key: e.target.value }))}
-                      placeholder="Your Upstox API key"
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        background: 'var(--bg-secondary)',
-                        border: '2px solid var(--border)',
-                        borderRadius: '8px',
-                        color: 'var(--text-primary)'
-                      }}
-                    />
+                </div>
+
+                {/* Instrument Selection */}
+                <div>
+                  <h3 className="text-xl font-semibold cyber-blue mb-4">
+                    📊 Instrument Configuration
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Select Instruments
+                      </label>
+                      <select
+                        multiple
+                        value={selectedInstruments}
+                        onChange={(e) => setSelectedInstruments(Array.from(e.target.selectedOptions, option => option.value))}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyber-blue h-32"
+                      >
+                        {Object.keys(popularInstruments).map(instrument => (
+                          <option key={instrument} value={instrument}>
+                            {instrument}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Custom Instrument Key
+                      </label>
+                      <input
+                        type="text"
+                        value={customInstrument}
+                        onChange={(e) => setCustomInstrument(e.target.value)}
+                        placeholder="e.g., NSE_EQ|INE002A01018"
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyber-blue"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Instrument Selection */}
-              <div>
-                <h3 style={{ color: 'var(--accent-electric)', marginBottom: '1rem' }}>
-                  📊 Instrument Configuration
+              {/* Connection Controls */}
+              <div className="border-t border-gray-700 pt-6">
+                <h3 className="text-xl font-semibold cyber-blue mb-4">
+                  🔌 Live Data Connection
                 </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
-                      Select Instruments
-                    </label>
-                    <select
-                      multiple
-                      value={selectedInstruments}
-                      onChange={(e) => setSelectedInstruments(Array.from(e.target.selectedOptions, option => option.value))}
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        background: 'var(--bg-secondary)',
-                        border: '2px solid var(--border)',
-                        borderRadius: '8px',
-                        color: 'var(--text-primary)',
-                        minHeight: '120px'
-                      }}
-                    >
-                      {Object.keys(popularInstruments).map(instrument => (
-                        <option key={instrument} value={instrument}>
-                          {instrument}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
-                      Custom Instrument Key
-                    </label>
-                    <input
-                      type="text"
-                      value={customInstrument}
-                      onChange={(e) => setCustomInstrument(e.target.value)}
-                      placeholder="e.g., NSE_EQ|INE002A01018"
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        background: 'var(--bg-secondary)',
-                        border: '2px solid var(--border)',
-                        borderRadius: '8px',
-                        color: 'var(--text-primary)'
-                      }}
-                    />
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <button
+                    onClick={connectToLiveData}
+                    disabled={loading || !credentials.access_token || !credentials.api_key}
+                    className="cyber-border rounded-md py-2 px-4 text-cyber-green hover:cyber-glow transition-all duration-200 disabled:opacity-50"
+                  >
+                    {loading ? '🔄 Connecting...' : '🚀 Connect'}
+                  </button>
+                  
+                  <button
+                    onClick={disconnectFromLiveData}
+                    disabled={!isLiveConnected}
+                    className="border border-cyber-red rounded-md py-2 px-4 text-cyber-red hover:bg-cyber-red hover:bg-opacity-10 transition-all duration-200 disabled:opacity-50"
+                  >
+                    🔌 Disconnect
+                  </button>
+                  
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="border border-gray-600 rounded-md py-2 px-4 text-gray-400 hover:text-white transition-all duration-200"
+                  >
+                    🔄 Refresh Status
+                  </button>
+                  
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className={`w-3 h-3 rounded-full ${isLiveConnected ? 'bg-cyber-green animate-pulse' : 'bg-cyber-red'}`}></div>
+                    <span className="text-sm text-gray-400">{connectionStatus}</span>
                   </div>
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Connection Controls */}
-            <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border)', paddingTop: '2rem' }}>
-              <h3 style={{ color: 'var(--accent-electric)', marginBottom: '1rem' }}>
-                🔌 Live Data Connection
+          {/* Historical Data Tab */}
+          {activeTab === 'historical' && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold cyber-blue">
+                📈 Fetch Historical Data from Upstox
               </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
-                <button
-                  onClick={connectToLiveData}
-                  disabled={loading || !credentials.access_token || !credentials.api_key}
-                  style={{
-                    padding: '0.75rem 1rem',
-                    background: isLiveConnected ? 'var(--accent-electric)' : 'var(--gradient-button)',
-                    color: 'var(--bg-primary)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    opacity: loading ? 0.5 : 1
-                  }}
-                >
-                  {loading ? '🔄 Connecting...' : '🚀 Connect'}
-                </button>
-                
-                <button
-                  onClick={disconnectFromLiveData}
-                  disabled={!isLiveConnected}
-                  style={{
-                    padding: '0.75rem 1rem',
-                    background: isLiveConnected ? 'var(--gradient-danger)' : 'var(--bg-secondary)',
-                    color: 'var(--text-primary)',
-                    border: '2px solid var(--border)',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    cursor: isLiveConnected ? 'pointer' : 'not-allowed',
-                    opacity: isLiveConnected ? 1 : 0.5
-                  }}
-                >
-                  🔌 Disconnect
-                </button>
-                
-                <button
-                  onClick={() => window.location.reload()}
-                  style={{
-                    padding: '0.75rem 1rem',
-                    background: 'transparent',
-                    color: 'var(--text-accent)',
-                    border: '2px solid var(--border)',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  🔄 Refresh Status
-                </button>
-                
-                <div style={{
-                  padding: '0.75rem 1rem',
-                  background: 'var(--bg-secondary)',
-                  border: '2px solid var(--border)',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <div style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    background: isLiveConnected ? 'var(--accent-electric)' : 'var(--accent-pink)',
-                    marginRight: '0.5rem',
-                    animation: isLiveConnected ? 'statusPulse 2s ease-in-out infinite' : 'none'
-                  }}></div>
-                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    {connectionStatus}
-                  </span>
+              <p className="text-gray-400">
+                Fetch historical 1-minute data for Nifty 50 and other instruments using Upstox API
+              </p>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Historical Credentials */}
+                <div>
+                  <h4 className="font-semibold text-cyber-green mb-3">API Credentials</h4>
+                  <div className="space-y-3">
+                    <input
+                      type="password"
+                      value={histCredentials.access_token}
+                      onChange={(e) => setHistCredentials(prev => ({ ...prev, access_token: e.target.value }))}
+                      placeholder="Access Token"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyber-blue"
+                    />
+                    <input
+                      type="password"
+                      value={histCredentials.api_key}
+                      onChange={(e) => setHistCredentials(prev => ({ ...prev, api_key: e.target.value }))}
+                      placeholder="API Key"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyber-blue"
+                    />
+                  </div>
+                </div>
+
+                {/* Instrument Selection */}
+                <div>
+                  <h4 className="font-semibold text-cyber-green mb-3">Instrument Selection</h4>
+                  <select
+                    multiple
+                    value={selectedHistInstruments}
+                    onChange={(e) => setSelectedHistInstruments(Array.from(e.target.selectedOptions, option => option.value))}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyber-blue h-32"
+                  >
+                    {Object.keys(histInstruments).map(instrument => (
+                      <option key={instrument} value={instrument}>
+                        {instrument}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Fetch Controls */}
+                <div>
+                  <h4 className="font-semibold text-cyber-green mb-3">Fetch Data</h4>
+                  <div className="space-y-2">
+                    {selectedHistInstruments.map(instrument => (
+                      <button
+                        key={instrument}
+                        onClick={() => fetchHistoricalData(instrument)}
+                        disabled={loading || !histCredentials.access_token || !histCredentials.api_key}
+                        className="w-full text-left px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-cyber-blue hover:bg-gray-700 transition-all duration-200 disabled:opacity-50 text-sm"
+                      >
+                        📊 Fetch {instrument}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </Card>
-        )}
-
-        {/* Historical Data Tab */}
-        {activeTab === 'historical' && (
-          <Card>
-            <h3 style={{ color: 'var(--accent-electric)', marginBottom: '1rem' }}>
-              📈 Fetch Historical Data from Upstox
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-              Fetch historical 1-minute data for Nifty 50 and other instruments using Upstox API
-            </p>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem' }}>
-              {/* Historical Credentials */}
-              <div>
-                <h4 style={{ color: 'var(--text-accent)', marginBottom: '1rem' }}>API Credentials</h4>
-                <div className="space-y-3">
-                  <input
-                    type="password"
-                    value={histCredentials.access_token}
-                    onChange={(e) => setHistCredentials(prev => ({ ...prev, access_token: e.target.value }))}
-                    placeholder="Access Token"
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      background: 'var(--bg-secondary)',
-                      border: '2px solid var(--border)',
-                      borderRadius: '8px',
-                      color: 'var(--text-primary)'
-                    }}
-                  />
-                  <input
-                    type="password"
-                    value={histCredentials.api_key}
-                    onChange={(e) => setHistCredentials(prev => ({ ...prev, api_key: e.target.value }))}
-                    placeholder="API Key"
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      background: 'var(--bg-secondary)',
-                      border: '2px solid var(--border)',
-                      borderRadius: '8px',
-                      color: 'var(--text-primary)'
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Instrument Selection */}
-              <div>
-                <h4 style={{ color: 'var(--text-accent)', marginBottom: '1rem' }}>Instrument Selection</h4>
-                <select
-                  multiple
-                  value={selectedHistInstruments}
-                  onChange={(e) => setSelectedHistInstruments(Array.from(e.target.selectedOptions, option => option.value))}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    background: 'var(--bg-secondary)',
-                    border: '2px solid var(--border)',
-                    borderRadius: '8px',
-                    color: 'var(--text-primary)',
-                    minHeight: '120px'
-                  }}
-                >
-                  {Object.keys(histInstruments).map(instrument => (
-                    <option key={instrument} value={instrument}>
-                      {instrument}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Fetch Controls */}
-              <div>
-                <h4 style={{ color: 'var(--text-accent)', marginBottom: '1rem' }}>Fetch Data</h4>
-                <div className="space-y-3">
-                  {selectedHistInstruments.map(instrument => (
-                    <button
-                      key={instrument}
-                      onClick={() => fetchHistoricalData(instrument)}
-                      disabled={loading || !histCredentials.access_token || !histCredentials.api_key}
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem',
-                        background: 'var(--gradient-card)',
-                        color: 'var(--text-accent)',
-                        border: '2px solid var(--border)',
-                        borderRadius: '6px',
-                        fontSize: '0.875rem',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        opacity: loading ? 0.5 : 1
-                      }}
-                    >
-                      📊 Fetch {instrument}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Card>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Live Data Status Dashboard */}
       {isLiveConnected && (
         <Card>
-          <h3 style={{ color: 'var(--accent-electric)', marginBottom: '1.5rem' }}>
+          <h3 className="text-xl font-semibold cyber-blue mb-4">
             📊 Live Prediction Pipeline Status
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem' }}>
-            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>
-                {isLiveConnected ? '🟢' : '🔴'}
-              </div>
-              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                Data Connection
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-accent)' }}>
-                {isLiveConnected ? 'Connected' : 'Disconnected'}
-              </div>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="text-center p-4 bg-gray-800 rounded-lg">
+              <div className="text-2xl mb-2">{isLiveConnected ? '🟢' : '🔴'}</div>
+              <div className="text-sm text-gray-400">Data Connection</div>
+              <div className="text-xs text-cyber-green">{isLiveConnected ? 'Connected' : 'Disconnected'}</div>
             </div>
             
-            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>
-                {isPredictionPipelineActive ? '🟢' : '🔴'}
-              </div>
-              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                Prediction Pipeline
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-accent)' }}>
-                {isPredictionPipelineActive ? 'Active' : 'Inactive'}
-              </div>
+            <div className="text-center p-4 bg-gray-800 rounded-lg">
+              <div className="text-2xl mb-2">{isPredictionPipelineActive ? '🟢' : '🔴'}</div>
+              <div className="text-sm text-gray-400">Prediction Pipeline</div>
+              <div className="text-xs text-cyber-green">{isPredictionPipelineActive ? 'Active' : 'Inactive'}</div>
             </div>
             
-            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🟢</div>
-              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                Trained Models
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-accent)' }}>
-                4/4 Available
-              </div>
+            <div className="text-center p-4 bg-gray-800 rounded-lg">
+              <div className="text-2xl mb-2">🟢</div>
+              <div className="text-sm text-gray-400">Trained Models</div>
+              <div className="text-xs text-cyber-green">4/4 Available</div>
             </div>
             
-            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📊</div>
-              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                Subscribed Instruments
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-accent)' }}>
-                {selectedInstruments.length}
-              </div>
+            <div className="text-center p-4 bg-gray-800 rounded-lg">
+              <div className="text-2xl mb-2">📊</div>
+              <div className="text-sm text-gray-400">Subscribed Instruments</div>
+              <div className="text-xs text-cyber-green">{selectedInstruments.length}</div>
             </div>
             
-            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔮</div>
-              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                Live Predictions
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-accent)' }}>
-                {Object.keys(predictions).length}
-              </div>
+            <div className="text-center p-4 bg-gray-800 rounded-lg">
+              <div className="text-2xl mb-2">🔮</div>
+              <div className="text-sm text-gray-400">Live Predictions</div>
+              <div className="text-xs text-cyber-green">{Object.keys(predictions).length}</div>
             </div>
           </div>
         </Card>
@@ -640,25 +493,18 @@ export default function LiveTrading() {
       {/* Live Data Display */}
       {Object.keys(liveData).length > 0 && (
         <Card>
-          <h3 style={{ color: 'var(--accent-electric)', marginBottom: '1.5rem' }}>
-            📈 Live Market Data
-          </h3>
-          <div style={{ display: 'grid', gap: '1rem' }}>
+          <h3 className="text-xl font-semibold cyber-blue mb-4">📈 Live Market Data</h3>
+          <div className="space-y-4">
             {Object.entries(liveData).map(([symbol, data]) => (
-              <div key={symbol} style={{
-                padding: '1rem',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border)',
-                borderRadius: '8px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h4 style={{ color: 'var(--text-accent)', margin: 0 }}>{symbol}</h4>
-                  <span style={{ color: 'var(--accent-electric)', fontWeight: '600' }}>
+              <div key={symbol} className="p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-cyber-green font-semibold">{symbol}</h4>
+                  <span className="text-cyber-blue font-mono text-xl">
                     ₹{data.price?.toFixed(2)}
                   </span>
                 </div>
-                <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                  Change: <span style={{ color: data.change >= 0 ? 'var(--accent-electric)' : 'var(--accent-pink)' }}>
+                <div className="mt-2 text-sm text-gray-400">
+                  Change: <span className={data.change >= 0 ? 'text-cyber-green' : 'text-cyber-red'}>
                     {data.change?.toFixed(2)}
                   </span> | Volume: {data.volume?.toLocaleString()}
                 </div>
@@ -671,30 +517,23 @@ export default function LiveTrading() {
       {/* Live Predictions Display */}
       {Object.keys(predictions).length > 0 && (
         <Card>
-          <h3 style={{ color: 'var(--accent-electric)', marginBottom: '1.5rem' }}>
-            🔮 Live Predictions
-          </h3>
-          <div style={{ display: 'grid', gap: '1rem' }}>
+          <h3 className="text-xl font-semibold cyber-blue mb-4">🔮 Live Predictions</h3>
+          <div className="space-y-4">
             {Object.entries(predictions).map(([instrument, prediction]) => (
-              <div key={instrument} style={{
-                padding: '1rem',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border)',
-                borderRadius: '8px'
-              }}>
-                <h4 style={{ color: 'var(--text-accent)', marginBottom: '0.5rem' }}>{instrument}</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', fontSize: '0.875rem' }}>
+              <div key={instrument} className="p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                <h4 className="text-cyber-green font-semibold mb-2">{instrument}</h4>
+                <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
-                    <span style={{ color: 'var(--text-secondary)' }}>Direction: </span>
-                    <span style={{ color: 'var(--accent-electric)' }}>{prediction.direction || 'N/A'}</span>
+                    <span className="text-gray-400">Direction: </span>
+                    <span className="text-cyber-blue">{prediction.direction || 'N/A'}</span>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-secondary)' }}>Volatility: </span>
-                    <span style={{ color: 'var(--accent-electric)' }}>{prediction.volatility || 'N/A'}</span>
+                    <span className="text-gray-400">Volatility: </span>
+                    <span className="text-cyber-blue">{prediction.volatility || 'N/A'}</span>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-secondary)' }}>Confidence: </span>
-                    <span style={{ color: 'var(--accent-electric)' }}>{prediction.confidence || 'N/A'}</span>
+                    <span className="text-gray-400">Confidence: </span>
+                    <span className="text-cyber-blue">{prediction.confidence || 'N/A'}</span>
                   </div>
                 </div>
               </div>
@@ -705,182 +544,38 @@ export default function LiveTrading() {
 
       {/* Information Card */}
       <Card>
-        <div style={{ background: 'rgba(0, 255, 255, 0.1)', padding: '1.5rem', borderRadius: '8px', marginBottom: '1rem' }}>
-          <h4 style={{ color: 'var(--accent-cyan)', marginBottom: '1rem' }}>📋 Upstox Historical Data Features:</h4>
-          <ul style={{ listStyle: 'none', padding: 0, color: 'var(--text-secondary)' }}>
-            <li>• Supports 1-minute to daily intervals</li>
-            <li>• Up to 1 year of historical data</li>
-            <li>• Real-time API integration</li>
-            <li>• Direct CSV download</li>
-            <li>• Database storage option</li>
-            <li>• Interactive charts</li>
-          </ul>
-          <h4 style={{ color: 'var(--accent-cyan)', margin: '1rem 0', fontSize: '1rem' }}>🔑 API Requirements:</h4>
-          <ul style={{ listStyle: 'none', padding: 0, color: 'var(--text-secondary)' }}>
-            <li>• Valid Upstox access token (refreshed daily)</li>
-            <li>• Active API subscription for historical data</li>
-          </ul>
-        </div>
-
-        <div style={{ background: 'rgba(0, 255, 65, 0.1)', padding: '1.5rem', borderRadius: '8px' }}>
-          <h4 style={{ color: 'var(--accent-electric)', marginBottom: '1rem' }}>🌱 Live Data Continuation Feature:</h4>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-            <strong>How it works:</strong> Upload your historical data with name pattern: `live_NSE_INDEX_Nifty_50`. 
-            When live data starts, it automatically loads your historical data as foundation. 
-            Live ticks continue building OHLC from that point forward. 
-            Result: 250+ rows for predictions from day 1 instead of starting with 0.
-          </p>
-          <p style={{ color: 'var(--text-secondary)' }}>
-            <strong>Naming pattern:</strong> `livenifty50`, `liveniftybank`, `livereliance`, etc.
-          </p>
-        </div>
-      </Card>
-    </div>
-  );
-}
-          )}
-        </div>
-      </div>
-
-      {/* Connection Status */}
-      {connecting && (
-        <div className="cyber-bg cyber-border rounded-lg p-6">
-          <div className="text-center">
-            <LoadingSpinner size="lg" text="Connecting to live data stream..." />
-          </div>
-        </div>
-      )}
-
-      {/* Error Display */}
-      {error && (
-        <div className="cyber-bg border border-cyber-red rounded-lg p-6">
-          <h2 className="text-xl font-semibold text-cyber-red mb-4">
-            ❌ Connection Error
-          </h2>
-          <p className="text-gray-300">{error}</p>
-        </div>
-      )}
-
-      {/* Live Data Display */}
-      {connected && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Market Data */}
-          <div className="cyber-bg cyber-border rounded-lg p-6">
-            <h2 className="text-xl font-semibold cyber-blue mb-4">Market Data</h2>
-            {marketData ? (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Symbol:</span>
-                  <span className="text-white font-mono">{marketData.symbol}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Price:</span>
-                  <span className="text-cyber-green font-mono text-xl">
-                    ₹{marketData.price?.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Change:</span>
-                  <span className={`font-mono ${
-                    marketData.change >= 0 ? 'text-cyber-green' : 'text-cyber-red'
-                  }`}>
-                    {marketData.change >= 0 ? '+' : ''}{marketData.change?.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Volume:</span>
-                  <span className="text-white font-mono">
-                    {marketData.volume?.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Last Update:</span>
-                  <span className="text-gray-300 text-sm">
-                    {new Date(marketData.timestamp).toLocaleTimeString()}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center text-gray-400 py-8">
-                <p>Waiting for market data...</p>
-              </div>
-            )}
+        <div className="space-y-4">
+          <div className="bg-blue-900 bg-opacity-30 p-4 rounded-lg">
+            <h4 className="text-cyber-blue font-semibold mb-2">📋 Upstox Historical Data Features:</h4>
+            <ul className="text-sm text-gray-300 space-y-1">
+              <li>• Supports 1-minute to daily intervals</li>
+              <li>• Up to 1 year of historical data</li>
+              <li>• Real-time API integration</li>
+              <li>• Direct CSV download</li>
+              <li>• Database storage option</li>
+              <li>• Interactive charts</li>
+            </ul>
+            <h5 className="text-cyber-blue font-semibold mt-3 mb-1">🔑 API Requirements:</h5>
+            <ul className="text-sm text-gray-300 space-y-1">
+              <li>• Valid Upstox access token (refreshed daily)</li>
+              <li>• Active API subscription for historical data</li>
+            </ul>
           </div>
 
-          {/* Live Predictions */}
-          <div className="cyber-bg cyber-border rounded-lg p-6">
-            <h2 className="text-xl font-semibold cyber-purple mb-4">Live Predictions</h2>
-            {predictions ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-800 rounded-lg p-3">
-                    <h3 className="text-sm font-semibold text-cyber-blue mb-2">Volatility</h3>
-                    <div className="text-lg font-mono text-cyber-green">
-                      {predictions.volatility?.toFixed(4) || 'N/A'}
-                    </div>
-                  </div>
-                  <div className="bg-gray-800 rounded-lg p-3">
-                    <h3 className="text-sm font-semibold text-cyber-blue mb-2">Direction</h3>
-                    <div className="text-lg font-mono text-cyber-yellow">
-                      {predictions.direction || 'N/A'}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-800 rounded-lg p-3">
-                    <h3 className="text-sm font-semibold text-cyber-blue mb-2">Profit Prob.</h3>
-                    <div className="text-lg font-mono text-cyber-purple">
-                      {predictions.profit_probability ? 
-                        `${(predictions.profit_probability * 100).toFixed(1)}%` : 'N/A'}
-                    </div>
-                  </div>
-                  <div className="bg-gray-800 rounded-lg p-3">
-                    <h3 className="text-sm font-semibold text-cyber-blue mb-2">Reversal</h3>
-                    <div className="text-lg font-mono text-cyber-red">
-                      {predictions.reversal || 'N/A'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-gray-700">
-                  <p className="text-xs text-gray-400">
-                    Last updated: {predictions.timestamp ? 
-                      new Date(predictions.timestamp).toLocaleTimeString() : 'Unknown'}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center text-gray-400 py-8">
-                <p>Waiting for predictions...</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* AI Analysis */}
-      {connected && predictions && (
-        <div className="cyber-bg cyber-border rounded-lg p-6">
-          <h2 className="text-xl font-semibold cyber-text mb-4">AI Market Analysis</h2>
-          <div className="bg-gray-800 rounded-lg p-4">
-            <p className="text-gray-300 italic">
-              AI-powered market analysis and insights will be displayed here based on current predictions and market conditions.
+          <div className="bg-green-900 bg-opacity-30 p-4 rounded-lg">
+            <h4 className="text-cyber-green font-semibold mb-2">🌱 Live Data Continuation Feature:</h4>
+            <p className="text-sm text-gray-300 mb-2">
+              <strong>How it works:</strong> Upload your historical data with name pattern: `live_NSE_INDEX_Nifty_50`. 
+              When live data starts, it automatically loads your historical data as foundation. 
+              Live ticks continue building OHLC from that point forward. 
+              Result: 250+ rows for predictions from day 1 instead of starting with 0.
+            </p>
+            <p className="text-sm text-gray-300">
+              <strong>Naming pattern:</strong> `livenifty50`, `liveniftybank`, `livereliance`, etc.
             </p>
           </div>
         </div>
-      )}
-
-      {/* Trading Controls (Placeholder) */}
-      {connected && (
-        <div className="cyber-bg cyber-border rounded-lg p-6">
-          <h2 className="text-xl font-semibold cyber-yellow mb-4">Trading Controls</h2>
-          <div className="text-center text-gray-400 py-8">
-            <p>Trading execution controls will be available here</p>
-            <p className="text-sm mt-2">Connect to your broker API for live trading</p>
-          </div>
-        </div>
-      )}
+      </Card>
     </div>
   );
 }
