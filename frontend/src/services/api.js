@@ -16,8 +16,13 @@ const getAPIBaseURL = () => {
     const protocol = window.location.protocol;
 
     if (hostname.includes('replit.dev')) {
-      // For Replit, use the same host but port 8000
-      return `${protocol}//${hostname.replace(/:\d+/, '')}:8000`;
+      // For Replit, use the same origin but replace port with 8000
+      const port = window.location.port;
+      if (port) {
+        return `${protocol}//${hostname.replace(`:${port}`, ':8000')}`;
+      } else {
+        return `${protocol}//${hostname}:8000`;
+      }
     }
   }
 
@@ -259,6 +264,30 @@ export const dataAPI = {
   clearAllData: async () => {
     const response = await api.delete('/api/data/datasets');
     return response.data;
+  },
+
+  // Clean data mode
+  cleanDataMode: async () => {
+    const response = await api.post('/api/data/clean-mode');
+    return response.data;
+  },
+
+  // Sync metadata
+  syncMetadata: async () => {
+    const response = await api.post('/api/data/sync-metadata');
+    return response.data;
+  },
+
+  // Clean database
+  cleanDatabase: async () => {
+    const response = await api.post('/api/data/clean-database');
+    return response.data;
+  },
+
+  // Get key content
+  getKeyContent: async (key) => {
+    const response = await api.get(`/api/data/keys/${key}`);
+    return response;
   }
 };
 
