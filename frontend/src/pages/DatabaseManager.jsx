@@ -943,7 +943,7 @@ const DatabaseManager = () => {
                   padding: '0.75rem 1rem',
                   background: '#28a745',
                   border: 'none',
-                  borderRadius: '6px',```tool_code
+                  borderRadius: '6px',
                   color: 'white',
                   fontFamily: 'var(--font-primary)',
                   fontWeight: '600',
