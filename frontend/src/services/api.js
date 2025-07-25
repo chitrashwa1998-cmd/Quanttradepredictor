@@ -7,8 +7,8 @@ import axios from 'axios';
 
 // For Replit environment, use proxy configuration
 const getAPIBaseURL = () => {
-  // Use the proxy endpoint configured in Vite
-  return '/api';
+  // Use empty string since routes already include /api prefix
+  return '';
 };
 
 const API_BASE_URL = getAPIBaseURL();
