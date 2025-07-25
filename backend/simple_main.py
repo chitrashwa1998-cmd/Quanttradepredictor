@@ -1,8 +1,12 @@
 """
 Simplified FastAPI main with basic API endpoints
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional, List
+import pandas as pd
+import io
+import logging
 import uvicorn
 from datetime import datetime
 
@@ -16,6 +20,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# In-memory storage for datasets (for demo purposes)
+datasets_storage = {}
 
 @app.get("/")
 async def root():
@@ -31,12 +38,12 @@ async def get_database_info():
     return {
         "info": {
             "database_type": "postgresql_row_based",
-            "total_datasets": 0,
-            "total_records": 0,
+            "total_datasets": len(datasets_storage),
+            "total_records": sum(len(df) for df in datasets_storage.values()),
             "total_models": 0,
             "total_trained_models": 0,
             "total_predictions": 0,
-            "datasets": [],
+            "datasets": list(datasets_storage.keys()),
             "backend": "PostgreSQL (Row-Based)",
             "storage_type": "Row-Based",
             "supports_append": True,
@@ -60,13 +67,106 @@ async def get_models_status():
 
 @app.get("/api/data/datasets")
 async def list_datasets():
-    return []  # Empty list for now
+    result = []
+    for name, df in datasets_storage.items():
+        dataset_info = {
+            "name": name,
+            "rows": len(df),
+            "columns": list(df.columns),
+            "purpose": "training"
+        }
+
+        # Add date range if Date column exists
+        if 'Date' in df.columns:
+            try:
+                df['Date'] = pd.to_datetime(df['Date'])
+                dataset_info["date_range"] = f"{df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}"
+            except:
+                dataset_info["date_range"] = "Unknown"
+
+        result.append(dataset_info)
+
+    return result
 
 @app.get("/api/models/list")
 async def list_models():
     return {
         "models": ["volatility", "direction", "profit_probability", "reversal"]
     }
+
+@app.post("/api/data/upload")
+async def upload_data(
+    file: UploadFile = File(...),
+    dataset_name: Optional[str] = Form(None),
+    purpose: Optional[str] = Form("training")
+):
+    """Upload CSV data file"""
+    try:
+        # Read uploaded file
+        contents = await file.read()
+        df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
+
+        # Basic validation
+        if df.empty:
+            raise ValueError("Uploaded file is empty")
+
+        # Use filename as dataset name if not provided
+        if not dataset_name:
+            dataset_name = (file.filename or "uploaded_data").replace('.csv', '')
+
+        # Store in memory (in a real app, this would go to database)
+        datasets_storage[dataset_name] = df
+
+        # Create preview data
+        preview_data = None
+        if len(df) > 0:
+            preview_data = {
+                "columns": list(df.columns),
+                "rows": df.head(5).values.tolist()
+            }
+
+        # Get date range
+        date_range = "Unknown"
+        if 'Date' in df.columns:
+            try:
+                df['Date'] = pd.to_datetime(df['Date'])
+                date_range = f"{df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}"
+            except:
+                pass
+
+        return {
+            "success": True,
+            "dataset_name": dataset_name,
+            "records_processed": len(df),
+            "date_range": date_range,
+            "columns": list(df.columns),
+            "preview": preview_data,
+            "message": f"Successfully uploaded {len(df)} rows"
+        }
+
+    except Exception as e:
+        logging.error(f"Data upload failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/data/datasets/{dataset_name}")
+async def delete_dataset(dataset_name: str):
+    """Delete a specific dataset"""
+    try:
+        if dataset_name not in datasets_storage:
+            raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
+
+        del datasets_storage[dataset_name]
+
+        return {
+            "success": True,
+            "message": f"Dataset {dataset_name} deleted successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Failed to delete dataset {dataset_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
