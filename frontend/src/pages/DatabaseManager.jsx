@@ -34,7 +34,7 @@ const DatabaseManager = () => {
         dataAPI.getDatasets()
       ]);
 
-      const dbInfo = dbInfoResponse.data || {};
+      const dbInfo = dbInfoResponse || {};
       setDatabaseInfo(dbInfo);
       setDatasets(datasetsResponse.data || []);
 
