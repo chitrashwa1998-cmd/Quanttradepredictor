@@ -200,6 +200,38 @@ export const dataAPI = {
   getDatasetStats: async (datasetName) => {
     const response = await api.get(`/api/data/datasets/${datasetName}/stats`);
     return response.data;
+  },
+
+  // Get datasets (alias for listDatasets for compatibility)
+  getDatasets: async () => {
+    const response = await api.get('/api/data/datasets');
+    return response;
+  },
+
+  // Load specific dataset
+  loadDataset: async (datasetName, params = {}) => {
+    const response = await api.get(`/api/data/datasets/${datasetName}`, { params });
+    return response;
+  },
+
+  // Clear all data
+  clearAllData: async () => {
+    const response = await api.delete('/api/data/datasets');
+    return response.data;
+  },
+
+  // Clean data mode
+  cleanDataMode: async () => {
+    const response = await api.post('/api/data/clean-mode');
+    return response.data;
+  },
+
+  // Export dataset
+  exportDataset: async (datasetName) => {
+    const response = await api.get(`/api/data/datasets/${datasetName}/export`, {
+      responseType: 'blob'
+    });
+    return response;
   }
 };
 
