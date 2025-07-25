@@ -202,8 +202,48 @@ export const dataAPI = {
   // Export dataset
   exportDataset: async (datasetName) => {
     const response = await api.get(`/api/data/datasets/${datasetName}/export`, {
-      responseType: 'text'
+      responseType: 'blob'
     });
+    return response;
+  },
+
+  // Get dataset with filters (row-based specific)
+  getDatasetWithFilters: async (datasetName, filters = {}) => {
+    const response = await api.get(`/api/data/datasets/${datasetName}`, { params: filters });
+    return response;
+  },
+
+  // Get latest rows for seeding
+  getLatestRows: async (datasetName, count = 250) => {
+    const response = await api.get(`/api/data/datasets/${datasetName}`, { 
+      params: { limit: count }
+    });
+    return response;
+  },
+
+  // Get datasets by purpose
+  getDatasetsByPurpose: async (purpose) => {
+    const response = await api.get('/api/data/datasets', { 
+      params: { purpose }
+    });
+    return response;
+  },
+
+  // Append data to existing dataset
+  appendData: async (formData, datasetName) => {
+    formData.append('preserve_full_data', 'true');
+    const response = await api.post('/api/data/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      params: { dataset_name: datasetName }
+    });
+    return response;
+  },
+
+  // Sync metadata
+  syncMetadata: async () => {
+    const response = await api.post('/api/data/sync-metadata');
     return response;
   },
 

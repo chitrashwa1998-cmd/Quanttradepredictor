@@ -1,4 +1,3 @@
-
 /**
  * Database Manager page - Complete Streamlit functionality migration
  */
@@ -29,7 +28,7 @@ const DatabaseManager = () => {
   const loadDatabaseInfo = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       const [dbInfoResponse, datasetsResponse] = await Promise.all([
         dataAPI.getDatabaseInfo(),
         dataAPI.getDatasets()
@@ -38,16 +37,16 @@ const DatabaseManager = () => {
       const dbInfo = dbInfoResponse.data || {};
       setDatabaseInfo(dbInfo);
       setDatasets(datasetsResponse.data || []);
-      
+
       // Load model results and predictions
       const availableKeys = dbInfo.available_keys || [];
       const modelKeys = availableKeys.filter(key => key.startsWith('model_results_'));
       const predKeys = availableKeys.filter(key => key.startsWith('predictions_'));
-      
+
       setModelResults(modelKeys.map(key => key.replace('model_results_', '')));
       setPredictions(predKeys.map(key => key.replace('predictions_', '')));
       setRawDatabaseKeys(availableKeys);
-      
+
       setStatus('✅ Database information refreshed');
     } catch (error) {
       setStatus(`❌ Error loading database info: ${error.response?.data?.detail || error.message}`);
@@ -72,12 +71,12 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus('🗑️ Clearing all database data...');
-      
+
       await dataAPI.clearAllData();
-      
+
       // Refresh database info
       await loadDatabaseInfo();
-      
+
       setStatus('✅ All database data cleared successfully');
       setDataPreview(null);
       setSelectedDataset('');
@@ -98,12 +97,12 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus('🧹 Activating clean data mode...');
-      
+
       await dataAPI.cleanDataMode();
-      
+
       // Refresh database info
       await loadDatabaseInfo();
-      
+
       setStatus('✅ Clean data mode activated! Only your data remains.');
     } catch (error) {
       setStatus(`❌ Error activating clean mode: ${error.response?.data?.detail || error.message}`);
@@ -121,14 +120,14 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus(`🗑️ Deleting dataset: ${datasetName}...`);
-      
+
       await dataAPI.deleteDataset(datasetName);
-      
+
       // Refresh database info
       await loadDatabaseInfo();
-      
+
       setStatus(`✅ Dataset "${datasetName}" deleted successfully`);
-      
+
       if (selectedDataset === datasetName) {
         setSelectedDataset('');
         setDataPreview(null);
@@ -150,12 +149,12 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus(`✏️ Renaming dataset from "${oldName}" to "${newName}"...`);
-      
+
       await dataAPI.renameDataset(oldName, newName);
-      
+
       // Refresh database info
       await loadDatabaseInfo();
-      
+
       setStatus(`✅ Dataset renamed from "${oldName}" to "${newName}" successfully`);
       setRenameMode({});
       setNewDatasetName('');
@@ -171,7 +170,7 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus(`📊 Loading preview for ${datasetName}...`);
-      
+
       const response = await dataAPI.loadDataset(datasetName, { limit: 100 });
       setDataPreview(response.data);
       setSelectedDataset(datasetName);
@@ -189,12 +188,12 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus(`📥 Loading ${datasetName} to session...`);
-      
+
       const response = await dataAPI.loadDataset(datasetName);
       // Store in session storage for other components to use
       sessionStorage.setItem('currentDataset', JSON.stringify(response.data));
       sessionStorage.setItem('currentDatasetName', datasetName);
-      
+
       setStatus(`✅ Dataset "${datasetName}" loaded to session`);
     } catch (error) {
       setStatus(`❌ Error loading dataset to session: ${error.response?.data?.detail || error.message}`);
@@ -208,9 +207,9 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus(`📤 Exporting ${datasetName}...`);
-      
+
       const response = await dataAPI.exportDataset(datasetName);
-      
+
       // Create download link
       const blob = new Blob([response.data], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
@@ -221,7 +220,7 @@ const DatabaseManager = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       setStatus(`✅ Dataset "${datasetName}" exported successfully`);
     } catch (error) {
       setStatus(`❌ Error exporting dataset: ${error.response?.data?.detail || error.message}`);
@@ -239,10 +238,10 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus(`🗑️ Deleting model results for ${modelName}...`);
-      
+
       await dataAPI.deleteModelResults(modelName);
       await loadDatabaseInfo();
-      
+
       setStatus(`✅ Deleted ${modelName} model results`);
     } catch (error) {
       setStatus(`❌ Error deleting model results: ${error.response?.data?.detail || error.message}`);
@@ -260,10 +259,10 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus(`🗑️ Deleting predictions for ${modelName}...`);
-      
+
       await dataAPI.deletePredictions(modelName);
       await loadDatabaseInfo();
-      
+
       setStatus(`✅ Deleted ${modelName} predictions`);
     } catch (error) {
       setStatus(`❌ Error deleting predictions: ${error.response?.data?.detail || error.message}`);
@@ -284,10 +283,10 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus('🔄 Syncing metadata...');
-      
+
       await dataAPI.syncMetadata();
       await loadDatabaseInfo();
-      
+
       setStatus('✅ Metadata synced successfully!');
     } catch (error) {
       setStatus(`❌ Error syncing metadata: ${error.response?.data?.detail || error.message}`);
@@ -305,10 +304,10 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus('🧹 Cleaning database...');
-      
+
       await dataAPI.cleanDatabase();
       await loadDatabaseInfo();
-      
+
       setStatus('✅ Database cleaned! Only main_dataset data remains.');
     } catch (error) {
       setStatus(`❌ Error cleaning database: ${error.response?.data?.detail || error.message}`);
@@ -322,7 +321,7 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       setStatus(`🔍 Loading content for key: ${key}...`);
-      
+
       const response = await dataAPI.getKeyContent(key);
       setKeyContent(response.data);
       setSelectedKey(key);
@@ -919,7 +918,7 @@ const DatabaseManager = () => {
             <h3 style={{ color: 'var(--accent-gold)', margin: '0 0 1rem 0' }}>
               Export Data
             </h3>
-            
+
             <div style={{ marginBottom: '1rem' }}>
               <button
                 onClick={() => {
@@ -944,7 +943,7 @@ const DatabaseManager = () => {
                   padding: '0.75rem 1rem',
                   background: '#28a745',
                   border: 'none',
-                  borderRadius: '6px',
+                  borderRadius: '6px',```tool_code
                   color: 'white',
                   fontFamily: 'var(--font-primary)',
                   fontWeight: '600',
@@ -994,7 +993,7 @@ const DatabaseManager = () => {
             <h3 style={{ color: '#ff6b6b', margin: '0 0 1rem 0' }}>
               ⚠️ Danger Zone
             </h3>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <button
                 onClick={clearSessionData}
@@ -1264,7 +1263,7 @@ const DatabaseManager = () => {
               <p style={{ color: 'var(--text-secondary)', margin: '0 0 1rem 0', fontSize: '0.9rem' }}>
                 Database Type: {databaseInfo.database_type || 'Unknown'}
               </p>
-              
+
               {rawDatabaseKeys.length > 0 && (
                 <div style={{ marginBottom: '1rem' }}>
                   <select
@@ -1286,7 +1285,7 @@ const DatabaseManager = () => {
                       <option key={index} value={key}>{key}</option>
                     ))}
                   </select>
-                  
+
                   <button
                     onClick={() => viewKeyContent(selectedKey)}
                     disabled={!selectedKey || loading}
