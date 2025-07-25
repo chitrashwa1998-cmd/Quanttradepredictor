@@ -9,7 +9,6 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Import page components
 import Home from './pages/Home';
-import SafeHome from './pages/SafeHome';
 import Dashboard from './pages/Dashboard';
 import DataUpload from './pages/DataUpload';
 import ModelTraining from './pages/ModelTraining';
@@ -24,14 +23,14 @@ function App() {
       <Router>
         <Layout>
           <Routes>
-            <Route path="/" element={<SafeHome />} />
-            <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-            <Route path="/upload" element={<ErrorBoundary><DataUpload /></ErrorBoundary>} />
-            <Route path="/training" element={<ErrorBoundary><ModelTraining /></ErrorBoundary>} />
-            <Route path="/predictions" element={<ErrorBoundary><Predictions /></ErrorBoundary>} />
-            <Route path="/live" element={<ErrorBoundary><LiveTrading /></ErrorBoundary>} />
-            <Route path="/backtesting" element={<ErrorBoundary><Backtesting /></ErrorBoundary>} />
-            <Route path="/database" element={<ErrorBoundary><DatabaseManager /></ErrorBoundary>} />
+            <Route path="/" element={<Home />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/upload" element={<DataUpload />} />
+            <Route path="/training" element={<ModelTraining />} />
+            <Route path="/predictions" element={<Predictions />} />
+            <Route path="/live" element={<LiveTrading />} />
+            <Route path="/backtesting" element={<Backtesting />} />
+            <Route path="/database" element={<DatabaseManager />} />
           </Routes>
         </Layout>
       </Router>

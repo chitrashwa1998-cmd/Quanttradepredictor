@@ -23,7 +23,7 @@ const DataUpload = () => {
     try {
       setLoading(true);
       const response = await dataAPI.getDatasets();
-      setDatasets(response?.data || response || []);
+      setDatasets(response.data || []);
     } catch (error) {
       console.error('Error loading datasets:', error);
       setDatasets([]);
