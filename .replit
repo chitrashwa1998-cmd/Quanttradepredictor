@@ -91,6 +91,15 @@ task = "shell.exec"
 args = "cd backend && python simple_main.py"
 waitForPort = 8000
 
+[[workflows.workflow]]
+name = "Simple Backend Fixed"
+author = 40743738
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python simple_main.py"
+
 [[ports]]
 localPort = 5000
 externalPort = 80

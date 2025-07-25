@@ -207,49 +207,21 @@ export const dataAPI = {
     return response;
   },
 
-  // Get dataset with filters (row-based specific)
-  getDatasetWithFilters: async (datasetName, filters = {}) => {
-    const response = await api.get(`/api/data/datasets/${datasetName}`, { params: filters });
+  // Rename dataset
+  renameDataset: async (oldName, newName) => {
+    const response = await api.post(`/api/data/datasets/${oldName}/rename?new_name=${newName}`);
     return response;
   },
 
-  // Get latest rows for seeding
-  getLatestRows: async (datasetName, count = 250) => {
-    const response = await api.get(`/api/data/datasets/${datasetName}`, { 
-      params: { limit: count }
-    });
+  // Delete model results
+  deleteModelResults: async (modelName) => {
+    const response = await api.delete(`/api/data/model-results/${modelName}`);
     return response;
   },
 
-  // Get datasets by purpose
-  getDatasetsByPurpose: async (purpose) => {
-    const response = await api.get('/api/data/datasets', { 
-      params: { purpose }
-    });
-    return response;
-  },
-
-  // Append data to existing dataset
-  appendData: async (formData, datasetName) => {
-    formData.append('preserve_full_data', 'true');
-    const response = await api.post('/api/data/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      params: { dataset_name: datasetName }
-    });
-    return response;
-  },
-
-  // Sync metadata
-  syncMetadata: async () => {
-    const response = await api.post('/api/data/sync-metadata');
-    return response;
-  },
-
-  // Clean data mode
-  cleanDataMode: async () => {
-    const response = await api.post('/api/data/clean-mode');
+  // Delete predictions
+  deletePredictions: async (modelName) => {
+    const response = await api.delete(`/api/data/predictions/${modelName}`);
     return response;
   },
 
@@ -265,61 +237,11 @@ export const dataAPI = {
     return response;
   },
 
-  // Delete model results
-  deleteModelResults: async (modelName) => {
-    const response = await api.delete(`/api/models/results/${modelName}`);
-    return response;
-  },
-
-  // Delete predictions
-  deletePredictions: async (modelName) => {
-    const response = await api.delete(`/api/predictions/${modelName}`);
-    return response;
-  },
-
-  // Get key content (for debug view)
+  // Get key content
   getKeyContent: async (key) => {
-    const response = await api.get(`/api/data/debug/key/${key}`);
+    const response = await api.get(`/api/data/keys/${key}`);
     return response;
-  },
-
-  // Get database info
-  getDatabaseInfo: async () => {
-    const response = await api.get('/api/data/database/info');
-    return response.data;
-  },
-
-  // Get latest live data
-  getLatestLiveData: async (limit = 10) => {
-    const response = await api.get('/api/data/live-data/latest', {
-      params: { limit }
-    });
-    return response.data;
-  },
-
-  // Get dataset statistics
-  getDatasetStats: async (datasetName) => {
-    const response = await api.get(`/api/data/datasets/${datasetName}/stats`);
-    return response.data;
-  },
-
-  // Get datasets (alias for listDatasets for compatibility)
-  getDatasets: async () => {
-    const response = await api.get('/api/data/datasets');
-    return response;
-  },
-
-  // Load specific dataset
-  loadDataset: async (datasetName, params = {}) => {
-    const response = await api.get(`/api/data/datasets/${datasetName}`, { params });
-    return response;
-  },
-
-  // Clear all data
-  clearAllData: async () => {
-    const response = await api.delete('/api/data/datasets');
-    return response.data;
-  },
+  }
 };
 
 // WebSocket API
