@@ -21,8 +21,8 @@ const Dashboard = () => {
           dataAPI.getDatabaseInfo(),
           predictionsAPI.getModelsStatus()
         ]);
-        setDatabaseInfo(dbInfo);
-        setModelsStatus(modelStatus);
+        setDatabaseInfo(dbInfo?.data || dbInfo);
+        setModelsStatus(modelStatus?.data || modelStatus);
       } catch (err) {
         setError(err.message);
       } finally {
