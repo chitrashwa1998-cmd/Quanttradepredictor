@@ -11,19 +11,9 @@ const getAPIBaseURL = () => {
     return import.meta.env.VITE_API_URL;
   }
 
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const protocol = window.location.protocol;
-
-    if (hostname.includes('replit.dev')) {
-      // For Replit, use the same origin but replace port with 8000
-      const port = window.location.port;
-      if (port) {
-        return `${protocol}//${hostname.replace(`:${port}`, ':8000')}`;
-      } else {
-        return `${protocol}//${hostname}:8000`;
-      }
-    }
+  // In development, use the proxy
+  if (import.meta.env.DEV) {
+    return '/api-proxy';
   }
 
   return 'http://localhost:8000';
