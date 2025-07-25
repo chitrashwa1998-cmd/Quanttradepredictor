@@ -5,18 +5,9 @@
 
 import axios from 'axios';
 
-// For Replit environment, use the same domain with port 8000
+// For Replit environment, use proxy configuration
 const getAPIBaseURL = () => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-
-  // In development, use the proxy
-  if (import.meta.env.DEV) {
-    return '/api-proxy';
-  }
-
-  return 'http://localhost:8000';
+  return '';  // Use proxy from Vite config
 };
 
 const API_BASE_URL = getAPIBaseURL();
