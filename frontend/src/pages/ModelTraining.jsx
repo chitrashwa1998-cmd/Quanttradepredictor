@@ -31,7 +31,7 @@ const ModelTraining = () => {
   ];
 
   // Load datasets on component mount
-  const loadDatasets = useCallback(async () => {
+  const loadDatasets = async () => {
     try {
       setLoading(true);
       const response = await dataAPI.getDatasets().catch(() => ({ data: [] }));
@@ -51,11 +51,20 @@ const ModelTraining = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDataset]);
+  };
 
   useEffect(() => {
-    loadDatasets();
-  }, [loadDatasets]);
+    const initializeData = async () => {
+      try {
+        await loadDatasets();
+      } catch (error) {
+        console.error('Initialization error:', error);
+        setTrainingStatus('❌ Failed to initialize data');
+      }
+    };
+    
+    initializeData();
+  }, []);
 
   // Calculate features
   const calculateFeatures = async () => {
