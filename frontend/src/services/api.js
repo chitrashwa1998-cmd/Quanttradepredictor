@@ -85,7 +85,7 @@ export const predictionsAPI = {
 
   // Get model status
   getModelsStatus: async () => {
-    const response = await api.get('/api/predictions/models/status');
+    const response = await api.get('/api/models/status');
     return response.data;
   },
 

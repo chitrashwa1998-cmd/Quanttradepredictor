@@ -223,20 +223,105 @@ class DataProcessor:
             # Remove rows with all NaN values in price columns
             df = df.dropna(subset=price_cols, how='all')
 
-            if len(df) == 0:
-                return None, "No valid data rows found after processing"
-
-            # Validate data
-            is_valid, message = DataProcessor.validate_ohlc_data(df)
-
+            # Validate OHLC data
+            is_valid, validation_message = DataProcessor.validate_ohlc_data(df)
             if not is_valid:
-                return None, f"Data validation failed: {message}"
+                return None, validation_message
 
-            success_msg = f"Data loaded successfully using {successful_config}. Processed {len(df)} rows."
-            return df, success_msg
+            return df, f"Successfully processed {len(df)} rows of OHLC data. {successful_config}"
 
         except Exception as e:
-            return None, f"Error loading data: {str(e)}. Please check that your file is a valid CSV with OHLC columns."
+            return None, f"Data processing failed: {str(e)}"
+
+    @staticmethod
+    def load_and_validate_data_from_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+        """Load and validate data from a pandas DataFrame (for FastAPI backend)."""
+        try:
+            # Clean column names (remove spaces, make case-insensitive)
+            df.columns = df.columns.str.strip().str.lower()
+
+            # Map common column name variations
+            column_mapping = {
+                'datetime': 'date',
+                'timestamp': 'date',
+                'time': 'date',
+                'o': 'open',
+                'h': 'high',
+                'l': 'low',
+                'c': 'close',
+                'v': 'volume',
+                'vol': 'volume',
+                'adj close': 'close',
+                'adj_close': 'close'
+            }
+
+            # Apply column mapping
+            df.columns = [column_mapping.get(col, col) for col in df.columns]
+
+            # Ensure we have required columns
+            required_base_cols = ['open', 'high', 'low', 'close']
+            missing_cols = [col for col in required_base_cols if col not in df.columns]
+
+            if missing_cols:
+                raise ValueError(f"Missing required columns: {missing_cols}. Available columns: {list(df.columns)}")
+
+            # Capitalize column names for consistency
+            df.columns = [col.capitalize() for col in df.columns]
+
+            # Handle date column
+            date_col = None
+            for col in df.columns:
+                if col.lower() in ['date', 'datetime', 'timestamp', 'time']:
+                    date_col = col
+                    break
+
+            if date_col:
+                # Convert to datetime with multiple format attempts
+                df[date_col] = pd.to_datetime(df[date_col], errors='coerce', infer_datetime_format=True)
+
+                # Remove rows with invalid dates
+                initial_rows = len(df)
+                df = df.dropna(subset=[date_col])
+
+                if len(df) == 0:
+                    raise ValueError("All date values are invalid. Please check your date format.")
+
+                # Set as index
+                df.set_index(date_col, inplace=True)
+                df.index.name = 'DateTime'
+
+                # Sort by datetime to ensure proper chronological order
+                df = df.sort_index()
+
+            else:
+                # If no date column, create a simple index
+                df.index = pd.date_range(start='2020-01-01', periods=len(df), freq='D')
+                df.index.name = 'DateTime'
+
+            # Remove any duplicate dates
+            df = df[~df.index.duplicated(keep='first')]
+
+            # Convert price columns to numeric
+            price_cols = ['Open', 'High', 'Low', 'Close']
+            for col in price_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            # Handle Volume column if present
+            if 'Volume' in df.columns:
+                df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce')
+
+            # Remove rows with all NaN values in price columns
+            df = df.dropna(subset=price_cols, how='all')
+
+            # Basic validation
+            if len(df) == 0:
+                raise ValueError("No valid data remaining after processing")
+
+            return df
+
+        except Exception as e:
+            raise ValueError(f"Data processing failed: {str(e)}")
 
     @staticmethod
     def get_data_summary(df: pd.DataFrame) -> Dict[str, Any]:
