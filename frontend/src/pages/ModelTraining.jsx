@@ -27,20 +27,34 @@ const ModelTraining = () => {
   });
   const [featureStatus, setFeatureStatus] = useState('');
 
+  // Load datasets on component mount
+  useEffect(() => {
+    loadDatasets();
+  }, []);
+
   // Load datasets
   const loadDatasets = async () => {
     try {
       setLoading(true);
       const response = await dataAPI.getDatasets();
-      const datasetList = Array.isArray(response?.data) ? response.data : [];
-      setDatasets(datasetList);
+      
+      if (response?.data?.success && response.data.datasets) {
+        const datasetList = response.data.datasets;
+        setDatasets(datasetList);
 
-      // Auto-select training_dataset if available
-      const trainingDataset = datasetList.find(d => d.name === 'training_dataset');
-      if (trainingDataset) {
-        setSelectedDataset('training_dataset');
-      } else if (datasetList.length > 0) {
-        setSelectedDataset(datasetList[0].name);
+        // Auto-select training_dataset if available, otherwise main_dataset, otherwise first
+        const trainingDataset = datasetList.find(d => d.name === 'training_dataset');
+        const mainDataset = datasetList.find(d => d.name === 'main_dataset');
+        
+        if (trainingDataset) {
+          setSelectedDataset('training_dataset');
+        } else if (mainDataset) {
+          setSelectedDataset('main_dataset');
+        } else if (datasetList.length > 0) {
+          setSelectedDataset(datasetList[0].name);
+        }
+      } else {
+        setTrainingStatus('❌ Failed to load datasets');
       }
     } catch (error) {
       console.error('Error loading datasets:', error);
@@ -62,9 +76,9 @@ const ModelTraining = () => {
       setTrainingStatus(`🔄 Loading ${selectedDataset}...`);
       
       const response = await dataAPI.getDataset(selectedDataset);
-      if (response?.success && response?.data) {
-        setCurrentData(response.data);
-        setTrainingStatus(`✅ Loaded ${selectedDataset}: ${response.data.length} rows`);
+      if (response?.data?.success && response.data.data) {
+        setCurrentData(response.data.data);
+        setTrainingStatus(`✅ Loaded ${selectedDataset}: ${response.data.data.length} rows`);
       } else {
         setTrainingStatus(`❌ Failed to load ${selectedDataset}`);
       }
@@ -78,8 +92,8 @@ const ModelTraining = () => {
 
   // Calculate features for specific model
   const calculateFeatures = async (modelType) => {
-    if (!currentData || currentData.length === 0) {
-      setFeatureStatus('❌ Please load a dataset first');
+    if (!selectedDataset) {
+      setFeatureStatus('❌ Please select a dataset first');
       return;
     }
 
@@ -100,11 +114,11 @@ const ModelTraining = () => {
         }));
         setFeatureStatus(`✅ ${modelType} features calculated successfully!`);
       } else {
-        setFeatureStatus(`❌ Failed to calculate ${modelType} features`);
+        setFeatureStatus(`❌ Failed to calculate ${modelType} features: ${response?.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Feature calculation error:', error);
-      setFeatureStatus(`❌ Error calculating features: ${error?.message || 'Unknown error'}`);
+      setFeatureStatus(`❌ Error calculating features: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -139,7 +153,7 @@ const ModelTraining = () => {
         }));
         setTrainingStatus(`✅ ${activeTab} model trained successfully!`);
       } else {
-        setTrainingStatus(`❌ Failed to train ${activeTab} model`);
+        setTrainingStatus(`❌ Failed to train ${activeTab} model: ${response?.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Training error:', error);
@@ -148,10 +162,6 @@ const ModelTraining = () => {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadDatasets();
-  }, []);
 
   const modelTabs = [
     { 
@@ -257,14 +267,14 @@ const ModelTraining = () => {
               <button
                 onClick={loadSelectedDataset}
                 style={{
-                  backgroundColor: '#00ffff',
+                  backgroundColor: selectedDataset ? '#00ffff' : '#666666',
                   color: '#0a0a0f',
                   border: 'none',
                   padding: '0.75rem 1.5rem',
                   borderRadius: '4px',
                   fontSize: '1rem',
                   fontWeight: 'bold',
-                  cursor: 'pointer',
+                  cursor: selectedDataset ? 'pointer' : 'not-allowed',
                   width: '100%'
                 }}
                 disabled={loading || !selectedDataset}
@@ -274,13 +284,34 @@ const ModelTraining = () => {
             </div>
           </div>
 
-          {currentData && (
+          {/* Show dataset list */}
+          {datasets.length > 0 && (
             <div style={{
               backgroundColor: 'rgba(0, 255, 255, 0.1)',
               border: '1px solid rgba(0, 255, 255, 0.3)',
               borderRadius: '4px',
+              padding: '1rem',
+              marginBottom: '1rem'
+            }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', color: '#00ffff' }}>Available Datasets:</h4>
+              {datasets.map((dataset, index) => (
+                <div key={index} style={{ color: '#b8bcc8', marginBottom: '0.25rem' }}>
+                  • {dataset.name}: {dataset.rows} rows
+                  {dataset.start_date && dataset.end_date && 
+                    ` (${dataset.start_date} to ${dataset.end_date})`
+                  }
+                </div>
+              ))}
+            </div>
+          )}
+
+          {currentData && (
+            <div style={{
+              backgroundColor: 'rgba(0, 255, 65, 0.1)',
+              border: '1px solid rgba(0, 255, 65, 0.3)',
+              borderRadius: '4px',
               padding: '0.75rem',
-              color: '#00ffff'
+              color: '#00ff41'
             }}>
               📈 Current dataset: {selectedDataset} loaded ({currentData.length} rows)
             </div>
@@ -473,16 +504,16 @@ const ModelTraining = () => {
                     <button
                       onClick={() => calculateFeatures(activeTab)}
                       style={{
-                        backgroundColor: '#00ffff',
+                        backgroundColor: selectedDataset ? '#00ffff' : '#666666',
                         color: '#0a0a0f',
                         border: 'none',
                         padding: '0.75rem 1.5rem',
                         borderRadius: '4px',
                         fontSize: '1rem',
                         fontWeight: 'bold',
-                        cursor: 'pointer'
+                        cursor: selectedDataset ? 'pointer' : 'not-allowed'
                       }}
-                      disabled={loading || !currentData}
+                      disabled={loading || !selectedDataset}
                     >
                       🔧 Calculate Technical Indicators
                     </button>
@@ -551,9 +582,9 @@ const ModelTraining = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '2rem', color: '#00ff41', fontWeight: 'bold' }}>
-                  {(trainingResults[activeTab]?.accuracy * 100)?.toFixed(2) || 'N/A'}%
+                  {(trainingResults[activeTab]?.r2_score * 100)?.toFixed(2) || 'N/A'}%
                 </div>
-                <div style={{ color: '#b8bcc8' }}>Accuracy</div>
+                <div style={{ color: '#b8bcc8' }}>R² Score</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '2rem', color: '#00ffff', fontWeight: 'bold' }}>
@@ -561,20 +592,18 @@ const ModelTraining = () => {
                 </div>
                 <div style={{ color: '#b8bcc8' }}>Features</div>
               </div>
-              {trainingResults[activeTab]?.precision && (
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', color: '#ffa500', fontWeight: 'bold' }}>
-                    {(trainingResults[activeTab]?.precision * 100)?.toFixed(2)}%
-                  </div>
-                  <div style={{ color: '#b8bcc8' }}>Precision</div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '2rem', color: '#ffa500', fontWeight: 'bold' }}>
+                  {trainingResults[activeTab]?.training_samples || 'N/A'}
                 </div>
-              )}
-              {trainingResults[activeTab]?.recall && (
+                <div style={{ color: '#b8bcc8' }}>Samples</div>
+              </div>
+              {trainingResults[activeTab]?.mse && (
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '2rem', color: '#ff0080', fontWeight: 'bold' }}>
-                    {(trainingResults[activeTab]?.recall * 100)?.toFixed(2)}%
+                    {trainingResults[activeTab]?.mse?.toFixed(4) || 'N/A'}
                   </div>
-                  <div style={{ color: '#b8bcc8' }}>Recall</div>
+                  <div style={{ color: '#b8bcc8' }}>MSE</div>
                 </div>
               )}
             </div>
@@ -602,7 +631,7 @@ const ModelTraining = () => {
                 
                 {trainingResults[tab.id] ? (
                   <div style={{ color: '#00ff41' }}>
-                    ✅ Trained - Accuracy: {(trainingResults[tab.id]?.accuracy * 100)?.toFixed(2) || 'N/A'}%
+                    ✅ Trained - R²: {(trainingResults[tab.id]?.r2_score * 100)?.toFixed(2) || 'N/A'}%
                   </div>
                 ) : featuresCalculated[tab.id] ? (
                   <div style={{ color: '#ffa500' }}>
@@ -618,38 +647,8 @@ const ModelTraining = () => {
           </div>
         </div>
 
-        {/* Export Models Section */}
-        {Object.keys(trainingResults).length > 0 && (
-          <div style={{ marginBottom: '2rem' }}>
-            <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>💾 Export Models</h2>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-              {Object.keys(trainingResults).map((modelType) => (
-                <button
-                  key={modelType}
-                  style={{
-                    backgroundColor: 'rgba(0, 255, 255, 0.1)',
-                    border: '1px solid rgba(0, 255, 255, 0.3)',
-                    borderRadius: '4px',
-                    padding: '0.75rem',
-                    color: '#00ffff',
-                    cursor: 'pointer',
-                    fontSize: '1rem'
-                  }}
-                  onClick={() => {
-                    // Export functionality would be implemented here
-                    console.log(`Exporting ${modelType} model`);
-                  }}
-                >
-                  📥 Save {modelType.charAt(0).toUpperCase() + modelType.slice(1)} Model
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Next Steps */}
-        {!currentData && (
+        {datasets.length === 0 && (
           <div style={{
             backgroundColor: 'rgba(0, 255, 255, 0.1)',
             border: '1px solid rgba(0, 255, 255, 0.3)',
@@ -657,14 +656,10 @@ const ModelTraining = () => {
             padding: '1.5rem',
             color: '#00ffff'
           }}>
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>📋 Next Steps:</h3>
-            <ol style={{ margin: 0, paddingLeft: '1.5rem' }}>
-              <li>Select and load a dataset from the dropdown above</li>
-              <li>Choose a model type (Volatility, Direction, Profit Probability, or Reversal)</li>
-              <li>Calculate technical indicators for your chosen model</li>
-              <li>Configure training parameters if needed</li>
-              <li>Train the model and review results</li>
-            </ol>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>📋 No Datasets Found</h3>
+            <p style={{ margin: 0 }}>
+              Please upload data using the Data Upload page first, then return here to train models.
+            </p>
           </div>
         )}
       </div>
