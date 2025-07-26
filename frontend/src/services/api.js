@@ -99,6 +99,23 @@ export const predictionsAPI = {
   batchPredict: async (requests) => {
     const response = await api.post('/api/predictions/batch', requests);
     return response.data;
+  },
+
+  // Generate comprehensive predictions
+  generatePredictions: async (request) => {
+    const response = await api.post('/api/predictions/generate', request);
+    return response;
+  },
+
+  // Get live prediction status
+  getLivePredictionStatus: async () => {
+    try {
+      const response = await api.get('/api/predictions/live/status');
+      return response;
+    } catch (error) {
+      // Return default status if endpoint doesn't exist
+      return { data: { pipeline_active: false, instruments_with_predictions: 0 } };
+    }
   }
 };
 

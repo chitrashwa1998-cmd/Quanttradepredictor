@@ -98,7 +98,7 @@ const Predictions = () => {
       setGeneratingPredictions(true);
       setPredictionStatus(`🔮 Generating ${modelType} predictions...`);
 
-      const response = await axios.post('http://localhost:8000/api/predictions/generate', {
+      const response = await predictionsAPI.generatePredictions({
         model_type: modelType,
         dataset_name: selectedDataset,
         config: {}
