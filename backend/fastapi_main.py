@@ -342,7 +342,13 @@ async def get_models_status():
                     "status": "Not Trained"
                 }
         
-        return {"data": status}
+        return {
+            "success": True,
+            "status": {
+                "models": status,
+                "initialized": True
+            }
+        }
         
     except Exception as e:
         logging.error(f"Failed to get models status: {e}")

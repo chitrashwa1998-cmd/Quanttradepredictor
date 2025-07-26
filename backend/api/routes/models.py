@@ -141,6 +141,109 @@ async def delete_model(
         logger.error(f"Failed to delete model: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/calculate-features")
+async def calculate_features(
+    request: dict,
+    db = Depends(get_database_dependency)
+):
+    """Calculate features for model training"""
+    try:
+        dataset_name = request.get('dataset_name')
+        model_type = request.get('model_type')
+        
+        if not dataset_name or not model_type:
+            raise HTTPException(status_code=400, detail="Missing dataset_name or model_type")
+        
+        # Get dataset
+        dataset = db.get_dataset(dataset_name)
+        if dataset is None:
+            raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
+        
+        # Calculate features based on model type
+        if model_type == 'volatility':
+            from features.technical_indicators import calculate_technical_indicators
+            features_df = calculate_technical_indicators(dataset)
+        elif model_type == 'direction':
+            from features.direction_technical_indicators import calculate_technical_indicators
+            features_df = calculate_technical_indicators(dataset)
+        elif model_type == 'profit_probability':
+            from features.profit_probability_technical_indicators import calculate_technical_indicators
+            features_df = calculate_technical_indicators(dataset)
+        elif model_type == 'reversal':
+            from features.reversal_technical_indicators import calculate_technical_indicators
+            features_df = calculate_technical_indicators(dataset)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown model type: {model_type}")
+        
+        feature_count = len(features_df.columns) if features_df is not None else 0
+        
+        return {
+            "success": True,
+            "feature_count": feature_count,
+            "model_type": model_type,
+            "dataset_name": dataset_name
+        }
+        
+    except Exception as e:
+        logger.error(f"Feature calculation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/train")
+async def train_model_endpoint(
+    request: dict,
+    db = Depends(get_database_dependency)
+):
+    """Train a specific model"""
+    try:
+        model_type = request.get('model_type')
+        dataset_name = request.get('dataset_name')
+        config = request.get('config', {})
+        
+        if not model_type or not dataset_name:
+            raise HTTPException(status_code=400, detail="Missing model_type or dataset_name")
+        
+        # Get dataset
+        dataset = db.get_dataset(dataset_name)
+        if dataset is None:
+            raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
+        
+        # Train the model
+        if model_type == 'volatility':
+            from models.volatility_model import VolatilityModel
+            model = VolatilityModel()
+            result = model.train(dataset)
+        elif model_type == 'direction':
+            from models.direction_model import DirectionModel
+            model = DirectionModel()
+            result = model.train(dataset)
+        elif model_type == 'profit_probability':
+            from models.profit_probability_model import ProfitProbabilityModel
+            model = ProfitProbabilityModel()
+            result = model.train(dataset)
+        elif model_type == 'reversal':
+            from models.reversal_model import ReversalModel
+            model = ReversalModel()
+            result = model.train(dataset)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown model type: {model_type}")
+        
+        if result and result.get('success'):
+            return {
+                "success": True,
+                "model_type": model_type,
+                "dataset_name": dataset_name,
+                "mse": result.get('mse'),
+                "r2_score": result.get('r2_score'),
+                "feature_count": result.get('feature_count'),
+                "training_samples": result.get('training_samples')
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Model training failed")
+        
+    except Exception as e:
+        logger.error(f"Model training failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/{model_name}/info")
 async def get_model_info(
     model_name: str,
