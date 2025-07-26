@@ -131,16 +131,18 @@ const ModelTraining = () => {
         config: trainingConfig
       });
 
-      // Process the response to match Streamlit format
+      // Process the response to match Streamlit format with proper null checks
+      const responseData = response.data || response || {};
+      
       const processedResults = {
-        ...response.data,
-        metrics: response.data.metrics || response.data.performance || {},
-        feature_importance: response.data.feature_importance || {},
+        ...responseData,
+        metrics: responseData.metrics || responseData.performance || responseData.training_metrics || {},
+        feature_importance: responseData.feature_importance || {},
         model_info: {
-          training_samples: response.data.training_samples || 'N/A',
-          features_used: response.data.features_used || response.data.feature_names?.length || 'N/A',
+          training_samples: responseData.training_samples || responseData.model_info?.training_samples || 'N/A',
+          features_used: responseData.features_used || responseData.feature_names?.length || responseData.model_info?.features_used || 'N/A',
           model_type: 'Ensemble (XGBoost + CatBoost + Random Forest)',
-          task_type: response.data.task_type || 'regression'
+          task_type: responseData.task_type || responseData.model_info?.task_type || 'regression'
         }
       };
 
@@ -151,7 +153,20 @@ const ModelTraining = () => {
 
       setTrainingStatus(`✅ ${modelType.charAt(0).toUpperCase() + modelType.slice(1)} model trained successfully!`);
     } catch (error) {
-      setTrainingStatus(`❌ Training failed: ${error.response?.data?.detail || error.message}`);
+      console.error('Training error details:', error);
+      console.error('Error response:', error.response);
+      
+      let errorMessage = 'Unknown error occurred';
+      
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.statusText) {
+        errorMessage = error.response.statusText;
+      }
+      
+      setTrainingStatus(`❌ Training failed: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -676,7 +691,7 @@ const ModelTraining = () => {
                       </h4>
 
                       {/* Key Metrics for Volatility Model (matching Streamlit) */}
-                      {tab.id === 'volatility' && trainingResults[tab.id].metrics && (
+                      {tab.id === 'volatility' && trainingResults[tab.id]?.metrics && (
                         <div>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                             <div style={{
@@ -692,7 +707,7 @@ const ModelTraining = () => {
                                 fontWeight: '700',
                                 marginBottom: '0.25rem'
                               }}>
-                                {trainingResults[tab.id].metrics.rmse?.toFixed(4) || 'N/A'}
+                                {trainingResults[tab.id]?.metrics?.rmse?.toFixed(4) || 'N/A'}
                               </div>
                               <div style={{
                                 color: 'var(--text-secondary)',
@@ -716,7 +731,7 @@ const ModelTraining = () => {
                                 fontWeight: '700',
                                 marginBottom: '0.25rem'
                               }}>
-                                {trainingResults[tab.id].metrics.mae?.toFixed(4) || 'N/A'}
+                                {trainingResults[tab.id]?.metrics?.mae?.toFixed(4) || 'N/A'}
                               </div>
                               <div style={{
                                 color: 'var(--text-secondary)',
@@ -740,7 +755,7 @@ const ModelTraining = () => {
                                 fontWeight: '700',
                                 marginBottom: '0.25rem'
                               }}>
-                                {trainingResults[tab.id].metrics.mse?.toFixed(4) || 'N/A'}
+                                {trainingResults[tab.id]?.metrics?.mse?.toFixed(4) || 'N/A'}
                               </div>
                               <div style={{
                                 color: 'var(--text-secondary)',
@@ -763,12 +778,12 @@ const ModelTraining = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
                                 <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
-                                  <strong style={{ color: 'var(--accent-cyan)' }}>Training Data:</strong> {trainingResults[tab.id].model_info?.training_samples || 'N/A'} rows with {trainingResults[tab.id].model_info?.features_used || '27'} features
+                                  <strong style={{ color: 'var(--accent-cyan)' }}>Training Data:</strong> {trainingResults[tab.id]?.model_info?.training_samples || 'N/A'} rows with {trainingResults[tab.id]?.model_info?.features_used || '27'} features
                                 </div>
                               </div>
                               <div>
                                 <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
-                                  <strong style={{ color: 'var(--accent-cyan)' }}>Model Architecture:</strong> {trainingResults[tab.id].model_info?.model_type || 'Ensemble (XGBoost + CatBoost + Random Forest)'}
+                                  <strong style={{ color: 'var(--accent-cyan)' }}>Model Architecture:</strong> {trainingResults[tab.id]?.model_info?.model_type || 'Ensemble (XGBoost + CatBoost + Random Forest)'}
                                 </div>
                               </div>
                             </div>
@@ -777,9 +792,9 @@ const ModelTraining = () => {
                       )}
 
                       {/* Metrics Grid for other models */}
-                      {tab.id !== 'volatility' && trainingResults[tab.id].metrics && (
+                      {tab.id !== 'volatility' && trainingResults[tab.id]?.metrics && (
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                          {Object.entries(trainingResults[tab.id].metrics).map(([key, value]) => (
+                          {Object.entries(trainingResults[tab.id]?.metrics || {}).map(([key, value]) => (
                             <div key={key} style={{
                               background: 'rgba(0, 255, 255, 0.1)',
                               border: '1px solid rgba(0, 255, 255, 0.3)',
@@ -813,7 +828,7 @@ const ModelTraining = () => {
                       )}
 
                       {/* Feature Importance Section */}
-                      {trainingResults[tab.id].feature_importance && (
+                      {trainingResults[tab.id]?.feature_importance && (
                         <div style={{ marginTop: '2rem' }}>
                           <h5 style={{
                             color: 'var(--text-primary)',
@@ -851,7 +866,7 @@ const ModelTraining = () => {
                                   <div>Feature</div>
                                   <div style={{ textAlign: 'right' }}>Importance</div>
                                 </div>
-                                {Object.entries(trainingResults[tab.id].feature_importance)
+                                {Object.entries(trainingResults[tab.id]?.feature_importance || {})
                                   .sort(([,a], [,b]) => b - a)
                                   .slice(0, 10)
                                   .map(([feature, importance], index) => (
@@ -900,11 +915,11 @@ const ModelTraining = () => {
                                 flexDirection: 'column',
                                 gap: '0.5rem'
                               }}>
-                                {Object.entries(trainingResults[tab.id].feature_importance)
+                                {Object.entries(trainingResults[tab.id]?.feature_importance || {})
                                   .sort(([,a], [,b]) => b - a)
                                   .slice(0, 8)
                                   .map(([feature, importance], index) => {
-                                    const maxImportance = Math.max(...Object.values(trainingResults[tab.id].feature_importance));
+                                    const maxImportance = Math.max(...Object.values(trainingResults[tab.id]?.feature_importance || {}));
                                     const percentage = (importance / maxImportance) * 100;
                                     return (
                                       <div key={index} style={{
