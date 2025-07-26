@@ -38,8 +38,10 @@ const ModelTraining = () => {
       setLoading(true);
       const response = await dataAPI.getDatasets();
       
-      // The response structure is different - it's an array directly
-      if (response?.data && Array.isArray(response.data)) {
+      console.log('API Response:', response);
+      
+      // Handle the actual API response structure
+      if (response?.data && Array.isArray(response.data) && response.data.length > 0) {
         const datasetList = response.data;
         setDatasets(datasetList);
 
@@ -56,8 +58,12 @@ const ModelTraining = () => {
         }
         
         setTrainingStatus(`✅ Loaded ${datasetList.length} datasets`);
-      } else {
+      } else if (response?.data && Array.isArray(response.data) && response.data.length === 0) {
         setTrainingStatus('❌ No datasets found. Please upload data first.');
+        setDatasets([]);
+      } else {
+        console.error('Unexpected API response structure:', response);
+        setTrainingStatus('❌ Error: Unexpected response format from server.');
         setDatasets([]);
       }
     } catch (error) {
