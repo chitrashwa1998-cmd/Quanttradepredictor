@@ -160,6 +160,161 @@ async def get_dataset(dataset_name: str):
         logging.error(f"Failed to get dataset {dataset_name}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# === DATABASE MANAGEMENT ENDPOINTS ===
+@app.get("/api/data/database/info")
+async def get_database_info():
+    """Get database information"""
+    try:
+        db = DatabaseAdapter()
+        db_info = db.get_database_info()
+        return {"data": db_info}
+        
+    except Exception as e:
+        logging.error(f"Failed to get database info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/data/datasets/{dataset_name}")
+async def delete_dataset(dataset_name: str):
+    """Delete a specific dataset"""
+    try:
+        db = DatabaseAdapter()
+        success = db.clear_dataset(dataset_name)
+        
+        if success:
+            return {"success": True, "message": f"Dataset '{dataset_name}' deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' not found")
+            
+    except Exception as e:
+        logging.error(f"Failed to delete dataset {dataset_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/data/clear-all")
+async def clear_all_data():
+    """Clear all data from database"""
+    try:
+        db = DatabaseAdapter()
+        success = db.clear_all_data()
+        
+        if success:
+            return {"success": True, "message": "All data cleared successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to clear all data")
+            
+    except Exception as e:
+        logging.error(f"Failed to clear all data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# === MODEL TRAINING ENDPOINTS ===
+@app.post("/api/models/train")
+async def train_model(request: dict):
+    """Train a specific ML model"""
+    try:
+        model_type = request.get('model_type')
+        dataset_name = request.get('dataset_name')
+        config = request.get('config', {})
+        
+        logging.info(f"🚀 Training {model_type} model using dataset: {dataset_name}")
+        
+        # Initialize database and load data
+        db = DatabaseAdapter()
+        data = db.load_ohlc_data(dataset_name)
+        
+        if data is None or len(data) == 0:
+            raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
+        
+        # Train model based on type
+        if model_type == 'volatility':
+            from models.volatility_model import VolatilityModel
+            model = VolatilityModel()
+            result = model.train_model(data)
+            
+        elif model_type == 'direction':
+            from models.direction_model import DirectionModel
+            model = DirectionModel()
+            result = model.train_model(data)
+            
+        elif model_type == 'profit_probability':
+            from models.profit_probability_model import ProfitProbabilityModel
+            model = ProfitProbabilityModel()
+            result = model.train_model(data)
+            
+        elif model_type == 'reversal':
+            from models.reversal_model import ReversalModel
+            model = ReversalModel()
+            result = model.train_model(data)
+            
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown model type: {model_type}")
+        
+        if result and result.get('success'):
+            logging.info(f"✅ {model_type} model trained successfully")
+            return {
+                "success": True,
+                "message": f"{model_type} model trained successfully",
+                "model_type": model_type,
+                "dataset": dataset_name,
+                "accuracy": result.get('accuracy', 0.0),
+                "training_samples": result.get('training_samples', 0)
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Model training failed: {result.get('error', 'Unknown error')}")
+        
+    except Exception as e:
+        logging.error(f"Model training failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/models/calculate-features")
+async def calculate_features(request: dict):
+    """Calculate features for a specific model type"""
+    try:
+        dataset_name = request.get('dataset_name')
+        model_type = request.get('model_type', 'volatility')
+        
+        logging.info(f"🔧 Calculating {model_type} features for dataset: {dataset_name}")
+        
+        # Load dataset
+        db = DatabaseAdapter()
+        data = db.load_ohlc_data(dataset_name)
+        
+        if data is None or len(data) == 0:
+            raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
+        
+        # Calculate features based on model type
+        if model_type == 'volatility':
+            from features.technical_indicators import TechnicalIndicators  
+            calc = TechnicalIndicators()
+            features = calc.calculate_volatility_features(data)
+        elif model_type == 'direction':
+            from features.direction_technical_indicators import DirectionTechnicalIndicators
+            calc = DirectionTechnicalIndicators()
+            features = calc.calculate_direction_features(data)
+        elif model_type == 'profit_probability':
+            from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
+            calc = ProfitProbabilityTechnicalIndicators()  
+            features = calc.calculate_profit_probability_features(data)
+        elif model_type == 'reversal':
+            from features.reversal_technical_indicators import ReversalTechnicalIndicators
+            calc = ReversalTechnicalIndicators()
+            features = calc.calculate_reversal_features(data)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown model type: {model_type}")
+        
+        if features is None or len(features) == 0:
+            raise HTTPException(status_code=400, detail="Failed to calculate features")
+        
+        return {
+            "success": True,
+            "features_calculated": len(features),
+            "feature_columns": list(features.columns),
+            "model_type": model_type,
+            "dataset": dataset_name
+        }
+        
+    except Exception as e:
+        logging.error(f"Feature calculation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # === MODEL STATUS ENDPOINTS ===
 @app.get("/api/models/status")
 async def get_models_status():

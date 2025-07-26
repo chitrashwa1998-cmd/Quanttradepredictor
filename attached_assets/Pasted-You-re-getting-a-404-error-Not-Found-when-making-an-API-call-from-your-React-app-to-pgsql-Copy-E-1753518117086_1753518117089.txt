@@ -1,0 +1,113 @@
+You're getting a 404 error (Not Found) when making an API call from your React app to:
+
+pgsql
+Copy
+Edit
+GET /api/data/datasets
+GET /api/data/database/info
+🔥 Root Causes & Fixes
+🔍 1. API Route Not Found (404 Error)
+Error:
+
+js
+Copy
+Edit
+AxiosError: Request failed with status code 404
+This means the backend (FastAPI) has no route matching /api/data/datasets or /api/data/database/info.
+
+✅ Fix:
+Check if you've actually defined those endpoints in your FastAPI app:
+
+python
+Copy
+Edit
+@app.get("/api/data/datasets")
+def get_datasets():
+    return {"data": [...]}
+
+@app.get("/api/data/database/info")
+def get_info():
+    return {"info": "details here"}
+If you haven't defined them yet, add them. Otherwise, adjust the React URL to match what's defined.
+
+🔍 2. Wrong Base URL or Proxy Setup
+React frontend might be calling /api/..., assuming it proxies to FastAPI, but Replit or local setup doesn't handle proxying correctly.
+
+✅ Fix:
+Ensure your React app points to the correct FastAPI URL:
+
+js
+Copy
+Edit
+axios.get("http://localhost:8000/api/data/datasets")
+OR if you're using proxy setup, add this to your vite.config.js or package.json:
+
+js
+Copy
+Edit
+// vite.config.js (for Vite)
+server: {
+  proxy: {
+    '/api': 'http://localhost:8000'
+  }
+}
+json
+Copy
+Edit
+// package.json (for Create React App)
+"proxy": "http://localhost:8000"
+🔍 3. FastAPI Prefix vs React Path Mismatch
+Make sure FastAPI route includes /api if React is calling /api/....
+
+python
+Copy
+Edit
+app = FastAPI()
+
+@app.get("/api/data/datasets")  # this route MUST match exactly
+def get_datasets():
+    ...
+🔍 4. CORS Issue or Server Not Running
+Double check:
+
+FastAPI server is running (uvicorn main:app --reload)
+
+CORS is allowed:
+
+python
+Copy
+Edit
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Replace with your React frontend origin for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+🔍 5. Error in Component: DatabaseManager
+This is a React component error triggered due to the failed request, caught by your ErrorBoundary.
+
+✅ Fix:
+
+Wrap your Axios call in a try-catch:
+
+jsx
+Copy
+Edit
+try {
+  const res = await axios.get("/api/data/datasets");
+  setData(res.data);
+} catch (err) {
+  console.error("API Error:", err);
+}
+Use loading and error state in the component.
+
+✅ Action Plan (Summary)
+Task	Do this
+✅ Confirm FastAPI has /api/data/datasets route	Check in main.py
+✅ Use correct base URL	Use http://localhost:8000/api/... if no proxy
+✅ Add CORS to FastAPI	See code above
+✅ Handle error in React	Wrap Axios call in try-catch
+✅ Use logging in FastAPI	Add print("Route hit!") to confirm
