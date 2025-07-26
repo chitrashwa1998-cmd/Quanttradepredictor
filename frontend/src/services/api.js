@@ -104,13 +104,17 @@ export const predictionsAPI = {
 
 // Models API
 export const modelsAPI = {
-  // Train model
-  trainModel: async (modelName, datasetName = null, parameters = null) => {
-    const response = await api.post('/api/models/train', {
-      model_name: modelName,
-      dataset_name: datasetName,
-      parameters: parameters
+  // Calculate features
+  calculateFeatures: async (datasetName) => {
+    const response = await api.post('/api/models/calculate-features', {
+      dataset_name: datasetName
     });
+    return response.data;
+  },
+
+  // Train model  
+  trainModel: async (request) => {
+    const response = await api.post('/api/models/train', request);
     return response.data;
   },
 
