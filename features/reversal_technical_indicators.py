@@ -1,214 +1,209 @@
+"""
+Reversal prediction technical indicators
+"""
 
 import pandas as pd
 import numpy as np
+import ta
+from .technical_indicators import TechnicalIndicators
 
-class ReversalTechnicalIndicators:
-    """Calculate reversal-specific technical indicators for trading analysis."""
-
-    @staticmethod
-    def calculate_reversal_indicators(df):
-        """Calculate indicators specifically for reversal model"""
-        df = df.copy()
-
-        # Ensure we have the right column names - check all variations
-        close_col = None
-        open_col = None
-        high_col = None
-        low_col = None
+class ReversalTechnicalIndicators(TechnicalIndicators):
+    def __init__(self):
+        super().__init__()
+    
+    def calculate_reversal_features(self, data):
+        """Calculate features specifically for reversal prediction model"""
+        if data is None or len(data) < 50:
+            return None
         
-        for col in df.columns:
-            if col.lower() == 'close':
-                close_col = col
-            elif col.lower() == 'open':
-                open_col = col
-            elif col.lower() == 'high':
-                high_col = col
-            elif col.lower() == 'low':
-                low_col = col
-                
-        if not all([close_col, open_col, high_col, low_col]):
-            missing = [name for name, col in [('Close', close_col), ('Open', open_col), ('High', high_col), ('Low', low_col)] if col is None]
-            raise ValueError(f"Missing required OHLC columns: {missing}. Available columns: {list(df.columns)}")
-
         try:
-            # RSI_14 - 14-period RSI
-            delta = df[close_col].diff()
-            gain = delta.where(delta > 0, 0)
-            loss = -delta.where(delta < 0, 0)
-            avg_gain = gain.rolling(window=14).mean()
-            avg_loss = loss.rolling(window=14).mean()
-            rs = avg_gain / avg_loss
-            df['rsi_14'] = 100 - (100 / (1 + rs))
-
-            # MACD Histogram
-            ema_12 = df[close_col].ewm(span=12).mean()
-            ema_26 = df[close_col].ewm(span=26).mean()
-            macd = ema_12 - ema_26
-            macd_signal = macd.ewm(span=9).mean()
-            df['macd_histogram'] = macd - macd_signal
-
-            # Stochastic K and D
-            lowest_low_k = df[low_col].rolling(14).min()
-            highest_high_k = df[high_col].rolling(14).max()
-            df['stochastic_k'] = ((df[close_col] - lowest_low_k) / (highest_high_k - lowest_low_k)) * 100
-            df['stochastic_d'] = df['stochastic_k'].rolling(3).mean()
-
-            # CCI - Commodity Channel Index
-            typical_price = (df[high_col] + df[low_col] + df[close_col]) / 3
-            sma_tp = typical_price.rolling(20).mean()
-            mean_deviation = typical_price.rolling(20).apply(lambda x: np.mean(np.abs(x - x.mean())))
-            df['cci'] = (typical_price - sma_tp) / (0.015 * mean_deviation)
-
-            # Williams %R
-            highest_high = df[high_col].rolling(14).max()
-            lowest_low = df[low_col].rolling(14).min()
-            df['williams_r'] = ((highest_high - df[close_col]) / (highest_high - lowest_low)) * -100
-
-            # Bollinger Bands Percent B
-            bb_period = 20
-            bb_std = 2
-            bb_middle = df[close_col].rolling(bb_period).mean()
-            bb_std_dev = df[close_col].rolling(bb_period).std()
-            bb_upper = bb_middle + (bb_std_dev * bb_std)
-            bb_lower = bb_middle - (bb_std_dev * bb_std)
-            df['bb_percent_b'] = (df[close_col] - bb_lower) / (bb_upper - bb_lower)
-
-            # ATR - Average True Range
-            tr1 = df[high_col] - df[low_col]
-            tr2 = abs(df[high_col] - df[close_col].shift(1))
-            tr3 = abs(df[low_col] - df[close_col].shift(1))
-            true_range = pd.DataFrame({'tr1': tr1, 'tr2': tr2, 'tr3': tr3}).max(axis=1)
-            df['atr'] = true_range.rolling(window=14).mean()
-
-            # Donchian Channel Width
-            donchian_high = df[high_col].rolling(20).max()
-            donchian_low = df[low_col].rolling(20).min()
-            df['donchian_channel_width'] = (donchian_high - donchian_low) / df[close_col]
-
-            # Parabolic SAR
-            def calculate_parabolic_sar(df, af_start=0.02, af_increment=0.02, af_max=0.2):
-                high = df[high_col].values
-                low = df[low_col].values
-                close = df[close_col].values
-                
-                length = len(df)
-                psar = np.zeros(length)
-                psarbull = np.zeros(length)
-                psarbear = np.zeros(length)
-                
-                # Initialize
-                psar[0] = close[0]
-                psarbull[0] = low[0]
-                psarbear[0] = high[0]
-                
-                bull = True
-                af = af_start
-                
-                for i in range(1, length):
-                    if bull:
-                        psar[i] = psar[i-1] + af * (psarbull[i-1] - psar[i-1])
-                        if high[i] > psarbull[i-1]:
-                            psarbull[i] = high[i]
-                            af = min(af + af_increment, af_max)
-                        else:
-                            psarbull[i] = psarbull[i-1]
-                        
-                        if low[i] <= psar[i]:
-                            bull = False
-                            psar[i] = psarbull[i-1]
-                            psarbear[i] = low[i]
-                            af = af_start
-                        else:
-                            psarbear[i] = psarbear[i-1]
-                    else:
-                        psar[i] = psar[i-1] + af * (psarbear[i-1] - psar[i-1])
-                        if low[i] < psarbear[i-1]:
-                            psarbear[i] = low[i]
-                            af = min(af + af_increment, af_max)
-                        else:
-                            psarbear[i] = psarbear[i-1]
-                        
-                        if high[i] >= psar[i]:
-                            bull = True
-                            psar[i] = psarbear[i-1]
-                            psarbull[i] = high[i]
-                            af = af_start
-                        else:
-                            psarbull[i] = psarbull[i-1]
-                
-                return psar
-
-            df['parabolic_sar'] = calculate_parabolic_sar(df)
-
-            # Momentum ROC (Rate of Change)
-            period = 10
-            df['momentum_roc'] = ((df[close_col] - df[close_col].shift(period)) / df[close_col].shift(period)) * 100
-
-            # Replace inf and nan values
-            reversal_cols = ['rsi_14', 'macd_histogram', 'stochastic_k', 'stochastic_d', 'cci', 
-                           'williams_r', 'bb_percent_b', 'atr', 'donchian_channel_width', 
-                           'parabolic_sar', 'momentum_roc']
+            # Start with base features
+            features = self.calculate_base_features(data)
             
-            for col in reversal_cols:
-                if col in df.columns:
-                    df[col] = df[col].replace([np.inf, -np.inf], np.nan)
-
+            # Reversal-specific features
+            features = self.add_reversal_patterns(features)
+            features = self.add_divergence_features(features)
+            features = self.add_extreme_conditions(features)
+            features = self.add_support_resistance(features)
+            
+            # Target: Reversal in next few periods
+            features = self.calculate_reversal_targets(features)
+            
+            # Remove rows with NaN values
+            features = features.dropna()
+            
+            return features
+            
         except Exception as e:
-            print(f"Error calculating reversal technical indicators: {e}")
-            # Fallback calculations
-            df['rsi_14'] = 50.0
-            df['macd_histogram'] = 0.0
-            df['stochastic_k'] = 50.0
-            df['stochastic_d'] = 50.0
-            df['cci'] = 0.0
-            df['williams_r'] = -50.0
-            df['bb_percent_b'] = 0.5
-            df['atr'] = 0.0
-            df['donchian_channel_width'] = 0.0
-            df['parabolic_sar'] = df[close_col] if close_col in df.columns else 0.0
-            df['momentum_roc'] = 0.0
-
+            print(f"Error calculating reversal features: {e}")
+            return None
+    
+    def add_reversal_patterns(self, df):
+        """Add candlestick reversal pattern features"""
+        # Basic reversal patterns
+        df['bullish_hammer'] = ((df['close'] > df['open']) & 
+                               ((df['open'] - df['low']) > 2 * (df['close'] - df['open'])) &
+                               ((df['high'] - df['close']) < 0.3 * (df['close'] - df['open']))).astype(int)
+        
+        df['bearish_shooting_star'] = ((df['open'] > df['close']) & 
+                                      ((df['high'] - df['open']) > 2 * (df['open'] - df['close'])) &
+                                      ((df['close'] - df['low']) < 0.3 * (df['open'] - df['close']))).astype(int)
+        
+        df['doji_reversal'] = (abs(df['open'] - df['close']) / (df['high'] - df['low']) < 0.1).astype(int)
+        
+        # Engulfing patterns
+        df['bullish_engulfing'] = ((df['close'] > df['open']) & 
+                                  (df['close'].shift(1) < df['open'].shift(1)) &
+                                  (df['close'] > df['open'].shift(1)) & 
+                                  (df['open'] < df['close'].shift(1))).astype(int)
+        
+        df['bearish_engulfing'] = ((df['close'] < df['open']) & 
+                                  (df['close'].shift(1) > df['open'].shift(1)) &
+                                  (df['close'] < df['open'].shift(1)) & 
+                                  (df['open'] > df['close'].shift(1))).astype(int)
+        
+        # Piercing line / Dark cloud cover
+        df['piercing_line'] = ((df['close'] > df['open']) & 
+                              (df['close'].shift(1) < df['open'].shift(1)) &
+                              (df['open'] < df['close'].shift(1)) & 
+                              (df['close'] > (df['open'].shift(1) + df['close'].shift(1)) / 2)).astype(int)
+        
+        df['dark_cloud'] = ((df['close'] < df['open']) & 
+                           (df['close'].shift(1) > df['open'].shift(1)) &
+                           (df['open'] > df['close'].shift(1)) & 
+                           (df['close'] < (df['open'].shift(1) + df['close'].shift(1)) / 2)).astype(int)
+        
         return df
-
-    @staticmethod
-    def calculate_all_reversal_indicators(df):
-        """Calculate all reversal indicators for the dataset"""
-        print("🔧 Calculating reversal-specific technical indicators...")
-
-        # Validate input data
-        from utils.data_processing import DataProcessor
-        is_valid, message = DataProcessor.validate_ohlc_data(df)
-        if not is_valid:
-            raise ValueError(f"Invalid OHLC data provided: {message}")
-
-        # Create a copy to avoid modifying original data
-        result_df = df.copy()
-
-        # Calculate reversal indicators
-        result_df = ReversalTechnicalIndicators.calculate_reversal_indicators(result_df)
-
-        # Add custom engineered features
-        from features.reversal_custom_engineered import add_custom_reversal_features
-        result_df = add_custom_reversal_features(result_df)
-
-        # Add lagged features
-        from features.reversal_lagged_features import add_lagged_reversal_features
-        result_df = add_lagged_reversal_features(result_df)
-
-        # Add time context features
-        from features.reversal_time_context import add_time_context_features_reversal
-        result_df = add_time_context_features_reversal(result_df)
-
-        # Final cleanup
-        result_df = result_df.replace([np.inf, -np.inf], np.nan)
-        result_df = result_df.dropna()
-
-        feature_cols = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        print(f"✅ Calculated {len(feature_cols)} reversal indicators")
-        print(f"Generated reversal features: {feature_cols}")
-
-        return result_df
-
-def add_reversal_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """Wrapper function to calculate reversal technical indicators"""
-    return ReversalTechnicalIndicators.calculate_reversal_indicators(df)
+    
+    def add_divergence_features(self, df):
+        """Add momentum divergence features"""
+        # RSI divergence
+        df['rsi_14'] = ta.momentum.RSIIndicator(df['close'], window=14).rsi()
+        df['price_higher_high'] = ((df['high'] > df['high'].shift(5)) & 
+                                  (df['high'].shift(5) > df['high'].shift(10))).astype(int)
+        df['price_lower_low'] = ((df['low'] < df['low'].shift(5)) & 
+                                (df['low'].shift(5) < df['low'].shift(10))).astype(int)
+        df['rsi_lower_high'] = ((df['rsi_14'] < df['rsi_14'].shift(5)) & 
+                               (df['rsi_14'].shift(5) < df['rsi_14'].shift(10))).astype(int)
+        df['rsi_higher_low'] = ((df['rsi_14'] > df['rsi_14'].shift(5)) & 
+                               (df['rsi_14'].shift(5) > df['rsi_14'].shift(10))).astype(int)
+        
+        # Bearish divergence (price makes higher highs, RSI makes lower highs)
+        df['bearish_divergence'] = (df['price_higher_high'] & df['rsi_lower_high']).astype(int)
+        
+        # Bullish divergence (price makes lower lows, RSI makes higher lows)
+        df['bullish_divergence'] = (df['price_lower_low'] & df['rsi_higher_low']).astype(int)
+        
+        # MACD divergence
+        macd = ta.trend.MACD(df['close'])
+        df['macd'] = macd.macd()
+        df['macd_lower_high'] = ((df['macd'] < df['macd'].shift(5)) & 
+                                (df['macd'].shift(5) < df['macd'].shift(10))).astype(int)
+        df['macd_higher_low'] = ((df['macd'] > df['macd'].shift(5)) & 
+                                (df['macd'].shift(5) > df['macd'].shift(10))).astype(int)
+        
+        df['macd_bearish_div'] = (df['price_higher_high'] & df['macd_lower_high']).astype(int)
+        df['macd_bullish_div'] = (df['price_lower_low'] & df['macd_higher_low']).astype(int)
+        
+        return df
+    
+    def add_extreme_conditions(self, df):
+        """Add overbought/oversold extreme condition features"""
+        # RSI extremes
+        df['rsi_oversold'] = (df['rsi_14'] < 20).astype(int)
+        df['rsi_overbought'] = (df['rsi_14'] > 80).astype(int)
+        df['rsi_extreme_oversold'] = (df['rsi_14'] < 15).astype(int)
+        df['rsi_extreme_overbought'] = (df['rsi_14'] > 85).astype(int)
+        
+        # Stochastic extremes
+        stoch = ta.momentum.StochasticOscillator(df['high'], df['low'], df['close'])
+        df['stoch_k'] = stoch.stoch()
+        df['stoch_oversold'] = (df['stoch_k'] < 15).astype(int)
+        df['stoch_overbought'] = (df['stoch_k'] > 85).astype(int)
+        
+        # Williams %R extremes
+        willr = ta.momentum.WilliamsRIndicator(df['high'], df['low'], df['close'])
+        df['willr'] = willr.williams_r()
+        df['willr_oversold'] = (df['willr'] < -85).astype(int)
+        df['willr_overbought'] = (df['willr'] > -15).astype(int)
+        
+        # Multiple oscillator confirmation
+        df['multiple_oversold'] = (df['rsi_oversold'] + df['stoch_oversold'] + df['willr_oversold'] >= 2).astype(int)
+        df['multiple_overbought'] = (df['rsi_overbought'] + df['stoch_overbought'] + df['willr_overbought'] >= 2).astype(int)
+        
+        return df
+    
+    def add_support_resistance(self, df):
+        """Add support/resistance level features"""
+        # Pivot points (simplified)
+        df['pivot'] = (df['high'] + df['low'] + df['close']) / 3
+        df['support1'] = 2 * df['pivot'] - df['high']
+        df['resistance1'] = 2 * df['pivot'] - df['low']
+        
+        # Distance to support/resistance
+        df['dist_to_support'] = (df['close'] - df['support1']) / df['close']
+        df['dist_to_resistance'] = (df['resistance1'] - df['close']) / df['close']
+        
+        # Near support/resistance
+        df['near_support'] = (abs(df['dist_to_support']) < 0.01).astype(int)
+        df['near_resistance'] = (abs(df['dist_to_resistance']) < 0.01).astype(int)
+        
+        # Dynamic support/resistance (recent highs/lows)
+        df['recent_high_20'] = df['high'].rolling(20).max()
+        df['recent_low_20'] = df['low'].rolling(20).min()
+        df['at_resistance'] = (df['close'] >= df['recent_high_20'] * 0.998).astype(int)
+        df['at_support'] = (df['close'] <= df['recent_low_20'] * 1.002).astype(int)
+        
+        # Fibonacci retracements (simplified)
+        df['fib_range'] = df['recent_high_20'] - df['recent_low_20']
+        df['fib_23'] = df['recent_high_20'] - 0.236 * df['fib_range']
+        df['fib_38'] = df['recent_high_20'] - 0.382 * df['fib_range']
+        df['fib_50'] = df['recent_high_20'] - 0.500 * df['fib_range']
+        df['fib_62'] = df['recent_high_20'] - 0.618 * df['fib_range']
+        
+        df['near_fib_level'] = ((abs(df['close'] - df['fib_23']) < df['close'] * 0.005) |
+                               (abs(df['close'] - df['fib_38']) < df['close'] * 0.005) |
+                               (abs(df['close'] - df['fib_50']) < df['close'] * 0.005) |
+                               (abs(df['close'] - df['fib_62']) < df['close'] * 0.005)).astype(int)
+        
+        return df
+    
+    def calculate_reversal_targets(self, df):
+        """Calculate reversal targets for different timeframes"""
+        # Short-term reversal (1-3 periods)
+        df['reversal_1d'] = self._calculate_reversal_target(df, 1)
+        df['reversal_3d'] = self._calculate_reversal_target(df, 3)
+        df['reversal_5d'] = self._calculate_reversal_target(df, 5)
+        
+        # Main target: 3-day reversal
+        df['reversal_target'] = df['reversal_3d']
+        
+        return df
+    
+    def _calculate_reversal_target(self, df, periods):
+        """Calculate if a reversal occurs within the specified periods"""
+        reversal_signals = []
+        
+        for i in range(len(df)):
+            if i + periods >= len(df):
+                reversal_signals.append(0)
+                continue
+                
+            current_close = df['close'].iloc[i]
+            future_prices = df['close'].iloc[i+1:i+periods+1]
+            
+            # Check for significant reversal (>2% move in opposite direction of recent trend)
+            recent_trend = df['close'].iloc[i] - df['close'].iloc[max(0, i-5)]
+            
+            if recent_trend > 0:  # Recent uptrend
+                # Look for downward reversal
+                min_future = future_prices.min()
+                reversal = (current_close - min_future) / current_close > 0.02
+            else:  # Recent downtrend
+                # Look for upward reversal
+                max_future = future_prices.max()
+                reversal = (max_future - current_close) / current_close > 0.02
+            
+            reversal_signals.append(int(reversal))
+        
+        return reversal_signals

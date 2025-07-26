@@ -38,13 +38,17 @@ const ModelTraining = () => {
       setLoading(true);
       const response = await dataAPI.getDatasets();
       
-      console.log('API Response:', response);
+      // Handle Axios response structure - check for data property first
+      let datasetList = [];
+      if (response?.data && Array.isArray(response.data)) {
+        datasetList = response.data;
+      } else if (Array.isArray(response)) {
+        datasetList = response;
+      }
       
-      // Handle the actual API response structure - response IS the array directly
-      if (Array.isArray(response) && response.length > 0) {
-        const datasetList = response;
-        setDatasets(datasetList);
-
+      setDatasets(datasetList);
+      
+      if (datasetList.length > 0) {
         // Auto-select training_dataset if available, otherwise main_dataset, otherwise first
         const trainingDataset = datasetList.find(d => d.name === 'training_dataset');
         const mainDataset = datasetList.find(d => d.name === 'main_dataset');
@@ -53,18 +57,13 @@ const ModelTraining = () => {
           setSelectedDataset('training_dataset');
         } else if (mainDataset) {
           setSelectedDataset('main_dataset');
-        } else if (datasetList.length > 0) {
+        } else {
           setSelectedDataset(datasetList[0].name);
         }
         
         setTrainingStatus(`✅ Loaded ${datasetList.length} datasets`);
-      } else if (Array.isArray(response) && response.length === 0) {
-        setTrainingStatus('❌ No datasets found. Please upload data first.');
-        setDatasets([]);
       } else {
-        console.error('Unexpected API response structure:', response);
-        setTrainingStatus('❌ Error: Unexpected response format from server.');
-        setDatasets([]);
+        setTrainingStatus('❌ No datasets found. Please upload data first.');
       }
     } catch (error) {
       console.error('Error loading datasets:', error);

@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any
 import pandas as pd
 import numpy as np
 
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -392,10 +392,8 @@ async def generate_predictions(request: dict):
                 "dataset_name": dataset_name,
                 "prediction_count": len(predictions),
                 "next_prediction": float(next_prediction),
-                "confidence": 0.85,  
-                "accuracy": 0.78,
-                "predictions": predictions[-10:].tolist() if len(predictions) > 10 else predictions.tolist(),
-                "generated_at": datetime.now().isoformat()
+                "confidence": 0.85,
+                "predictions": predictions.tolist() if hasattr(predictions, 'tolist') else predictions
             }
             
         elif model_type == 'direction':
@@ -403,59 +401,27 @@ async def generate_predictions(request: dict):
             model = DirectionModel()
             predictions = model.predict(data)
             
-            # Convert to readable format
-            direction_map = {0: 'Down', 1: 'Up'}
-            next_direction = direction_map.get(predictions[-1], 'Unknown') if len(predictions) > 0 else 'Unknown'
-            
-            return {
-                "success": True,
-                "model_type": model_type,
-                "dataset_name": dataset_name,
-                "prediction_count": len(predictions),
-                "next_prediction": next_direction,
-                "confidence": 0.82,
-                "accuracy": 0.74,
-                "predictions": [direction_map.get(p, 'Unknown') for p in predictions[-10:]],
-                "generated_at": datetime.now().isoformat()
-            }
-        
         elif model_type == 'profit_probability':
             from models.profit_probability_model import ProfitProbabilityModel
             model = ProfitProbabilityModel()
             predictions = model.predict(data)
-            
-            next_prob = predictions[-1] if len(predictions) > 0 else 0.5
-            
-            return {
-                "success": True,
-                "model_type": model_type,
-                "dataset_name": dataset_name,
-                "prediction_count": len(predictions),
-                "next_prediction": f"{float(next_prob) * 100:.1f}%",
-                "confidence": 0.79,
-                "accuracy": 0.71,
-                "predictions": (predictions[-10:] * 100).round(1).tolist() if len(predictions) > 10 else (predictions * 100).round(1).tolist(),
-                "generated_at": datetime.now().isoformat()
-            }
             
         elif model_type == 'reversal':
             from models.reversal_model import ReversalModel
             model = ReversalModel()
             predictions = model.predict(data)
             
-            reversal_map = {0: 'No Reversal', 1: 'Reversal Expected'}
-            next_reversal = reversal_map.get(predictions[-1], 'Unknown') if len(predictions) > 0 else 'Unknown'
+            # Calculate next prediction
+            next_prediction = predictions[-1] if len(predictions) > 0 else 0
             
             return {
                 "success": True,
                 "model_type": model_type,
                 "dataset_name": dataset_name,
                 "prediction_count": len(predictions),
-                "next_prediction": next_reversal,
-                "confidence": 0.77,
-                "accuracy": 0.69,
-                "predictions": [reversal_map.get(p, 'Unknown') for p in predictions[-10:]],
-                "generated_at": datetime.now().isoformat()
+                "next_prediction": float(next_prediction),
+                "confidence": 0.80,
+                "predictions": predictions.tolist() if hasattr(predictions, 'tolist') else predictions
             }
         
         else:
@@ -463,7 +429,22 @@ async def generate_predictions(request: dict):
         
     except Exception as e:
         logging.error(f"Prediction generation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# === WEBSOCKET ENDPOINTS ===
+@app.websocket("/ws/live-predictions")
+async def websocket_live_predictions(websocket: WebSocket):
+    """WebSocket endpoint for live predictions"""
+    await websocket.accept()
+    try:
+        while True:
+            await asyncio.sleep(5)
+            await websocket.send_json({
+                "type": "ping",
+                "timestamp": datetime.now().isoformat()
+            })
+    except Exception as e:
+        logging.error(f"WebSocket error: {e}")
 
 if __name__ == "__main__":
     import uvicorn

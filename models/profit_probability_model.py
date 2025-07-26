@@ -49,6 +49,39 @@ class ProfitProbabilityModel:
 
         return target
 
+    def train_model(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """Train profit probability model from raw OHLC data"""
+        try:
+            print(f"🚀 Training profit probability model with {len(data)} data points")
+            
+            # Prepare features and target
+            features_df = self.prepare_features(data)
+            target = self.create_target(data)
+            
+            # Train the model
+            result = self.train(features_df, target)
+            
+            # Save model to database
+            from utils.database_adapter import DatabaseAdapter
+            db = DatabaseAdapter()
+            db.save_trained_model('profit_probability', self.model, self.scaler, self.feature_names)
+            
+            return {
+                'success': True,
+                'model_type': 'profit_probability',
+                'accuracy': result.get('test_accuracy', 0.0),
+                'training_samples': len(features_df),
+                'message': 'Profit probability model trained successfully'
+            }
+            
+        except Exception as e:
+            print(f"Error training profit probability model: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'model_type': 'profit_probability'
+            }
+
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Prepare features for profit probability model."""
         if df.empty:
@@ -56,8 +89,9 @@ class ProfitProbabilityModel:
 
         from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
 
-        # Calculate all profit probability-specific indicators
-        result_df = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(df)
+        # Calculate all profit probability-specific indicators  
+        calc = ProfitProbabilityTechnicalIndicators()
+        result_df = calc.calculate_profit_probability_features(df)
 
         # Get all non-OHLC features, but exclude non-numeric columns
         excluded_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'timestamp', 'date', 'Timestamp', 'Date', 'DateTime']

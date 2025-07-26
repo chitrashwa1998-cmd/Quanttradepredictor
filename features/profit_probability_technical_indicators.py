@@ -1,215 +1,210 @@
-
+"""
+Profit probability technical indicators
+"""
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List
+import ta
+from .technical_indicators import TechnicalIndicators
 
-class ProfitProbabilityTechnicalIndicators:
-    """Calculate technical indicators specifically for profit probability prediction."""
-
-    @staticmethod
-    def calculate_profit_probability_indicators(df):
-        """Calculate indicators specifically for profit probability model"""
-        df = df.copy()
-
-        # Ensure we have the right column names
-        close_col = 'Close' if 'Close' in df.columns else 'close'
-        open_col = 'Open' if 'Open' in df.columns else 'open'
-        high_col = 'High' if 'High' in df.columns else 'high'
-        low_col = 'Low' if 'Low' in df.columns else 'low'
-        volume_col = 'Volume' if 'Volume' in df.columns else 'volume'
-
+class ProfitProbabilityTechnicalIndicators(TechnicalIndicators):
+    def __init__(self):
+        super().__init__()
+    
+    def calculate_profit_probability_features(self, data):
+        """Calculate features specifically for profit probability prediction model"""
+        if data is None or len(data) < 50:
+            return None
+        
         try:
-            # EMA calculations - 5, 10, 20
-            df['ema_5'] = df[close_col].ewm(span=5).mean()
-            df['ema_10'] = df[close_col].ewm(span=10).mean()
-            df['ema_20'] = df[close_col].ewm(span=20).mean()
-
-            # RSI calculation (14 period)
-            delta = df[close_col].diff()
+            # Start with a copy of the data
+            features = data.copy()
+            
+            # Ensure consistent column names (capital case for OHLC)
+            if 'close' in features.columns and 'Close' not in features.columns:
+                features = features.rename(columns={'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close'})
+            
+            # Get the correct close column name
+            close_col = 'Close' if 'Close' in features.columns else 'close'
+            high_col = 'High' if 'High' in features.columns else 'high'
+            low_col = 'Low' if 'Low' in features.columns else 'low'
+            
+            # Simplified profit probability-specific features
+            # Price momentum for different timeframes
+            features['return_1d'] = features[close_col].pct_change(1)
+            features['return_3d'] = features[close_col].pct_change(3)
+            features['return_5d'] = features[close_col].pct_change(5)
+            
+            # Volatility measures
+            features['vol_5d'] = features['return_1d'].rolling(5).std()
+            features['vol_10d'] = features['return_1d'].rolling(10).std()
+            
+            # Simple moving averages
+            features['sma_10'] = features[close_col].rolling(10).mean()
+            features['sma_20'] = features[close_col].rolling(20).mean()
+            
+            # Price relative to moving averages
+            features['price_above_sma10'] = (features[close_col] > features['sma_10']).astype(int)
+            features['price_above_sma20'] = (features[close_col] > features['sma_20']).astype(int)
+            
+            # Simple RSI
+            delta = features[close_col].diff()
             gain = delta.where(delta > 0, 0)
             loss = -delta.where(delta < 0, 0)
             avg_gain = gain.rolling(window=14).mean()
             avg_loss = loss.rolling(window=14).mean()
             rs = avg_gain / avg_loss
-            df['rsi_14'] = 100 - (100 / (1 + rs))
-
-            # MACD histogram calculation
-            ema_12 = df[close_col].ewm(span=12).mean()
-            ema_26 = df[close_col].ewm(span=26).mean()
-            macd = ema_12 - ema_26
-            macd_signal = macd.ewm(span=9).mean()
-            df['macd_histogram'] = macd - macd_signal
-
-            # ATR calculation
-            tr1 = df[high_col] - df[low_col]
-            tr2 = abs(df[high_col] - df[close_col].shift(1))
-            tr3 = abs(df[low_col] - df[close_col].shift(1))
-            true_range = pd.DataFrame({'tr1': tr1, 'tr2': tr2, 'tr3': tr3}).max(axis=1)
-            df['atr'] = true_range.rolling(window=14).mean()
-
-            # Bollinger Bands
-            bb_period = 20
-            bb_std = 2
-            bb_middle = df[close_col].rolling(bb_period).mean()
-            bb_std_dev = df[close_col].rolling(bb_period).std()
-            bb_upper = bb_middle + (bb_std_dev * bb_std)
-            bb_lower = bb_middle - (bb_std_dev * bb_std)
-            df['bb_width'] = (bb_upper - bb_lower) / bb_middle
-            df['bb_position'] = (df[close_col] - bb_lower) / (bb_upper - bb_lower)
-
-            # Donchian Channel
-            df['donchian_high_20'] = df[high_col].rolling(window=20).max()
-            df['donchian_low_20'] = df[low_col].rolling(window=20).min()
-
-            # ADX calculation
-            # Calculate directional movement
-            plus_dm = df[high_col].diff()
-            minus_dm = df[low_col].diff()
-            plus_dm = np.where((plus_dm > minus_dm) & (plus_dm > 0), plus_dm, 0.0)
-            minus_dm = np.where((minus_dm > plus_dm) & (minus_dm > 0), minus_dm, 0.0)
+            features['rsi_14'] = 100 - (100 / (1 + rs))
             
-            # Smooth the directional movements
-            plus_dm_smooth = pd.Series(plus_dm, index=df.index).rolling(window=14).mean()
-            minus_dm_smooth = pd.Series(minus_dm, index=df.index).rolling(window=14).mean()
+            # Target: Future profit probability (2% profit in 3 days)
+            future_return = features[close_col].shift(-3) / features[close_col] - 1
+            features['profit_target'] = (future_return > 0.02).astype(int)
             
-            # Calculate directional indicators
-            plus_di = 100 * (plus_dm_smooth / df['atr'])
-            minus_di = 100 * (minus_dm_smooth / df['atr'])
+            # Remove rows with NaN values
+            features = features.dropna()
             
-            # Calculate ADX
-            dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
-            df['adx'] = dx.rolling(window=14).mean()
-
-            # Replace inf and nan values
-            numeric_cols = ['ema_5', 'ema_10', 'ema_20', 'rsi_14', 'macd_histogram', 
-                           'atr', 'bb_width', 'bb_position', 'donchian_high_20', 
-                           'donchian_low_20', 'adx']
+            return features
             
-            for col in numeric_cols:
-                if col in df.columns:
-                    df[col] = df[col].replace([np.inf, -np.inf], np.nan)
-                    
         except Exception as e:
-            print(f"Error calculating profit probability technical indicators: {e}")
-            # Fallback calculations
-            df['ema_5'] = df[close_col].ewm(span=5).mean()
-            df['ema_10'] = df[close_col].ewm(span=10).mean()
-            df['ema_20'] = df[close_col].ewm(span=20).mean()
-            df['rsi_14'] = 50.0
-            df['macd_histogram'] = 0.0
-            df['atr'] = (df[high_col] - df[low_col]).rolling(14).mean()
-            df['bb_width'] = df[close_col].rolling(20).std() / df[close_col].rolling(20).mean()
-            df['bb_position'] = 0.5
-            df['donchian_high_20'] = df[high_col].rolling(20).max()
-            df['donchian_low_20'] = df[low_col].rolling(20).min()
-            df['adx'] = 25.0
-
+            print(f"Error calculating profit probability features: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def add_profit_features(self, df):
+        """Add features related to profit potential"""
+        # Get the correct close column name
+        close_col = 'Close' if 'Close' in df.columns else 'close'
+        high_col = 'High' if 'High' in df.columns else 'high'
+        low_col = 'Low' if 'Low' in df.columns else 'low'
+        
+        # Price momentum for different timeframes
+        df['return_1d'] = df[close_col].pct_change(1)
+        df['return_3d'] = df[close_col].pct_change(3)
+        df['return_5d'] = df[close_col].pct_change(5)
+        df['return_10d'] = df[close_col].pct_change(10)
+        
+        # Volatility-adjusted returns
+        df['vol_5d'] = df['return_1d'].rolling(5).std()
+        df['vol_10d'] = df['return_1d'].rolling(10).std()
+        df['sharpe_5d'] = df['return_1d'].rolling(5).mean() / df['vol_5d']
+        df['sharpe_10d'] = df['return_1d'].rolling(10).mean() / df['vol_10d']
+        
+        # Trend strength
+        df['trend_strength'] = abs(df[close_col].rolling(20).apply(lambda x: np.polyfit(range(len(x)), x, 1)[0]))
+        
+        # Price efficiency
+        df['price_efficiency'] = abs(df[close_col] - df[close_col].shift(10)) / (df[high_col].rolling(10).max() - df[low_col].rolling(10).min())
+        
         return df
-
-    @staticmethod
-    def calculate_all_profit_probability_indicators(df):
-        """Calculate all profit probability technical indicators"""
-        print("🔧 Calculating profit probability technical indicators...")
-
-        # Validate input data
-        from utils.data_processing import DataProcessor
-        is_valid, message = DataProcessor.validate_ohlc_data(df)
-        if not is_valid:
-            raise ValueError(f"Invalid OHLC data provided: {message}")
-
-        # Create a copy to avoid modifying original data
-        result_df = df.copy()
+    
+    def add_risk_features(self, df):
+        """Add risk-related features"""
+        # Get the correct close column name
+        close_col = 'Close' if 'Close' in df.columns else 'close'
         
-        # Preserve original index for later restoration
-        original_index = result_df.index.copy()
-        print(f"Original index type: {type(original_index)}")
-        print(f"Original index range: {original_index.min()} to {original_index.max()}")
-
-        # Calculate profit probability indicators
-        print("Step 1: Calculating basic profit probability indicators...")
-        result_df = ProfitProbabilityTechnicalIndicators.calculate_profit_probability_indicators(result_df)
-        basic_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        print(f"After basic indicators: {len(basic_features)} features")
+        # Drawdown measures
+        df['rolling_max'] = df[close_col].rolling(window=20).max()
+        df['drawdown'] = (df[close_col] - df['rolling_max']) / df['rolling_max']
+        df['max_drawdown_5d'] = df['drawdown'].rolling(5).min()
+        df['max_drawdown_10d'] = df['drawdown'].rolling(10).min()
         
-        # Ensure index is preserved
-        result_df.index = original_index
-
-        # Add custom engineered features for profit probability
-        print("Step 2: Adding custom profit probability features...")
-        from features.profit_probability_custom_engineered import add_custom_profit_features
-        try:
-            result_df = add_custom_profit_features(result_df)
-            result_df.index = original_index  # Preserve index
-            custom_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-            print(f"After custom features: {len(custom_features)} features")
-        except Exception as e:
-            print(f"Error in custom features: {e}")
-
-        # Add lagged features for profit probability
-        print("Step 3: Adding lagged profit probability features...")
-        from features.profit_probability_lagged_features import add_lagged_features_profit_prob
-        try:
-            result_df = add_lagged_features_profit_prob(result_df)
-            result_df.index = original_index  # Preserve index
-            lagged_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-            print(f"After lagged features: {len(lagged_features)} features")
-        except Exception as e:
-            print(f"Error in lagged features: {e}")
-
-        # Add time context features for profit probability
-        print("Step 4: Adding time context features...")
-        try:
-            from features.profit_probability_time_context import add_time_context_features_profit_prob
-            result_df = add_time_context_features_profit_prob(result_df)
-            result_df.index = original_index  # Preserve index
-            time_features = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-            print(f"After time features: {len(time_features)} features")
-        except Exception as e:
-            print(f"Error in time features: {e}")
-            # Add minimal time features as fallback
-            if 'timestamp' in result_df.columns:
-                result_df['hour'] = pd.to_datetime(result_df['timestamp']).dt.hour
-                result_df['minute'] = pd.to_datetime(result_df['timestamp']).dt.minute
-                result_df['day_of_week'] = pd.to_datetime(result_df['timestamp']).dt.dayofweek
-            else:
-                result_df['hour'] = 12  # Default mid-day
-                result_df['minute'] = 30
-                result_df['day_of_week'] = 2  # Tuesday
-            print("Added fallback time features")
-
-        # Final cleanup
-        print("Step 5: Final cleanup...")
-        print("Filling NaN values...")
+        # Value at Risk (simplified)
+        df['var_95'] = df['return_1d'].rolling(20).quantile(0.05)
+        df['var_99'] = df['return_1d'].rolling(20).quantile(0.01)
         
-        # Fill NaN values with appropriate defaults
-        numeric_columns = result_df.select_dtypes(include=[np.number]).columns
-        for col in numeric_columns:
-            if col not in ['Open', 'High', 'Low', 'Close', 'Volume']:
-                result_df[col] = result_df[col].fillna(result_df[col].median())
+        # Tail risk
+        df['skewness'] = df['return_1d'].rolling(20).skew()
+        df['kurtosis'] = df['return_1d'].rolling(20).kurt()
         
-        result_df = result_df.replace([np.inf, -np.inf], np.nan)
+        # Volatility clustering
+        df['vol_clustering'] = df['vol_5d'] / df['vol_10d']
         
-        # Count completely empty rows
-        non_ohlc_cols = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        if non_ohlc_cols:
-            try:
-                empty_rows_mask = result_df[non_ohlc_cols].isna().all(axis=1)
-                empty_rows = len([x for x in empty_rows_mask if x])
-            except:
-                empty_rows = 0
+        return df
+    
+    def add_market_regime_features(self, df):
+        """Add market regime identification features"""
+        close_col = 'Close' if 'Close' in df.columns else 'close'
+        high_col = 'High' if 'High' in df.columns else 'high'
+        low_col = 'Low' if 'Low' in df.columns else 'low'
+        
+        # Regime indicators
+        df['high_vol_regime'] = (df['vol_10d'] > df['vol_10d'].rolling(50).quantile(0.75)).astype(int)
+        df['trending_regime'] = (df['trend_strength'] > df['trend_strength'].rolling(50).quantile(0.75)).astype(int)
+        
+        # Market stress indicators
+        df['stress_indicator'] = ((df['vol_5d'] > df['vol_5d'].rolling(20).quantile(0.9)) & 
+                                 (df['drawdown'] < -0.05)).astype(int)
+        
+        # Momentum regime
+        df['momentum_regime'] = ((df['return_5d'] > 0) & (df['return_10d'] > 0)).astype(int)
+        
+        # Range-bound detection
+        df['range_bound'] = ((df[high_col].rolling(20).max() - df[low_col].rolling(20).min()) / 
+                            df[close_col].rolling(20).mean() < 0.1).astype(int)
+        
+        return df
+    
+    def add_timing_features(self, df):
+        """Add timing-related features"""
+        # Entry timing - create default series if columns don't exist
+        rsi_14_series = df.get('rsi_14', pd.Series([50] * len(df), index=df.index))
+        bb_position_series = df.get('bb_position', pd.Series([0.5] * len(df), index=df.index))
+        
+        df['rsi_entry'] = ((rsi_14_series < 35) | (rsi_14_series > 65)).astype(int)
+        df['bb_entry'] = ((bb_position_series < 0.2) | (bb_position_series > 0.8)).astype(int)
+        
+        # Confluence signals - create default series if columns don't exist
+        price_above_sma20_series = df.get('price_above_sma20', pd.Series([0] * len(df), index=df.index))
+        macd_bullish_series = df.get('macd_bullish', pd.Series([0] * len(df), index=df.index))
+        rsi_14_series = df.get('rsi_14', pd.Series([50] * len(df), index=df.index))
+        
+        df['bullish_confluence'] = ((price_above_sma20_series == 1) & 
+                                   (macd_bullish_series == 1) & 
+                                   (rsi_14_series > 50)).astype(int)
+        df['bearish_confluence'] = ((price_above_sma20_series == 0) & 
+                                   (macd_bullish_series == 0) & 
+                                   (rsi_14_series < 50)).astype(int)
+        
+        # Breakout conditions
+        close_col = 'Close' if 'Close' in df.columns else 'close'
+        high_col = 'High' if 'High' in df.columns else 'high'
+        low_col = 'Low' if 'Low' in df.columns else 'low'
+        
+        if 'recent_high' in df.columns:
+            df['breakout_high'] = (df[close_col] > df['recent_high'].shift(1)).astype(int)
         else:
-            empty_rows = 0
+            # Create recent_high feature
+            df['recent_high'] = df[high_col].rolling(20).max()
+            df['breakout_high'] = (df[close_col] > df['recent_high'].shift(1)).astype(int)
+            
+        if 'recent_low' in df.columns:
+            df['breakout_low'] = (df[close_col] < df['recent_low'].shift(1)).astype(int)
+        else:
+            # Create recent_low feature
+            df['recent_low'] = df[low_col].rolling(20).min()
+            df['breakout_low'] = (df[close_col] < df['recent_low'].shift(1)).astype(int)
         
-        # Drop completely empty rows
-        result_df = result_df.dropna(subset=non_ohlc_cols, how='all')
+        return df
+    
+    def calculate_profit_targets(self, df, holding_periods=[1, 3, 5]):
+        """Calculate profit probability targets for different holding periods"""
+        close_col = 'Close' if 'Close' in df.columns else 'close'
         
-        print(f"Data points after cleanup: {len(result_df)} (dropped {empty_rows} completely empty rows)")
-        print(f"Feature data index after cleanup: {result_df.index.min()} to {result_df.index.max()}")
-
-        feature_cols = [col for col in result_df.columns if col not in ['Open', 'High', 'Low', 'Close', 'Volume']]
-        print(f"✅ Final result: {len(feature_cols)} profit probability indicators")
-        print(f"Profit probability features: {feature_cols}")
-
-        return result_df
-
+        for period in holding_periods:
+            # Future returns
+            future_return = df[close_col].shift(-period) / df[close_col] - 1
+            
+            # Binary profit targets (different thresholds)
+            df[f'profit_1pct_{period}d'] = (future_return > 0.01).astype(int)
+            df[f'profit_2pct_{period}d'] = (future_return > 0.02).astype(int)
+            df[f'profit_3pct_{period}d'] = (future_return > 0.03).astype(int)
+            
+            # Risk-adjusted profit (profit above risk threshold)
+            risk_threshold = df['vol_5d'] * np.sqrt(period)
+            df[f'risk_adj_profit_{period}d'] = (future_return > risk_threshold).astype(int)
+        
+        # Main target: 2% profit in 3 days
+        df['profit_target'] = df['profit_2pct_3d']
+        
+        return df

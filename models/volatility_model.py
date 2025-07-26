@@ -137,6 +137,39 @@ class VolatilityModel:
         self.feature_names = feature_columns
         return result_df
 
+    def train_model(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """Train volatility model from raw OHLC data"""
+        try:
+            print(f"🚀 Training volatility model with {len(data)} data points")
+            
+            # Prepare features and target
+            features_df = self.prepare_features(data)
+            target = self.create_target(data)
+            
+            # Train the model
+            result = self.train(features_df, target)
+            
+            # Save model to database
+            from utils.database_adapter import DatabaseAdapter
+            db = DatabaseAdapter()
+            db.save_trained_model('volatility', self.model, self.scaler, self.feature_names)
+            
+            return {
+                'success': True,
+                'model_type': 'volatility',
+                'accuracy': result.get('test_r2', 0.0),
+                'training_samples': len(features_df),
+                'message': 'Volatility model trained successfully'
+            }
+            
+        except Exception as e:
+            print(f"Error training volatility model: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'model_type': 'volatility'
+            }
+
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:
         """Train volatility prediction model."""
         print(f"Training input - Features shape: {X.shape}, Target length: {len(y)}")

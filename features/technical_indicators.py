@@ -72,6 +72,64 @@ class TechnicalIndicators:
             df['donchian_width'] = (df[high_col].rolling(20).max() - df[low_col].rolling(20).min()) / df[close_col]
 
         return df
+    
+    def __init__(self):
+        """Initialize TechnicalIndicators class"""
+        pass
+    
+    def calculate_base_features(self, data):
+        """Calculate base OHLC features"""
+        if data is None or len(data) < 10:
+            return None
+            
+        # Ensure column names are standardized
+        df = data.copy()
+        if 'Close' in df.columns:
+            df = df.rename(columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close'})
+        
+        return df
+    
+    def calculate_volatility_features(self, data):
+        """Calculate features specifically for volatility prediction model"""
+        if data is None or len(data) < 50:
+            return None
+        
+        try:
+            # Start with base features
+            features = self.calculate_base_features(data)
+            
+            # Add volatility-specific indicators
+            features = self.calculate_volatility_indicators(features)
+            
+            # Target: Next period volatility (ATR)
+            if 'atr' in features.columns:
+                features['volatility_target'] = features['atr'].shift(-1)
+            
+            # Remove rows with NaN values
+            features = features.dropna()
+            
+            return features
+            
+        except Exception as e:
+            print(f"Error calculating volatility features: {e}")
+            return None
+    
+    def add_volatility_features(self, df):
+        """Add volatility-specific features"""
+        return self.calculate_volatility_indicators(df)
+    
+    def add_momentum_indicators(self, df):
+        """Add momentum indicators"""
+        # RSI is already calculated in volatility_indicators
+        return df
+    
+    def add_trend_indicators(self, df):
+        """Add trend indicators"""
+        # Moving averages and other trend indicators
+        if 'close' in df.columns:
+            df['sma_20'] = df['close'].rolling(20).mean()
+            df['ema_12'] = df['close'].ewm(span=12).mean()
+        return df
 
     @staticmethod
     def calculate_all_indicators(df):

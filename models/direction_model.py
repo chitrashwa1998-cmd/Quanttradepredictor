@@ -42,6 +42,39 @@ class DirectionModel:
         print(f"Direction target created: {len(target)} samples")
         return target
 
+    def train_model(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """Train direction model from raw OHLC data"""
+        try:
+            print(f"🚀 Training direction model with {len(data)} data points")
+            
+            # Prepare features and target
+            features_df = self.prepare_features(data)
+            target = self.create_target(data)
+            
+            # Train the model
+            result = self.train(features_df, target)
+            
+            # Save model to database
+            from utils.database_adapter import DatabaseAdapter
+            db = DatabaseAdapter()
+            db.save_trained_model('direction', self.model, self.scaler, self.feature_names)
+            
+            return {
+                'success': True,
+                'model_type': 'direction',
+                'accuracy': result.get('test_accuracy', 0.0),
+                'training_samples': len(features_df),
+                'message': 'Direction model trained successfully'
+            }
+            
+        except Exception as e:
+            print(f"Error training direction model: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'model_type': 'direction'
+            }
+
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Prepare features for direction model."""
         if df.empty:
@@ -50,7 +83,8 @@ class DirectionModel:
         from features.direction_technical_indicators import DirectionTechnicalIndicators
         
         # Calculate all direction-specific indicators
-        result_df = DirectionTechnicalIndicators.calculate_all_direction_indicators(df)
+        calc = DirectionTechnicalIndicators()
+        result_df = calc.calculate_direction_features(df)
         
         # Define core direction-specific features to ensure we have them
         core_direction_features = ['ema_5', 'ema_10', 'ema_20', 'rsi_14', 'macd_histogram', 

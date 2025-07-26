@@ -127,6 +127,39 @@ class ReversalModel:
 
         return reversal_signal
 
+    def train_model(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """Train reversal model from raw OHLC data"""
+        try:
+            print(f"🚀 Training reversal model with {len(data)} data points")
+            
+            # Prepare features and target
+            features_df = self.prepare_features(data)
+            target = self.create_target(data)
+            
+            # Train the model
+            result = self.train(features_df, target)
+            
+            # Save model to database
+            from utils.database_adapter import DatabaseAdapter
+            db = DatabaseAdapter()
+            db.save_trained_model('reversal', self.model, self.scaler, self.feature_names)
+            
+            return {
+                'success': True,
+                'model_type': 'reversal',
+                'accuracy': result.get('test_accuracy', 0.0),
+                'training_samples': len(features_df),
+                'message': 'Reversal model trained successfully'
+            }
+            
+        except Exception as e:
+            print(f"Error training reversal model: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'model_type': 'reversal'
+            }
+
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Prepare comprehensive reversal features including technical indicators, custom features, lagged features, and time context."""
         if df.empty:
@@ -140,7 +173,8 @@ class ReversalModel:
         # Step 1: Calculate reversal technical indicators
         print("  - Computing reversal technical indicators...")
         from features.reversal_technical_indicators import ReversalTechnicalIndicators
-        result_df = ReversalTechnicalIndicators.calculate_reversal_indicators(result_df)
+        calc = ReversalTechnicalIndicators()
+        result_df = calc.calculate_reversal_features(result_df)
         
         # Step 2: Add custom reversal features
         print("  - Adding custom reversal features...")
