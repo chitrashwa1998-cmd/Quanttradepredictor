@@ -12,6 +12,12 @@ import io
 import logging
 import uvicorn
 from datetime import datetime
+import sys
+import os
+
+# Add project root to Python path to find features module
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 app = FastAPI(title="TribexAlpha API", version="2.0.0")
 
