@@ -248,11 +248,27 @@ class ReversalModel:
 
         # Remove OHLC columns if they exist (they shouldn't be in features for reversal prediction)
         ohlc_columns = ['Open', 'High', 'Low', 'Close', 'Volume', 'open', 'high', 'low', 'close', 'volume']
-        datetime_cols = [col for col in X_train.columns if X_train[col].dtype == 'datetime64[ns]' or 'date' in col.lower()]
-        exclude_cols = [col for col in X_train.columns if col in ohlc_columns or col in datetime_cols]
+        
+        # Find datetime and string columns more comprehensively
+        datetime_cols = []
+        string_cols = []
+        for col in X_train.columns:
+            col_data = X_train[col]
+            # Check for datetime types
+            if col_data.dtype == 'datetime64[ns]' or 'date' in col.lower() or 'time' in col.lower():
+                datetime_cols.append(col)
+            # Check for string/object types that can't be converted to numeric
+            elif col_data.dtype == 'object':
+                try:
+                    # Try to convert a few values to numeric
+                    pd.to_numeric(col_data.dropna().iloc[:5], errors='raise')
+                except:
+                    string_cols.append(col)
+        
+        exclude_cols = [col for col in X_train.columns if col in ohlc_columns or col in datetime_cols or col in string_cols]
         
         if exclude_cols:
-            print(f"Removing OHLC/datetime columns before training: {exclude_cols}")
+            print(f"Removing OHLC/datetime/string columns before training: {exclude_cols}")
             X_train = X_train.drop(exclude_cols, axis=1)
             X_test = X_test.drop(exclude_cols, axis=1)
             # Update feature names to match what will be available during prediction
