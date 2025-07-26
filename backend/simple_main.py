@@ -269,16 +269,41 @@ async def calculate_features(request: dict):
         # Exclude OHLC columns for feature count validation
         excluded_features = ['date', 'open', 'high', 'low', 'close']
         actual_feature_columns = [col for col in df_with_features.columns if col.lower() not in [f.lower() for f in excluded_features]]
+        
+        # Define model-specific feature counts and categories
+        model_feature_info = {
+            'volatility': {
+                'count': 28,
+                'categories': ['Technical Indicators', 'Volatility Measures', 'Statistical Features', 'Lagged Features']
+            },
+            'direction': {
+                'count': 54,
+                'categories': ['Momentum Indicators', 'Trend Analysis', 'Support/Resistance', 'Volume Analysis']
+            },
+            'profit_probability': {
+                'count': 66,
+                'categories': ['Risk Metrics', 'Probability Features', 'Market Microstructure', 'Pattern Recognition']
+            },
+            'reversal': {
+                'count': 63,
+                'categories': ['Divergence Indicators', 'Overbought/Oversold', 'Volume Patterns', 'Price Action']
+            }
+        }
+        
+        feature_count = len(actual_feature_columns)
+        expected_count = model_feature_info.get(model_type, {}).get('count', feature_count)
+        feature_categories = model_feature_info.get(model_type, {}).get('categories', ['Technical Features'])
 
         print(f"Warning: Excluding extra features: {[col for col in df_with_features.columns if col.lower() in [f.lower() for f in excluded_features]]}")
-        print(f"{model_type.capitalize()} model using exactly {feature_count} features (target: {feature_count})")
+        print(f"{model_type.capitalize()} model calculated {feature_count} features (expected: {expected_count})")
 
         return {
             "status": "success",
             "model_type": model_type,
             "data_points": len(df_with_features),
             "total_features": len(df_with_features.columns),
-            "engineered_features": feature_count,  # Model-specific feature count
+            "engineered_features": feature_count,
+            "expected_features": expected_count,
             "feature_categories": feature_categories,
             "features_dataset": features_dataset_name
         }
@@ -302,12 +327,15 @@ async def train_model(request: dict):
         features_data = datasets_storage[f"{dataset_name}_features"]
         raw_data = datasets_storage[dataset_name]
 
-        # Import the appropriate model
+        # Import the appropriate models
         import sys
         import os
         sys.path.append('/home/runner/workspace')
 
         from models.volatility_model import VolatilityModel
+        from models.direction_model import DirectionModel
+        from models.profit_probability_model import ProfitProbabilityModel
+        from models.reversal_model import ReversalModel
 
         if model_type == 'volatility':
             logging.info("🚀 Training volatility model...")
@@ -378,8 +406,217 @@ async def train_model(request: dict):
             logging.info(f"📊 Final metrics - RMSE: {response_data['metrics']['rmse']:.6f}, MAE: {response_data['metrics']['mae']:.6f}")
 
             return response_data
+
+        elif model_type == 'direction':
+            logging.info("🚀 Training direction model...")
+
+            # Initialize direction model
+            direction_model = DirectionModel()
+
+            # Create target from raw data
+            target = direction_model.create_target(raw_data)
+
+            # Ensure data alignment before training
+            logging.info(f"📊 Pre-training alignment - Features: {len(features_data)} rows, Target: {len(target)} values")
+
+            # Align features and target by taking the minimum length
+            min_length = min(len(features_data), len(target))
+            features_aligned = features_data.iloc[:min_length].copy()
+            target_aligned = target.iloc[:min_length].copy()
+
+            logging.info(f"📊 Post-alignment - Features: {len(features_aligned)} rows, Target: {len(target_aligned)} values")
+
+            # Train the model
+            training_result = direction_model.train(
+                features_aligned, 
+                target_aligned, 
+                config.get('train_split', 0.8),
+                max_depth=config.get('max_depth', 6),
+                n_estimators=config.get('n_estimators', 100)
+            )
+
+            # Store the trained model
+            trained_models_storage['direction'] = {
+                'model': direction_model,
+                'result': training_result
+            }
+
+            # Extract metrics (matching Streamlit display)
+            metrics = training_result.get('metrics', {})
+
+            # Prepare detailed response matching Streamlit format
+            response_data = {
+                "success": True,
+                "model_type": model_type,
+                "metrics": {
+                    "accuracy": metrics.get('accuracy', 0),
+                    "precision": metrics.get('precision', 0),
+                    "recall": metrics.get('recall', 0),
+                    "f1": metrics.get('f1', 0),
+                    "train_accuracy": metrics.get('train_accuracy', 0),
+                    "test_accuracy": metrics.get('test_accuracy', 0)
+                },
+                "feature_importance": training_result.get('feature_importance', {}),
+                "model_info": {
+                    "training_samples": len(features_data),
+                    "features_used": len(features_data.columns),
+                    "model_type": "Ensemble (XGBoost + CatBoost + Random Forest)",
+                    "task_type": training_result.get('task_type', 'classification')
+                },
+                "feature_names": training_result.get('feature_names', []),
+                "training_config": {
+                    "train_split": config.get('train_split', 0.8),
+                    "max_depth": config.get('max_depth', 6),
+                    "n_estimators": config.get('n_estimators', 100)
+                },
+                "message": f"✅ Direction model trained successfully!"
+            }
+
+            logging.info(f"✅ Direction model training completed successfully")
+            logging.info(f"📊 Final metrics - Accuracy: {response_data['metrics']['accuracy']:.4f}")
+
+            return response_data
+
+        elif model_type == 'profit_probability':
+            logging.info("🚀 Training profit probability model...")
+
+            # Initialize profit probability model
+            profit_model = ProfitProbabilityModel()
+
+            # Create target from raw data
+            target = profit_model.create_target(raw_data)
+
+            # Ensure data alignment before training
+            logging.info(f"📊 Pre-training alignment - Features: {len(features_data)} rows, Target: {len(target)} values")
+
+            # Align features and target by taking the minimum length
+            min_length = min(len(features_data), len(target))
+            features_aligned = features_data.iloc[:min_length].copy()
+            target_aligned = target.iloc[:min_length].copy()
+
+            logging.info(f"📊 Post-alignment - Features: {len(features_aligned)} rows, Target: {len(target_aligned)} values")
+
+            # Train the model
+            training_result = profit_model.train(
+                features_aligned, 
+                target_aligned, 
+                config.get('train_split', 0.8)
+            )
+
+            # Store the trained model
+            trained_models_storage['profit_probability'] = {
+                'model': profit_model,
+                'result': training_result
+            }
+
+            # Extract metrics (matching Streamlit display)
+            metrics = training_result.get('metrics', {})
+
+            # Prepare detailed response matching Streamlit format
+            response_data = {
+                "success": True,
+                "model_type": model_type,
+                "metrics": {
+                    "accuracy": metrics.get('accuracy', 0),
+                    "precision": metrics.get('precision', 0),
+                    "recall": metrics.get('recall', 0),
+                    "f1": metrics.get('f1', 0),
+                    "roc_auc": metrics.get('roc_auc', 0),
+                    "train_accuracy": metrics.get('train_accuracy', 0),
+                    "test_accuracy": metrics.get('test_accuracy', 0)
+                },
+                "feature_importance": training_result.get('feature_importance', {}),
+                "model_info": {
+                    "training_samples": len(features_data),
+                    "features_used": len(features_data.columns),
+                    "model_type": "Ensemble (XGBoost + CatBoost + Random Forest)",
+                    "task_type": training_result.get('task_type', 'classification')
+                },
+                "feature_names": training_result.get('feature_names', []),
+                "training_config": {
+                    "train_split": config.get('train_split', 0.8),
+                    "max_depth": config.get('max_depth', 6),
+                    "n_estimators": config.get('n_estimators', 100)
+                },
+                "message": f"✅ Profit probability model trained successfully!"
+            }
+
+            logging.info(f"✅ Profit probability model training completed successfully")
+            logging.info(f"📊 Final metrics - Accuracy: {response_data['metrics']['accuracy']:.4f}, ROC AUC: {response_data['metrics']['roc_auc']:.4f}")
+
+            return response_data
+
+        elif model_type == 'reversal':
+            logging.info("🚀 Training reversal model...")
+
+            # Initialize reversal model
+            reversal_model = ReversalModel()
+
+            # Create target from raw data
+            target = reversal_model.create_target(raw_data)
+
+            # Ensure data alignment before training
+            logging.info(f"📊 Pre-training alignment - Features: {len(features_data)} rows, Target: {len(target)} values")
+
+            # Align features and target by taking the minimum length
+            min_length = min(len(features_data), len(target))
+            features_aligned = features_data.iloc[:min_length].copy()
+            target_aligned = target.iloc[:min_length].copy()
+
+            logging.info(f"📊 Post-alignment - Features: {len(features_aligned)} rows, Target: {len(target_aligned)} values")
+
+            # Train the model
+            training_result = reversal_model.train(
+                features_aligned, 
+                target_aligned, 
+                config.get('train_split', 0.8)
+            )
+
+            # Store the trained model
+            trained_models_storage['reversal'] = {
+                'model': reversal_model,
+                'result': training_result
+            }
+
+            # Extract metrics (matching Streamlit display)
+            metrics = training_result.get('metrics', {})
+
+            # Prepare detailed response matching Streamlit format
+            response_data = {
+                "success": True,
+                "model_type": model_type,
+                "metrics": {
+                    "accuracy": metrics.get('accuracy', 0),
+                    "precision": metrics.get('precision', 0),
+                    "recall": metrics.get('recall', 0),
+                    "f1": metrics.get('f1', 0),
+                    "roc_auc": metrics.get('roc_auc', 0),
+                    "train_accuracy": metrics.get('train_accuracy', 0),
+                    "test_accuracy": metrics.get('test_accuracy', 0)
+                },
+                "feature_importance": training_result.get('feature_importance', {}),
+                "model_info": {
+                    "training_samples": len(features_data),
+                    "features_used": len(features_data.columns),
+                    "model_type": "Ensemble (XGBoost + CatBoost + Random Forest)",
+                    "task_type": training_result.get('task_type', 'classification')
+                },
+                "feature_names": training_result.get('feature_names', []),
+                "training_config": {
+                    "train_split": config.get('train_split', 0.8),
+                    "max_depth": config.get('max_depth', 6),
+                    "n_estimators": config.get('n_estimators', 100)
+                },
+                "message": f"✅ Reversal model trained successfully!"
+            }
+
+            logging.info(f"✅ Reversal model training completed successfully")
+            logging.info(f"📊 Final metrics - Accuracy: {response_data['metrics']['accuracy']:.4f}, ROC AUC: {response_data['metrics']['roc_auc']:.4f}")
+
+            return response_data
+
         else:
-            raise HTTPException(status_code=400, detail=f"Model type {model_type} not supported yet")
+            raise HTTPException(status_code=400, detail=f"Model type {model_type} not supported")
 
     except Exception as e:
         logging.error(f"Training failed: {e}")

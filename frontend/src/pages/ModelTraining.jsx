@@ -576,31 +576,51 @@ const ModelTraining = () => {
                       📊 Feature Categories Breakdown:
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {Object.entries(featureDetails.feature_categories).map(([category, count], index) => (
-                        <div key={index} style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          borderRadius: '6px',
-                          padding: '0.75rem',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}>
-                          <span style={{
-                            color: 'var(--text-primary)',
-                            fontSize: '0.9rem'
+                      {Array.isArray(featureDetails.feature_categories) ? 
+                        featureDetails.feature_categories.map((category, index) => (
+                          <div key={index} style={{
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '6px',
+                            padding: '0.75rem',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
                           }}>
-                            {category}
-                          </span>
-                          <span style={{
-                            color: 'var(--accent-cyan)',
-                            fontWeight: '600',
-                            fontSize: '0.9rem'
+                            <span style={{
+                              color: 'var(--text-primary)',
+                              fontSize: '0.9rem'
+                            }}>
+                              {category}
+                            </span>
+                          </div>
+                        )) : 
+                        Object.entries(featureDetails.feature_categories || {}).map(([category, count], index) => (
+                          <div key={index} style={{
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '6px',
+                            padding: '0.75rem',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
                           }}>
-                            {count}
-                          </span>
-                        </div>
-                      ))}
+                            <span style={{
+                              color: 'var(--text-primary)',
+                              fontSize: '0.9rem'
+                            }}>
+                              {category}
+                            </span>
+                            <span style={{
+                              color: 'var(--accent-cyan)',
+                              fontWeight: '600',
+                              fontSize: '0.9rem'
+                            }}>
+                              {count}
+                            </span>
+                          </div>
+                        ))
+                      }
                     </div>
                   </div>
 
@@ -813,8 +833,359 @@ const ModelTraining = () => {
                         </div>
                       )}
 
-                      {/* Metrics Grid for other models */}
-                      {tab.id !== 'volatility' && trainingResults[tab.id]?.metrics && (
+                      {/* Direction Model Metrics */}
+                      {tab.id === 'direction' && trainingResults[tab.id]?.metrics && (
+                        <div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div style={{
+                              background: 'rgba(0, 255, 255, 0.1)',
+                              border: '1px solid rgba(0, 255, 255, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: 'var(--accent-cyan)',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {(trainingResults[tab.id]?.metrics?.accuracy * 100)?.toFixed(1) || 'N/A'}%
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                Accuracy
+                              </div>
+                            </div>
+
+                            <div style={{
+                              background: 'rgba(255, 215, 0, 0.1)',
+                              border: '1px solid rgba(255, 215, 0, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: 'var(--accent-gold)',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {(trainingResults[tab.id]?.metrics?.precision * 100)?.toFixed(1) || 'N/A'}%
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                Precision
+                              </div>
+                            </div>
+
+                            <div style={{
+                              background: 'rgba(139, 92, 246, 0.1)',
+                              border: '1px solid rgba(139, 92, 246, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: '#8b5cf6',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {(trainingResults[tab.id]?.metrics?.recall * 100)?.toFixed(1) || 'N/A'}%
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                Recall
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Additional Direction Training Info */}
+                          <div style={{
+                            background: 'rgba(0, 255, 255, 0.05)',
+                            border: '1px solid rgba(0, 255, 255, 0.2)',
+                            borderRadius: '8px',
+                            padding: '1rem',
+                            marginBottom: '1.5rem'
+                          }}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                                  <strong style={{ color: 'var(--accent-cyan)' }}>Training Data:</strong> {trainingResults[tab.id]?.model_info?.training_samples || 'N/A'} rows with {trainingResults[tab.id]?.model_info?.features_used || '54'} features
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                                  <strong style={{ color: 'var(--accent-cyan)' }}>Task Type:</strong> {trainingResults[tab.id]?.model_info?.task_type || 'Classification'} (Direction Prediction)
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Profit Probability Model Metrics */}
+                      {tab.id === 'profit_probability' && trainingResults[tab.id]?.metrics && (
+                        <div>
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div style={{
+                              background: 'rgba(0, 255, 255, 0.1)',
+                              border: '1px solid rgba(0, 255, 255, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: 'var(--accent-cyan)',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {(trainingResults[tab.id]?.metrics?.accuracy * 100)?.toFixed(1) || 'N/A'}%
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                Accuracy
+                              </div>
+                            </div>
+
+                            <div style={{
+                              background: 'rgba(255, 215, 0, 0.1)',
+                              border: '1px solid rgba(255, 215, 0, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: 'var(--accent-gold)',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {(trainingResults[tab.id]?.metrics?.precision * 100)?.toFixed(1) || 'N/A'}%
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                Precision
+                              </div>
+                            </div>
+
+                            <div style={{
+                              background: 'rgba(139, 92, 246, 0.1)',
+                              border: '1px solid rgba(139, 92, 246, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: '#8b5cf6',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {(trainingResults[tab.id]?.metrics?.f1 * 100)?.toFixed(1) || 'N/A'}%
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                F1 Score
+                              </div>
+                            </div>
+
+                            <div style={{
+                              background: 'rgba(255, 107, 53, 0.1)',
+                              border: '1px solid rgba(255, 107, 53, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: '#ff6b35',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {trainingResults[tab.id]?.metrics?.roc_auc?.toFixed(3) || 'N/A'}
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                ROC AUC
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Additional Profit Probability Training Info */}
+                          <div style={{
+                            background: 'rgba(0, 255, 255, 0.05)',
+                            border: '1px solid rgba(0, 255, 255, 0.2)',
+                            borderRadius: '8px',
+                            padding: '1rem',
+                            marginBottom: '1.5rem'
+                          }}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                                  <strong style={{ color: 'var(--accent-cyan)' }}>Training Data:</strong> {trainingResults[tab.id]?.model_info?.training_samples || 'N/A'} rows with {trainingResults[tab.id]?.model_info?.features_used || '66'} features
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                                  <strong style={{ color: 'var(--accent-cyan)' }}>Task Type:</strong> {trainingResults[tab.id]?.model_info?.task_type || 'Classification'} (Profit Probability)
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Reversal Model Metrics */}
+                      {tab.id === 'reversal' && trainingResults[tab.id]?.metrics && (
+                        <div>
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div style={{
+                              background: 'rgba(0, 255, 255, 0.1)',
+                              border: '1px solid rgba(0, 255, 255, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: 'var(--accent-cyan)',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {(trainingResults[tab.id]?.metrics?.accuracy * 100)?.toFixed(1) || 'N/A'}%
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                Accuracy
+                              </div>
+                            </div>
+
+                            <div style={{
+                              background: 'rgba(255, 215, 0, 0.1)',
+                              border: '1px solid rgba(255, 215, 0, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: 'var(--accent-gold)',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {(trainingResults[tab.id]?.metrics?.precision * 100)?.toFixed(1) || 'N/A'}%
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                Precision
+                              </div>
+                            </div>
+
+                            <div style={{
+                              background: 'rgba(139, 92, 246, 0.1)',
+                              border: '1px solid rgba(139, 92, 246, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: '#8b5cf6',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {(trainingResults[tab.id]?.metrics?.recall * 100)?.toFixed(1) || 'N/A'}%
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                Recall
+                              </div>
+                            </div>
+
+                            <div style={{
+                              background: 'rgba(255, 107, 53, 0.1)',
+                              border: '1px solid rgba(255, 107, 53, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: '#ff6b35',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {trainingResults[tab.id]?.metrics?.roc_auc?.toFixed(3) || 'N/A'}
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                ROC AUC
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Additional Reversal Training Info */}
+                          <div style={{
+                            background: 'rgba(0, 255, 255, 0.05)',
+                            border: '1px solid rgba(0, 255, 255, 0.2)',
+                            borderRadius: '8px',
+                            padding: '1rem',
+                            marginBottom: '1.5rem'
+                          }}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                                  <strong style={{ color: 'var(--accent-cyan)' }}>Training Data:</strong> {trainingResults[tab.id]?.model_info?.training_samples || 'N/A'} rows with {trainingResults[tab.id]?.model_info?.features_used || '63'} features
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                                  <strong style={{ color: 'var(--accent-cyan)' }}>Task Type:</strong> {trainingResults[tab.id]?.model_info?.task_type || 'Classification'} (Reversal Detection)
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Generic Metrics Grid for any other models */}
+                      {!['volatility', 'direction', 'profit_probability', 'reversal'].includes(tab.id) && trainingResults[tab.id]?.metrics && (
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                           {Object.entries(trainingResults[tab.id]?.metrics || {}).map(([key, value]) => (
                             <div key={key} style={{
