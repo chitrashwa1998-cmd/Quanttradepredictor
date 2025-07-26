@@ -1,11 +1,13 @@
 /**
  * Predictions page - Complete Streamlit functionality migration with 4 model tabs
+ * Exact replica of the original Streamlit predictions with comprehensive analysis
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import Card from '../components/common/Card';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { dataAPI, predictionsAPI } from '../services/api';
+import axios from 'axios';
 
 const Predictions = () => {
   const [datasets, setDatasets] = useState([]);
@@ -16,6 +18,10 @@ const Predictions = () => {
   const [predictionStatus, setPredictionStatus] = useState('');
   const [freshData, setFreshData] = useState(null);
   const [livePredictionsAvailable, setLivePredictionsAvailable] = useState(false);
+  const [selectedDataset, setSelectedDataset] = useState('');
+  const [generatingPredictions, setGeneratingPredictions] = useState(false);
+  const [currentPredictionData, setCurrentPredictionData] = useState(null);
+  const [analysisTab, setAnalysisTab] = useState('chart');
 
   // Load initial data
   const loadInitialData = useCallback(async () => {
@@ -34,8 +40,8 @@ const Predictions = () => {
       // Try to load fresh data from preferred datasets
       const datasetList = datasetsResponse.data || [];
       if (datasetList.length > 0) {
-        // Prefer training_dataset or livenifty50
-        const preferredDatasets = ['training_dataset', 'livenifty50'];
+        // Prefer training_dataset or livenifty50 or tr
+        const preferredDatasets = ['training_dataset', 'livenifty50', 'tr'];
         let datasetToLoad = null;
 
         for (const preferred of preferredDatasets) {
@@ -52,6 +58,7 @@ const Predictions = () => {
         }
 
         if (datasetToLoad) {
+          setSelectedDataset(datasetToLoad);
           const dataResponse = await dataAPI.loadDataset(datasetToLoad);
           setFreshData(dataResponse.data);
           setPredictionStatus(`✅ Using authentic data with ${dataResponse.data?.length || 0} records from ${datasetToLoad}`);
@@ -82,35 +89,29 @@ const Predictions = () => {
 
   // Generate predictions for a specific model
   const generatePredictions = async (modelType) => {
-    if (!freshData || freshData.length === 0) {
-      setPredictionStatus('❌ No data available for predictions');
-      return;
-    }
-
-    if (!modelStatus[modelType]?.loaded) {
-      setPredictionStatus(`❌ ${modelType} model not trained. Please train the model first.`);
+    if (!selectedDataset) {
+      setPredictionStatus('❌ No dataset selected for predictions');
       return;
     }
 
     try {
-      setLoading(true);
+      setGeneratingPredictions(true);
       setPredictionStatus(`🔮 Generating ${modelType} predictions...`);
 
-      const response = await predictionsAPI.generatePredictions({
+      const response = await axios.post('http://localhost:8000/api/predictions/generate', {
         model_type: modelType,
-        data: freshData.slice(-100) // Use last 100 records for prediction
+        dataset_name: selectedDataset,
+        config: {}
       });
 
-      setPredictions(prev => ({
-        ...prev,
-        [modelType]: response.data
-      }));
-
+      setCurrentPredictionData(response.data);
       setPredictionStatus(`✅ ${modelType.charAt(0).toUpperCase() + modelType.slice(1)} predictions generated successfully!`);
+      
     } catch (error) {
+      console.error('Prediction error:', error);
       setPredictionStatus(`❌ Prediction failed: ${error.response?.data?.detail || error.message}`);
     } finally {
-      setLoading(false);
+      setGeneratingPredictions(false);
     }
   };
 
@@ -123,6 +124,7 @@ const Predictions = () => {
       // Clear local state
       setPredictions({});
       setFreshData(null);
+      setCurrentPredictionData(null);
       
       // Reload fresh data
       await loadInitialData();
@@ -138,442 +140,524 @@ const Predictions = () => {
   const modelTabs = [
     { 
       id: 'volatility', 
-      name: 'Volatility Predictions', 
-      icon: '📊', 
-      description: 'Forecasts the magnitude of price movements without predicting direction.',
-      color: '#00ffff'
+      name: '📊 Volatility Predictions', 
+      icon: '📊',
+      description: 'Advanced volatility forecasting with comprehensive analysis'
     },
     { 
       id: 'direction', 
-      name: 'Direction Predictions', 
-      icon: '📈', 
-      description: 'Predicts whether prices will move up or down.',
-      color: '#00ff41'
+      name: '📈 Direction Predictions', 
+      icon: '📈',
+      description: 'Bullish/bearish market direction with confidence levels'
     },
     { 
       id: 'profit_probability', 
-      name: 'Profit Probability', 
-      icon: '💰', 
-      description: 'Estimates the likelihood of profitable trades with risk assessment.',
-      color: '#ff0080'
+      name: '💰 Profit Probability', 
+      icon: '💰',
+      description: 'Probability of profitable trades with risk assessment'
     },
     { 
       id: 'reversal', 
-      name: 'Reversal Detection', 
-      icon: '🔄', 
-      description: 'Identifies potential market reversal points.',
-      color: '#8b5cf6'
+      name: '🔄 Reversal Detection', 
+      icon: '🔄',
+      description: 'Market reversal patterns and trend changes'
     }
   ];
 
-  return (
-    <div className="container mx-auto px-6 py-8">
-      {/* Header */}
-      <div className="trading-header mb-8">
-        <h1 style={{
-          margin: '0',
-          background: 'var(--gradient-primary)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          fontFamily: 'var(--font-display)',
-          fontSize: '2.5rem'
-        }}>
-          🔮 REAL-TIME PREDICTIONS
-        </h1>
-        <p style={{
-          fontSize: '1.2rem',
-          margin: '1rem 0 0 0',
-          color: 'rgba(255,255,255,0.8)',
-          fontFamily: 'var(--font-primary)'
-        }}>
-          Advanced ML Model Predictions - Authentic Data Only
-        </p>
-      </div>
+  const analysisTabs = [
+    { id: 'chart', name: '📈 Interactive Chart', icon: '📈' },
+    { id: 'data', name: '📋 Detailed Data', icon: '📋' },
+    { id: 'distribution', name: '📊 Distribution Analysis', icon: '📊' },
+    { id: 'statistics', name: '🔍 Statistical Analysis', icon: '🔍' },
+    { id: 'metrics', name: '⚡ Performance Metrics', icon: '⚡' }
+  ];
 
-      {/* Live Predictions Banner */}
-      {livePredictionsAvailable && (
-        <Card style={{ marginBottom: '2rem', background: 'rgba(0, 255, 0, 0.05)', border: '1px solid rgba(0, 255, 0, 0.2)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+  // Render prediction results based on model type
+  const renderPredictionResults = (data) => {
+    if (!data || !data.success) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-gray-400">No prediction data available</p>
+        </div>
+      );
+    }
+
+    const { model_type, statistics, predictions, total_predictions } = data;
+
+    return (
+      <div className="space-y-6">
+        {/* Status Header */}
+        <div className="bg-gray-800 rounded-lg p-4">
+          <div className="flex items-center justify-between">
             <div>
-              <h3 style={{ color: '#51cf66', margin: '0 0 0.5rem 0', fontSize: '1.2rem' }}>
-                🎯 Live Predictions Available!
+              <h3 className="text-lg font-semibold text-cyan-400">
+                {model_type.charAt(0).toUpperCase() + model_type.slice(1)} Predictions
               </h3>
-              <p style={{ color: 'var(--text-primary)', margin: '0' }}>
-                Real-time direction predictions are being generated from live market data.
+              <p className="text-gray-400">
+                {total_predictions} predictions generated from authentic data
               </p>
             </div>
-            <button
-              onClick={() => window.location.href = '/live'}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: 'var(--gradient-primary)',
-                border: 'none',
-                borderRadius: '8px',
-                color: 'white',
-                fontFamily: 'var(--font-primary)',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              📡 View Live Data Page
-            </button>
+            <div className="text-right">
+              <p className="text-sm text-gray-400">Dataset: {selectedDataset}</p>
+              <p className="text-sm text-gray-400">Status: Active</p>
+            </div>
           </div>
-        </Card>
-      )}
+        </div>
 
-      {/* Controls */}
-      <Card style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h3 style={{ color: 'var(--accent-cyan)', margin: '0 0 0.5rem 0' }}>
-              Data Status
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', margin: '0', fontSize: '0.9rem' }}>
-              {freshData ? `${freshData.length} records loaded` : 'No data loaded'}
-            </p>
+        {/* Analysis Tabs */}
+        <div className="border-b border-gray-700">
+          <nav className="flex space-x-8">
+            {analysisTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setAnalysisTab(tab.id)}
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  analysisTab === tab.id
+                    ? 'border-cyan-400 text-cyan-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                }`}
+              >
+                <span className="mr-1">{tab.icon}</span>
+                {tab.name}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Analysis Content */}
+        <div className="bg-gray-800 rounded-lg p-6">
+          {analysisTab === 'chart' && renderChartAnalysis(data)}
+          {analysisTab === 'data' && renderDataAnalysis(data)}
+          {analysisTab === 'distribution' && renderDistributionAnalysis(data)}
+          {analysisTab === 'statistics' && renderStatisticalAnalysis(data)}
+          {analysisTab === 'metrics' && renderMetricsAnalysis(data)}
+        </div>
+      </div>
+    );
+  };
+
+  // Chart Analysis Tab
+  const renderChartAnalysis = (data) => {
+    const { predictions, statistics } = data;
+    
+    return (
+      <div className="space-y-6">
+        <h4 className="text-lg font-semibold text-cyan-400">Interactive Chart Analysis</h4>
+        
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {data.model_type === 'volatility' && (
+            <>
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <p className="text-sm text-gray-400">Current Volatility</p>
+                <p className="text-xl font-bold text-cyan-400">{statistics.current_volatility?.toFixed(6) || 'N/A'}</p>
+              </div>
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <p className="text-sm text-gray-400">Average</p>
+                <p className="text-xl font-bold text-cyan-400">{statistics.mean?.toFixed(6) || 'N/A'}</p>
+              </div>
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <p className="text-sm text-gray-400">Min</p>
+                <p className="text-xl font-bold text-green-400">{statistics.min?.toFixed(6) || 'N/A'}</p>
+              </div>
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <p className="text-sm text-gray-400">Max</p>
+                <p className="text-xl font-bold text-red-400">{statistics.max?.toFixed(6) || 'N/A'}</p>
+              </div>
+            </>
+          )}
+          
+          {data.model_type === 'direction' && (
+            <>
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <p className="text-sm text-gray-400">Current Direction</p>
+                <p className={`text-xl font-bold ${statistics.current_direction === 'Bullish' ? 'text-green-400' : 'text-red-400'}`}>
+                  {statistics.current_direction || 'N/A'}
+                </p>
+              </div>
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <p className="text-sm text-gray-400">Current Confidence</p>
+                <p className="text-xl font-bold text-cyan-400">{(statistics.current_confidence * 100)?.toFixed(1) || 'N/A'}%</p>
+              </div>
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <p className="text-sm text-gray-400">Bullish %</p>
+                <p className="text-xl font-bold text-green-400">{statistics.bullish_percentage?.toFixed(1) || 'N/A'}%</p>
+              </div>
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <p className="text-sm text-gray-400">Avg Confidence</p>
+                <p className="text-xl font-bold text-cyan-400">{(statistics.average_confidence * 100)?.toFixed(1) || 'N/A'}%</p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Prediction Timeline */}
+        <div>
+          <h5 className="text-md font-semibold text-white mb-4">Recent Predictions Timeline</h5>
+          <div className="bg-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto">
+            {predictions.slice(-20).map((pred, idx) => (
+              <div key={idx} className="flex justify-between items-center py-2 border-b border-gray-600 last:border-b-0">
+                <div>
+                  <span className="text-sm text-gray-400">{pred.date} {pred.time}</span>
+                </div>
+                <div className="text-right">
+                  {data.model_type === 'volatility' && (
+                    <span className="text-cyan-400 font-mono">{pred.predicted_volatility?.toFixed(6)}</span>
+                  )}
+                  {data.model_type === 'direction' && (
+                    <div>
+                      <span className={`font-semibold ${pred.direction === 'Bullish' ? 'text-green-400' : 'text-red-400'}`}>
+                        {pred.direction}
+                      </span>
+                      <span className="text-xs text-gray-400 ml-2">({(pred.confidence * 100).toFixed(1)}%)</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Data Analysis Tab
+  const renderDataAnalysis = (data) => {
+    return (
+      <div className="space-y-6">
+        <h4 className="text-lg font-semibold text-cyan-400">Detailed Prediction Data</h4>
+        <div className="bg-gray-700 rounded-lg max-h-96 overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-600 sticky top-0">
+              <tr>
+                <th className="px-4 py-2 text-left">DateTime</th>
+                <th className="px-4 py-2 text-left">Prediction</th>
+                <th className="px-4 py-2 text-left">Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.predictions.slice(-50).map((pred, idx) => (
+                <tr key={idx} className="border-b border-gray-600 hover:bg-gray-650">
+                  <td className="px-4 py-2 font-mono text-xs">{pred.date} {pred.time}</td>
+                  <td className="px-4 py-2">
+                    {data.model_type === 'volatility' && (
+                      <span className="text-cyan-400 font-mono">{pred.predicted_volatility?.toFixed(6)}</span>
+                    )}
+                    {data.model_type === 'direction' && (
+                      <span className={`font-semibold ${pred.direction === 'Bullish' ? 'text-green-400' : 'text-red-400'}`}>
+                        {pred.direction}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2">
+                    <span className="text-gray-300">{(pred.confidence * 100)?.toFixed(1) || 'N/A'}%</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // Distribution Analysis Tab
+  const renderDistributionAnalysis = (data) => {
+    return (
+      <div className="space-y-6">
+        <h4 className="text-lg font-semibold text-cyan-400">Distribution Analysis</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-gray-700 p-4 rounded-lg">
+            <h5 className="font-semibold text-white mb-3">Statistical Summary</h5>
+            <div className="space-y-2">
+              {data.statistics && Object.entries(data.statistics).map(([key, value]) => (
+                <div key={key} className="flex justify-between">
+                  <span className="text-gray-400 capitalize">{key.replace('_', ' ')}:</span>
+                  <span className="text-cyan-400 font-mono">
+                    {typeof value === 'number' ? value.toFixed(6) : value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {data.percentiles && (
+            <div className="bg-gray-700 p-4 rounded-lg">
+              <h5 className="font-semibold text-white mb-3">Percentile Analysis</h5>
+              <div className="space-y-2">
+                {Object.entries(data.percentiles).map(([percentile, value]) => (
+                  <div key={percentile} className="flex justify-between">
+                    <span className="text-gray-400">{percentile}th percentile:</span>
+                    <span className="text-cyan-400 font-mono">{parseFloat(value).toFixed(6)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Statistical Analysis Tab
+  const renderStatisticalAnalysis = (data) => {
+    return (
+      <div className="space-y-6">
+        <h4 className="text-lg font-semibold text-cyan-400">Statistical Analysis</h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {data.rolling_stats && (
+            <div className="bg-gray-700 p-4 rounded-lg">
+              <h5 className="font-semibold text-white mb-3">Rolling Statistics</h5>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Current Mean:</span>
+                  <span className="text-cyan-400 font-mono">{data.rolling_stats.current_mean?.toFixed(6) || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Current Std:</span>
+                  <span className="text-cyan-400 font-mono">{data.rolling_stats.current_std?.toFixed(6) || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {data.clustering && (
+            <div className="bg-gray-700 p-4 rounded-lg">
+              <h5 className="font-semibold text-white mb-3">Volatility Clustering</h5>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Total Clusters:</span>
+                  <span className="text-cyan-400">{data.clustering.total_clusters}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Avg Length:</span>
+                  <span className="text-cyan-400">{data.clustering.avg_cluster_length?.toFixed(1) || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Max Length:</span>
+                  <span className="text-cyan-400">{data.clustering.max_cluster_length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Clustering %:</span>
+                  <span className="text-cyan-400">{data.clustering.clustering_percentage?.toFixed(1) || 'N/A'}%</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {data.regimes && (
+          <div className="bg-gray-700 p-4 rounded-lg">
+            <h5 className="font-semibold text-white mb-3">Volatility Regime Distribution</h5>
+            <div className="space-y-2">
+              {Object.entries(data.regimes).map(([regime, count]) => (
+                <div key={regime} className="flex justify-between">
+                  <span className="text-gray-400">{regime}:</span>
+                  <span className="text-cyan-400">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Performance Metrics Tab
+  const renderMetricsAnalysis = (data) => {
+    return (
+      <div className="space-y-6">
+        <h4 className="text-lg font-semibold text-cyan-400">Performance Metrics</h4>
+        
+        <div className="bg-gray-700 p-4 rounded-lg">
+          <h5 className="font-semibold text-white mb-3">Model Information</h5>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Model Type:</span>
+              <span className="text-cyan-400 capitalize">{data.model_type}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Total Predictions:</span>
+              <span className="text-cyan-400">{data.total_predictions}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Dataset:</span>
+              <span className="text-cyan-400">{selectedDataset}</span>
+            </div>
+          </div>
+        </div>
+
+        {data.autocorrelation && (
+          <div className="bg-gray-700 p-4 rounded-lg">
+            <h5 className="font-semibold text-white mb-3">Autocorrelation Analysis</h5>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Object.entries(data.autocorrelation).slice(0, 8).map(([lag, correlation]) => (
+                <div key={lag} className="text-center">
+                  <p className="text-xs text-gray-400">Lag {lag}</p>
+                  <p className="text-sm font-mono text-cyan-400">{parseFloat(correlation).toFixed(3)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-cyan-400 mb-2">🔮 Real-Time Predictions</h1>
+          <p className="text-gray-400">Advanced ML Model Predictions - Authentic Data Only</p>
+        </div>
+
+        {/* Live Predictions Banner */}
+        {livePredictionsAvailable && (
+          <div className="mb-6 bg-blue-900 border border-blue-700 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-200">🎯 <strong>Live Predictions Available!</strong> Real-time direction predictions are being generated from live market data.</p>
+              </div>
+              <button className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white">
+                📡 View Live Data Page
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Controls */}
+        <div className="mb-6 flex flex-wrap gap-4">
           <button
             onClick={clearCache}
             disabled={loading}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: loading ? 'var(--bg-secondary)' : '#ff6b6b',
-              border: '1px solid #ff6b6b',
-              borderRadius: '8px',
-              color: 'white',
-              fontFamily: 'var(--font-primary)',
-              fontWeight: '600',
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
-            title="Click if you see synthetic datetime warnings"
+            className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 px-4 py-2 rounded text-white flex items-center"
           >
-            {loading ? '⏳ Clearing...' : '🗑️ Clear All Cached Data'}
+            🗑️ Clear All Cached Data
           </button>
-        </div>
-      </Card>
-
-      {/* Model Status Overview */}
-      <Card style={{ marginBottom: '2rem' }}>
-        <h3 style={{ color: 'var(--accent-cyan)', marginBottom: '1rem' }}>
-          🤖 Model Status
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {modelTabs.map((tab) => (
-            <div key={tab.id} style={{
-              background: modelStatus[tab.id]?.loaded 
-                ? 'rgba(0, 255, 0, 0.05)' 
-                : 'rgba(255, 0, 0, 0.05)',
-              border: `1px solid ${modelStatus[tab.id]?.loaded ? '#00ff00' : '#ff0000'}`,
-              borderRadius: '8px',
-              padding: '1rem',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{tab.icon}</div>
-              <div style={{
-                color: modelStatus[tab.id]?.loaded ? '#51cf66' : '#ff6b6b',
-                fontWeight: '600',
-                fontSize: '0.9rem'
-              }}>
-                {modelStatus[tab.id]?.loaded ? '✅ Ready' : '❌ Not Trained'}
-              </div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                {tab.name}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Prediction Tabs */}
-      <Card>
-        {/* Tab Navigation */}
-        <div style={{
-          display: 'flex',
-          borderBottom: '2px solid var(--border)',
-          marginBottom: '2rem',
-          overflowX: 'auto'
-        }}>
-          {modelTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                padding: '1rem 1.5rem',
-                background: activeTab === tab.id ? tab.color + '20' : 'transparent',
-                border: 'none',
-                borderBottom: activeTab === tab.id ? `3px solid ${tab.color}` : '3px solid transparent',
-                color: activeTab === tab.id ? tab.color : 'var(--text-primary)',
-                fontFamily: 'var(--font-primary)',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                whiteSpace: 'nowrap'
-              }}
+          
+          <div className="flex items-center space-x-2">
+            <span className="text-gray-400">Dataset:</span>
+            <select
+              value={selectedDataset}
+              onChange={(e) => setSelectedDataset(e.target.value)}
+              className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
             >
-              {tab.icon} {tab.name}
-            </button>
-          ))}
+              <option value="">Select dataset...</option>
+              {datasets.map((dataset) => (
+                <option key={dataset.name} value={dataset.name}>
+                  {dataset.name} ({dataset.rows} rows)
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Tab Content */}
-        {modelTabs.map((tab) => (
-          activeTab === tab.id && (
-            <div key={tab.id}>
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <div className="lg:col-span-3">
-                  <h3 style={{
-                    color: tab.color,
-                    fontFamily: 'var(--font-display)',
-                    fontSize: '1.5rem',
-                    marginBottom: '1rem'
-                  }}>
-                    {tab.icon} {tab.name}
-                  </h3>
-                  <p style={{
-                    color: 'var(--text-primary)',
-                    marginBottom: '1.5rem',
-                    lineHeight: '1.6'
-                  }}>
-                    {tab.description}
-                  </p>
+        {/* Status */}
+        {predictionStatus && (
+          <div className="mb-6 p-4 bg-gray-800 rounded-lg">
+            <p className="text-gray-300">{predictionStatus}</p>
+          </div>
+        )}
 
-                  {/* Model Status Check */}
-                  {!modelStatus[tab.id]?.loaded && (
-                    <div style={{
-                      background: 'rgba(255, 0, 0, 0.05)',
-                      border: '1px solid #ff0000',
-                      borderRadius: '8px',
-                      padding: '1.5rem',
-                      marginBottom: '1.5rem',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{ color: '#ff6b6b', fontSize: '1.2rem', marginBottom: '0.5rem' }}>
-                        ⚠️ Model Not Trained
-                      </div>
-                      <p style={{ color: 'var(--text-secondary)', margin: '0 0 1rem 0' }}>
-                        Please train the {tab.name.toLowerCase()} first in the Model Training page.
-                      </p>
-                      <button
-                        onClick={() => window.location.href = '/training'}
-                        style={{
-                          padding: '0.75rem 1.5rem',
-                          background: 'var(--gradient-primary)',
-                          border: 'none',
-                          borderRadius: '8px',
-                          color: 'white',
-                          fontFamily: 'var(--font-primary)',
-                          fontWeight: '600',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        🧠 Go to Model Training
-                      </button>
-                    </div>
-                  )}
+        {/* Model Tabs */}
+        <div className="mb-6">
+          <div className="border-b border-gray-700">
+            <nav className="flex space-x-8">
+              {modelTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setCurrentPredictionData(null);
+                    setAnalysisTab('chart');
+                  }}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === tab.id
+                      ? 'border-cyan-400 text-cyan-400'
+                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                  }`}
+                >
+                  <span className="mr-1">{tab.icon}</span>
+                  {tab.name}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
 
-                  {/* Predictions Results */}
-                  {predictions[tab.id] && modelStatus[tab.id]?.loaded && (
-                    <div style={{
-                      background: `${tab.color}10`,
-                      border: `1px solid ${tab.color}40`,
-                      borderRadius: '12px',
-                      padding: '1.5rem',
-                      marginBottom: '1.5rem'
-                    }}>
-                      <h4 style={{ color: tab.color, marginBottom: '1rem' }}>
-                        📊 Latest {tab.name}
-                      </h4>
-                      
-                      {/* Prediction Visualization */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        {predictions[tab.id].summary && Object.entries(predictions[tab.id].summary).map(([key, value]) => (
-                          <div key={key} style={{
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            borderRadius: '8px',
-                            padding: '1rem',
-                            textAlign: 'center'
-                          }}>
-                            <div style={{
-                              color: tab.color,
-                              fontSize: '1.5rem',
-                              fontWeight: '700',
-                              marginBottom: '0.25rem'
-                            }}>
-                              {typeof value === 'number' ? value.toFixed(4) : value}
-                            </div>
-                            <div style={{
-                              color: 'var(--text-secondary)',
-                              fontSize: '0.9rem',
-                              textTransform: 'capitalize'
-                            }}>
-                              {key.replace('_', ' ')}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+        {/* Active Model Content */}
+        <Card>
+          <div className="p-6">
+            {/* Model Header */}
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-white">
+                  {modelTabs.find(tab => tab.id === activeTab)?.name}
+                </h2>
+                <p className="text-gray-400 mt-1">
+                  {modelTabs.find(tab => tab.id === activeTab)?.description}
+                </p>
+              </div>
+              
+              {/* Generate Predictions Button */}
+              <button
+                onClick={() => generatePredictions(activeTab)}
+                disabled={generatingPredictions || !selectedDataset}
+                className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600 px-6 py-3 rounded-lg text-white font-semibold flex items-center space-x-2"
+              >
+                {generatingPredictions ? (
+                  <>
+                    <LoadingSpinner size="sm" />
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>🔮</span>
+                    <span>Generate Predictions</span>
+                  </>
+                )}
+              </button>
+            </div>
 
-                      {/* Prediction Table */}
-                      {predictions[tab.id].data && (
-                        <div style={{ overflowX: 'auto' }}>
-                          <table style={{
-                            width: '100%',
-                            borderCollapse: 'collapse',
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: '0.9rem'
-                          }}>
-                            <thead>
-                              <tr style={{ background: `${tab.color}20` }}>
-                                <th style={{
-                                  padding: '0.75rem',
-                                  textAlign: 'left',
-                                  color: tab.color,
-                                  borderBottom: '1px solid var(--border)'
-                                }}>
-                                  Timestamp
-                                </th>
-                                <th style={{
-                                  padding: '0.75rem',
-                                  textAlign: 'left',
-                                  color: tab.color,
-                                  borderBottom: '1px solid var(--border)'
-                                }}>
-                                  Prediction
-                                </th>
-                                <th style={{
-                                  padding: '0.75rem',
-                                  textAlign: 'left',
-                                  color: tab.color,
-                                  borderBottom: '1px solid var(--border)'
-                                }}>
-                                  Confidence
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {predictions[tab.id].data.slice(0, 10).map((row, index) => (
-                                <tr key={index}>
-                                  <td style={{
-                                    padding: '0.75rem',
-                                    color: 'var(--text-primary)',
-                                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-                                  }}>
-                                    {row.timestamp}
-                                  </td>
-                                  <td style={{
-                                    padding: '0.75rem',
-                                    color: tab.color,
-                                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                                    fontWeight: '600'
-                                  }}>
-                                    {row.prediction}
-                                  </td>
-                                  <td style={{
-                                    padding: '0.75rem',
-                                    color: 'var(--text-primary)',
-                                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-                                  }}>
-                                    {row.confidence}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  )}
+            {/* Model Status Check */}
+            {!modelStatus[activeTab]?.loaded && (
+              <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 mb-6">
+                <p className="text-yellow-200">
+                  ⚠️ {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} model not trained. 
+                  Please train the model first in the Model Training page.
+                </p>
+              </div>
+            )}
+
+            {/* Prediction Results */}
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <LoadingSpinner />
+              </div>
+            ) : currentPredictionData && currentPredictionData.model_type === activeTab ? (
+              renderPredictionResults(currentPredictionData)
+            ) : (
+              <div className="text-center py-12">
+                <div className="text-gray-400 mb-4">
+                  <span className="text-4xl">🔮</span>
                 </div>
-
-                <div>
-                  <button
-                    onClick={() => generatePredictions(tab.id)}
-                    disabled={loading || !modelStatus[tab.id]?.loaded || !freshData}
-                    style={{
-                      width: '100%',
-                      padding: '1rem',
-                      background: loading || !modelStatus[tab.id]?.loaded || !freshData
-                        ? 'var(--bg-secondary)' 
-                        : tab.color,
-                      border: `2px solid ${tab.color}`,
-                      borderRadius: '8px',
-                      color: 'white',
-                      fontFamily: 'var(--font-primary)',
-                      fontWeight: '600',
-                      fontSize: '1rem',
-                      cursor: loading || !modelStatus[tab.id]?.loaded || !freshData ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.3s ease'
-                    }}
-                  >
-                    {loading ? '⏳ Generating...' : `🔮 Generate ${tab.name}`}
-                  </button>
-
-                  {predictions[tab.id] && (
-                    <div style={{
-                      marginTop: '1rem',
-                      padding: '1rem',
-                      background: `${tab.color}10`,
-                      border: `1px solid ${tab.color}40`,
-                      borderRadius: '8px',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{
-                        color: tab.color,
-                        fontSize: '1.5rem',
-                        marginBottom: '0.5rem'
-                      }}>
-                        ✅
-                      </div>
-                      <div style={{
-                        color: tab.color,
-                        fontSize: '0.9rem',
-                        fontWeight: '600'
-                      }}>
-                        Predictions Generated
-                      </div>
-                      <div style={{
-                        color: 'var(--text-secondary)',
-                        fontSize: '0.8rem',
-                        marginTop: '0.25rem'
-                      }}>
-                        {predictions[tab.id].data?.length || 0} predictions
-                      </div>
-                    </div>
-                  )}
+                <h3 className="text-lg font-semibold text-gray-300 mb-2">
+                  Ready to Generate {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Predictions
+                </h3>
+                <p className="text-gray-400 mb-6">
+                  Click "Generate Predictions" to create comprehensive analysis with authentic data
+                </p>
+                <div className="text-sm text-gray-500">
+                  {selectedDataset ? `Using dataset: ${selectedDataset}` : 'Select a dataset to begin'}
                 </div>
               </div>
-            </div>
-          )
-        ))}
-      </Card>
-
-      {/* Status Message */}
-      {predictionStatus && (
-        <div style={{
-          position: 'fixed',
-          bottom: '2rem',
-          right: '2rem',
-          padding: '1rem 1.5rem',
-          background: predictionStatus.includes('❌') 
-            ? 'rgba(255, 0, 0, 0.9)' 
-            : predictionStatus.includes('✅')
-            ? 'rgba(0, 255, 0, 0.9)'
-            : 'rgba(0, 255, 255, 0.9)',
-          border: `1px solid ${
-            predictionStatus.includes('❌') ? '#ff0000' : 
-            predictionStatus.includes('✅') ? '#00ff00' : '#00ffff'
-          }`,
-          borderRadius: '8px',
-          color: 'white',
-          fontFamily: 'var(--font-primary)',
-          fontWeight: '600',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-          zIndex: 1000,
-          maxWidth: '400px'
-        }}>
-          {predictionStatus}
-        </div>
-      )}
+            )}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };
