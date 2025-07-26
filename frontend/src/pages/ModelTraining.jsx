@@ -131,9 +131,22 @@ const ModelTraining = () => {
         config: trainingConfig
       });
 
+      // Process the response to match Streamlit format
+      const processedResults = {
+        ...response.data,
+        metrics: response.data.metrics || response.data.performance || {},
+        feature_importance: response.data.feature_importance || {},
+        model_info: {
+          training_samples: response.data.training_samples || 'N/A',
+          features_used: response.data.features_used || response.data.feature_names?.length || 'N/A',
+          model_type: 'Ensemble (XGBoost + CatBoost + Random Forest)',
+          task_type: response.data.task_type || 'regression'
+        }
+      };
+
       setTrainingResults(prev => ({
         ...prev,
-        [modelType]: response.data
+        [modelType]: processedResults
       }));
 
       setTrainingStatus(`✅ ${modelType.charAt(0).toUpperCase() + modelType.slice(1)} model trained successfully!`);
@@ -659,42 +672,145 @@ const ModelTraining = () => {
                       marginBottom: '1.5rem'
                     }}>
                       <h4 style={{ color: '#51cf66', marginBottom: '1.5rem', fontSize: '1.2rem' }}>
-                        📊 Training Results - {tab.name}
+                        ✅ {tab.name} trained successfully!
                       </h4>
 
-                      {/* Metrics Grid */}
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        {trainingResults[tab.id].metrics && Object.entries(trainingResults[tab.id].metrics).map(([key, value]) => (
-                          <div key={key} style={{
-                            background: 'rgba(0, 255, 255, 0.1)',
-                            border: '1px solid rgba(0, 255, 255, 0.3)',
-                            borderRadius: '8px',
-                            padding: '1rem',
-                            textAlign: 'center'
-                          }}>
+                      {/* Key Metrics for Volatility Model (matching Streamlit) */}
+                      {tab.id === 'volatility' && trainingResults[tab.id].metrics && (
+                        <div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                             <div style={{
-                              color: 'var(--accent-cyan)',
-                              fontSize: '1.5rem',
-                              fontWeight: '700',
-                              marginBottom: '0.25rem'
+                              background: 'rgba(0, 255, 255, 0.1)',
+                              border: '1px solid rgba(0, 255, 255, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
                             }}>
-                              {typeof value === 'number' ? (
-                                key.includes('accuracy') || key.includes('precision') || key.includes('recall') || key.includes('f1') ? 
-                                `${(value * 100).toFixed(2)}%` : 
-                                value.toFixed(4)
-                              ) : value}
+                              <div style={{
+                                color: 'var(--accent-cyan)',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {trainingResults[tab.id].metrics.rmse?.toFixed(4) || 'N/A'}
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                RMSE
+                              </div>
                             </div>
+
                             <div style={{
-                              color: 'var(--text-secondary)',
-                              fontSize: '0.9rem',
-                              textTransform: 'capitalize',
-                              fontWeight: '500'
+                              background: 'rgba(255, 215, 0, 0.1)',
+                              border: '1px solid rgba(255, 215, 0, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
                             }}>
-                              {key.replace('_', ' ').toUpperCase()}
+                              <div style={{
+                                color: 'var(--accent-gold)',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {trainingResults[tab.id].metrics.mae?.toFixed(4) || 'N/A'}
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                MAE
+                              </div>
+                            </div>
+
+                            <div style={{
+                              background: 'rgba(139, 92, 246, 0.1)',
+                              border: '1px solid rgba(139, 92, 246, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: '#8b5cf6',
+                                fontSize: '1.8rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {trainingResults[tab.id].metrics.mse?.toFixed(4) || 'N/A'}
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                fontWeight: '500'
+                              }}>
+                                MSE
+                              </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
+
+                          {/* Additional Training Info */}
+                          <div style={{
+                            background: 'rgba(0, 255, 255, 0.05)',
+                            border: '1px solid rgba(0, 255, 255, 0.2)',
+                            borderRadius: '8px',
+                            padding: '1rem',
+                            marginBottom: '1.5rem'
+                          }}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                                  <strong style={{ color: 'var(--accent-cyan)' }}>Training Data:</strong> {trainingResults[tab.id].model_info?.training_samples || 'N/A'} rows with {trainingResults[tab.id].model_info?.features_used || '27'} features
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                                  <strong style={{ color: 'var(--accent-cyan)' }}>Model Architecture:</strong> {trainingResults[tab.id].model_info?.model_type || 'Ensemble (XGBoost + CatBoost + Random Forest)'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Metrics Grid for other models */}
+                      {tab.id !== 'volatility' && trainingResults[tab.id].metrics && (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                          {Object.entries(trainingResults[tab.id].metrics).map(([key, value]) => (
+                            <div key={key} style={{
+                              background: 'rgba(0, 255, 255, 0.1)',
+                              border: '1px solid rgba(0, 255, 255, 0.3)',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                color: 'var(--accent-cyan)',
+                                fontSize: '1.5rem',
+                                fontWeight: '700',
+                                marginBottom: '0.25rem'
+                              }}>
+                                {typeof value === 'number' ? (
+                                  key.includes('accuracy') || key.includes('precision') || key.includes('recall') || key.includes('f1') ? 
+                                  `${(value * 100).toFixed(2)}%` : 
+                                  value.toFixed(4)
+                                ) : value}
+                              </div>
+                              <div style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                textTransform: 'capitalize',
+                                fontWeight: '500'
+                              }}>
+                                {key.replace('_', ' ').toUpperCase()}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Feature Importance Section */}
                       {trainingResults[tab.id].feature_importance && (

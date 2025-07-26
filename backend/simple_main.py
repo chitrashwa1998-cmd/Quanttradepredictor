@@ -23,6 +23,7 @@ app.add_middleware(
 
 # In-memory storage for datasets (for demo purposes)
 datasets_storage = {}
+trained_models_storage = {}
 
 @app.get("/")
 async def root():
@@ -156,7 +157,7 @@ async def get_dataset(dataset_name: str):
             raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
 
         df = datasets_storage[dataset_name]
-        
+
         return {
             "success": True,
             "dataset_name": dataset_name,
@@ -198,37 +199,37 @@ async def calculate_features(request: dict):
         dataset_name = request.get('dataset_name')
         if not dataset_name or dataset_name not in datasets_storage:
             raise HTTPException(status_code=404, detail="Dataset not found")
-        
+
         # Get the raw dataset
         raw_data = datasets_storage[dataset_name]
-        
+
         # Import the exact same modules used in Streamlit
         import sys
         import os
         sys.path.append('/home/runner/workspace')
-        
+
         from models.volatility_model import VolatilityModel
         from utils.data_processing import DataProcessor
-        
+
         # Calculate features using the exact same volatility model process as Streamlit
         logging.info("🔧 Calculating volatility-specific technical indicators...")
-        
+
         # Step 1: Use volatility model's prepare_features method (same as Streamlit)
         volatility_model = VolatilityModel()
         features_data = volatility_model.prepare_features(raw_data)
-        
+
         # Step 2: Clean the data (same as Streamlit)
         features_clean = DataProcessor.clean_data(features_data)
-        
+
         # Store the calculated features
         datasets_storage[f"{dataset_name}_features"] = features_clean
-        
+
         # Count engineered features (excluding OHLC columns)
         ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
         feature_cols = [col for col in features_clean.columns if col not in ohlc_cols]
-        
+
         logging.info(f"✅ Volatility features calculated: {len(feature_cols)} engineered features, {len(features_clean)} data points")
-        
+
         return {
             "success": True,
             "message": "Volatility technical indicators calculated successfully!",
@@ -238,7 +239,7 @@ async def calculate_features(request: dict):
             "feature_columns": feature_cols,
             "sample_data": features_clean.head(10).to_dict('records') if len(features_clean) > 0 else []
         }
-        
+
     except Exception as e:
         logging.error(f"Error calculating volatility features: {e}")
         import traceback
@@ -247,32 +248,96 @@ async def calculate_features(request: dict):
 
 @app.post("/api/models/train")
 async def train_model(request: dict):
-    """Train a specific model"""
+    """Train a specific model with detailed results matching Streamlit"""
     try:
-        model_type = request.get('model_type')
+        model_type = request.get('model_type', 'volatility')
         dataset_name = request.get('dataset_name')
-        
-        if not model_type:
-            raise HTTPException(status_code=400, detail="model_type is required")
-        if not dataset_name or dataset_name not in datasets_storage:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        # Mock training results
-        mock_metrics = {
-            'volatility': {'rmse': 0.0245, 'mae': 0.0198, 'mse': 0.0006},
-            'direction': {'accuracy': 0.67, 'precision': 0.65, 'recall': 0.69},
-            'profit_probability': {'accuracy': 0.72, 'precision': 0.70, 'recall': 0.74},
-            'reversal': {'accuracy': 0.63, 'precision': 0.61, 'recall': 0.66}
-        }
-        
-        return {
-            "success": True,
-            "model_type": model_type,
-            "metrics": mock_metrics.get(model_type, {}),
-            "message": f"{model_type.capitalize()} model trained successfully (mock)"
-        }
+        config = request.get('config', {})
+
+        if not dataset_name or f"{dataset_name}_features" not in datasets_storage:
+            raise HTTPException(status_code=404, detail="Features not calculated. Please calculate features first.")
+
+        # Get the processed features
+        features_data = datasets_storage[f"{dataset_name}_features"]
+        raw_data = datasets_storage[dataset_name]
+
+        # Import the appropriate model
+        import sys
+        import os
+        sys.path.append('/home/runner/workspace')
+
+        from models.volatility_model import VolatilityModel
+
+        if model_type == 'volatility':
+            logging.info("🚀 Training volatility model...")
+
+            # Initialize volatility model
+            volatility_model = VolatilityModel()
+
+            # Create target from raw data
+            target = volatility_model.create_target(raw_data)
+
+            # Log training info (matching Streamlit)
+            logging.info(f"📊 Training data: {len(features_data)} rows with {len(features_data.columns)} features")
+
+            # Train the model
+            training_result = volatility_model.train(
+                features_data, 
+                target, 
+                config.get('train_split', 0.8)
+            )
+
+            # Store the trained model
+            trained_models_storage['volatility'] = {
+                'model': volatility_model,
+                'result': training_result
+            }
+
+            # Extract metrics (matching Streamlit display)
+            metrics = training_result.get('metrics', {})
+
+            # Prepare detailed response matching Streamlit format
+            response_data = {
+                "success": True,
+                "model_type": model_type,
+                "metrics": {
+                    "rmse": metrics.get('rmse', metrics.get('test_rmse')),
+                    "mae": metrics.get('mae'),
+                    "mse": metrics.get('mse'),
+                    "r2": metrics.get('r2', metrics.get('test_r2')),
+                    "train_rmse": metrics.get('train_rmse'),
+                    "test_rmse": metrics.get('test_rmse'),
+                    "train_r2": metrics.get('train_r2'),
+                    "test_r2": metrics.get('test_r2')
+                },
+                "feature_importance": training_result.get('feature_importance', {}),
+                "model_info": {
+                    "training_samples": len(features_data),
+                    "features_used": len(features_data.columns),
+                    "model_type": "Ensemble (XGBoost + CatBoost + Random Forest)",
+                    "task_type": training_result.get('task_type', 'regression')
+                },
+                "feature_names": training_result.get('feature_names', []),
+                "training_config": {
+                    "train_split": config.get('train_split', 0.8),
+                    "max_depth": config.get('max_depth', 6),
+                    "n_estimators": config.get('n_estimators', 100)
+                },
+                "message": f"✅ Volatility model trained successfully!"
+            }
+
+            logging.info(f"✅ Volatility model training completed successfully")
+            logging.info(f"📊 Final metrics - RMSE: {response_data['metrics']['rmse']:.6f}, MAE: {response_data['metrics']['mae']:.6f}")
+
+            return response_data
+        else:
+            raise HTTPException(status_code=400, detail=f"Model type {model_type} not supported yet")
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Training failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
