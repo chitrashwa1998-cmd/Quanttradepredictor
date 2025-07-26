@@ -197,18 +197,6 @@ class DatabaseAdapter:
         """Clear all data from database."""
         return self.db.clear_all_data()
 
-    def save_trained_model(self, model_type: str, model, scaler, feature_names: List[str]) -> bool:
-        """Save trained model to database."""
-        try:
-            if hasattr(self.db, 'save_trained_model'):
-                return self.db.save_trained_model(model_type, model, scaler, feature_names)
-            else:
-                print(f"Warning: save_trained_model not implemented for {self.db_type}")
-                return True  # Return True to avoid blocking training
-        except Exception as e:
-            print(f"Error saving trained model: {e}")
-            return False
-
     def get_connection_status(self) -> Dict[str, Any]:
         """Get database connection status."""
         return {

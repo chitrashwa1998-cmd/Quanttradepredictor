@@ -6,19 +6,14 @@ TribexAlpha is a comprehensive trading analytics platform built with Streamlit t
 
 ## System Architecture
 
-### Frontend Architecture (MIGRATED TO REACT)
-- **Framework**: React 18 with Vite build system (migrated from Streamlit)
-- **UI Library**: Tailwind CSS with cyberpunk theme matching original design
-- **Routing**: React Router for single-page application navigation
-- **Pages**: Dashboard, DataUpload, ModelTraining, Predictions, LiveTrading, Backtesting, DatabaseManager
-- **State Management**: React hooks with error boundaries
-- **API Communication**: Axios for HTTP requests and WebSocket connections
+### Frontend Architecture
+- **Framework**: Streamlit web application
+- **UI Components**: Multi-page application with cyberpunk-themed custom CSS styling
+- **Pages**: Data Upload, Model Training, Predictions, Backtesting, Database Manager
+- **Visualization**: Plotly for interactive charts and technical analysis displays
 
-### Backend Architecture (MIGRATED TO FASTAPI)
-- **Framework**: FastAPI with async/await support (migrated from Streamlit)
-- **API Structure**: RESTful endpoints with OpenAPI documentation
-- **WebSocket Support**: Real-time market data and live predictions
-- **Database Layer**: PostgreSQL via existing database adapter
+### Backend Architecture
+- **Database Layer**: PostgreSQL-only database adapter with unified interface
 - **Model Layer**: XGBoost, CatBoost, and Random Forest ensemble models
 - **Feature Engineering**: Technical indicators using TA library
 - **Data Processing**: Pandas-based OHLC data validation and cleaning
@@ -101,35 +96,21 @@ TribexAlpha is a comprehensive trading analytics platform built with Streamlit t
 
 ### Replit Configuration
 - **Platform**: Replit autoscale deployment
-- **Runtime**: Python 3.11 + Node.js 20
-- **Services**: 
-  - Frontend: React dev server on port 5000
-  - Backend: FastAPI server on port 8000 (in development)
+- **Runtime**: Python 3.11
+- **Port**: 5000 (mapped to port 80 externally)
 - **Packages**: PostgreSQL, GCC, and OpenCL support via Nix
 
 ### Environment Setup
 - PostgreSQL database creation required
 - DATABASE_URL automatically configured by Replit
-- Frontend builds static assets with Vite
-- Backend serves API endpoints with CORS support
+- Custom CSS and styling files served statically
 
 ### Session Management
-- React state management with local storage persistence
-- FastAPI database session handling
+- Streamlit session state for data persistence
 - Auto-restore system for model recovery
 - Database backup for long-term persistence
 
 ## Changelog
-- July 26, 2025: **MIGRATION COMPLETED** - Full Streamlit to React + FastAPI migration successfully completed
-  - ✅ Created complete React frontend with Tailwind CSS cyberpunk theme
-  - ✅ Built FastAPI backend with comprehensive RESTful API endpoints
-  - ✅ Implemented React pages: Dashboard, DataUpload, ModelTraining, Predictions, LiveTrading, Backtesting, DatabaseManager
-  - ✅ Added WebSocket support for real-time data streaming
-  - ✅ Preserved all existing PostgreSQL database functionality with 4050+ records across 2 datasets
-  - ✅ Maintained ML model integration (volatility, direction, profit probability, reversal) with all 4 models trained
-  - ✅ Fixed API connectivity issues and added missing endpoints for complete functionality
-  - ✅ Verified data upload works correctly (tested with livenifty50.csv - 225 rows)
-  - ✅ All original Streamlit functionality preserved in modern React interface
 - July 22, 2025: Integrated Google Gemini AI for advanced market analysis - added natural language insights, sentiment analysis, and AI-powered trading recommendations to both static and live predictions
 - July 18, 2025: Fixed model persistence issue - models now automatically saved to database after training and persist across app restarts
 - July 18, 2025: Fixed profit probability model RangeIndex error by preserving datetime indices throughout feature calculation

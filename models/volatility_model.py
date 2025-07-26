@@ -137,67 +137,22 @@ class VolatilityModel:
         self.feature_names = feature_columns
         return result_df
 
-    def train_model(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """Train volatility model from raw OHLC data"""
-        try:
-            print(f"🚀 Training volatility model with {len(data)} data points")
-            
-            # Prepare features and target
-            features_df = self.prepare_features(data)
-            target = self.create_target(data)
-            
-            # Train the model
-            result = self.train(features_df, target)
-            
-            # Save model to database
-            from utils.database_adapter import DatabaseAdapter
-            db = DatabaseAdapter()
-            db.save_trained_model('volatility', self.model, self.scaler, self.feature_names)
-            
-            return {
-                'success': True,
-                'model_type': 'volatility',
-                'accuracy': result.get('test_r2', 0.0),
-                'training_samples': len(features_df),
-                'message': 'Volatility model trained successfully'
-            }
-            
-        except Exception as e:
-            print(f"Error training volatility model: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'model_type': 'volatility'
-            }
-
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:
         """Train volatility prediction model."""
-        print(f"Training input - Features shape: {X.shape}, Target length: {len(y)}")
-        
-        # Reset indices to ensure proper alignment
-        X_reset = X.reset_index(drop=True)
-        y_reset = y.reset_index(drop=True)
-        
-        # Align by taking minimum length
-        min_len = min(len(X_reset), len(y_reset))
-        X_aligned = X_reset.iloc[:min_len]
-        y_aligned = y_reset.iloc[:min_len]
-        
-        print(f"After alignment - Features: {X_aligned.shape}, Target: {len(y_aligned)}")
+        # Align data
+        common_index = X.index.intersection(y.index)
+        X_aligned = X.loc[common_index]
+        y_aligned = y.loc[common_index]
 
-        # Clean data - remove rows with NaN values
+        # Clean data
         mask = ~(X_aligned.isna().any(axis=1) | y_aligned.isna())
         X_clean = X_aligned[mask]
         y_clean = y_aligned[mask]
-        
-        print(f"After NaN removal - Features: {X_clean.shape}, Target: {len(y_clean)}")
 
-        # Remove invalid targets (inf, negative, zero)
+        # Remove invalid targets
         valid_targets = np.isfinite(y_clean) & (y_clean > 0)
         X_clean = X_clean[valid_targets]
         y_clean = y_clean[valid_targets]
-        
-        print(f"After target validation - Features: {X_clean.shape}, Target: {len(y_clean)}")
 
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training. Need at least 100 samples, got {len(X_clean)}")

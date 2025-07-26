@@ -49,139 +49,60 @@ class ProfitProbabilityModel:
 
         return target
 
-    def train_model(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """Train profit probability model from raw OHLC data"""
-        try:
-            print(f"🚀 Training profit probability model with {len(data)} data points")
-            
-            # Prepare features and target
-            features_df = self.prepare_features(data)
-            target = self.create_target(data)
-            
-            # Train the model
-            result = self.train(features_df, target)
-            
-            # Save model to database
-            from utils.database_adapter import DatabaseAdapter
-            db = DatabaseAdapter()
-            db.save_trained_model('profit_probability', self.model, self.scaler, self.feature_names)
-            
-            return {
-                'success': True,
-                'model_type': 'profit_probability',
-                'accuracy': result.get('test_accuracy', 0.0),
-                'training_samples': len(features_df),
-                'message': 'Profit probability model trained successfully'
-            }
-            
-        except Exception as e:
-            print(f"Error training profit probability model: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'model_type': 'profit_probability'
-            }
-
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Prepare comprehensive profit probability features including technical indicators, custom features, lagged features, and time context."""
+        """Prepare features for profit probability model."""
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
-        print("🔧 Calculating comprehensive profit probability features...")
-        
-        # Start with a copy of the input data
-        result_df = df.copy()
-        
-        # Step 1: Calculate profit probability technical indicators
-        print("  - Computing profit probability technical indicators...")
         from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
-        calc = ProfitProbabilityTechnicalIndicators()
-        result_df = calc.calculate_profit_probability_features(result_df)
-        
-        # Step 2: Add custom profit probability features
-        print("  - Adding custom profit probability features...")
-        from features.profit_probability_custom_engineered import add_custom_profit_features
-        result_df = add_custom_profit_features(result_df)
-        
-        # Step 3: Add lagged profit probability features
-        print("  - Adding lagged profit probability features...")
-        from features.profit_probability_lagged_features import add_lagged_features_profit_prob
-        result_df = add_lagged_features_profit_prob(result_df)
-        
-        # Step 4: Add time context features
-        print("  - Adding time context features...")
-        from features.profit_probability_time_context import add_time_context_features_profit_prob
-        result_df = add_time_context_features_profit_prob(result_df)
 
-        # Step 5: Select only feature columns (exclude OHLC columns and non-numeric columns)
-        ohlc_columns = ['Open', 'High', 'Low', 'Close', 'Volume', 'open', 'high', 'low', 'close', 'volume']
-        exclude_columns = ohlc_columns + ['date']  # Exclude datetime columns
-        feature_columns = [col for col in result_df.columns if col not in exclude_columns]
-        
-        if len(feature_columns) == 0:
-            raise ValueError(f"No profit probability features were generated. Available columns: {list(result_df.columns)}")
-        
-        # Select only feature columns
-        features_df = result_df[feature_columns].copy()
-        
-        # Step 6: Handle missing values  
-        print(f"  - Cleaning {len(feature_columns)} features...")
-        print(f"  - Feature columns before cleaning: {feature_columns[:10]}...")
-        
-        # Replace infinite values with NaN
-        features_df = features_df.replace([np.inf, -np.inf], np.nan)
-        
-        # Count initial NaN values
-        initial_nan_count = features_df.isna().sum().sum()
-        print(f"  - Initial NaN values: {initial_nan_count}")
-        
-        # Forward fill then backward fill
-        features_df = features_df.ffill().bfill()
-        
-        # Fill remaining NaN with appropriate neutral values
-        for col in features_df.columns:
-            if features_df[col].isna().any():
-                # Use median for most features, 0 for binary features, 50 for RSI-like features
-                if 'rsi' in col.lower() or 'stoch' in col.lower():
-                    features_df[col] = features_df[col].fillna(50)
-                elif any(x in col.lower() for x in ['_above_', '_below_', '_bullish', '_bearish', '_up', '_down']):
-                    features_df[col] = features_df[col].fillna(0)
+        # Calculate all profit probability-specific indicators
+        result_df = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(df)
+
+        # Get all non-OHLC features, but exclude non-numeric columns
+        excluded_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'timestamp', 'date', 'Timestamp', 'Date', 'DateTime']
+
+        # First pass: exclude known non-numeric columns
+        feature_columns = [col for col in result_df.columns if col not in excluded_cols]
+
+        # Second pass: check each remaining column for actual numeric content
+        numeric_columns = []
+        for col in feature_columns:
+            try:
+                # Check if column is numeric and not a datetime type
+                if pd.api.types.is_numeric_dtype(result_df[col]) and not pd.api.types.is_datetime64_any_dtype(result_df[col]):
+                    # Additional check: ensure all values can be converted to float
+                    test_values = result_df[col].dropna().head(10)
+                    if len(test_values) > 0:
+                        pd.to_numeric(test_values, errors='raise')
+                    numeric_columns.append(col)
                 else:
-                    median_val = features_df[col].median()
-                    if pd.isna(median_val):
-                        features_df[col] = features_df[col].fillna(0)  # Use 0 if median is NaN
-                    else:
-                        features_df[col] = features_df[col].fillna(median_val)
-        
-        # Ensure all features are numeric
-        for col in features_df.columns:
-            features_df[col] = pd.to_numeric(features_df[col], errors='coerce')
-        
-        # Only remove rows that are completely NaN (keep rows with some valid features)
-        features_df = features_df.dropna(how='all')
-        
-        # If still all features are NaN, fill with zeros as fallback
-        if features_df.isna().all().any():
-            features_df = features_df.fillna(0)
-        
-        print(f"  - Features after cleaning: {len(features_df)} rows × {len(features_df.columns)} columns")
-        
-        if features_df.empty:
-            raise ValueError("No valid profit probability features remain after cleaning")
-        
-        print(f"✅ Generated {len(feature_columns)} profit probability features: {feature_columns[:10]}{'...' if len(feature_columns) > 10 else ''}")
-        print(f"✅ Final feature dataset: {len(features_df)} samples × {len(feature_columns)} features")
-        
-        # Ensure features_df has the same index as input df for proper alignment with targets
-        # Keep the original datetime index from input data
-        if len(features_df) == len(df):
-            features_df.index = df.index
-        else:
-            # If lengths differ due to feature engineering, use the last N indices from original df
-            features_df.index = df.index[-len(features_df):]
-        
+                    print(f"Excluding non-numeric or datetime column: {col}")
+            except (ValueError, TypeError) as e:
+                print(f"Excluding column {col} due to conversion error: {e}")
+
+        feature_columns = numeric_columns
+
+        if len(feature_columns) == 0:
+            raise ValueError(f"No numeric features found. Available columns: {list(result_df.columns)}")
+
+        # Select only numeric features and remove NaN
+        result_df = result_df[feature_columns].dropna()
+
+        if result_df.empty:
+            raise ValueError("DataFrame is empty after removing NaN values")
+
+        # Ensure we preserve the original dataframe's index for alignment with targets
+        # The features should have the same index as the input df for proper alignment
+        if not result_df.index.equals(df.index[:len(result_df)]):
+            # If indices don't match, use the original df's index
+            result_df.index = df.index[:len(result_df)]
+
+        print(f"Profit probability model using {len(feature_columns)} features: {feature_columns}")
+        print(f"Feature data index range: {result_df.index.min()} to {result_df.index.max()}")
+
         self.feature_names = feature_columns
-        return features_df
+        return result_df
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:
         """Train profit probability prediction model."""

@@ -24,57 +24,32 @@ def add_time_context_features_reversal(df: pd.DataFrame) -> pd.DataFrame:
         missing = [name for name, col in [('Close', close_col), ('Open', open_col), ('High', high_col), ('Low', low_col)] if col is None]
         raise ValueError(f"Missing required OHLC columns: {missing}. Available columns: {list(df.columns)}")
     
-    try:
-        # Handle timestamp - check if it's in columns or use index
-        if 'timestamp' in df.columns:
-            timestamp_col = pd.to_datetime(df['timestamp'])
-        else:
-            # Use index as timestamp, but first check if it's datetime-like
-            if hasattr(df.index, 'hour'):
-                timestamp_col = df.index
-            else:
-                # Create a simple time-like index based on row position
-                timestamp_col = pd.date_range(start='2023-01-01 09:15:00', periods=len(df), freq='5min')
+    # Handle timestamp - check if it's in columns or use index
+    if 'timestamp' in df.columns:
+        timestamp_col = pd.to_datetime(df['timestamp'])
+    else:
+        # Use index as timestamp
+        timestamp_col = pd.to_datetime(df.index)
 
-        # Basic time breakdown using .dt accessor for Series or direct attributes for DatetimeIndex
-        if hasattr(timestamp_col, 'dt'):
-            df['hour_of_day'] = timestamp_col.dt.hour
-            df['minute_of_hour'] = timestamp_col.dt.minute
-            df['day_of_week'] = timestamp_col.dt.dayofweek
-            hour = timestamp_col.dt.hour
-            minute = timestamp_col.dt.minute
-            date_col = timestamp_col.dt.date
-        else:
-            df['hour_of_day'] = timestamp_col.hour
-            df['minute_of_hour'] = timestamp_col.minute
-            df['day_of_week'] = timestamp_col.dayofweek
-            hour = timestamp_col.hour
-            minute = timestamp_col.minute
-            date_col = timestamp_col.date
-    except Exception as e:
-        print(f"Warning: Could not extract time features properly: {e}")
-        # Fallback to simple numeric features
-        df['hour_of_day'] = 10  # Default market hour
-        df['minute_of_hour'] = 0
-        df['day_of_week'] = 1  # Tuesday
-        hour = pd.Series([10] * len(df))
-        minute = pd.Series([0] * len(df))
-        date_col = pd.Series([pd.Timestamp('2023-01-01').date()] * len(df))
+    # Basic time breakdown
+    df['hour_of_day'] = timestamp_col.hour
+    df['minute_of_hour'] = timestamp_col.minute
+    df['day_of_week'] = timestamp_col.dayofweek
 
     # Opening and closing ranges (simplified using hour)
+    hour = timestamp_col.hour
+    minute = timestamp_col.minute
     df['is_opening_range'] = ((hour == 9) & (minute >= 15) | (hour == 10) & (minute == 0)).astype(int)
     df['is_closing_range'] = (hour >= 15).astype(int)
 
     # Session phase (simplified numeric encoding)
+    hour = timestamp_col.hour
     df['session_phase_numeric'] = np.where(hour < 10, 0,  # open
                                   np.where(hour < 14.5, 1,  # mid
                                           2))  # close
 
     # Previous day context
-    try:
-        df['date'] = date_col
-    except:
-        df['date'] = pd.Timestamp('2023-01-01').date()
+    df['date'] = timestamp_col.date
     df['prev_close'] = df[close_col].shift(1)
     df['overnight_gap'] = df[open_col] - df['prev_close']
 
