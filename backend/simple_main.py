@@ -222,89 +222,39 @@ async def calculate_features(request: dict):
 
         print(f"Dataset loaded: {len(df)} rows for {model_type} model")
 
-        # Model-specific feature engineering (matching Streamlit approach)
-        if model_type == 'volatility':
-            # Volatility model - 27 features
-            from features.technical_indicators import calculate_technical_indicators
-            from features.custom_engineered import calculate_custom_features
-            from features.lagged_features import calculate_lagged_features
-            from features.time_context_features import calculate_time_context_features
+        # Calculate features based on model type
+        if model_type == "volatility":
+            from features.technical_indicators import TechnicalIndicators
+            df_with_features = TechnicalIndicators.calculate_volatility_indicators(df)
 
-            df_with_features = calculate_technical_indicators(df.copy())
-            df_with_features = calculate_custom_features(df.copy())
-            df_with_features = calculate_lagged_features(df_with_features)
-            df_with_features = calculate_time_context_features(df_with_features)
+            # Add custom volatility features
+            from features.custom_engineered import compute_custom_volatility_features
+            df_with_features = compute_custom_volatility_features(df_with_features)
 
-            feature_count = 27
-            feature_categories = {
-                'Technical Indicators': 5,    # atr, bb_width, keltner_width, rsi, donchian_width
-                'Custom Engineered': 8,       # log_return, realized_volatility, etc.
-                'Lagged Features': 7,         # lag_volatility_1, lag_volatility_3, etc.
-                'Time Context': 7             # hour, minute, day_of_week, etc.
-            }
+            # Add lagged features
+            from features.lagged_features import add_volatility_lagged_features
+            df_with_features = add_volatility_lagged_features(df_with_features)
 
-        elif model_type == 'direction':
-            # Direction model - 54 features
-            from features.direction_technical_indicators import calculate_direction_technical_indicators
-            from features.direction_custom_engineered import calculate_direction_custom_features
-            from features.direction_lagged_features import calculate_direction_lagged_features
-            from features.direction_time_context import calculate_direction_time_context_features
+            # Add time context features
+            from features.time_context_features import add_time_context_features
+            df_with_features = add_time_context_features(df_with_features)
 
-            df_with_features = calculate_direction_technical_indicators(df.copy())
-            df_with_features = calculate_direction_custom_features(df_with_features)
-            df_with_features = calculate_direction_lagged_features(df_with_features)
-            df_with_features = calculate_direction_time_context_features(df_with_features)
+        elif model_type == "direction":
+            from features.direction_technical_indicators import DirectionTechnicalIndicators
+            df_with_features = DirectionTechnicalIndicators.calculate_all_direction_indicators(df)
 
-            feature_count = 54
-            feature_categories = {
-                'Technical Indicators': 15,   # RSI, MACD, Bollinger Bands, etc.
-                'Price Action': 12,           # Price patterns, momentum indicators
-                'Lagged Features': 15,        # Historical price movements
-                'Time Context': 12            # Market session, volatility timing
-            }
+        elif model_type == "reversal":
+            from features.reversal_technical_indicators import ReversalTechnicalIndicators
+            df_with_features = ReversalTechnicalIndicators.calculate_all_reversal_indicators(df)
 
-        elif model_type == 'profit_probability':
-            # Profit Probability model - 66 features
-            from features.profit_probability_technical_indicators import calculate_profit_technical_indicators
-            from features.profit_probability_custom_engineered import calculate_profit_custom_features
-            from features.profit_probability_lagged_features import calculate_profit_lagged_features
-            from features.profit_probability_time_context import calculate_profit_time_context_features
-
-            df_with_features = calculate_profit_technical_indicators(df.copy())
-            df_with_features = calculate_profit_custom_features(df_with_features)
-            df_with_features = calculate_profit_lagged_features(df_with_features)
-            df_with_features = calculate_profit_time_context_features(df_with_features)
-
-            feature_count = 66
-            feature_categories = {
-                'Technical Indicators': 20,   # Extended technical analysis
-                'Risk Metrics': 18,           # Risk-reward calculations
-                'Lagged Features': 16,        # Historical performance
-                'Time Context': 12            # Market timing factors
-            }
-
-        elif model_type == 'reversal':
-            # Reversal model - 63 features
-            from features.reversal_technical_indicators import calculate_reversal_technical_indicators
-            from features.reversal_custom_engineered import calculate_reversal_custom_features
-            from features.reversal_lagged_features import calculate_reversal_lagged_features
-            from features.reversal_time_context import calculate_reversal_time_context_features
-
-            df_with_features = calculate_reversal_technical_indicators(df.copy())
-            df_with_features = calculate_reversal_custom_features(df_with_features)
-            df_with_features = calculate_reversal_lagged_features(df_with_features)
-            df_with_features = calculate_reversal_time_context_features(df_with_features)
-
-            feature_count = 63
-            feature_categories = {
-                'Technical Indicators': 18,   # Reversal-specific indicators
-                'Pattern Recognition': 17,    # Chart patterns, support/resistance
-                'Lagged Features': 16,        # Historical reversal patterns
-                'Time Context': 12            # Market timing for reversals
-            }
+        elif model_type == "profit_probability":
+            from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
+            df_with_features = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(df)
 
         else:
-            raise HTTPException(status_code=400, detail=f"Unsupported model type: {model_type}")
+            # Default to all indicators
+            from features.technical_indicators import TechnicalIndicators
+            df_with_features = TechnicalIndicators.calculate_all_indicators(df)
 
         # Remove rows with NaN values
         df_with_features = df_with_features.dropna()
