@@ -277,13 +277,20 @@ async def train_model(request: dict):
             # Create target from raw data
             target = volatility_model.create_target(raw_data)
 
-            # Log training info (matching Streamlit)
-            logging.info(f"📊 Training data: {len(features_data)} rows with {len(features_data.columns)} features")
+            # Ensure data alignment before training
+            logging.info(f"📊 Pre-training alignment - Features: {len(features_data)} rows, Target: {len(target)} values")
+            
+            # Align features and target by taking the minimum length
+            min_length = min(len(features_data), len(target))
+            features_aligned = features_data.iloc[:min_length].copy()
+            target_aligned = target.iloc[:min_length].copy()
+            
+            logging.info(f"📊 Post-alignment - Features: {len(features_aligned)} rows, Target: {len(target_aligned)} values")
 
             # Train the model
             training_result = volatility_model.train(
-                features_data, 
-                target, 
+                features_aligned, 
+                target_aligned, 
                 config.get('train_split', 0.8)
             )
 

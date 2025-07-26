@@ -139,20 +139,32 @@ class VolatilityModel:
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8) -> Dict[str, Any]:
         """Train volatility prediction model."""
-        # Align data
-        common_index = X.index.intersection(y.index)
-        X_aligned = X.loc[common_index]
-        y_aligned = y.loc[common_index]
+        print(f"Training input - Features shape: {X.shape}, Target length: {len(y)}")
+        
+        # Reset indices to ensure proper alignment
+        X_reset = X.reset_index(drop=True)
+        y_reset = y.reset_index(drop=True)
+        
+        # Align by taking minimum length
+        min_len = min(len(X_reset), len(y_reset))
+        X_aligned = X_reset.iloc[:min_len]
+        y_aligned = y_reset.iloc[:min_len]
+        
+        print(f"After alignment - Features: {X_aligned.shape}, Target: {len(y_aligned)}")
 
-        # Clean data
+        # Clean data - remove rows with NaN values
         mask = ~(X_aligned.isna().any(axis=1) | y_aligned.isna())
         X_clean = X_aligned[mask]
         y_clean = y_aligned[mask]
+        
+        print(f"After NaN removal - Features: {X_clean.shape}, Target: {len(y_clean)}")
 
-        # Remove invalid targets
+        # Remove invalid targets (inf, negative, zero)
         valid_targets = np.isfinite(y_clean) & (y_clean > 0)
         X_clean = X_clean[valid_targets]
         y_clean = y_clean[valid_targets]
+        
+        print(f"After target validation - Features: {X_clean.shape}, Target: {len(y_clean)}")
 
         if len(X_clean) < 100:
             raise ValueError(f"Insufficient data for training. Need at least 100 samples, got {len(X_clean)}")
