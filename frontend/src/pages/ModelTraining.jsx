@@ -1,8 +1,8 @@
 /**
- * Model Training page - Simplified working version
+ * Model Training page - Robust error-free version
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import Card from '../components/common/Card';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { dataAPI, modelsAPI } from '../services/api';
@@ -34,19 +34,19 @@ const ModelTraining = () => {
   const loadDatasets = async () => {
     try {
       setLoading(true);
-      const response = await dataAPI.getDatasets().catch(() => ({ data: [] }));
-      const datasetList = response.data || [];
+      const response = await dataAPI.getDatasets();
+      const datasetList = Array.isArray(response?.data) ? response.data : [];
       setDatasets(datasetList);
 
       // Auto-select first dataset
       if (datasetList.length > 0 && !selectedDataset) {
-        setSelectedDataset(datasetList[0].name);
+        setSelectedDataset(datasetList[0]?.name || '');
       }
 
       setTrainingStatus(`✅ Loaded ${datasetList.length} datasets`);
     } catch (error) {
       console.error('Error loading datasets:', error);
-      setTrainingStatus(`❌ Error loading datasets: ${error.message}`);
+      setTrainingStatus(`❌ Error loading datasets: ${error?.message || 'Unknown error'}`);
       setDatasets([]);
     } finally {
       setLoading(false);
@@ -54,16 +54,7 @@ const ModelTraining = () => {
   };
 
   useEffect(() => {
-    const initializeData = async () => {
-      try {
-        await loadDatasets();
-      } catch (error) {
-        console.error('Initialization error:', error);
-        setTrainingStatus('❌ Failed to initialize data');
-      }
-    };
-    
-    initializeData();
+    loadDatasets();
   }, []);
 
   // Calculate features
@@ -82,18 +73,18 @@ const ModelTraining = () => {
         model_type: activeTab
       });
 
-      if (response.success) {
+      if (response?.success) {
         setFeaturesCalculated(prev => ({
           ...prev,
           [activeTab]: true
         }));
-        setTrainingStatus(`✅ Calculated ${response.feature_count || 0} ${activeTab} features`);
+        setTrainingStatus(`✅ Calculated ${response.features_calculated || 0} ${activeTab} features`);
       } else {
         setTrainingStatus(`❌ Failed to calculate ${activeTab} features`);
       }
     } catch (error) {
       console.error('Feature calculation error:', error);
-      setTrainingStatus(`❌ Error: ${error.response?.data?.detail || error.message}`);
+      setTrainingStatus(`❌ Error: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -107,39 +98,38 @@ const ModelTraining = () => {
     }
 
     if (!featuresCalculated[activeTab]) {
-      setTrainingStatus(`❌ Please calculate ${activeTab} features first`);
+      setTrainingStatus('❌ Please calculate features first');
       return;
     }
 
     try {
       setIsTraining(true);
-      setTrainingStatus(`🎯 Training ${activeTab} model...`);
+      setLoading(true);
+      setTrainingStatus(`🚀 Training ${activeTab} model...`);
 
       const response = await modelsAPI.trainModel({
-        model_type: activeTab,
         dataset_name: selectedDataset,
+        model_type: activeTab,
         config: trainingConfig
       });
 
-      if (response.success) {
+      if (response?.success) {
         setTrainingResults(prev => ({
           ...prev,
           [activeTab]: response
         }));
-        setTrainingStatus(`✅ ${activeTab} model trained successfully!`);
+        setTrainingStatus(`✅ ${activeTab} model trained successfully! Accuracy: ${(response.accuracy * 100)?.toFixed(2) || 'N/A'}%`);
       } else {
         setTrainingStatus(`❌ Failed to train ${activeTab} model`);
       }
     } catch (error) {
       console.error('Training error:', error);
-      setTrainingStatus(`❌ Error: ${error.response?.data?.detail || error.message}`);
+      setTrainingStatus(`❌ Training error: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
     } finally {
       setIsTraining(false);
+      setLoading(false);
     }
   };
-
-  const activeTabColor = modelTabs.find(tab => tab.id === activeTab)?.color || 'blue';
-  const currentResults = trainingResults[activeTab];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-800">
@@ -149,7 +139,7 @@ const ModelTraining = () => {
             Model Training
           </h1>
           <p className="text-gray-300 text-lg">
-            Train advanced machine learning models for market prediction
+            Train machine learning models for market predictions
           </p>
         </div>
 
@@ -166,145 +156,175 @@ const ModelTraining = () => {
           </div>
         )}
 
+        {loading && (
+          <div className="flex justify-center mb-6">
+            <LoadingSpinner />
+          </div>
+        )}
+
+        {/* Dataset Selection */}
+        <Card className="mb-8">
+          <h2 className="text-2xl font-bold text-cyan-400 mb-4">📊 Dataset Selection</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-300 mb-2">Select Dataset:</label>
+              <select
+                value={selectedDataset}
+                onChange={(e) => setSelectedDataset(e.target.value)}
+                className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                disabled={loading}
+              >
+                <option value="">Choose a dataset...</option>
+                {datasets.map((dataset, index) => (
+                  <option key={dataset?.name || index} value={dataset?.name || ''}>
+                    {dataset?.name || 'Unknown'} ({dataset?.rows || 0} rows)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-gray-300 mb-2">Refresh Datasets:</label>
+              <button
+                onClick={loadDatasets}
+                className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                disabled={loading}
+              >
+                🔄 Refresh
+              </button>
+            </div>
+          </div>
+        </Card>
+
         {/* Model Tabs */}
-        <Card className="mb-6">
-          <div className="flex flex-wrap gap-2 mb-6">
+        <Card className="mb-8">
+          <h2 className="text-2xl font-bold text-cyan-400 mb-4">🤖 Model Selection</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {modelTabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-lg border transition-colors flex items-center space-x-2 ${
+                className={`p-4 rounded-lg border-2 transition-all ${
                   activeTab === tab.id
-                    ? `bg-${tab.color}-600 border-${tab.color}-500 text-white`
-                    : `border-gray-600 text-gray-300 hover:border-${tab.color}-500 hover:text-${tab.color}-400`
+                    ? `border-${tab.color}-500 bg-${tab.color}-900/30 text-${tab.color}-400`
+                    : 'border-gray-600 bg-gray-800/30 text-gray-300 hover:border-gray-500'
                 }`}
+                disabled={loading}
               >
-                <span>{tab.icon}</span>
-                <span>{tab.name}</span>
-                {featuresCalculated[tab.id] && <span className="text-green-400">✓</span>}
+                <div className="text-2xl mb-2">{tab.icon}</div>
+                <div className="font-bold">{tab.name}</div>
+                {featuresCalculated[tab.id] && (
+                  <div className="text-xs mt-1 text-green-400">Features Ready</div>
+                )}
               </button>
             ))}
           </div>
+        </Card>
 
-          {/* Dataset Selection */}
-          <div className="mb-6">
-            <label className="block text-cyan-400 font-medium mb-2">Select Dataset:</label>
-            <select
-              value={selectedDataset}
-              onChange={(e) => setSelectedDataset(e.target.value)}
-              className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
-            >
-              <option value="">Select a dataset...</option>
-              {datasets.map((dataset) => (
-                <option key={dataset.name} value={dataset.name}>
-                  {dataset.name} ({dataset.rows?.toLocaleString() || 0} rows)
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Training Configuration */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {/* Training Configuration */}
+        <Card className="mb-8">
+          <h2 className="text-2xl font-bold text-cyan-400 mb-4">⚙️ Training Configuration</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-cyan-400 font-medium mb-2">Train Split:</label>
+              <label className="block text-gray-300 mb-2">Train Split Ratio:</label>
               <input
                 type="number"
                 min="0.1"
                 max="0.9"
                 step="0.1"
                 value={trainingConfig.train_split}
-                onChange={(e) => setTrainingConfig(prev => ({ ...prev, train_split: parseFloat(e.target.value) }))}
-                className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                onChange={(e) => setTrainingConfig(prev => ({
+                  ...prev,
+                  train_split: parseFloat(e.target.value) || 0.8
+                }))}
+                className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-cyan-500"
+                disabled={loading}
               />
             </div>
             <div>
-              <label className="block text-cyan-400 font-medium mb-2">Max Depth:</label>
+              <label className="block text-gray-300 mb-2">Max Depth:</label>
               <input
                 type="number"
                 min="1"
                 max="20"
                 value={trainingConfig.max_depth}
-                onChange={(e) => setTrainingConfig(prev => ({ ...prev, max_depth: parseInt(e.target.value) }))}
-                className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                onChange={(e) => setTrainingConfig(prev => ({
+                  ...prev,
+                  max_depth: parseInt(e.target.value) || 6
+                }))}
+                className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-cyan-500"
+                disabled={loading}
               />
             </div>
             <div>
-              <label className="block text-cyan-400 font-medium mb-2">N Estimators:</label>
+              <label className="block text-gray-300 mb-2">N Estimators:</label>
               <input
                 type="number"
                 min="10"
                 max="1000"
-                step="10"
                 value={trainingConfig.n_estimators}
-                onChange={(e) => setTrainingConfig(prev => ({ ...prev, n_estimators: parseInt(e.target.value) }))}
-                className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                onChange={(e) => setTrainingConfig(prev => ({
+                  ...prev,
+                  n_estimators: parseInt(e.target.value) || 100
+                }))}
+                className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-cyan-500"
+                disabled={loading}
               />
             </div>
           </div>
+        </Card>
 
-          {/* Action Buttons */}
+        {/* Training Actions */}
+        <Card className="mb-8">
+          <h2 className="text-2xl font-bold text-cyan-400 mb-4">🚀 Training Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
               onClick={calculateFeatures}
+              className="p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
               disabled={loading || !selectedDataset}
-              className={`px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2`}
             >
-              {loading && <LoadingSpinner size="sm" />}
-              <span>Calculate Features</span>
+              🔧 Calculate {activeTab} Features
             </button>
             <button
               onClick={trainModel}
-              disabled={loading || isTraining || !selectedDataset || !featuresCalculated[activeTab]}
-              className={`px-6 py-3 bg-${activeTabColor}-600 hover:bg-${activeTabColor}-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2`}
+              className="p-4 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              disabled={loading || !selectedDataset || !featuresCalculated[activeTab] || isTraining}
             >
-              {isTraining && <LoadingSpinner size="sm" />}
-              <span>
-                {isTraining ? `Training ${activeTab}...` : `Train ${activeTab} Model`}
-              </span>
+              🚀 Train {activeTab} Model
             </button>
           </div>
         </Card>
 
         {/* Training Results */}
-        {currentResults && (
+        {trainingResults[activeTab] && (
           <Card>
-            <h2 className={`text-2xl font-bold text-${activeTabColor}-400 mb-4`}>
-              {modelTabs.find(tab => tab.id === activeTab)?.icon} {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Training Results
-            </h2>
-            
+            <h2 className="text-2xl font-bold text-cyan-400 mb-4">📊 Training Results - {activeTab}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {currentResults.mse !== undefined && (
-                <div className="bg-gray-800/50 p-4 rounded-lg">
-                  <div className="text-sm text-gray-400">MSE</div>
-                  <div className="text-2xl font-bold text-white">{currentResults.mse.toFixed(6)}</div>
+              <div className="bg-gradient-to-br from-green-900/50 to-emerald-900/50 p-4 rounded-lg border border-green-500/30">
+                <div className="text-2xl font-bold text-green-400">
+                  {(trainingResults[activeTab]?.accuracy * 100)?.toFixed(2) || 'N/A'}%
                 </div>
-              )}
-              {currentResults.r2_score !== undefined && (
-                <div className="bg-gray-800/50 p-4 rounded-lg">
-                  <div className="text-sm text-gray-400">R² Score</div>
-                  <div className="text-2xl font-bold text-white">{currentResults.r2_score.toFixed(4)}</div>
+                <div className="text-gray-300">Accuracy</div>
+              </div>
+              <div className="bg-gradient-to-br from-blue-900/50 to-cyan-900/50 p-4 rounded-lg border border-blue-500/30">
+                <div className="text-2xl font-bold text-blue-400">
+                  {trainingResults[activeTab]?.feature_count || 'N/A'}
                 </div>
-              )}
-              {currentResults.feature_count !== undefined && (
-                <div className="bg-gray-800/50 p-4 rounded-lg">
-                  <div className="text-sm text-gray-400">Features</div>
-                  <div className="text-2xl font-bold text-white">{currentResults.feature_count}</div>
+                <div className="text-gray-300">Features</div>
+              </div>
+              <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 p-4 rounded-lg border border-purple-500/30">
+                <div className="text-2xl font-bold text-purple-400">
+                  {trainingResults[activeTab]?.train_samples || 'N/A'}
                 </div>
-              )}
-              {currentResults.training_samples !== undefined && (
-                <div className="bg-gray-800/50 p-4 rounded-lg">
-                  <div className="text-sm text-gray-400">Training Samples</div>
-                  <div className="text-2xl font-bold text-white">{currentResults.training_samples.toLocaleString()}</div>
+                <div className="text-gray-300">Train Samples</div>
+              </div>
+              <div className="bg-gradient-to-br from-yellow-900/50 to-orange-900/50 p-4 rounded-lg border border-yellow-500/30">
+                <div className="text-2xl font-bold text-yellow-400">
+                  {trainingResults[activeTab]?.test_samples || 'N/A'}
                 </div>
-              )}
+                <div className="text-gray-300">Test Samples</div>
+              </div>
             </div>
           </Card>
-        )}
-
-        {loading && (
-          <div className="flex justify-center">
-            <LoadingSpinner />
-          </div>
         )}
       </div>
     </div>
