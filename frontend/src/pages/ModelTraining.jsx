@@ -123,13 +123,24 @@ const ModelTraining = () => {
 
     try {
       setLoading(true);
-      setTrainingStatus(`🚀 Training ${modelType} model...`);
+      setTrainingStatus(`🚀 Training ${modelType} model... (This may take 7-8 minutes)`);
+
+      // Add progress indicator for long training
+      let progressCounter = 0;
+      const progressInterval = setInterval(() => {
+        progressCounter += 30;
+        const minutes = Math.floor(progressCounter / 60);
+        const seconds = progressCounter % 60;
+        setTrainingStatus(`🚀 Training ${modelType} model... (${minutes}:${seconds.toString().padStart(2, '0')} elapsed)`);
+      }, 30000);
 
       const response = await modelsAPI.trainModel({
         model_type: modelType,
         dataset_name: selectedDataset,
         config: trainingConfig
       });
+
+      clearInterval(progressInterval);
 
       // Process the response to match Streamlit format with proper null checks
       const responseData = response.data || response || {};
@@ -156,9 +167,16 @@ const ModelTraining = () => {
       console.error('Training error details:', error);
       console.error('Error response:', error.response);
       
+      // Clear progress interval on error
+      if (typeof progressInterval !== 'undefined') {
+        clearInterval(progressInterval);
+      }
+      
       let errorMessage = 'Unknown error occurred';
       
-      if (error.response?.data?.detail) {
+      if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+        errorMessage = 'Training is taking longer than expected. Please check the backend logs for progress.';
+      } else if (error.response?.data?.detail) {
         errorMessage = error.response.data.detail;
       } else if (error.message) {
         errorMessage = error.message;
