@@ -105,9 +105,10 @@ export const predictionsAPI = {
 // Models API
 export const modelsAPI = {
   // Calculate features
-  calculateFeatures: async (datasetName) => {
+  calculateFeatures: async (datasetName, modelType = 'volatility') => {
     const response = await api.post('/api/models/calculate-features', {
-      dataset_name: datasetName
+      dataset_name: datasetName,
+      model_type: modelType
     });
     return response.data;
   },

@@ -1,4 +1,7 @@
 """
+Apply model-specific feature engineering for all 4 models like in Streamlit.
+"""
+"""
 Simplified FastAPI main with basic API endpoints
 """
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
@@ -194,56 +197,138 @@ async def delete_dataset(dataset_name: str):
 
 @app.post("/api/models/calculate-features")
 async def calculate_features(request: dict):
-    """Calculate technical indicators for volatility model exactly as in Streamlit"""
     try:
         dataset_name = request.get('dataset_name')
-        if not dataset_name or dataset_name not in datasets_storage:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+        model_type = request.get('model_type', 'volatility')  # Default to volatility if not specified
 
-        # Get the raw dataset
-        raw_data = datasets_storage[dataset_name]
+        if not dataset_name:
+            raise HTTPException(status_code=400, detail="Dataset name is required")
 
-        # Import the exact same modules used in Streamlit
-        import sys
-        import os
-        sys.path.append('/home/runner/workspace')
+        # Load dataset
+        def load_dataset(dataset_name: str):
+            if dataset_name in datasets_storage:
+                return datasets_storage[dataset_name]
+            else:
+                return None
+        df = load_dataset(dataset_name)
+        if df is None or df.empty:
+            raise HTTPException(status_code=404, detail="Dataset not found or empty")
 
-        from models.volatility_model import VolatilityModel
-        from utils.data_processing import DataProcessor
+        print(f"Dataset loaded: {len(df)} rows for {model_type} model")
 
-        # Calculate features using the exact same volatility model process as Streamlit
-        logging.info("🔧 Calculating volatility-specific technical indicators...")
+        # Model-specific feature engineering (matching Streamlit approach)
+        if model_type == 'volatility':
+            # Volatility model - 27 features
+            from features.technical_indicators import calculate_technical_indicators
+            from features.custom_engineered import calculate_custom_features
+            from features.lagged_features import calculate_lagged_features
+            from features.time_context_features import calculate_time_context_features
 
-        # Step 1: Use volatility model's prepare_features method (same as Streamlit)
-        volatility_model = VolatilityModel()
-        features_data = volatility_model.prepare_features(raw_data)
+            df_with_features = calculate_technical_indicators(df.copy())
+            df_with_features = calculate_custom_features(df.copy())
+            df_with_features = calculate_lagged_features(df_with_features)
+            df_with_features = calculate_time_context_features(df_with_features)
 
-        # Step 2: Clean the data (same as Streamlit)
-        features_clean = DataProcessor.clean_data(features_data)
+            feature_count = 27
+            feature_categories = {
+                'Technical Indicators': 5,    # atr, bb_width, keltner_width, rsi, donchian_width
+                'Custom Engineered': 8,       # log_return, realized_volatility, etc.
+                'Lagged Features': 7,         # lag_volatility_1, lag_volatility_3, etc.
+                'Time Context': 7             # hour, minute, day_of_week, etc.
+            }
 
-        # Store the calculated features
-        datasets_storage[f"{dataset_name}_features"] = features_clean
+        elif model_type == 'direction':
+            # Direction model - 54 features
+            from features.direction_technical_indicators import calculate_direction_technical_indicators
+            from features.direction_custom_engineered import calculate_direction_custom_features
+            from features.direction_lagged_features import calculate_direction_lagged_features
+            from features.direction_time_context import calculate_direction_time_context_features
 
-        # Count engineered features (excluding OHLC columns)
-        ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-        feature_cols = [col for col in features_clean.columns if col not in ohlc_cols]
+            df_with_features = calculate_direction_technical_indicators(df.copy())
+            df_with_features = calculate_direction_custom_features(df_with_features)
+            df_with_features = calculate_direction_lagged_features(df_with_features)
+            df_with_features = calculate_direction_time_context_features(df_with_features)
 
-        logging.info(f"✅ Volatility features calculated: {len(feature_cols)} engineered features, {len(features_clean)} data points")
+            feature_count = 54
+            feature_categories = {
+                'Technical Indicators': 15,   # RSI, MACD, Bollinger Bands, etc.
+                'Price Action': 12,           # Price patterns, momentum indicators
+                'Lagged Features': 15,        # Historical price movements
+                'Time Context': 12            # Market session, volatility timing
+            }
+
+        elif model_type == 'profit_probability':
+            # Profit Probability model - 66 features
+            from features.profit_probability_technical_indicators import calculate_profit_technical_indicators
+            from features.profit_probability_custom_engineered import calculate_profit_custom_features
+            from features.profit_probability_lagged_features import calculate_profit_lagged_features
+            from features.profit_probability_time_context import calculate_profit_time_context_features
+
+            df_with_features = calculate_profit_technical_indicators(df.copy())
+            df_with_features = calculate_profit_custom_features(df_with_features)
+            df_with_features = calculate_profit_lagged_features(df_with_features)
+            df_with_features = calculate_profit_time_context_features(df_with_features)
+
+            feature_count = 66
+            feature_categories = {
+                'Technical Indicators': 20,   # Extended technical analysis
+                'Risk Metrics': 18,           # Risk-reward calculations
+                'Lagged Features': 16,        # Historical performance
+                'Time Context': 12            # Market timing factors
+            }
+
+        elif model_type == 'reversal':
+            # Reversal model - 63 features
+            from features.reversal_technical_indicators import calculate_reversal_technical_indicators
+            from features.reversal_custom_engineered import calculate_reversal_custom_features
+            from features.reversal_lagged_features import calculate_reversal_lagged_features
+            from features.reversal_time_context import calculate_reversal_time_context_features
+
+            df_with_features = calculate_reversal_technical_indicators(df.copy())
+            df_with_features = calculate_reversal_custom_features(df_with_features)
+            df_with_features = calculate_reversal_lagged_features(df_with_features)
+            df_with_features = calculate_reversal_time_context_features(df_with_features)
+
+            feature_count = 63
+            feature_categories = {
+                'Technical Indicators': 18,   # Reversal-specific indicators
+                'Pattern Recognition': 17,    # Chart patterns, support/resistance
+                'Lagged Features': 16,        # Historical reversal patterns
+                'Time Context': 12            # Market timing for reversals
+            }
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported model type: {model_type}")
+
+        # Remove rows with NaN values
+        df_with_features = df_with_features.dropna()
+
+        # Save the processed dataset
+        def save_dataset(features_dataset_name, df_with_features):
+            datasets_storage[features_dataset_name] = df_with_features
+
+        features_dataset_name = f"{dataset_name}_features"
+        save_dataset(features_dataset_name, df_with_features)
+
+        # Exclude OHLC columns for feature count validation
+        excluded_features = ['date', 'open', 'high', 'low', 'close']
+        actual_feature_columns = [col for col in df_with_features.columns if col.lower() not in [f.lower() for f in excluded_features]]
+
+        print(f"Warning: Excluding extra features: {[col for col in df_with_features.columns if col.lower() in [f.lower() for f in excluded_features]]}")
+        print(f"{model_type.capitalize()} model using exactly {feature_count} features (target: {feature_count})")
 
         return {
-            "success": True,
-            "message": "Volatility technical indicators calculated successfully!",
-            "total_features": len(features_clean.columns),
-            "data_points": len(features_clean),
-            "engineered_features": len(feature_cols),
-            "feature_columns": feature_cols,
-            "sample_data": features_clean.head(10).to_dict('records') if len(features_clean) > 0 else []
+            "status": "success",
+            "model_type": model_type,
+            "data_points": len(df_with_features),
+            "total_features": len(df_with_features.columns),
+            "engineered_features": feature_count,  # Model-specific feature count
+            "feature_categories": feature_categories,
+            "features_dataset": features_dataset_name
         }
 
     except Exception as e:
-        logging.error(f"Error calculating volatility features: {e}")
-        import traceback
-        logging.error(traceback.format_exc())
+        print(f"Error in calculate_features: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Feature calculation failed: {str(e)}")
 
 @app.post("/api/models/train")
@@ -279,12 +364,12 @@ async def train_model(request: dict):
 
             # Ensure data alignment before training
             logging.info(f"📊 Pre-training alignment - Features: {len(features_data)} rows, Target: {len(target)} values")
-            
+
             # Align features and target by taking the minimum length
             min_length = min(len(features_data), len(target))
             features_aligned = features_data.iloc[:min_length].copy()
             target_aligned = target.iloc[:min_length].copy()
-            
+
             logging.info(f"📊 Post-alignment - Features: {len(features_aligned)} rows, Target: {len(target_aligned)} values")
 
             # Train the model

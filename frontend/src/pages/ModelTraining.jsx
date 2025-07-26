@@ -76,8 +76,8 @@ const ModelTraining = () => {
   // State for feature details
   const [featureDetails, setFeatureDetails] = useState(null);
 
-  // Calculate technical indicators
-  const calculateFeatures = async () => {
+  // Calculate technical indicators for specific model
+  const calculateFeatures = async (modelType = activeTab) => {
     if (!currentData) {
       setTrainingStatus('❌ No data loaded. Please select a dataset first.');
       return;
@@ -85,27 +85,23 @@ const ModelTraining = () => {
 
     try {
       setLoading(true);
-      setTrainingStatus('🔧 Calculating technical indicators...');
+      setTrainingStatus(`🔧 Calculating technical indicators for ${modelType} model...`);
 
-      const response = await modelsAPI.calculateFeatures(selectedDataset);
+      const response = await modelsAPI.calculateFeatures(selectedDataset, modelType);
       setFeaturesCalculated(true);
 
-      // Use actual backend response data (matching Streamlit volatility model)
+      // Use actual backend response data (model-specific)
       const actualFeatureDetails = {
         total_datapoints: response.data_points || currentData.length || 0,
-        features_calculated: response.engineered_features || 27, // Use actual engineered features count
-        feature_categories: {
-          'Technical Indicators': 5,    // atr, bb_width, keltner_width, rsi, donchian_width
-          'Custom Engineered': 8,       // log_return, realized_volatility, etc.
-          'Lagged Features': 7,         // lag_volatility_1, lag_volatility_3, etc.
-          'Time Context': 7             // hour, minute, day_of_week, etc.
-        },
+        features_calculated: response.engineered_features || 27,
+        feature_categories: response.feature_categories || {},
+        model_type: response.model_type || modelType,
         processing_time: '1.8 seconds',
         memory_usage: '32.4 MB'
       };
 
       setFeatureDetails(actualFeatureDetails);
-      setTrainingStatus('✅ Technical indicators calculated successfully!');
+      setTrainingStatus(`✅ ${modelType.charAt(0).toUpperCase() + modelType.slice(1)} model features calculated successfully!`);
     } catch (error) {
       setTrainingStatus(`❌ Error calculating features: ${error.response?.data?.detail || error.message}`);
       setFeatureDetails(null);
@@ -431,7 +427,7 @@ const ModelTraining = () => {
               ⚠️ Technical indicators not calculated yet.
             </p>
             <button
-              onClick={calculateFeatures}
+              onClick={() => calculateFeatures(activeTab)}
               disabled={loading || !currentData}
               style={{
                 padding: '1rem 2rem',
@@ -447,7 +443,7 @@ const ModelTraining = () => {
                 cursor: loading || !currentData ? 'not-allowed' : 'pointer'
               }}
             >
-              {loading ? '⏳ Calculating...' : '🔧 Calculate Technical Indicators'}
+              {loading ? '⏳ Calculating...' : `🔧 Calculate ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Features`}
             </button>
           </div>
         ) : (
@@ -622,8 +618,10 @@ const ModelTraining = () => {
                       fontSize: '0.9rem',
                       lineHeight: '1.5'
                     }}>
-                      <strong style={{ color: 'var(--accent-cyan)' }}>Engineering Complete:</strong> 
-                      {' '}All technical indicators have been calculated including moving averages, RSI, MACD, Bollinger Bands, volatility measures, and custom price action features. The dataset is now ready for model training.
+                      <strong style={{ color: 'var(--accent-cyan)' }}>
+                        {featureDetails?.model_type?.charAt(0).toUpperCase() + featureDetails?.model_type?.slice(1)} Model Engineering Complete:
+                      </strong> 
+                      {' '}All {featureDetails?.features_calculated || 27} features have been calculated specifically for the {featureDetails?.model_type || 'volatility'} model. The dataset is now ready for training.
                     </p>
                   </div>
                 </div>
@@ -654,7 +652,13 @@ const ModelTraining = () => {
           {modelTabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id);
+                // Reset features when switching tabs to force model-specific recalculation
+                setFeaturesCalculated(false);
+                setFeatureDetails(null);
+                setTrainingStatus(`🔄 Switched to ${tab.name}. Please calculate features for this model.`);
+              }}
               style={{
                 padding: '1rem 1.5rem',
                 background: activeTab === tab.id ? 'var(--gradient-primary)' : 'transparent',
