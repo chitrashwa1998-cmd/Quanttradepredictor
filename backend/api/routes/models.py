@@ -103,6 +103,25 @@ async def upload_training_data(
         logger.error(f"Data upload failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.get("/status")
+async def get_models_status():
+    """Get status of all models"""
+    try:
+        from main import app
+        model_manager: ModelManager = app.state.model_manager
+        
+        status = await model_manager.get_model_status()
+        
+        return {
+            "success": True,
+            "models": status.get("models", {}),
+            "initialized": status.get("initialized", False)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get models status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/list")
 async def list_models():
     """List all available models and their status"""
