@@ -1,7 +1,4 @@
-"""
-Model management API endpoints
-Handles model training, loading, and management operations
-"""
+"""Model management API endpoints Handles model training, loading, and management operations"""
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
@@ -36,7 +33,7 @@ async def train_model(
     try:
         from main import app
         model_manager: ModelManager = app.state.model_manager
-        
+
         # Get training data
         if request.dataset_name:
             training_data = db.get_dataset(request.dataset_name)
@@ -46,16 +43,16 @@ async def train_model(
             if not datasets:
                 raise ValueError("No training data available")
             training_data = db.get_dataset(datasets[0]['name'])
-        
+
         # Train model
         results = await model_manager.train_model(request.model_name, training_data)
-        
+
         return TrainingResponse(
             success=True,
             model_name=request.model_name,
             results=results
         )
-        
+
     except Exception as e:
         logger.error(f"Model training failed: {e}")
         return TrainingResponse(
@@ -75,19 +72,19 @@ async def upload_training_data(
         # Read uploaded file
         contents = await file.read()
         df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
-        
+
         # Validate OHLC format
         required_columns = ['Date', 'Open', 'High', 'Low', 'Close']
         if not all(col in df.columns for col in required_columns):
             raise ValueError(f"CSV must contain columns: {required_columns}")
-        
+
         # Use filename as dataset name if not provided
         if not dataset_name:
             dataset_name = (file.filename or "uploaded_data").replace('.csv', '')
-        
+
         # Store in database
         db.store_dataset(dataset_name, df)
-        
+
         return {
             "success": True,
             "dataset_name": dataset_name,
@@ -98,7 +95,7 @@ async def upload_training_data(
                 "end": df['Date'].max()
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Data upload failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -109,15 +106,15 @@ async def get_models_status():
     try:
         from main import app
         model_manager: ModelManager = app.state.model_manager
-        
+
         status = await model_manager.get_model_status()
-        
+
         return {
             "success": True,
             "models": status.get("models", {}),
             "initialized": status.get("initialized", False)
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get models status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -128,15 +125,15 @@ async def list_models():
     try:
         from main import app
         model_manager: ModelManager = app.state.model_manager
-        
+
         status = await model_manager.get_model_status()
-        
+
         return {
             "success": True,
             "models": status.get("models", {}),
             "initialized": status.get("initialized", False)
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to list models: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -150,12 +147,12 @@ async def delete_model(
     try:
         # Delete model from database
         db.delete_model(model_name)
-        
+
         return {
             "success": True,
             "message": f"Model {model_name} deleted successfully"
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to delete model: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -165,50 +162,52 @@ async def calculate_features(
     request: dict,
     db = Depends(get_database_dependency)
 ):
-    """Calculate features for model training"""
+    """Calculate features for a specific model type"""
     try:
         dataset_name = request.get('dataset_name')
         model_type = request.get('model_type')
-        
+
         if not dataset_name or not model_type:
-            raise HTTPException(status_code=400, detail="Missing dataset_name or model_type")
-        
-        # Get dataset
+            raise HTTPException(status_code=400, detail="dataset_name and model_type are required")
+
+        # Load dataset
         dataset = db.get_dataset(dataset_name)
         if dataset is None:
             raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
-        
+
         # Calculate features based on model type
-        if model_type == 'volatility':
-            from features.technical_indicators import calculate_technical_indicators
-            features_df = calculate_technical_indicators(dataset)
-        elif model_type == 'direction':
-            from features.direction_technical_indicators import calculate_technical_indicators
-            features_df = calculate_technical_indicators(dataset)
-        elif model_type == 'profit_probability':
-            from features.profit_probability_technical_indicators import calculate_technical_indicators
-            features_df = calculate_technical_indicators(dataset)
-        elif model_type == 'reversal':
-            from features.reversal_technical_indicators import calculate_technical_indicators
-            features_df = calculate_technical_indicators(dataset)
+        if model_type == "volatility":
+            from features.technical_indicators import TechnicalIndicators
+            features = TechnicalIndicators.calculate_all_indicators(dataset)
+
+        elif model_type == "direction":
+            from features.direction_technical_indicators import DirectionTechnicalIndicators
+            features = DirectionTechnicalIndicators.calculate_all_direction_indicators(dataset)
+
+        elif model_type == "profit_probability":
+            from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
+            features = ProfitProbabilityTechnicalIndicators.calculate_all_profit_probability_indicators(dataset)
+
+        elif model_type == "reversal":
+            from features.reversal_technical_indicators import ReversalTechnicalIndicators
+            features = ReversalTechnicalIndicators.calculate_all_reversal_indicators(dataset)
+
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown model type: {model_type}")
-        
-        feature_count = len(features_df.columns) if features_df is not None else 0
-        
+            raise HTTPException(status_code=400, detail=f"Unsupported model type: {model_type}")
+
         return {
             "success": True,
-            "feature_count": feature_count,
             "model_type": model_type,
-            "dataset_name": dataset_name
+            "feature_count": len(features.columns),
+            "message": f"Features calculated successfully for {model_type} model"
         }
-        
+
     except Exception as e:
         logger.error(f"Feature calculation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/train")
-async def train_model_endpoint(
+async def train_model(
     request: dict,
     db = Depends(get_database_dependency)
 ):
@@ -217,15 +216,15 @@ async def train_model_endpoint(
         model_type = request.get('model_type')
         dataset_name = request.get('dataset_name')
         config = request.get('config', {})
-        
+
         if not model_type or not dataset_name:
             raise HTTPException(status_code=400, detail="Missing model_type or dataset_name")
-        
+
         # Get dataset
         dataset = db.get_dataset(dataset_name)
         if dataset is None:
             raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
-        
+
         # Train the model
         if model_type == 'volatility':
             from models.volatility_model import VolatilityModel
@@ -245,7 +244,7 @@ async def train_model_endpoint(
             result = model.train(dataset)
         else:
             raise HTTPException(status_code=400, detail=f"Unknown model type: {model_type}")
-        
+
         if result and result.get('success'):
             return {
                 "success": True,
@@ -258,7 +257,7 @@ async def train_model_endpoint(
             }
         else:
             raise HTTPException(status_code=500, detail="Model training failed")
-        
+
     except Exception as e:
         logger.error(f"Model training failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -272,11 +271,11 @@ async def get_model_info(
     try:
         from main import app
         model_manager: ModelManager = app.state.model_manager
-        
+
         model = model_manager.get_model(model_name)
         if not model:
             raise HTTPException(status_code=404, detail=f"Model {model_name} not found")
-        
+
         info = {
             "name": model_name,
             "loaded": hasattr(model, 'model') and model.model is not None,
@@ -284,11 +283,14 @@ async def get_model_info(
             "last_trained": getattr(model, 'last_trained', None),
             "model_type": type(model).__name__
         }
-        
+
         return {"success": True, "info": info}
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get model info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+```
+
+The code combines the addition of the `/calculate-features` endpoint and refactors the `/train` endpoint to support different model types with feature calculation and training.

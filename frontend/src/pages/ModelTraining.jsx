@@ -1,5 +1,6 @@
+
 /**
- * Model Training page - Exact Streamlit UI replication
+ * Model Training page - Complete Streamlit UI replication
  */
 
 import { useState, useEffect } from 'react';
@@ -8,6 +9,7 @@ import { dataAPI, modelsAPI } from '../services/api';
 const ModelTraining = () => {
   const [datasets, setDatasets] = useState([]);
   const [selectedDataset, setSelectedDataset] = useState('');
+  const [currentData, setCurrentData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('volatility');
   const [trainingConfig, setTrainingConfig] = useState({
@@ -17,6 +19,13 @@ const ModelTraining = () => {
   });
   const [trainingStatus, setTrainingStatus] = useState('');
   const [trainingResults, setTrainingResults] = useState({});
+  const [featuresCalculated, setFeaturesCalculated] = useState({
+    volatility: false,
+    direction: false,
+    profit_probability: false,
+    reversal: false
+  });
+  const [featureStatus, setFeatureStatus] = useState('');
 
   // Load datasets
   const loadDatasets = async () => {
@@ -41,14 +50,75 @@ const ModelTraining = () => {
     }
   };
 
-  useEffect(() => {
-    loadDatasets();
-  }, []);
+  // Load selected dataset
+  const loadSelectedDataset = async () => {
+    if (!selectedDataset) {
+      setTrainingStatus('❌ Please select a dataset first');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setTrainingStatus(`🔄 Loading ${selectedDataset}...`);
+      
+      const response = await dataAPI.getDataset(selectedDataset);
+      if (response?.success && response?.data) {
+        setCurrentData(response.data);
+        setTrainingStatus(`✅ Loaded ${selectedDataset}: ${response.data.length} rows`);
+      } else {
+        setTrainingStatus(`❌ Failed to load ${selectedDataset}`);
+      }
+    } catch (error) {
+      console.error('Error loading dataset:', error);
+      setTrainingStatus(`❌ Error loading dataset: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate features for specific model
+  const calculateFeatures = async (modelType) => {
+    if (!currentData || currentData.length === 0) {
+      setFeatureStatus('❌ Please load a dataset first');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setFeatureStatus(`🔧 Calculating ${modelType} features...`);
+
+      // Call backend API to calculate features
+      const response = await modelsAPI.calculateFeatures({
+        dataset_name: selectedDataset,
+        model_type: modelType
+      });
+
+      if (response?.success) {
+        setFeaturesCalculated(prev => ({
+          ...prev,
+          [modelType]: true
+        }));
+        setFeatureStatus(`✅ ${modelType} features calculated successfully!`);
+      } else {
+        setFeatureStatus(`❌ Failed to calculate ${modelType} features`);
+      }
+    } catch (error) {
+      console.error('Feature calculation error:', error);
+      setFeatureStatus(`❌ Error calculating features: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Train model
   const trainModel = async () => {
     if (!selectedDataset) {
       setTrainingStatus('❌ Please select a dataset first');
+      return;
+    }
+
+    if (!featuresCalculated[activeTab]) {
+      setTrainingStatus('❌ Please calculate features first');
       return;
     }
 
@@ -79,39 +149,75 @@ const ModelTraining = () => {
     }
   };
 
+  useEffect(() => {
+    loadDatasets();
+  }, []);
+
   const modelTabs = [
-    { id: 'volatility', name: 'Volatility Model', icon: '📈' },
-    { id: 'direction', name: 'Direction Model', icon: '🎯' },
-    { id: 'profit_probability', name: 'Profit Probability Model', icon: '💰' },
-    { id: 'reversal', name: 'Reversal Model', icon: '🔄' }
+    { 
+      id: 'volatility', 
+      name: 'Volatility Model', 
+      icon: '📈',
+      description: 'Predicts future market volatility using technical indicators.'
+    },
+    { 
+      id: 'direction', 
+      name: 'Direction Model', 
+      icon: '🎯',
+      description: 'Predicts whether price will move up or down.'
+    },
+    { 
+      id: 'profit_probability', 
+      name: 'Profit Probability Model', 
+      icon: '💰',
+      description: 'Predicts the likelihood of profitable trades within the next 5 periods.'
+    },
+    { 
+      id: 'reversal', 
+      name: 'Reversal Model', 
+      icon: '🔄',
+      description: 'Predicts market reversal points using specialized technical indicators.'
+    }
   ];
+
+  const currentModel = modelTabs.find(tab => tab.id === activeTab);
 
   return (
     <div style={{ backgroundColor: '#0a0a0f', minHeight: '100vh', color: '#ffffff', fontFamily: 'Space Grotesk, sans-serif' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
         
         {/* Header */}
-        <h1 style={{ fontSize: '2.5rem', marginBottom: '0.5rem', fontFamily: 'Orbitron, monospace' }}>
-          🧠 Model Training
-        </h1>
-        <p style={{ color: '#b8bcc8', fontSize: '1.1rem', marginBottom: '2rem' }}>
-          Train prediction models using your processed data.
-        </p>
+        <div className="trading-header" style={{
+          background: 'linear-gradient(145deg, rgba(25, 25, 45, 0.9), rgba(35, 35, 55, 0.6))',
+          border: '2px solid rgba(0, 255, 255, 0.2)',
+          borderRadius: '20px',
+          padding: '2rem',
+          marginBottom: '2rem',
+          boxShadow: '0 0 20px rgba(0, 255, 255, 0.1)'
+        }}>
+          <h1 style={{ margin: 0, fontSize: '2.5rem', fontFamily: 'Orbitron, monospace' }}>
+            🧠 MODEL TRAINING
+          </h1>
+          <p style={{ fontSize: '1.2rem', margin: '1rem 0 0 0', color: 'rgba(255,255,255,0.8)' }}>
+            Train prediction models using your processed data.
+          </p>
+        </div>
 
-        {/* Status */}
-        {trainingStatus && (
+        {/* Status Messages */}
+        {(trainingStatus || featureStatus) && (
           <div style={{
             padding: '1rem',
             borderRadius: '8px',
             marginBottom: '2rem',
-            backgroundColor: trainingStatus.includes('✅') ? 'rgba(0, 255, 65, 0.1)' : 
-                           trainingStatus.includes('❌') ? 'rgba(255, 0, 128, 0.1)' : 'rgba(0, 255, 255, 0.1)',
-            border: `1px solid ${trainingStatus.includes('✅') ? 'rgba(0, 255, 65, 0.3)' : 
-                              trainingStatus.includes('❌') ? 'rgba(255, 0, 128, 0.3)' : 'rgba(0, 255, 255, 0.3)'}`,
-            color: trainingStatus.includes('✅') ? '#00ff41' : 
-                   trainingStatus.includes('❌') ? '#ff0080' : '#00ffff'
+            backgroundColor: (trainingStatus?.includes('✅') || featureStatus?.includes('✅')) ? 'rgba(0, 255, 65, 0.1)' : 
+                           (trainingStatus?.includes('❌') || featureStatus?.includes('❌')) ? 'rgba(255, 0, 128, 0.1)' : 'rgba(0, 255, 255, 0.1)',
+            border: `1px solid ${(trainingStatus?.includes('✅') || featureStatus?.includes('✅')) ? 'rgba(0, 255, 65, 0.3)' : 
+                              (trainingStatus?.includes('❌') || featureStatus?.includes('❌')) ? 'rgba(255, 0, 128, 0.3)' : 'rgba(0, 255, 255, 0.3)'}`,
+            color: (trainingStatus?.includes('✅') || featureStatus?.includes('✅')) ? '#00ff41' : 
+                   (trainingStatus?.includes('❌') || featureStatus?.includes('❌')) ? '#ff0080' : '#00ffff'
           }}>
-            {trainingStatus}
+            {trainingStatus && <div>{trainingStatus}</div>}
+            {featureStatus && <div>{featureStatus}</div>}
           </div>
         )}
 
@@ -119,62 +225,64 @@ const ModelTraining = () => {
         <div style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>📊 Dataset Selection</h2>
           
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', color: '#b8bcc8' }}>
-              Select Dataset for Training:
-            </label>
-            <select
-              value={selectedDataset}
-              onChange={(e) => setSelectedDataset(e.target.value)}
-              style={{
-                width: '100%',
-                maxWidth: '400px',
-                padding: '0.75rem',
-                backgroundColor: 'rgba(25, 25, 45, 0.5)',
-                border: '1px solid rgba(0, 255, 255, 0.3)',
-                borderRadius: '4px',
-                color: '#ffffff',
-                fontSize: '1rem'
-              }}
-              disabled={loading}
-            >
-              <option value="">Choose which dataset to use for model training</option>
-              {datasets.map((dataset, index) => (
-                <option key={index} value={dataset?.name || ''}>
-                  {dataset?.name || 'Unknown'} ({dataset?.rows || 0} rows)
-                </option>
-              ))}
-            </select>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', color: '#b8bcc8' }}>
+                Select Dataset for Training:
+              </label>
+              <select
+                value={selectedDataset}
+                onChange={(e) => setSelectedDataset(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  backgroundColor: 'rgba(25, 25, 45, 0.5)',
+                  border: '1px solid rgba(0, 255, 255, 0.3)',
+                  borderRadius: '4px',
+                  color: '#ffffff',
+                  fontSize: '1rem'
+                }}
+                disabled={loading}
+              >
+                <option value="">Choose which dataset to use for model training</option>
+                {datasets.map((dataset, index) => (
+                  <option key={index} value={dataset?.name || ''}>
+                    {dataset?.name || 'Unknown'} ({dataset?.rows || 0} rows)
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'end' }}>
+              <button
+                onClick={loadSelectedDataset}
+                style={{
+                  backgroundColor: '#00ffff',
+                  color: '#0a0a0f',
+                  border: 'none',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '4px',
+                  fontSize: '1rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+                disabled={loading || !selectedDataset}
+              >
+                🔄 Load Selected Dataset
+              </button>
+            </div>
           </div>
 
-          <button
-            onClick={loadDatasets}
-            style={{
-              backgroundColor: '#00ffff',
-              color: '#0a0a0f',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '4px',
-              fontSize: '1rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              marginRight: '1rem'
-            }}
-            disabled={loading}
-          >
-            🔄 Load Selected Dataset
-          </button>
-
-          {selectedDataset && (
+          {currentData && (
             <div style={{
               backgroundColor: 'rgba(0, 255, 255, 0.1)',
               border: '1px solid rgba(0, 255, 255, 0.3)',
               borderRadius: '4px',
               padding: '0.75rem',
-              marginTop: '1rem',
               color: '#00ffff'
             }}>
-              📈 Current dataset: {selectedDataset} ready for training
+              📈 Current dataset: {selectedDataset} loaded ({currentData.length} rows)
             </div>
           )}
         </div>
@@ -268,6 +376,10 @@ const ModelTraining = () => {
                 <option value={200}>200</option>
                 <option value={250}>250</option>
                 <option value={300}>300</option>
+                <option value={350}>350</option>
+                <option value={400}>400</option>
+                <option value={450}>450</option>
+                <option value={500}>500</option>
               </select>
             </div>
           </div>
@@ -294,11 +406,11 @@ const ModelTraining = () => {
           </div>
         </div>
 
-        {/* Model Selection */}
+        {/* Model Selection Tabs */}
         <div style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>🎯 Model Selection</h2>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
             {modelTabs.map((tab) => (
               <button
                 key={tab.id}
@@ -323,24 +435,105 @@ const ModelTraining = () => {
             ))}
           </div>
 
-          <button
-            onClick={trainModel}
-            style={{
-              backgroundColor: '#00ff41',
-              color: '#0a0a0f',
-              border: 'none',
-              padding: '1rem 2rem',
+          {/* Current Model Details */}
+          {currentModel && (
+            <div style={{
+              backgroundColor: 'rgba(25, 25, 45, 0.5)',
+              border: '1px solid rgba(0, 255, 255, 0.3)',
               borderRadius: '8px',
-              fontSize: '1.1rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              width: '100%',
-              maxWidth: '300px'
-            }}
-            disabled={loading || !selectedDataset}
-          >
-            {loading ? '🚀 Training...' : `🚀 Train ${activeTab} Model`}
-          </button>
+              padding: '1.5rem',
+              marginBottom: '2rem'
+            }}>
+              <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#00ffff' }}>
+                {currentModel.icon} {currentModel.name}
+              </h3>
+              <p style={{ color: '#b8bcc8', marginBottom: '1rem' }}>
+                {currentModel.description}
+              </p>
+
+              {/* Feature Calculation Section */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: '#ffffff' }}>
+                  {currentModel.name} Features
+                </h4>
+                
+                {!featuresCalculated[activeTab] ? (
+                  <div>
+                    <div style={{
+                      backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                      border: '1px solid rgba(255, 165, 0, 0.3)',
+                      borderRadius: '4px',
+                      padding: '0.75rem',
+                      marginBottom: '1rem',
+                      color: '#ffa500'
+                    }}>
+                      ⚠️ {currentModel.name} features not calculated yet.
+                    </div>
+                    
+                    <button
+                      onClick={() => calculateFeatures(activeTab)}
+                      style={{
+                        backgroundColor: '#00ffff',
+                        color: '#0a0a0f',
+                        border: 'none',
+                        padding: '0.75rem 1.5rem',
+                        borderRadius: '4px',
+                        fontSize: '1rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                      disabled={loading || !currentData}
+                    >
+                      🔧 Calculate Technical Indicators
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{
+                    backgroundColor: 'rgba(0, 255, 65, 0.1)',
+                    border: '1px solid rgba(0, 255, 65, 0.3)',
+                    borderRadius: '4px',
+                    padding: '0.75rem',
+                    color: '#00ff41'
+                  }}>
+                    ✅ {currentModel.name} features ready
+                  </div>
+                )}
+              </div>
+
+              {/* Training Section */}
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <button
+                  onClick={trainModel}
+                  style={{
+                    backgroundColor: featuresCalculated[activeTab] ? '#00ff41' : '#666666',
+                    color: '#0a0a0f',
+                    border: 'none',
+                    padding: '1rem 2rem',
+                    borderRadius: '8px',
+                    fontSize: '1.1rem',
+                    fontWeight: 'bold',
+                    cursor: featuresCalculated[activeTab] ? 'pointer' : 'not-allowed',
+                    flex: 1
+                  }}
+                  disabled={loading || !selectedDataset || !featuresCalculated[activeTab]}
+                >
+                  {loading ? '🚀 Training...' : `🚀 Train ${currentModel.name}`}
+                </button>
+                
+                {trainingResults[activeTab] && (
+                  <div style={{
+                    backgroundColor: 'rgba(0, 255, 65, 0.1)',
+                    border: '1px solid rgba(0, 255, 65, 0.3)',
+                    borderRadius: '4px',
+                    padding: '0.75rem',
+                    color: '#00ff41'
+                  }}>
+                    ✅ Trained
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Training Results */}
@@ -350,10 +543,10 @@ const ModelTraining = () => {
             border: '1px solid rgba(0, 255, 255, 0.3)',
             borderRadius: '8px',
             padding: '1.5rem',
-            marginTop: '2rem'
+            marginBottom: '2rem'
           }}>
             <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#00ffff' }}>
-              📊 Training Results - {activeTab}
+              📊 Training Results - {currentModel?.name}
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
               <div style={{ textAlign: 'center' }}>
@@ -368,7 +561,110 @@ const ModelTraining = () => {
                 </div>
                 <div style={{ color: '#b8bcc8' }}>Features</div>
               </div>
+              {trainingResults[activeTab]?.precision && (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '2rem', color: '#ffa500', fontWeight: 'bold' }}>
+                    {(trainingResults[activeTab]?.precision * 100)?.toFixed(2)}%
+                  </div>
+                  <div style={{ color: '#b8bcc8' }}>Precision</div>
+                </div>
+              )}
+              {trainingResults[activeTab]?.recall && (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '2rem', color: '#ff0080', fontWeight: 'bold' }}>
+                    {(trainingResults[activeTab]?.recall * 100)?.toFixed(2)}%
+                  </div>
+                  <div style={{ color: '#b8bcc8' }}>Recall</div>
+                </div>
+              )}
             </div>
+          </div>
+        )}
+
+        {/* Model Status Summary */}
+        <div style={{ marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>📊 Model Status</h2>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+            {modelTabs.map((tab) => (
+              <div
+                key={tab.id}
+                style={{
+                  backgroundColor: 'rgba(25, 25, 45, 0.5)',
+                  border: '1px solid rgba(0, 255, 255, 0.3)',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  textAlign: 'center'
+                }}
+              >
+                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{tab.icon}</div>
+                <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{tab.name}</div>
+                
+                {trainingResults[tab.id] ? (
+                  <div style={{ color: '#00ff41' }}>
+                    ✅ Trained - Accuracy: {(trainingResults[tab.id]?.accuracy * 100)?.toFixed(2) || 'N/A'}%
+                  </div>
+                ) : featuresCalculated[tab.id] ? (
+                  <div style={{ color: '#ffa500' }}>
+                    🔧 Features Ready
+                  </div>
+                ) : (
+                  <div style={{ color: '#b8bcc8' }}>
+                    ⚠️ Not prepared
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Export Models Section */}
+        {Object.keys(trainingResults).length > 0 && (
+          <div style={{ marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>💾 Export Models</h2>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+              {Object.keys(trainingResults).map((modelType) => (
+                <button
+                  key={modelType}
+                  style={{
+                    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                    border: '1px solid rgba(0, 255, 255, 0.3)',
+                    borderRadius: '4px',
+                    padding: '0.75rem',
+                    color: '#00ffff',
+                    cursor: 'pointer',
+                    fontSize: '1rem'
+                  }}
+                  onClick={() => {
+                    // Export functionality would be implemented here
+                    console.log(`Exporting ${modelType} model`);
+                  }}
+                >
+                  📥 Save {modelType.charAt(0).toUpperCase() + modelType.slice(1)} Model
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Next Steps */}
+        {!currentData && (
+          <div style={{
+            backgroundColor: 'rgba(0, 255, 255, 0.1)',
+            border: '1px solid rgba(0, 255, 255, 0.3)',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            color: '#00ffff'
+          }}>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>📋 Next Steps:</h3>
+            <ol style={{ margin: 0, paddingLeft: '1.5rem' }}>
+              <li>Select and load a dataset from the dropdown above</li>
+              <li>Choose a model type (Volatility, Direction, Profit Probability, or Reversal)</li>
+              <li>Calculate technical indicators for your chosen model</li>
+              <li>Configure training parameters if needed</li>
+              <li>Train the model and review results</li>
+            </ol>
           </div>
         )}
       </div>

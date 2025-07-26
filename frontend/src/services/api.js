@@ -165,6 +165,17 @@ export const modelsAPI = {
   getModelInfo: async (modelName) => {
     const response = await api.get(`/api/models/${modelName}/info`);
     return response.data;
+  },
+    // Get model metrics
+  getModelMetrics: async (modelName) => {
+    const response = await api.get(`/api/models/${modelName}/metrics`);
+    return response.data;
+  },
+
+  // Export model
+  exportModel: async (modelName) => {
+    const response = await api.post(`/api/models/${modelName}/export`);
+    return response.data;
   }
 };
 
@@ -288,7 +299,7 @@ export const dataAPI = {
     return response;
   },
 
-  // Load specific dataset
+    // Load dataset with options
   loadDataset: async (datasetName, params = {}) => {
     const response = await api.get(`/api/data/datasets/${datasetName}`, { params });
     return response;
