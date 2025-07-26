@@ -20,19 +20,33 @@ const DatabaseManager = () => {
     try {
       setLoading(true);
       
-      const [dbInfoResponse, datasetsResponse] = await Promise.all([
-        dataAPI.getDatabaseInfo().catch(() => ({ data: {} })),
-        dataAPI.getDatasets().catch(() => ({ data: [] }))
-      ]);
+      // Fetch database info with explicit error handling
+      let dbInfo = {};
+      try {
+        const dbInfoResponse = await dataAPI.getDatabaseInfo();
+        dbInfo = dbInfoResponse?.data || {};
+      } catch (dbError) {
+        console.error('Database info fetch error:', dbError);
+        dbInfo = {};
+      }
+      
+      // Fetch datasets with explicit error handling
+      let datasetList = [];
+      try {
+        const datasetsResponse = await dataAPI.getDatasets();
+        datasetList = Array.isArray(datasetsResponse?.data) ? datasetsResponse.data : [];
+      } catch (datasetsError) {
+        console.error('Datasets fetch error:', datasetsError);
+        datasetList = [];
+      }
 
-      const dbInfo = dbInfoResponse.data || {};
       setDatabaseInfo(dbInfo);
-      setDatasets(datasetsResponse.data || []);
+      setDatasets(datasetList);
       
       setStatus('✅ Database information refreshed');
     } catch (error) {
-      console.error('Error loading datasets:', error);
-      setStatus(`❌ Error: ${error.message}`);
+      console.error('Error loading database info:', error);
+      setStatus(`❌ Error: ${error?.message || 'Unknown error'}`);
       setDatabaseInfo({});
       setDatasets([]);
     } finally {
@@ -132,26 +146,26 @@ const DatabaseManager = () => {
           <h2 className="text-2xl font-bold text-cyan-400 mb-4">📊 Database Overview</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-gradient-to-br from-blue-900/50 to-cyan-900/50 p-4 rounded-lg border border-cyan-500/30">
-              <div className="text-2xl font-bold text-cyan-400">{databaseInfo.total_datasets || 0}</div>
+              <div className="text-2xl font-bold text-cyan-400">{(databaseInfo && typeof databaseInfo.total_datasets === 'number') ? databaseInfo.total_datasets : 0}</div>
               <div className="text-gray-300">Datasets</div>
             </div>
             <div className="bg-gradient-to-br from-green-900/50 to-emerald-900/50 p-4 rounded-lg border border-green-500/30">
-              <div className="text-2xl font-bold text-green-400">{databaseInfo.total_records || 0}</div>
+              <div className="text-2xl font-bold text-green-400">{(databaseInfo && typeof databaseInfo.total_records === 'number') ? databaseInfo.total_records : 0}</div>
               <div className="text-gray-300">Records</div>
             </div>
             <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 p-4 rounded-lg border border-purple-500/30">
-              <div className="text-2xl font-bold text-purple-400">{databaseInfo.total_trained_models || 0}</div>
+              <div className="text-2xl font-bold text-purple-400">{(databaseInfo && typeof databaseInfo.total_trained_models === 'number') ? databaseInfo.total_trained_models : 0}</div>
               <div className="text-gray-300">Trained Models</div>
             </div>
             <div className="bg-gradient-to-br from-yellow-900/50 to-orange-900/50 p-4 rounded-lg border border-yellow-500/30">
-              <div className="text-2xl font-bold text-yellow-400">{databaseInfo.total_predictions || 0}</div>
+              <div className="text-2xl font-bold text-yellow-400">{(databaseInfo && typeof databaseInfo.total_predictions === 'number') ? databaseInfo.total_predictions : 0}</div>
               <div className="text-gray-300">Predictions</div>
             </div>
           </div>
           
           <div className="mt-4 text-sm text-gray-400">
-            <p><strong>Backend:</strong> {databaseInfo.backend || 'PostgreSQL'}</p>
-            <p><strong>Storage Type:</strong> {databaseInfo.storage_type || 'Row-Based'}</p>
+            <p><strong>Backend:</strong> {(databaseInfo && databaseInfo.backend) ? databaseInfo.backend : 'PostgreSQL'}</p>
+            <p><strong>Storage Type:</strong> {(databaseInfo && databaseInfo.storage_type) ? databaseInfo.storage_type : 'Row-Based'}</p>
           </div>
         </Card>
 
@@ -177,20 +191,20 @@ const DatabaseManager = () => {
                 </thead>
                 <tbody>
                   {datasets.map((dataset, index) => (
-                    <tr key={index} className="border-b border-gray-700 hover:bg-gray-800/30">
-                      <td className="py-3 text-white font-medium">{dataset.name}</td>
-                      <td className="py-3 text-gray-300">{dataset.rows?.toLocaleString() || 0}</td>
+                    <tr key={dataset?.name || index} className="border-b border-gray-700 hover:bg-gray-800/30">
+                      <td className="py-3 text-white font-medium">{dataset?.name || 'Unknown'}</td>
+                      <td className="py-3 text-gray-300">{(dataset?.rows && typeof dataset.rows === 'number') ? dataset.rows.toLocaleString() : 0}</td>
                       <td className="py-3 text-gray-300">
-                        {dataset.start_date && dataset.end_date ? 
+                        {(dataset?.start_date && dataset?.end_date) ? 
                           `${dataset.start_date} to ${dataset.end_date}` : 
                           'N/A'}
                       </td>
-                      <td className="py-3 text-gray-300">{dataset.updated_at || 'N/A'}</td>
+                      <td className="py-3 text-gray-300">{dataset?.updated_at || 'N/A'}</td>
                       <td className="py-3">
                         <button
-                          onClick={() => deleteDataset(dataset.name)}
+                          onClick={() => deleteDataset(dataset?.name)}
                           className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
-                          disabled={loading}
+                          disabled={loading || !dataset?.name}
                         >
                           Delete
                         </button>
