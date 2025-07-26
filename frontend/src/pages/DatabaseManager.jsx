@@ -1,266 +1,310 @@
 /**
- * Database Manager page - Simplified working version
+ * Database Manager page - Exact Streamlit UI replication
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import Card from '../components/common/Card';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useState, useEffect } from 'react';
 import { dataAPI } from '../services/api';
 
 const DatabaseManager = () => {
-  const [databaseInfo, setDatabaseInfo] = useState({});
+  const [databaseInfo, setDatabaseInfo] = useState(null);
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
-  const [selectedDataset, setSelectedDataset] = useState('');
-  const [showConfirmClearAll, setShowConfirmClearAll] = useState(false);
+  const [actionStatus, setActionStatus] = useState('');
 
   // Load database information
-  const loadDatabaseInfo = useCallback(async () => {
+  const loadDatabaseInfo = async () => {
     try {
       setLoading(true);
+      const [dbResponse, datasetsResponse] = await Promise.all([
+        dataAPI.getDatabaseInfo(),
+        dataAPI.getDatasets()
+      ]);
       
-      // Fetch database info with explicit error handling
-      let dbInfo = {};
-      try {
-        const dbInfoResponse = await dataAPI.getDatabaseInfo();
-        dbInfo = dbInfoResponse?.data || {};
-      } catch (dbError) {
-        console.error('Database info fetch error:', dbError);
-        dbInfo = {};
-      }
-      
-      // Fetch datasets with explicit error handling
-      let datasetList = [];
-      try {
-        const datasetsResponse = await dataAPI.getDatasets();
-        datasetList = Array.isArray(datasetsResponse?.data) ? datasetsResponse.data : [];
-      } catch (datasetsError) {
-        console.error('Datasets fetch error:', datasetsError);
-        datasetList = [];
-      }
-
-      setDatabaseInfo(dbInfo);
-      setDatasets(datasetList);
-      
-      setStatus('✅ Database information refreshed');
+      setDatabaseInfo(dbResponse?.data || {});
+      setDatasets(Array.isArray(datasetsResponse?.data) ? datasetsResponse.data : []);
     } catch (error) {
       console.error('Error loading database info:', error);
-      setStatus(`❌ Error: ${error?.message || 'Unknown error'}`);
-      setDatabaseInfo({});
-      setDatasets([]);
+      setActionStatus(`❌ Error loading database info: ${error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     loadDatabaseInfo();
-  }, [loadDatabaseInfo]);
-
-  // Clear all data
-  const clearAllData = async () => {
-    if (!showConfirmClearAll) {
-      setShowConfirmClearAll(true);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setStatus('🗑️ Clearing all database data...');
-      
-      await dataAPI.clearAllData();
-      
-      // Refresh database info
-      await loadDatabaseInfo();
-      
-      setStatus('✅ All database data cleared successfully');
-      setSelectedDataset('');
-      setShowConfirmClearAll(false);
-    } catch (error) {
-      setStatus(`❌ Error clearing data: ${error.response?.data?.detail || error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Delete specific dataset
-  const deleteDataset = async (datasetName) => {
-    if (!confirm(`⚠️ Are you sure you want to delete dataset "${datasetName}"? This action cannot be undone!`)) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setStatus(`🗑️ Deleting dataset: ${datasetName}...`);
-      
-      await dataAPI.deleteDataset(datasetName);
-      
-      // Refresh database info
-      await loadDatabaseInfo();
-      
-      setStatus(`✅ Dataset "${datasetName}" deleted successfully`);
-      if (selectedDataset === datasetName) {
-        setSelectedDataset('');
-      }
-    } catch (error) {
-      setStatus(`❌ Error deleting dataset: ${error.response?.data?.detail || error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-800">
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-600 mb-4">
-            Database Manager
-          </h1>
-          <p className="text-gray-300 text-lg">
-            Manage your PostgreSQL database, datasets, and models
-          </p>
-        </div>
+    <div style={{ backgroundColor: '#0a0a0f', minHeight: '100vh', color: '#ffffff', fontFamily: 'Space Grotesk, sans-serif' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
+        
+        {/* Header */}
+        <h1 style={{ fontSize: '2.5rem', marginBottom: '0.5rem', fontFamily: 'Orbitron, monospace' }}>
+          🗄️ Database Manager
+        </h1>
+        <p style={{ color: '#b8bcc8', fontSize: '1.1rem', marginBottom: '2rem' }}>
+          Monitor and manage your PostgreSQL database and datasets.
+        </p>
 
         {/* Status */}
-        {status && (
-          <div className="mb-6">
-            <div className={`p-4 rounded-lg ${
-              status.includes('✅') ? 'bg-green-900/30 border border-green-500/30 text-green-400' :
-              status.includes('❌') ? 'bg-red-900/30 border border-red-500/30 text-red-400' :
-              'bg-blue-900/30 border border-blue-500/30 text-blue-400'
-            }`}>
-              {status}
-            </div>
-          </div>
-        )}
-
-        {loading && (
-          <div className="flex justify-center mb-6">
-            <LoadingSpinner />
+        {actionStatus && (
+          <div style={{
+            padding: '1rem',
+            borderRadius: '8px',
+            marginBottom: '2rem',
+            backgroundColor: actionStatus.includes('✅') ? 'rgba(0, 255, 65, 0.1)' : 'rgba(255, 0, 128, 0.1)',
+            border: `1px solid ${actionStatus.includes('✅') ? 'rgba(0, 255, 65, 0.3)' : 'rgba(255, 0, 128, 0.3)'}`,
+            color: actionStatus.includes('✅') ? '#00ff41' : '#ff0080'
+          }}>
+            {actionStatus}
           </div>
         )}
 
         {/* Database Overview */}
-        <Card className="mb-8">
-          <h2 className="text-2xl font-bold text-cyan-400 mb-4">📊 Database Overview</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-900/50 to-cyan-900/50 p-4 rounded-lg border border-cyan-500/30">
-              <div className="text-2xl font-bold text-cyan-400">{(databaseInfo && typeof databaseInfo.total_datasets === 'number') ? databaseInfo.total_datasets : 0}</div>
-              <div className="text-gray-300">Datasets</div>
-            </div>
-            <div className="bg-gradient-to-br from-green-900/50 to-emerald-900/50 p-4 rounded-lg border border-green-500/30">
-              <div className="text-2xl font-bold text-green-400">{(databaseInfo && typeof databaseInfo.total_records === 'number') ? databaseInfo.total_records : 0}</div>
-              <div className="text-gray-300">Records</div>
-            </div>
-            <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 p-4 rounded-lg border border-purple-500/30">
-              <div className="text-2xl font-bold text-purple-400">{(databaseInfo && typeof databaseInfo.total_trained_models === 'number') ? databaseInfo.total_trained_models : 0}</div>
-              <div className="text-gray-300">Trained Models</div>
-            </div>
-            <div className="bg-gradient-to-br from-yellow-900/50 to-orange-900/50 p-4 rounded-lg border border-yellow-500/30">
-              <div className="text-2xl font-bold text-yellow-400">{(databaseInfo && typeof databaseInfo.total_predictions === 'number') ? databaseInfo.total_predictions : 0}</div>
-              <div className="text-gray-300">Predictions</div>
-            </div>
+        <div style={{ marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ fontSize: '1.8rem', margin: 0 }}>📊 Database Overview</h2>
+            <button
+              onClick={loadDatabaseInfo}
+              style={{
+                backgroundColor: '#00ffff',
+                color: '#0a0a0f',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                fontSize: '0.9rem',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+              disabled={loading}
+            >
+              🔄 Refresh
+            </button>
           </div>
           
-          <div className="mt-4 text-sm text-gray-400">
-            <p><strong>Backend:</strong> {(databaseInfo && databaseInfo.backend) ? databaseInfo.backend : 'PostgreSQL'}</p>
-            <p><strong>Storage Type:</strong> {(databaseInfo && databaseInfo.storage_type) ? databaseInfo.storage_type : 'Row-Based'}</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+            <div style={{
+              backgroundColor: 'rgba(25, 25, 45, 0.5)',
+              border: '1px solid rgba(0, 255, 255, 0.3)',
+              borderRadius: '8px',
+              padding: '1.5rem',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🗄️</div>
+              <div style={{ fontSize: '1.5rem', color: '#00ffff', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                {loading ? '...' : databaseInfo?.database_type || 'PostgreSQL'}
+              </div>
+              <div style={{ color: '#b8bcc8', fontSize: '0.9rem' }}>Database Type</div>
+            </div>
+            
+            <div style={{
+              backgroundColor: 'rgba(25, 25, 45, 0.5)',
+              border: '1px solid rgba(0, 255, 65, 0.3)',
+              borderRadius: '8px',
+              padding: '1.5rem',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📊</div>
+              <div style={{ fontSize: '1.5rem', color: '#00ff41', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                {loading ? '...' : databaseInfo?.total_datasets || 0}
+              </div>
+              <div style={{ color: '#b8bcc8', fontSize: '0.9rem' }}>Total Datasets</div>
+            </div>
+            
+            <div style={{
+              backgroundColor: 'rgba(25, 25, 45, 0.5)',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              borderRadius: '8px',
+              padding: '1.5rem',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📈</div>
+              <div style={{ fontSize: '1.5rem', color: '#8b5cf6', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                {loading ? '...' : databaseInfo?.total_records?.toLocaleString() || 0}
+              </div>
+              <div style={{ color: '#b8bcc8', fontSize: '0.9rem' }}>Total Records</div>
+            </div>
+            
+            <div style={{
+              backgroundColor: 'rgba(25, 25, 45, 0.5)',
+              border: '1px solid rgba(255, 0, 128, 0.3)',
+              borderRadius: '8px',
+              padding: '1.5rem',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🤖</div>
+              <div style={{ fontSize: '1.5rem', color: '#ff0080', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                {loading ? '...' : databaseInfo?.total_trained_models || 0}
+              </div>
+              <div style={{ color: '#b8bcc8', fontSize: '0.9rem' }}>Trained Models</div>
+            </div>
           </div>
-        </Card>
+        </div>
 
         {/* Datasets Management */}
-        <Card className="mb-8">
-          <h2 className="text-2xl font-bold text-cyan-400 mb-4">📁 Datasets ({datasets.length})</h2>
+        <div style={{ marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>📋 Datasets Management</h2>
           
-          {datasets.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <p>No datasets found. Upload data to create your first dataset.</p>
+          {datasets.length > 0 ? (
+            <div style={{
+              backgroundColor: 'rgba(25, 25, 45, 0.5)',
+              border: '1px solid rgba(0, 255, 255, 0.3)',
+              borderRadius: '8px',
+              padding: '1.5rem'
+            }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <h3 style={{ color: '#00ffff', marginBottom: '0.5rem' }}>Current Datasets</h3>
+              </div>
+              
+              {datasets.map((dataset, index) => (
+                <div key={index} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '1rem',
+                  backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                  borderRadius: '4px',
+                  marginBottom: '0.5rem',
+                  border: '1px solid rgba(0, 255, 255, 0.2)'
+                }}>
+                  <div>
+                    <div style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '0.25rem' }}>
+                      📊 {dataset.name}
+                    </div>
+                    <div style={{ color: '#b8bcc8', fontSize: '0.9rem' }}>
+                      {dataset.rows?.toLocaleString() || 0} rows • {dataset.start_date} to {dataset.end_date}
+                    </div>
+                    <div style={{ color: '#b8bcc8', fontSize: '0.8rem' }}>
+                      Created: {new Date(dataset.created_at).toLocaleDateString()} • 
+                      Updated: {new Date(dataset.updated_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      style={{
+                        backgroundColor: 'rgba(0, 255, 255, 0.2)',
+                        border: '1px solid rgba(0, 255, 255, 0.3)',
+                        borderRadius: '4px',
+                        color: '#00ffff',
+                        padding: '0.5rem',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem'
+                      }}
+                    >
+                      📊 View
+                    </button>
+                    <button
+                      style={{
+                        backgroundColor: 'rgba(255, 0, 128, 0.2)',
+                        border: '1px solid rgba(255, 0, 128, 0.3)',
+                        borderRadius: '4px',
+                        color: '#ff0080',
+                        padding: '0.5rem',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem'
+                      }}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-600">
-                    <th className="pb-3 text-cyan-400">Dataset Name</th>
-                    <th className="pb-3 text-cyan-400">Rows</th>
-                    <th className="pb-3 text-cyan-400">Date Range</th>
-                    <th className="pb-3 text-cyan-400">Last Updated</th>
-                    <th className="pb-3 text-cyan-400">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {datasets.map((dataset, index) => (
-                    <tr key={dataset?.name || index} className="border-b border-gray-700 hover:bg-gray-800/30">
-                      <td className="py-3 text-white font-medium">{dataset?.name || 'Unknown'}</td>
-                      <td className="py-3 text-gray-300">{(dataset?.rows && typeof dataset.rows === 'number') ? dataset.rows.toLocaleString() : 0}</td>
-                      <td className="py-3 text-gray-300">
-                        {(dataset?.start_date && dataset?.end_date) ? 
-                          `${dataset.start_date} to ${dataset.end_date}` : 
-                          'N/A'}
-                      </td>
-                      <td className="py-3 text-gray-300">{dataset?.updated_at || 'N/A'}</td>
-                      <td className="py-3">
-                        <button
-                          onClick={() => deleteDataset(dataset?.name)}
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
-                          disabled={loading || !dataset?.name}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={{
+              backgroundColor: 'rgba(255, 215, 0, 0.1)',
+              border: '1px solid rgba(255, 215, 0, 0.3)',
+              borderRadius: '8px',
+              padding: '2rem',
+              textAlign: 'center',
+              color: '#ffd700'
+            }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📊</div>
+              <div style={{ marginBottom: '0.5rem' }}>No datasets found</div>
+              <div style={{ color: '#b8bcc8', fontSize: '0.9rem' }}>
+                Upload data through the Data Upload page to get started
+              </div>
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Database Actions */}
-        <Card>
-          <h2 className="text-2xl font-bold text-cyan-400 mb-4">⚙️ Database Actions</h2>
-          <div className="space-y-4">
-            
-            <div className="flex items-center justify-between p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-              <div>
-                <h3 className="text-blue-400 font-bold">Refresh Database Info</h3>
-                <p className="text-gray-400 text-sm">Reload database statistics and dataset information</p>
-              </div>
+        <div style={{
+          backgroundColor: 'rgba(25, 25, 45, 0.5)',
+          border: '1px solid rgba(255, 0, 128, 0.3)',
+          borderRadius: '8px',
+          padding: '2rem'
+        }}>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#ff0080' }}>⚠️ Database Actions</h2>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+            <div style={{ textAlign: 'center' }}>
+              <h3 style={{ color: '#ffd700', marginBottom: '1rem' }}>🔧 Maintenance</h3>
               <button
-                onClick={loadDatabaseInfo}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                style={{
+                  backgroundColor: 'rgba(255, 215, 0, 0.2)',
+                  border: '1px solid rgba(255, 215, 0, 0.3)',
+                  borderRadius: '4px',
+                  color: '#ffd700',
+                  padding: '0.75rem 1rem',
+                  cursor: 'pointer',
+                  width: '100%',
+                  marginBottom: '0.5rem'
+                }}
                 disabled={loading}
               >
-                Refresh
+                🧹 Clean Database
               </button>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
-              <div>
-                <h3 className="text-red-400 font-bold">Clear All Data</h3>
-                <p className="text-gray-400 text-sm">Remove all datasets, models, and predictions (irreversible)</p>
+              <div style={{ color: '#b8bcc8', fontSize: '0.8rem' }}>
+                Remove temporary and cached data
               </div>
-              <div className="flex space-x-2">
-                {showConfirmClearAll && (
-                  <button
-                    onClick={() => setShowConfirmClearAll(false)}
-                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
-                  >
-                    Cancel
-                  </button>
-                )}
-                <button
-                  onClick={clearAllData}
-                  className={`px-6 py-2 ${showConfirmClearAll ? 'bg-red-700 hover:bg-red-800' : 'bg-red-600 hover:bg-red-700'} text-white rounded transition-colors`}
-                  disabled={loading}
-                >
-                  {showConfirmClearAll ? 'Confirm Clear All' : 'Clear All Data'}
-                </button>
+            </div>
+            
+            <div style={{ textAlign: 'center' }}>
+              <h3 style={{ color: '#00ffff', marginBottom: '1rem' }}>💾 Backup</h3>
+              <button
+                style={{
+                  backgroundColor: 'rgba(0, 255, 255, 0.2)',
+                  border: '1px solid rgba(0, 255, 255, 0.3)',
+                  borderRadius: '4px',
+                  color: '#00ffff',
+                  padding: '0.75rem 1rem',
+                  cursor: 'pointer',
+                  width: '100%',
+                  marginBottom: '0.5rem'
+                }}
+                disabled={loading}
+              >
+                💾 Export Data
+              </button>
+              <div style={{ color: '#b8bcc8', fontSize: '0.8rem' }}>
+                Download database backup
+              </div>
+            </div>
+            
+            <div style={{ textAlign: 'center' }}>
+              <h3 style={{ color: '#ff0080', marginBottom: '1rem' }}>🗑️ Reset</h3>
+              <button
+                style={{
+                  backgroundColor: 'rgba(255, 0, 128, 0.2)',
+                  border: '1px solid rgba(255, 0, 128, 0.3)',
+                  borderRadius: '4px',
+                  color: '#ff0080',
+                  padding: '0.75rem 1rem',
+                  cursor: 'pointer',
+                  width: '100%',
+                  marginBottom: '0.5rem'
+                }}
+                disabled={loading}
+              >
+                🚨 Clear All Data
+              </button>
+              <div style={{ color: '#b8bcc8', fontSize: '0.8rem' }}>
+                ⚠️ This action cannot be undone
               </div>
             </div>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );
