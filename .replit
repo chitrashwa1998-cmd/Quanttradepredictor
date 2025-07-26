@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Start Backend Clean"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Streamlit App"
@@ -90,70 +90,6 @@ author = "agent"
 task = "shell.exec"
 args = "cd backend && python simple_main.py"
 waitForPort = 8000
-
-[[workflows.workflow]]
-name = "Simple Backend Fixed"
-author = 40743738
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd backend && python simple_main.py"
-
-[[workflows.workflow]]
-name = "React Frontend Fixed"
-author = 40743738
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd frontend && npm run dev -- --host 0.0.0.0 --port 5000"
-
-[[workflows.workflow]]
-name = "Backend Server"
-author = 40743738
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"python.*simple_main.py\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"python.*run_backend.py\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "sleep 2"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd backend && python simple_main.py"
-
-[[workflows.workflow]]
-name = "Start Backend Clean"
-author = 40743738
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"python.*simple_main.py\" 2>/dev/null || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"python.*run_backend.py\" 2>/dev/null || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"uvicorn\" 2>/dev/null || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "sleep 3"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd backend && python simple_main.py"
 
 [[ports]]
 localPort = 5000

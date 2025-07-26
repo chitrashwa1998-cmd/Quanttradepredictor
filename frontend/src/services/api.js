@@ -5,25 +5,38 @@
 
 import axios from 'axios';
 
-// For Replit environment, use proxy configuration
+// For Replit environment, use the same domain with port 8000
 const getAPIBaseURL = () => {
-  // Use empty string since routes already include /api prefix
-  return '';
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+
+    if (hostname.includes('replit.dev')) {
+      // For Replit, use the same host but port 8000
+      return `${protocol}//${hostname.replace(/:\d+/, '')}:8000`;
+    }
+  }
+
+  return 'http://localhost:8000';
 };
 
 const API_BASE_URL = getAPIBaseURL();
 
 // Create axios instance with default config
-const axiosInstance = axios.create({
+const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 second timeout
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
 // Request interceptor for logging
-axiosInstance.interceptors.request.use(
+api.interceptors.request.use(
   (config) => {
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
     return config;
@@ -35,7 +48,7 @@ axiosInstance.interceptors.request.use(
 );
 
 // Response interceptor for error handling
-axiosInstance.interceptors.response.use(
+api.interceptors.response.use(
   (response) => {
     return response;
   },
@@ -48,8 +61,6 @@ axiosInstance.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-const api = axiosInstance;
 
 // Health check
 export const healthCheck = async () => {
@@ -191,26 +202,14 @@ export const dataAPI = {
   // Export dataset
   exportDataset: async (datasetName) => {
     const response = await api.get(`/api/data/datasets/${datasetName}/export`, {
-      responseType: 'blob'
+      responseType: 'text'
     });
     return response;
   },
 
-  // Rename dataset
-  renameDataset: async (oldName, newName) => {
-    const response = await api.post(`/api/data/datasets/${oldName}/rename?new_name=${newName}`);
-    return response;
-  },
-
-  // Delete model results
-  deleteModelResults: async (modelName) => {
-    const response = await api.delete(`/api/data/model-results/${modelName}`);
-    return response;
-  },
-
-  // Delete predictions
-  deletePredictions: async (modelName) => {
-    const response = await api.delete(`/api/data/predictions/${modelName}`);
+  // Clean data mode
+  cleanDataMode: async () => {
+    const response = await api.post('/api/data/clean-mode');
     return response;
   },
 
@@ -226,9 +225,21 @@ export const dataAPI = {
     return response;
   },
 
-  // Get key content
+  // Delete model results
+  deleteModelResults: async (modelName) => {
+    const response = await api.delete(`/api/models/results/${modelName}`);
+    return response;
+  },
+
+  // Delete predictions
+  deletePredictions: async (modelName) => {
+    const response = await api.delete(`/api/predictions/${modelName}`);
+    return response;
+  },
+
+  // Get key content (for debug view)
   getKeyContent: async (key) => {
-    const response = await api.get(`/api/data/keys/${key}`);
+    const response = await api.get(`/api/data/debug/key/${key}`);
     return response;
   },
 
@@ -238,9 +249,29 @@ export const dataAPI = {
     return response.data;
   },
 
+  // Get latest live data
+  getLatestLiveData: async (limit = 10) => {
+    const response = await api.get('/api/data/live-data/latest', {
+      params: { limit }
+    });
+    return response.data;
+  },
+
+  // Get dataset statistics
+  getDatasetStats: async (datasetName) => {
+    const response = await api.get(`/api/data/datasets/${datasetName}/stats`);
+    return response.data;
+  },
+
   // Get datasets (alias for listDatasets for compatibility)
   getDatasets: async () => {
     const response = await api.get('/api/data/datasets');
+    return response;
+  },
+
+  // Load specific dataset
+  loadDataset: async (datasetName, params = {}) => {
+    const response = await api.get(`/api/data/datasets/${datasetName}`, { params });
     return response;
   },
 
@@ -249,30 +280,6 @@ export const dataAPI = {
     const response = await api.delete('/api/data/datasets');
     return response.data;
   },
-
-  // Clean data mode
-  cleanDataMode: async () => {
-    const response = await api.post('/api/data/clean-mode');
-    return response.data;
-  },
-
-  // Sync metadata
-  syncMetadata: async () => {
-    const response = await api.post('/api/data/sync-metadata');
-    return response.data;
-  },
-
-  // Clean database
-  cleanDatabase: async () => {
-    const response = await api.post('/api/data/clean-database');
-    return response.data;
-  },
-
-  // Get key content
-  getKeyContent: async (key) => {
-    const response = await api.get(`/api/data/keys/${key}`);
-    return response;
-  }
 };
 
 // WebSocket API

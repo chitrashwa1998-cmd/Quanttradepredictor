@@ -1,367 +1,523 @@
-
 /**
- * Data Upload page - Complete Streamlit functionality migration with cyberpunk theme
+ * Data Upload page - Complete Streamlit functionality migration
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Card from '../components/common/Card';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { dataAPI } from '../services/api';
 
-export default function DataUpload() {
-  const [file, setFile] = useState(null);
-  const [datasetName, setDatasetName] = useState('');
+const DataUpload = () => {
+  const [datasets, setDatasets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedDataset, setSelectedDataset] = useState('');
   const [datasetPurpose, setDatasetPurpose] = useState('training');
-  const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState('');
-  const [dragOver, setDragOver] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [previewData, setPreviewData] = useState(null);
+  const [processingResults, setProcessingResults] = useState(null);
 
-  const handleFileChange = (event) => {
-    const selectedFile = event.target.files[0];
-    setFile(selectedFile);
+  // Load datasets on component mount
+  const loadDatasets = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await dataAPI.getDatasets();
+      setDatasets(response.data || []);
+    } catch (error) {
+      console.error('Error loading datasets:', error);
+      setDatasets([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    if (selectedFile && !datasetName) {
-      // Auto-generate dataset name from filename
-      const name = selectedFile.name.replace(/\.[^/.]+$/, "");
-      setDatasetName(name);
+  useEffect(() => {
+    loadDatasets();
+  }, [loadDatasets]);
+
+  // Handle file selection
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type === 'text/csv') {
+      setUploadedFile(file);
+      setUploadStatus('');
+      setPreviewData(null);
+      setProcessingResults(null);
+    } else {
+      setUploadStatus('Please select a valid CSV file');
+      setUploadedFile(null);
     }
   };
 
-  const handleDrop = (event) => {
-    event.preventDefault();
-    setDragOver(false);
-    
-    const droppedFile = event.dataTransfer.files[0];
-    if (droppedFile && (droppedFile.type === 'text/csv' || droppedFile.name.endsWith('.csv'))) {
-      setFile(droppedFile);
-      if (!datasetName) {
-        const name = droppedFile.name.replace(/\.[^/.]+$/, "");
-        setDatasetName(name);
-      }
-    }
-  };
-
-  const handleDragOver = (event) => {
-    event.preventDefault();
-    setDragOver(true);
-  };
-
-  const handleDragLeave = (event) => {
-    event.preventDefault();
-    setDragOver(false);
-  };
-
+  // Handle file upload and processing
   const handleUpload = async () => {
-    if (!file) {
-      setMessage('Please select a file to upload');
-      setMessageType('error');
+    if (!uploadedFile) {
+      setUploadStatus('Please select a file first');
       return;
     }
 
-    if (!datasetName.trim()) {
-      setMessage('Please provide a dataset name');
-      setMessageType('error');
+    if (!selectedDataset.trim()) {
+      setUploadStatus('Please enter a dataset name');
       return;
     }
-
-    setUploading(true);
-    setMessage('');
 
     try {
+      setLoading(true);
+      setUploadProgress(0);
+      setUploadStatus('Uploading and processing data...');
+
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('dataset_name', datasetName.trim());
-      formData.append('dataset_purpose', datasetPurpose);
+      formData.append('file', uploadedFile);
+      formData.append('dataset_name', selectedDataset);
+      formData.append('purpose', datasetPurpose);
+
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 200);
 
       const response = await dataAPI.uploadData(formData);
 
-      if (response.status === 200) {
-        setMessage(`Successfully uploaded ${datasetName} for ${datasetPurpose}`);
-        setMessageType('success');
-        setFile(null);
-        setDatasetName('');
-        // Reset file input
-        const fileInput = document.querySelector('input[type="file"]');
-        if (fileInput) fileInput.value = '';
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      if (response.data) {
+        setUploadStatus('✅ Data uploaded and processed successfully!');
+        setProcessingResults(response.data);
+        
+        // Load preview data
+        if (response.data.preview) {
+          setPreviewData(response.data.preview);
+        }
+
+        // Refresh datasets list
+        await loadDatasets();
+        
+        // Clear form
+        setUploadedFile(null);
+        setSelectedDataset('');
+        document.getElementById('file-input').value = '';
       }
     } catch (error) {
-      console.error('Upload error:', error);
-      setMessage(`Upload failed: ${error.response?.data?.detail || error.message}`);
-      setMessageType('error');
+      setUploadStatus(`❌ Upload failed: ${error.response?.data?.detail || error.message}`);
     } finally {
-      setUploading(false);
+      setLoading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  // Delete dataset
+  const handleDeleteDataset = async (datasetName) => {
+    if (!window.confirm(`Are you sure you want to delete "${datasetName}"?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await dataAPI.deleteDataset(datasetName);
+      setUploadStatus(`✅ Dataset "${datasetName}" deleted successfully`);
+      await loadDatasets();
+    } catch (error) {
+      setUploadStatus(`❌ Failed to delete dataset: ${error.response?.data?.detail || error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen p-6" style={{
-      background: 'var(--primary-bg)',
-      backgroundImage: `
-        radial-gradient(circle at 20% 50%, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
-        radial-gradient(circle at 80% 20%, rgba(255, 0, 128, 0.1) 0%, transparent 50%),
-        radial-gradient(circle at 40% 80%, rgba(0, 255, 65, 0.05) 0%, transparent 50%)
-      `
-    }}>
-      <div className="max-w-6xl mx-auto">
-        {/* Header - Original Streamlit Style */}
-        <div className="trading-header">
-          <h1 style={{
-            margin: 0,
-            fontFamily: 'var(--font-display)',
-            fontSize: '2.5rem',
-            fontWeight: '900',
-            background: 'var(--gradient-text)',
-            backgroundClip: 'text',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            textShadow: '0 0 20px var(--shadow-cyan)',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase'
-          }}>
-            📊 DATA UPLOAD CENTER
-          </h1>
-          <p style={{
-            fontSize: '1.2rem',
-            margin: '1rem 0 0 0',
-            color: 'rgba(255,255,255,0.8)',
-            fontFamily: 'var(--font-primary)'
-          }}>
-            Load and Process Market Data
-          </p>
-        </div>
+    <div className="container mx-auto px-6 py-8">
+      {/* Header */}
+      <div className="trading-header mb-8">
+        <h1 style={{
+          margin: '0',
+          background: 'var(--gradient-primary)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          fontFamily: 'var(--font-display)',
+          fontSize: '2.5rem'
+        }}>
+          📊 DATA UPLOAD CENTER
+        </h1>
+        <p style={{
+          fontSize: '1.2rem',
+          margin: '1rem 0 0 0',
+          color: 'rgba(255,255,255,0.8)',
+          fontFamily: 'var(--font-primary)'
+        }}>
+          Load and Process Market Data
+        </p>
+      </div>
 
-        {/* Upload Form */}
-        <div className="cyber-card mb-6">
-          <h2 className="cyber-subtitle mb-6">Upload OHLC Data</h2>
-          
-          <div className="mb-6">
-            <p className="cyber-text mb-4">
-              Upload your historical price data in CSV format. The file should contain columns for Date, Open, High, Low, Close, and optionally Volume.
-            </p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Upload Section */}
+        <div className="lg:col-span-2">
+          <Card>
+            <h2 style={{
+              color: 'var(--accent-cyan)',
+              fontFamily: 'var(--font-display)',
+              fontSize: '1.5rem',
+              marginBottom: '1.5rem'
+            }}>
+              Upload OHLC Data
+            </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div className="cyber-alert cyber-alert-info">
-                <strong>Supported formats:</strong><br/>
-                Date formats: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY
+            <div style={{ marginBottom: '1.5rem' }}>
+              <p style={{ color: 'var(--text-primary)', marginBottom: '1rem' }}>
+                Upload your historical price data in CSV format. The file should contain columns for Date, Open, High, Low, Close, and optionally Volume.
+              </p>
+              
+              <div style={{
+                background: 'rgba(0, 255, 255, 0.05)',
+                border: '1px solid rgba(0, 255, 255, 0.2)',
+                borderRadius: '8px',
+                padding: '1rem',
+                marginBottom: '1.5rem'
+              }}>
+                <h4 style={{ color: 'var(--accent-cyan)', marginBottom: '0.5rem' }}>
+                  📋 Supported formats:
+                </h4>
+                <ul style={{ color: 'var(--text-secondary)', paddingLeft: '1.5rem', lineHeight: '1.6' }}>
+                  <li>Date formats: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY</li>
+                  <li>Column names: Date/Datetime, Open, High, Low, Close, Volume (case-insensitive)</li>
+                  <li>File format: CSV only</li>
+                </ul>
               </div>
-              <div className="cyber-alert cyber-alert-info">
-                <strong>Column names:</strong><br/>
-                Date/Datetime, Open, High, Low, Close, Volume (case-insensitive)
-              </div>
-              <div className="cyber-alert cyber-alert-warning">
-                <strong>File size limit:</strong><br/>
-                Maximum 100MB for optimal performance
-              </div>
-            </div>
-          </div>
 
-          {/* Dataset Configuration */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <label className="block text-sm font-medium mb-2 cyber-subtitle">
-                🎯 Dataset Purpose
-              </label>
-              <select
-                value={datasetPurpose}
-                onChange={(e) => setDatasetPurpose(e.target.value)}
-                className="cyber-select w-full"
+              {/* File Input */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{
+                  display: 'block',
+                  color: 'var(--text-primary)',
+                  marginBottom: '0.5rem',
+                  fontWeight: '500'
+                }}>
+                  Choose CSV File:
+                </label>
+                <input
+                  id="file-input"
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    background: 'var(--bg-secondary)',
+                    border: '2px solid var(--border)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    fontFamily: 'var(--font-primary)'
+                  }}
+                />
+              </div>
+
+              {/* Dataset Configuration */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label style={{
+                    display: 'block',
+                    color: 'var(--text-primary)',
+                    marginBottom: '0.5rem',
+                    fontWeight: '500'
+                  }}>
+                    Dataset Name:
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedDataset}
+                    onChange={(e) => setSelectedDataset(e.target.value)}
+                    placeholder="Enter dataset name"
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      background: 'var(--bg-secondary)',
+                      border: '2px solid var(--border)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)',
+                      fontFamily: 'var(--font-primary)'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{
+                    display: 'block',
+                    color: 'var(--text-primary)',
+                    marginBottom: '0.5rem',
+                    fontWeight: '500'
+                  }}>
+                    Purpose:
+                  </label>
+                  <select
+                    value={datasetPurpose}
+                    onChange={(e) => setDatasetPurpose(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      background: 'var(--bg-secondary)',
+                      border: '2px solid var(--border)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)',
+                      fontFamily: 'var(--font-primary)'
+                    }}
+                  >
+                    <option value="training">Training</option>
+                    <option value="testing">Testing</option>
+                    <option value="validation">Validation</option>
+                    <option value="production">Production</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Upload Button */}
+              <button
+                onClick={handleUpload}
+                disabled={loading || !uploadedFile}
+                style={{
+                  width: '100%',
+                  padding: '1rem',
+                  background: loading || !uploadedFile 
+                    ? 'var(--bg-secondary)' 
+                    : 'var(--gradient-primary)',
+                  border: '2px solid var(--border-hover)',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontFamily: 'var(--font-primary)',
+                  fontWeight: '600',
+                  fontSize: '1rem',
+                  cursor: loading || !uploadedFile ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
               >
-                <option value="training">Training - Used for model training</option>
-                <option value="pre_seed">Pre-seed - Used for live data seeding</option>
-                <option value="validation">Validation - Used for model validation</option>
-                <option value="testing">Testing - Used for model testing</option>
-              </select>
+                {loading ? '⏳ Processing...' : '📤 Upload & Process Data'}
+              </button>
+
+              {/* Upload Progress */}
+              {uploadProgress > 0 && (
+                <div style={{ marginTop: '1rem' }}>
+                  <div style={{
+                    width: '100%',
+                    height: '8px',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: `${uploadProgress}%`,
+                      height: '100%',
+                      background: 'var(--gradient-primary)',
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                  <p style={{
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.9rem',
+                    marginTop: '0.5rem',
+                    textAlign: 'center'
+                  }}>
+                    {uploadProgress}% Complete
+                  </p>
+                </div>
+              )}
+
+              {/* Status Message */}
+              {uploadStatus && (
+                <div style={{
+                  marginTop: '1rem',
+                  padding: '1rem',
+                  background: uploadStatus.includes('❌') 
+                    ? 'rgba(255, 0, 0, 0.1)' 
+                    : 'rgba(0, 255, 0, 0.1)',
+                  border: `1px solid ${uploadStatus.includes('❌') ? '#ff0000' : '#00ff00'}`,
+                  borderRadius: '8px',
+                  color: uploadStatus.includes('❌') ? '#ff6b6b' : '#51cf66',
+                  fontFamily: 'var(--font-primary)'
+                }}>
+                  {uploadStatus}
+                </div>
+              )}
+
+              {/* Processing Results */}
+              {processingResults && (
+                <div style={{
+                  marginTop: '1.5rem',
+                  padding: '1.5rem',
+                  background: 'rgba(0, 255, 255, 0.05)',
+                  border: '1px solid rgba(0, 255, 255, 0.2)',
+                  borderRadius: '12px'
+                }}>
+                  <h4 style={{ color: 'var(--accent-cyan)', marginBottom: '1rem' }}>
+                    📊 Processing Results
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>Records Processed:</span>
+                      <span style={{ color: 'var(--accent-gold)', marginLeft: '0.5rem', fontWeight: '600' }}>
+                        {processingResults.records_processed || 0}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>Date Range:</span>
+                      <span style={{ color: 'var(--accent-gold)', marginLeft: '0.5rem', fontWeight: '600' }}>
+                        {processingResults.date_range || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+          </Card>
 
-            <div>
-              <label className="block text-sm font-medium mb-2 cyber-subtitle">
-                📊 Dataset Name
-              </label>
-              <input
-                type="text"
-                value={datasetName}
-                onChange={(e) => setDatasetName(e.target.value)}
-                placeholder={`${datasetPurpose}_dataset`}
-                className="cyber-input w-full"
-              />
-            </div>
-          </div>
-
-          {/* File Upload Area */}
-          <div 
-            className={`file-upload-area ${dragOver ? 'dragover' : ''} mb-6`}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onClick={() => document.getElementById('file-input').click()}
-          >
-            <input
-              id="file-input"
-              type="file"
-              onChange={handleFileChange}
-              accept=".csv,.xlsx,.xls"
-              className="hidden"
-            />
-            
-            {file ? (
-              <div className="text-center">
-                <div className="cyber-mono text-2xl mb-4">📁</div>
-                <p className="cyber-subtitle mb-2">Selected File:</p>
-                <p className="cyber-text text-lg font-semibold">{file.name}</p>
-                <p className="cyber-mono mt-2">
-                  Size: {(file.size / 1024 / 1024).toFixed(2)} MB
-                </p>
+          {/* Data Preview */}
+          {previewData && (
+            <Card style={{ marginTop: '2rem' }}>
+              <h3 style={{
+                color: 'var(--accent-cyan)',
+                fontFamily: 'var(--font-display)',
+                fontSize: '1.3rem',
+                marginBottom: '1rem'
+              }}>
+                📈 Data Preview
+              </h3>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.9rem'
+                }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(0, 255, 255, 0.1)' }}>
+                      {previewData.columns?.map((col, index) => (
+                        <th key={index} style={{
+                          padding: '0.75rem',
+                          textAlign: 'left',
+                          color: 'var(--accent-cyan)',
+                          borderBottom: '1px solid var(--border)'
+                        }}>
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewData.rows?.slice(0, 5).map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {row.map((cell, cellIndex) => (
+                          <td key={cellIndex} style={{
+                            padding: '0.75rem',
+                            color: 'var(--text-primary)',
+                            borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+                          }}>
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              <div className="text-center">
-                <div className="cyber-mono text-4xl mb-4">⬆️</div>
-                <p className="cyber-subtitle text-xl mb-2">Drop your CSV file here</p>
-                <p className="cyber-text">or click to browse files</p>
-                <p className="cyber-mono mt-4 text-sm">
-                  Supported: CSV, Excel (.xlsx, .xls)
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Upload Button */}
-          <button
-            onClick={handleUpload}
-            disabled={!file || !datasetName.trim() || uploading}
-            className={`cyber-button w-full py-4 text-lg ${
-              (!file || !datasetName.trim()) ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            {uploading ? (
-              <div className="flex items-center justify-center">
-                <div className="cyber-spinner mr-3"></div>
-                <span>Processing Data...</span>
-              </div>
-            ) : (
-              <>
-                <span className="mr-2">💾</span>
-                Upload Dataset
-              </>
-            )}
-          </button>
-
-          {/* Message Display */}
-          {message && (
-            <div className={`mt-6 cyber-alert ${
-              messageType === 'success' ? 'cyber-alert-success' : 'cyber-alert-error'
-            }`}>
-              <div className="flex items-center">
-                <span className="mr-2">
-                  {messageType === 'success' ? '✅' : '❌'}
-                </span>
-                {message}
-              </div>
-            </div>
+            </Card>
           )}
         </div>
 
-        {/* Guidelines Card */}
-        <div className="cyber-card">
-          <h2 className="cyber-subtitle mb-6">📋 Upload Guidelines</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="cyber-subtitle text-lg mb-4">📄 File Format Requirements</h3>
-              <div className="space-y-3">
-                <div className="flex items-start">
-                  <span className="cyber-mono mr-3">•</span>
-                  <p className="cyber-text">CSV files should have headers in the first row</p>
-                </div>
-                <div className="flex items-start">
-                  <span className="cyber-mono mr-3">•</span>
-                  <p className="cyber-text">For OHLCV data, include columns: timestamp, open, high, low, close, volume</p>
-                </div>
-                <div className="flex items-start">
-                  <span className="cyber-mono mr-3">•</span>
-                  <p className="cyber-text">Timestamp should be in a recognizable format (ISO 8601 recommended)</p>
-                </div>
+        {/* Current Datasets Sidebar */}
+        <div>
+          <Card>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{
+                color: 'var(--accent-cyan)',
+                fontFamily: 'var(--font-display)',
+                fontSize: '1.3rem',
+                margin: '0'
+              }}>
+                📋 Current Datasets
+              </h3>
+              <button
+                onClick={loadDatasets}
+                disabled={loading}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  color: 'var(--accent-cyan)',
+                  padding: '0.5rem',
+                  cursor: 'pointer',
+                  fontSize: '1rem'
+                }}
+                title="Refresh dataset list"
+              >
+                🔄
+              </button>
+            </div>
+
+            {loading ? (
+              <LoadingSpinner />
+            ) : datasets.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '2rem',
+                color: 'var(--text-secondary)'
+              }}>
+                <p>No datasets found</p>
+                <p style={{ fontSize: '0.9rem' }}>Upload your first dataset to get started</p>
               </div>
-            </div>
-
-            <div>
-              <h3 className="cyber-subtitle text-lg mb-4">⚡ Quality Standards</h3>
-              <div className="space-y-3">
-                <div className="flex items-start">
-                  <span className="cyber-mono mr-3">•</span>
-                  <p className="cyber-text">Ensure data is clean and contains no missing critical values</p>
-                </div>
-                <div className="flex items-start">
-                  <span className="cyber-mono mr-3">•</span>
-                  <p className="cyber-text">All price values must be positive numbers</p>
-                </div>
-                <div className="flex items-start">
-                  <span className="cyber-mono mr-3">•</span>
-                  <p className="cyber-text">High ≥ Low, High ≥ Open, High ≥ Close constraints</p>
-                </div>
+            ) : (
+              <div>
+                {datasets.map((dataset, index) => (
+                  <div key={index} style={{
+                    background: 'rgba(0, 255, 255, 0.05)',
+                    border: '1px solid rgba(0, 255, 255, 0.2)',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    marginBottom: '0.75rem'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: '1' }}>
+                        <h4 style={{
+                          color: 'var(--accent-cyan)',
+                          margin: '0 0 0.5rem 0',
+                          fontSize: '1rem',
+                          fontFamily: 'var(--font-primary)'
+                        }}>
+                          {dataset.name}
+                        </h4>
+                        <div style={{
+                          color: 'var(--text-secondary)',
+                          fontSize: '0.85rem',
+                          fontFamily: 'var(--font-mono)'
+                        }}>
+                          <div>📊 {dataset.rows || 0} rows</div>
+                          <div>📅 {dataset.date_range || 'Unknown range'}</div>
+                          <div>🎯 {dataset.purpose || 'General'}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteDataset(dataset.name)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid #ff4757',
+                          borderRadius: '4px',
+                          color: '#ff4757',
+                          padding: '0.25rem 0.5rem',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                          marginLeft: '0.5rem'
+                        }}
+                        title="Delete dataset"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          </div>
-
-          {/* Sample Data Format */}
-          <div className="mt-8">
-            <h3 className="cyber-subtitle text-lg mb-4">📊 Expected Data Format</h3>
-            <div className="cyber-table-container">
-              <table className="cyber-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Open</th>
-                    <th>High</th>
-                    <th>Low</th>
-                    <th>Close</th>
-                    <th>Volume</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>2023-01-01</td>
-                    <td>100.0</td>
-                    <td>105.0</td>
-                    <td>99.0</td>
-                    <td>104.0</td>
-                    <td>1000000</td>
-                  </tr>
-                  <tr>
-                    <td>2023-01-02</td>
-                    <td>101.0</td>
-                    <td>106.0</td>
-                    <td>100.0</td>
-                    <td>105.0</td>
-                    <td>1100000</td>
-                  </tr>
-                  <tr>
-                    <td>2023-01-03</td>
-                    <td>102.0</td>
-                    <td>107.0</td>
-                    <td>101.0</td>
-                    <td>106.0</td>
-                    <td>1200000</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Next Steps */}
-        <div className="mt-8 cyber-alert cyber-alert-info">
-          <div className="flex items-center">
-            <span className="cyber-mono text-2xl mr-4">📋</span>
-            <div>
-              <strong className="cyber-subtitle">Next Steps:</strong>
-              <p className="cyber-text mt-1">
-                Once your data is loaded and processed, go to the <strong>Model Training</strong> page to train the XGBoost models.
-              </p>
-            </div>
-          </div>
+            )}
+          </Card>
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default DataUpload;
