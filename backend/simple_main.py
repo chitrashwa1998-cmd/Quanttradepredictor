@@ -246,6 +246,19 @@ async def calculate_features(request: dict):
         elif model_type == "reversal":
             from features.reversal_technical_indicators import ReversalTechnicalIndicators
             df_with_features = ReversalTechnicalIndicators.calculate_all_reversal_indicators(df)
+            
+            # Skip time context features for reversal model to avoid datetime issues
+            print("✅ Reversal features calculated (skipping time context features)")
+            # Add time context features only if we have a proper datetime index
+            try:
+                if hasattr(df_with_features.index, 'hour'):
+                    from features.time_context_features import add_time_context_features
+                    df_with_features = add_time_context_features(df_with_features)
+                    print("✅ Time context features added")
+                else:
+                    print("⚠️ Skipping time context features - no datetime index")
+            except Exception as e:
+                print(f"⚠️ Skipping time context features due to error: {str(e)}")
 
         elif model_type == "profit_probability":
             from features.profit_probability_technical_indicators import ProfitProbabilityTechnicalIndicators
@@ -372,8 +385,18 @@ async def train_model(request: dict):
             # Extract metrics (matching Streamlit display)
             metrics = training_result.get('metrics', {})
 
+            # Convert numpy values to Python types for JSON serialization
+            def convert_numpy_types(obj):
+                if hasattr(obj, 'item'):  # numpy scalar
+                    return obj.item()
+                elif isinstance(obj, dict):
+                    return {k: convert_numpy_types(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy_types(v) for v in obj]
+                return obj
+
             # Prepare detailed response matching Streamlit format
-            response_data = {
+            raw_response_data = {
                 "success": True,
                 "model_type": model_type,
                 "metrics": {
@@ -401,6 +424,9 @@ async def train_model(request: dict):
                 },
                 "message": f"✅ Volatility model trained successfully!"
             }
+            
+            # Convert numpy types to Python types for JSON serialization
+            response_data = convert_numpy_types(raw_response_data)
 
             logging.info(f"✅ Volatility model training completed successfully")
             logging.info(f"📊 Final metrics - RMSE: {response_data['metrics']['rmse']:.6f}, MAE: {response_data['metrics']['mae']:.6f}")
@@ -444,8 +470,18 @@ async def train_model(request: dict):
             # Extract metrics (matching Streamlit display)
             metrics = training_result.get('metrics', {})
 
+            # Convert numpy values to Python types for JSON serialization
+            def convert_numpy_types(obj):
+                if hasattr(obj, 'item'):  # numpy scalar
+                    return obj.item()
+                elif isinstance(obj, dict):
+                    return {k: convert_numpy_types(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy_types(v) for v in obj]
+                return obj
+
             # Prepare detailed response matching Streamlit format
-            response_data = {
+            raw_response_data = {
                 "success": True,
                 "model_type": model_type,
                 "metrics": {
@@ -471,6 +507,9 @@ async def train_model(request: dict):
                 },
                 "message": f"✅ Direction model trained successfully!"
             }
+            
+            # Convert numpy types to Python types for JSON serialization
+            response_data = convert_numpy_types(raw_response_data)
 
             logging.info(f"✅ Direction model training completed successfully")
             logging.info(f"📊 Final metrics - Accuracy: {response_data['metrics']['accuracy']:.4f}")
@@ -512,8 +551,18 @@ async def train_model(request: dict):
             # Extract metrics (matching Streamlit display)
             metrics = training_result.get('metrics', {})
 
+            # Convert numpy values to Python types for JSON serialization
+            def convert_numpy_types(obj):
+                if hasattr(obj, 'item'):  # numpy scalar
+                    return obj.item()
+                elif isinstance(obj, dict):
+                    return {k: convert_numpy_types(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy_types(v) for v in obj]
+                return obj
+
             # Prepare detailed response matching Streamlit format
-            response_data = {
+            raw_response_data = {
                 "success": True,
                 "model_type": model_type,
                 "metrics": {
@@ -540,6 +589,9 @@ async def train_model(request: dict):
                 },
                 "message": f"✅ Profit probability model trained successfully!"
             }
+            
+            # Convert numpy types to Python types for JSON serialization
+            response_data = convert_numpy_types(raw_response_data)
 
             logging.info(f"✅ Profit probability model training completed successfully")
             logging.info(f"📊 Final metrics - Accuracy: {response_data['metrics']['accuracy']:.4f}, ROC AUC: {response_data['metrics']['roc_auc']:.4f}")
@@ -581,8 +633,18 @@ async def train_model(request: dict):
             # Extract metrics (matching Streamlit display)
             metrics = training_result.get('metrics', {})
 
+            # Convert numpy values to Python types for JSON serialization
+            def convert_numpy_types(obj):
+                if hasattr(obj, 'item'):  # numpy scalar
+                    return obj.item()
+                elif isinstance(obj, dict):
+                    return {k: convert_numpy_types(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy_types(v) for v in obj]
+                return obj
+
             # Prepare detailed response matching Streamlit format
-            response_data = {
+            raw_response_data = {
                 "success": True,
                 "model_type": model_type,
                 "metrics": {
@@ -609,6 +671,9 @@ async def train_model(request: dict):
                 },
                 "message": f"✅ Reversal model trained successfully!"
             }
+            
+            # Convert numpy types to Python types for JSON serialization
+            response_data = convert_numpy_types(raw_response_data)
 
             logging.info(f"✅ Reversal model training completed successfully")
             logging.info(f"📊 Final metrics - Accuracy: {response_data['metrics']['accuracy']:.4f}, ROC AUC: {response_data['metrics']['roc_auc']:.4f}")
