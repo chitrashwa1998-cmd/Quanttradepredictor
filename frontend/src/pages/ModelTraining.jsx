@@ -658,29 +658,243 @@ const ModelTraining = () => {
                       padding: '1.5rem',
                       marginBottom: '1.5rem'
                     }}>
-                      <h4 style={{ color: '#51cf66', marginBottom: '1rem' }}>
-                        📊 Training Results
+                      <h4 style={{ color: '#51cf66', marginBottom: '1.5rem', fontSize: '1.2rem' }}>
+                        📊 Training Results - {tab.name}
                       </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                      {/* Metrics Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         {trainingResults[tab.id].metrics && Object.entries(trainingResults[tab.id].metrics).map(([key, value]) => (
-                          <div key={key} style={{ textAlign: 'center' }}>
+                          <div key={key} style={{
+                            background: 'rgba(0, 255, 255, 0.1)',
+                            border: '1px solid rgba(0, 255, 255, 0.3)',
+                            borderRadius: '8px',
+                            padding: '1rem',
+                            textAlign: 'center'
+                          }}>
                             <div style={{
-                              color: 'var(--accent-gold)',
+                              color: 'var(--accent-cyan)',
                               fontSize: '1.5rem',
                               fontWeight: '700',
                               marginBottom: '0.25rem'
                             }}>
-                              {typeof value === 'number' ? value.toFixed(4) : value}
+                              {typeof value === 'number' ? (
+                                key.includes('accuracy') || key.includes('precision') || key.includes('recall') || key.includes('f1') ? 
+                                `${(value * 100).toFixed(2)}%` : 
+                                value.toFixed(4)
+                              ) : value}
                             </div>
                             <div style={{
                               color: 'var(--text-secondary)',
                               fontSize: '0.9rem',
-                              textTransform: 'capitalize'
+                              textTransform: 'capitalize',
+                              fontWeight: '500'
                             }}>
-                              {key.replace('_', ' ')}
+                              {key.replace('_', ' ').toUpperCase()}
                             </div>
                           </div>
                         ))}
+                      </div>
+
+                      {/* Feature Importance Section */}
+                      {trainingResults[tab.id].feature_importance && (
+                        <div style={{ marginTop: '2rem' }}>
+                          <h5 style={{
+                            color: 'var(--text-primary)',
+                            marginBottom: '1.5rem',
+                            fontSize: '1.1rem',
+                            fontWeight: '600'
+                          }}>
+                            🔍 Feature Importance Analysis
+                          </h5>
+
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Feature Importance Table */}
+                            <div>
+                              <h6 style={{
+                                color: 'var(--accent-gold)',
+                                marginBottom: '1rem',
+                                fontSize: '1rem'
+                              }}>
+                                Top 10 Most Important Features:
+                              </h6>
+                              <div style={{
+                                background: 'var(--bg-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '8px',
+                                overflow: 'hidden'
+                              }}>
+                                <div style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: '2fr 1fr',
+                                  background: 'var(--gradient-primary)',
+                                  padding: '0.75rem 1rem',
+                                  fontWeight: '600',
+                                  fontSize: '0.9rem'
+                                }}>
+                                  <div>Feature</div>
+                                  <div style={{ textAlign: 'right' }}>Importance</div>
+                                </div>
+                                {Object.entries(trainingResults[tab.id].feature_importance)
+                                  .sort(([,a], [,b]) => b - a)
+                                  .slice(0, 10)
+                                  .map(([feature, importance], index) => (
+                                    <div key={index} style={{
+                                      display: 'grid',
+                                      gridTemplateColumns: '2fr 1fr',
+                                      padding: '0.75rem 1rem',
+                                      borderBottom: '1px solid var(--border)',
+                                      background: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'
+                                    }}>
+                                      <div style={{
+                                        color: 'var(--text-primary)',
+                                        fontSize: '0.85rem'
+                                      }}>
+                                        {feature}
+                                      </div>
+                                      <div style={{
+                                        color: 'var(--accent-cyan)',
+                                        textAlign: 'right',
+                                        fontWeight: '600',
+                                        fontSize: '0.85rem'
+                                      }}>
+                                        {importance.toFixed(4)}
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+
+                            {/* Feature Importance Chart */}
+                            <div>
+                              <h6 style={{
+                                color: 'var(--accent-gold)',
+                                marginBottom: '1rem',
+                                fontSize: '1rem'
+                              }}>
+                                Visual Importance Distribution:
+                              </h6>
+                              <div style={{
+                                background: 'var(--bg-secondary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '8px',
+                                padding: '1rem',
+                                height: '300px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.5rem'
+                              }}>
+                                {Object.entries(trainingResults[tab.id].feature_importance)
+                                  .sort(([,a], [,b]) => b - a)
+                                  .slice(0, 8)
+                                  .map(([feature, importance], index) => {
+                                    const maxImportance = Math.max(...Object.values(trainingResults[tab.id].feature_importance));
+                                    const percentage = (importance / maxImportance) * 100;
+                                    return (
+                                      <div key={index} style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.75rem',
+                                        fontSize: '0.8rem'
+                                      }}>
+                                        <div style={{
+                                          minWidth: '80px',
+                                          color: 'var(--text-primary)',
+                                          fontSize: '0.75rem'
+                                        }}>
+                                          {feature.length > 12 ? feature.substring(0, 12) + '...' : feature}
+                                        </div>
+                                        <div style={{
+                                          flex: 1,
+                                          height: '20px',
+                                          background: 'rgba(255,255,255,0.1)',
+                                          borderRadius: '10px',
+                                          overflow: 'hidden'
+                                        }}>
+                                          <div style={{
+                                            width: `${percentage}%`,
+                                            height: '100%',
+                                            background: `linear-gradient(90deg, 
+                                              ${index < 3 ? 'var(--accent-cyan)' : 
+                                                index < 6 ? 'var(--accent-gold)' : '#8b5cf6'})`,
+                                            transition: 'width 0.5s ease'
+                                          }} />
+                                        </div>
+                                        <div style={{
+                                          minWidth: '50px',
+                                          color: 'var(--accent-cyan)',
+                                          fontWeight: '600',
+                                          fontSize: '0.75rem',
+                                          textAlign: 'right'
+                                        }}>
+                                          {importance.toFixed(3)}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Model Architecture Info */}
+                      <div style={{
+                        marginTop: '2rem',
+                        padding: '1rem',
+                        background: 'rgba(139, 92, 246, 0.05)',
+                        border: '1px solid rgba(139, 92, 246, 0.2)',
+                        borderRadius: '8px'
+                      }}>
+                        <h6 style={{
+                          color: '#8b5cf6',
+                          marginBottom: '1rem',
+                          fontSize: '1rem'
+                        }}>
+                          🏗️ Model Architecture & Training Info
+                        </h6>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                              <strong>Model Type:</strong> Ensemble (XGBoost + CatBoost + Random Forest)
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                              <strong>Training Split:</strong> {(trainingConfig.train_split * 100).toFixed(0)}% / {((1-trainingConfig.train_split) * 100).toFixed(0)}%
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                              <strong>Hyperparameters:</strong> Depth: {trainingConfig.max_depth}, Trees: {trainingConfig.n_estimators}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Success Indicator */}
+                      <div style={{
+                        marginTop: '1.5rem',
+                        padding: '1rem',
+                        background: 'rgba(0, 255, 0, 0.1)',
+                        border: '1px solid rgba(0, 255, 0, 0.3)',
+                        borderRadius: '8px',
+                        textAlign: 'center'
+                      }}>
+                        <div style={{
+                          color: '#51cf66',
+                          fontSize: '1.1rem',
+                          fontWeight: '600'
+                        }}>
+                          ✅ {tab.name} Model Trained Successfully!
+                        </div>
+                        <div style={{
+                          color: 'var(--text-secondary)',
+                          fontSize: '0.9rem',
+                          marginTop: '0.5rem'
+                        }}>
+                          Model has been automatically saved to database and is ready for predictions
+                        </div>
                       </div>
                     </div>
                   )}
