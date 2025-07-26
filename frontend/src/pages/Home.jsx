@@ -169,40 +169,7 @@ const Home = () => {
           </div>
         </Card>
 
-        {/* Quick Actions */}
-        <Card>
-          <h2 className="text-3xl font-bold text-green-400 mb-6">🚀 Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <a
-              href="/data-upload"
-              className="block p-6 bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-colors text-center"
-            >
-              <div className="text-3xl mb-2">📁</div>
-              <div className="text-white font-bold">Upload Data</div>
-            </a>
-            <a
-              href="/model-training"
-              className="block p-6 bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors text-center"
-            >
-              <div className="text-3xl mb-2">🎯</div>
-              <div className="text-white font-bold">Train Models</div>
-            </a>
-            <a
-              href="/predictions"
-              className="block p-6 bg-gradient-to-r from-green-600 to-green-700 rounded-lg hover:from-green-700 hover:to-green-800 transition-colors text-center"
-            >
-              <div className="text-3xl mb-2">🔮</div>
-              <div className="text-white font-bold">Generate Predictions</div>
-            </a>
-            <a
-              href="/database-manager"
-              className="block p-6 bg-gradient-to-r from-red-600 to-red-700 rounded-lg hover:from-red-700 hover:to-red-800 transition-colors text-center"
-            >
-              <div className="text-3xl mb-2">🗄️</div>
-              <div className="text-white font-bold">Manage Database</div>
-            </a>
-          </div>
-        </Card>
+        
       </div>
     </div>
   );
