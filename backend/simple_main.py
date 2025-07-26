@@ -207,14 +207,15 @@ async def calculate_features(request: dict):
         import os
         sys.path.append('/home/runner/workspace')
         
-        from features.technical_indicators import TechnicalIndicators
+        from models.volatility_model import VolatilityModel
         from utils.data_processing import DataProcessor
         
-        # Calculate features using the exact same process as Streamlit
+        # Calculate features using the exact same volatility model process as Streamlit
         logging.info("🔧 Calculating volatility-specific technical indicators...")
         
-        # Step 1: Calculate all indicators (same as Streamlit)
-        features_data = TechnicalIndicators.calculate_all_indicators(raw_data)
+        # Step 1: Use volatility model's prepare_features method (same as Streamlit)
+        volatility_model = VolatilityModel()
+        features_data = volatility_model.prepare_features(raw_data)
         
         # Step 2: Clean the data (same as Streamlit)
         features_clean = DataProcessor.clean_data(features_data)
