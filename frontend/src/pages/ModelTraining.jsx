@@ -77,10 +77,7 @@ const ModelTraining = () => {
       setLoading(true);
       setTrainingStatus(`🔧 Calculating ${activeTab} features...`);
 
-      const response = await modelsAPI.calculateFeatures({
-        dataset_name: selectedDataset,
-        model_type: activeTab
-      });
+      const response = await modelsAPI.calculateFeatures(selectedDataset, activeTab);
 
       if (response.success) {
         setFeaturesCalculated(prev => ({
