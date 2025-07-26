@@ -40,9 +40,9 @@ const ModelTraining = () => {
       
       console.log('API Response:', response);
       
-      // Handle the actual API response structure
-      if (response?.data && Array.isArray(response.data) && response.data.length > 0) {
-        const datasetList = response.data;
+      // Handle the actual API response structure - response IS the array directly
+      if (Array.isArray(response) && response.length > 0) {
+        const datasetList = response;
         setDatasets(datasetList);
 
         // Auto-select training_dataset if available, otherwise main_dataset, otherwise first
@@ -58,7 +58,7 @@ const ModelTraining = () => {
         }
         
         setTrainingStatus(`✅ Loaded ${datasetList.length} datasets`);
-      } else if (response?.data && Array.isArray(response.data) && response.data.length === 0) {
+      } else if (Array.isArray(response) && response.length === 0) {
         setTrainingStatus('❌ No datasets found. Please upload data first.');
         setDatasets([]);
       } else {

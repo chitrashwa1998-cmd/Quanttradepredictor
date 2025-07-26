@@ -1,3 +1,4 @@
+"""Apply the changes to fix the feature calculation and incorporate the complete volatility feature calculation pipeline."""
 """Model management API endpoints Handles model training, loading, and management operations"""
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
