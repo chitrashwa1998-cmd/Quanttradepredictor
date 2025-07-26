@@ -127,7 +127,7 @@ async def get_datasets():
                     "updated_at": dataset_info.get('updated_at', '')
                 })
         
-        return {"data": dataset_list}
+        return dataset_list
         
     except Exception as e:
         logging.error(f"Failed to get datasets: {e}")
