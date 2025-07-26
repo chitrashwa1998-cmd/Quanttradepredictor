@@ -193,19 +193,56 @@ async def delete_dataset(dataset_name: str):
 
 @app.post("/api/models/calculate-features")
 async def calculate_features(request: dict):
-    """Calculate technical indicators for features"""
+    """Calculate technical indicators for volatility model exactly as in Streamlit"""
     try:
         dataset_name = request.get('dataset_name')
         if not dataset_name or dataset_name not in datasets_storage:
             raise HTTPException(status_code=404, detail="Dataset not found")
         
+        # Get the raw dataset
+        raw_data = datasets_storage[dataset_name]
+        
+        # Import the exact same modules used in Streamlit
+        import sys
+        import os
+        sys.path.append('/home/runner/workspace')
+        
+        from features.technical_indicators import TechnicalIndicators
+        from utils.data_processing import DataProcessor
+        
+        # Calculate features using the exact same process as Streamlit
+        logging.info("🔧 Calculating volatility-specific technical indicators...")
+        
+        # Step 1: Calculate all indicators (same as Streamlit)
+        features_data = TechnicalIndicators.calculate_all_indicators(raw_data)
+        
+        # Step 2: Clean the data (same as Streamlit)
+        features_clean = DataProcessor.clean_data(features_data)
+        
+        # Store the calculated features
+        datasets_storage[f"{dataset_name}_features"] = features_clean
+        
+        # Count engineered features (excluding OHLC columns)
+        ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        feature_cols = [col for col in features_clean.columns if col not in ohlc_cols]
+        
+        logging.info(f"✅ Volatility features calculated: {len(feature_cols)} engineered features, {len(features_clean)} data points")
+        
         return {
             "success": True,
-            "message": "Features calculated successfully (mock)",
-            "features_count": 50
+            "message": "Volatility technical indicators calculated successfully!",
+            "total_features": len(features_clean.columns),
+            "data_points": len(features_clean),
+            "engineered_features": len(feature_cols),
+            "feature_columns": feature_cols,
+            "sample_data": features_clean.head(10).to_dict('records') if len(features_clean) > 0 else []
         }
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Error calculating volatility features: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Feature calculation failed: {str(e)}")
 
 @app.post("/api/models/train")
 async def train_model(request: dict):

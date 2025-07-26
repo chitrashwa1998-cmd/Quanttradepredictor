@@ -29,7 +29,7 @@ const ModelTraining = () => {
       const response = await dataAPI.getDatasets();
       const datasetList = response.data || [];
       setDatasets(datasetList);
-      
+
       // Auto-select training_dataset if available
       const trainingDataset = datasetList.find(d => d.name === 'training_dataset');
       if (trainingDataset) {
@@ -86,10 +86,10 @@ const ModelTraining = () => {
     try {
       setLoading(true);
       setTrainingStatus('🔧 Calculating technical indicators...');
-      
+
       const response = await modelsAPI.calculateFeatures(selectedDataset);
       setFeaturesCalculated(true);
-      
+
       // Mock detailed feature information (similar to Streamlit)
       const mockFeatureDetails = {
         total_datapoints: currentData.length || 0,
@@ -104,7 +104,7 @@ const ModelTraining = () => {
         processing_time: '2.3 seconds',
         memory_usage: '45.2 MB'
       };
-      
+
       setFeatureDetails(mockFeatureDetails);
       setTrainingStatus('✅ Technical indicators calculated successfully!');
     } catch (error) {
