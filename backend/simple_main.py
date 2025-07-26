@@ -148,6 +148,29 @@ async def upload_data(
         logging.error(f"Data upload failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.get("/api/data/datasets/{dataset_name}")
+async def get_dataset(dataset_name: str):
+    """Get a specific dataset"""
+    try:
+        if dataset_name not in datasets_storage:
+            raise HTTPException(status_code=404, detail=f"Dataset {dataset_name} not found")
+
+        df = datasets_storage[dataset_name]
+        
+        return {
+            "success": True,
+            "dataset_name": dataset_name,
+            "data": df.to_dict('records'),
+            "rows": len(df),
+            "columns": list(df.columns)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Failed to get dataset {dataset_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/api/data/datasets/{dataset_name}")
 async def delete_dataset(dataset_name: str):
     """Delete a specific dataset"""
@@ -166,6 +189,51 @@ async def delete_dataset(dataset_name: str):
         raise
     except Exception as e:
         logging.error(f"Failed to delete dataset {dataset_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/models/calculate-features")
+async def calculate_features(request: dict):
+    """Calculate technical indicators for features"""
+    try:
+        dataset_name = request.get('dataset_name')
+        if not dataset_name or dataset_name not in datasets_storage:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        return {
+            "success": True,
+            "message": "Features calculated successfully (mock)",
+            "features_count": 50
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/models/train")
+async def train_model(request: dict):
+    """Train a specific model"""
+    try:
+        model_type = request.get('model_type')
+        dataset_name = request.get('dataset_name')
+        
+        if not model_type:
+            raise HTTPException(status_code=400, detail="model_type is required")
+        if not dataset_name or dataset_name not in datasets_storage:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # Mock training results
+        mock_metrics = {
+            'volatility': {'rmse': 0.0245, 'mae': 0.0198, 'mse': 0.0006},
+            'direction': {'accuracy': 0.67, 'precision': 0.65, 'recall': 0.69},
+            'profit_probability': {'accuracy': 0.72, 'precision': 0.70, 'recall': 0.74},
+            'reversal': {'accuracy': 0.63, 'precision': 0.61, 'recall': 0.66}
+        }
+        
+        return {
+            "success": True,
+            "model_type": model_type,
+            "metrics": mock_metrics.get(model_type, {}),
+            "message": f"{model_type.capitalize()} model trained successfully (mock)"
+        }
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
