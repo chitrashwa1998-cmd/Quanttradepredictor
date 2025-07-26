@@ -291,6 +291,3 @@ async def get_model_info(
     except Exception as e:
         logger.error(f"Failed to get model info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-```
-
-The code combines the addition of the `/calculate-features` endpoint and refactors the `/train` endpoint to support different model types with feature calculation and training.

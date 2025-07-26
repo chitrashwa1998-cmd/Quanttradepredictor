@@ -38,8 +38,9 @@ const ModelTraining = () => {
       setLoading(true);
       const response = await dataAPI.getDatasets();
       
-      if (response?.data?.success && response.data.datasets) {
-        const datasetList = response.data.datasets;
+      // The response structure is different - it's an array directly
+      if (response?.data && Array.isArray(response.data)) {
+        const datasetList = response.data;
         setDatasets(datasetList);
 
         // Auto-select training_dataset if available, otherwise main_dataset, otherwise first
@@ -53,12 +54,16 @@ const ModelTraining = () => {
         } else if (datasetList.length > 0) {
           setSelectedDataset(datasetList[0].name);
         }
+        
+        setTrainingStatus(`✅ Loaded ${datasetList.length} datasets`);
       } else {
-        setTrainingStatus('❌ Failed to load datasets');
+        setTrainingStatus('❌ No datasets found. Please upload data first.');
+        setDatasets([]);
       }
     } catch (error) {
       console.error('Error loading datasets:', error);
-      setTrainingStatus(`❌ Error loading datasets: ${error?.message || 'Unknown error'}`);
+      setTrainingStatus(`❌ Error loading datasets: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+      setDatasets([]);
     } finally {
       setLoading(false);
     }
@@ -80,11 +85,11 @@ const ModelTraining = () => {
         setCurrentData(response.data.data);
         setTrainingStatus(`✅ Loaded ${selectedDataset}: ${response.data.data.length} rows`);
       } else {
-        setTrainingStatus(`❌ Failed to load ${selectedDataset}`);
+        setTrainingStatus(`❌ Failed to load ${selectedDataset}: ${response?.data?.message || 'Dataset not found'}`);
       }
     } catch (error) {
       console.error('Error loading dataset:', error);
-      setTrainingStatus(`❌ Error loading dataset: ${error?.message || 'Unknown error'}`);
+      setTrainingStatus(`❌ Error loading dataset: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
