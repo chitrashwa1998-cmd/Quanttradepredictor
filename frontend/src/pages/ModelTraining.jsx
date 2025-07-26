@@ -473,7 +473,7 @@ const ModelTraining = () => {
                         color: 'var(--text-secondary)',
                         fontSize: '0.9rem'
                       }}>
-                        Features Calculated
+                        Engineered Features
                       </div>
                     </div>
 
