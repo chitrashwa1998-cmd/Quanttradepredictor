@@ -76,65 +76,83 @@ class DirectionModel:
             }
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Prepare features for direction model."""
+        """Prepare comprehensive direction features including technical indicators, custom features, lagged features, and time context."""
         if df.empty:
             raise ValueError("Input DataFrame is empty")
 
+        print("🔧 Calculating comprehensive direction features...")
+        
+        # Start with a copy of the input data
+        result_df = df.copy()
+        
+        # Step 1: Calculate direction technical indicators
+        print("  - Computing direction technical indicators...")
         from features.direction_technical_indicators import DirectionTechnicalIndicators
-        
-        # Calculate all direction-specific indicators
         calc = DirectionTechnicalIndicators()
-        result_df = calc.calculate_direction_features(df)
+        result_df = calc.calculate_direction_features(result_df)
         
-        # Define core direction-specific features to ensure we have them
-        core_direction_features = ['ema_5', 'ema_10', 'ema_20', 'rsi_14', 'macd_histogram', 
-                                 'bollinger_band_position', 'bb_width', 'stochastic_k', 'stochastic_d', 
-                                 'adx', 'obv', 'donchian_high_20', 'donchian_low_20']
+        # Step 2: Add custom direction features
+        print("  - Adding custom direction features...")
+        from features.direction_custom_engineered import add_custom_direction_features
+        result_df = add_custom_direction_features(result_df)
         
-        # Get all available features excluding OHLC and timestamp columns
-        ohlc_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-        timestamp_cols = ['timestamp', 'date', 'datetime', 'time', 'Timestamp', 'Date', 'DateTime', 'Time']
-        exclude_cols = ohlc_cols + timestamp_cols
+        # Step 3: Add lagged direction features
+        print("  - Adding lagged direction features...")
+        from features.direction_lagged_features import add_lagged_direction_features
+        result_df = add_lagged_direction_features(result_df)
         
-        # Filter out non-numeric columns by checking data types
-        available_features = []
-        for col in result_df.columns:
-            if col in exclude_cols:
-                continue
-            # Check if column has datetime or object dtype
-            if pd.api.types.is_datetime64_any_dtype(result_df[col]):
-                print(f"Excluding datetime column: {col}")
-                continue
-            if pd.api.types.is_object_dtype(result_df[col]):
-                # Try to convert to numeric - if it fails, exclude it
-                try:
-                    pd.to_numeric(result_df[col], errors='raise')
-                    available_features.append(col)
-                except (ValueError, TypeError):
-                    print(f"Excluding non-numeric object column: {col}")
-                    continue
-            else:
-                available_features.append(col)
+        # Step 4: Add time context features
+        print("  - Adding time context features...")
+        from features.direction_time_context import add_time_context_features
+        result_df = add_time_context_features(result_df)
         
-        if len(available_features) == 0:
-            raise ValueError(f"No direction features found. Available columns: {list(result_df.columns)}")
+        # Step 5: Select only feature columns (exclude OHLC columns and non-numeric columns)
+        ohlc_columns = ['Open', 'High', 'Low', 'Close', 'Volume', 'open', 'high', 'low', 'close', 'volume']
+        exclude_columns = ohlc_columns + ['date']  # Exclude datetime columns
+        feature_columns = [col for col in result_df.columns if col not in exclude_columns]
         
-        # Select only numeric direction features
-        feature_df = result_df[available_features].copy()
+        if len(feature_columns) == 0:
+            raise ValueError(f"No direction features were generated. Available columns: {list(result_df.columns)}")
         
-        # Convert all features to numeric, replacing any non-numeric values with NaN
-        for col in feature_df.columns:
-            feature_df[col] = pd.to_numeric(feature_df[col], errors='coerce')
+        # Select only feature columns
+        features_df = result_df[feature_columns].copy()
         
-        # Remove rows with NaN values
-        feature_df = feature_df.dropna()
+        # Step 6: Handle missing values
+        print(f"  - Cleaning {len(feature_columns)} features...")
         
-        if feature_df.empty:
-            raise ValueError("DataFrame is empty after removing NaN values")
+        # Replace infinite values with NaN
+        features_df = features_df.replace([np.inf, -np.inf], np.nan)
         
-        print(f"Direction model using {len(available_features)} features: {available_features}")
+        # Forward fill then backward fill
+        features_df = features_df.ffill().bfill()
         
-        return feature_df
+        # Fill remaining NaN with appropriate neutral values
+        for col in features_df.columns:
+            if features_df[col].isna().any():
+                # Use median for most features, 0 for binary features, 50 for RSI-like features
+                if 'rsi' in col.lower() or 'stoch' in col.lower():
+                    features_df[col] = features_df[col].fillna(50)
+                elif any(x in col.lower() for x in ['_above_', '_below_', '_bullish', '_bearish', '_up', '_down']):
+                    features_df[col] = features_df[col].fillna(0)
+                else:
+                    features_df[col] = features_df[col].fillna(features_df[col].median())
+        
+        # Ensure all features are numeric
+        for col in features_df.columns:
+            features_df[col] = pd.to_numeric(features_df[col], errors='coerce')
+        
+        # Final cleanup: drop any remaining NaN rows
+        features_df = features_df.dropna()
+        
+        if features_df.empty:
+            raise ValueError("No valid direction features remain after cleaning")
+        
+        print(f"✅ Generated {len(feature_columns)} direction features: {feature_columns[:10]}{'...' if len(feature_columns) > 10 else ''}")
+        print(f"✅ Final feature dataset: {len(features_df)} samples × {len(feature_columns)} features")
+        
+        self.feature_names = feature_columns
+        return features_df
+
 
     def train(self, X: pd.DataFrame, y: pd.Series, train_split: float = 0.8, max_depth: int = 6, n_estimators: int = 100) -> Dict[str, Any]:
         """Train direction prediction model."""
