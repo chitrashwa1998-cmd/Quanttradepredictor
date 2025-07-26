@@ -106,18 +106,20 @@ async def get_datasets():
     """Get all available datasets"""
     try:
         db = DatabaseAdapter()
-        datasets = db.list_datasets()
+        # Use get_database_info instead of list_datasets
+        db_info = db.get_database_info()
         
         dataset_list = []
-        for dataset_info in datasets:
-            dataset_list.append({
-                "name": dataset_info.get('name', ''),
-                "rows": dataset_info.get('rows', 0),
-                "start_date": dataset_info.get('start_date', ''),
-                "end_date": dataset_info.get('end_date', ''),
-                "created_at": dataset_info.get('created_at', ''),
-                "updated_at": dataset_info.get('updated_at', '')
-            })
+        if 'datasets' in db_info:
+            for dataset_info in db_info['datasets']:
+                dataset_list.append({
+                    "name": dataset_info.get('name', ''),
+                    "rows": dataset_info.get('rows', 0),
+                    "start_date": dataset_info.get('start_date', ''),
+                    "end_date": dataset_info.get('end_date', ''),
+                    "created_at": dataset_info.get('created_at', ''),
+                    "updated_at": dataset_info.get('updated_at', '')
+                })
         
         return {"data": dataset_list}
         
@@ -412,6 +414,51 @@ async def generate_volatility_predictions(model, fresh_data, config):
     except Exception as e:
         logging.error(f"Volatility prediction generation failed: {e}")
         raise HTTPException(status_code=500, detail=f"Volatility prediction failed: {str(e)}")
+
+# === DATABASE ENDPOINTS ===
+@app.get("/api/data/database/info")
+async def get_database_info():
+    """Get database information"""
+    try:
+        db = DatabaseAdapter()
+        db_info = db.get_database_info()
+        return {"data": db_info}
+        
+    except Exception as e:
+        logging.error(f"Failed to get database info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/data/datasets/{dataset_name}")
+async def delete_dataset(dataset_name: str):
+    """Delete a specific dataset"""
+    try:
+        db = DatabaseAdapter()
+        success = db.clear_dataset(dataset_name)
+        
+        if success:
+            return {"success": True, "message": f"Dataset '{dataset_name}' deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' not found")
+            
+    except Exception as e:
+        logging.error(f"Failed to delete dataset {dataset_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/data/clear-all")
+async def clear_all_data():
+    """Clear all data from database"""
+    try:
+        db = DatabaseAdapter()
+        success = db.clear_all_data()
+        
+        if success:
+            return {"success": True, "message": "All data cleared successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to clear all data")
+            
+    except Exception as e:
+        logging.error(f"Failed to clear all data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
