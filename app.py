@@ -407,11 +407,12 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Professional Footer
+# Professional Footer - Enhanced Visibility
 st.markdown("---")
 st.markdown("""
-<div style="background: linear-gradient(135deg, rgba(0, 10, 20, 0.8), rgba(0, 5, 15, 0.9)); 
-     border: 1px solid #2a2a2a; border-radius: 16px; padding: 3rem 2rem; margin: 4rem 0 2rem 0; text-align: center;">
+<div style="background: linear-gradient(135deg, rgba(0, 255, 255, 0.1), rgba(139, 92, 246, 0.1)); 
+     border: 2px solid #00ffff; border-radius: 16px; padding: 3rem 2rem; margin: 4rem 0 2rem 0; text-align: center;
+     box-shadow: 0 8px 32px rgba(0, 255, 255, 0.3);">
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin-bottom: 2rem;">
 
