@@ -406,3 +406,69 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# Professional Footer
+st.markdown("---")
+st.markdown("""
+<div style="background: linear-gradient(135deg, rgba(0, 10, 20, 0.8), rgba(0, 5, 15, 0.9)); 
+     border: 1px solid #2a2a2a; border-radius: 16px; padding: 3rem 2rem; margin: 4rem 0 2rem 0; text-align: center;">
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin-bottom: 2rem;">
+
+        <!-- Company Info -->
+        <div style="text-align: left;">
+            <h4 style="color: #00ffff; margin-bottom: 1rem; font-family: 'Orbitron', monospace;">⚡ TribexAlpha</h4>
+            <p style="color: #b8bcc8; margin-bottom: 0.5rem; line-height: 1.6;">
+                Leading AI-powered quantitative trading platform delivering institutional-grade algorithms 
+                to retail and professional traders worldwide.
+            </p>
+        </div>
+
+        <!-- Quick Links -->
+        <div style="text-align: left;">
+            <h4 style="color: #00ff41; margin-bottom: 1rem;">Quick Links</h4>
+            <div style="color: #b8bcc8; line-height: 2;">
+                <div>📊 Data Upload</div>
+                <div>🔬 Model Training</div>
+                <div>🎯 Predictions</div>
+                <div>📈 Backtesting</div>
+                <div>📡 Live Data</div>
+            </div>
+        </div>
+
+        <!-- Contact Info -->
+        <div style="text-align: left;">
+            <h4 style="color: #ff0080; margin-bottom: 1rem;">Contact</h4>
+            <div style="color: #b8bcc8; line-height: 2;">
+                <div>📧 support@tribexalpha.com</div>
+                <div>🏢 enterprise@tribexalpha.com</div>
+                <div>🤝 partnerships@tribexalpha.com</div>
+                <div>⏰ Mon-Fri: 9 AM - 6 PM EST</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Copyright and Legal -->
+    <div style="border-top: 1px solid #2a2a2a; padding-top: 2rem; margin-top: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div style="color: #8b949e; font-family: 'JetBrains Mono', monospace;">
+                © 2024 TribexAlpha. All rights reserved.
+            </div>
+            <div style="color: #8b949e; font-size: 0.9rem;">
+                <span style="margin: 0 1rem;">Privacy Policy</span>
+                <span style="margin: 0 1rem;">Terms of Service</span>
+                <span style="margin: 0 1rem;">Risk Disclosure</span>
+            </div>
+        </div>
+
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #1a1a1a;">
+            <p style="color: #6b7280; font-size: 0.85rem; margin: 0; line-height: 1.5;">
+                <strong>Risk Warning:</strong> Trading in financial markets involves substantial risk and may not be suitable for all investors. 
+                Past performance does not guarantee future results. TribexAlpha provides algorithmic analysis tools and does not constitute investment advice.
+            </p>
+        </div>
+    </div>
+
+</div>
+""", unsafe_allow_html=True)
