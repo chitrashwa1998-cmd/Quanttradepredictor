@@ -1,0 +1,12 @@
+{
+  "export_timestamp": "2025-07-27 09:26:03",
+  "database_type": "postgresql_row_based",
+  "backend": "PostgreSQL (Row-Based)",
+  "total_datasets": 2,
+  "total_records": 4050,
+  "total_models": 0,
+  "total_trained_models": 1,
+  "total_predictions": 0,
+  "export_directory": "database_export_20250727_092555",
+  "database_url_host": "ep-fragrant-sound-a683x6te.us-west-2.aws.neon.tech"
+}

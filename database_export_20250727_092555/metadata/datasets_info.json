@@ -1,0 +1,32 @@
+[
+  {
+    "name": "training_dataset",
+    "rows": 3825,
+    "columns": [
+      "Open",
+      "High",
+      "Low",
+      "Close",
+      "Volume"
+    ],
+    "start_date": "2025-04-28 09:15:00",
+    "end_date": "2025-07-08 15:25:00",
+    "exported_at": "2025-07-27 09:25:57",
+    "file_path": "database_export_20250727_092555/datasets/training_dataset.csv"
+  },
+  {
+    "name": "livenifty50",
+    "rows": 225,
+    "columns": [
+      "Open",
+      "High",
+      "Low",
+      "Close",
+      "Volume"
+    ],
+    "start_date": "2025-07-09 09:15:00",
+    "end_date": "2025-07-11 15:25:00",
+    "exported_at": "2025-07-27 09:25:57",
+    "file_path": "database_export_20250727_092555/datasets/livenifty50.csv"
+  }
+]
