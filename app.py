@@ -18,27 +18,18 @@ st.set_page_config(
 with open('style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
-# Add debug CSS to ensure content is visible
+# Simple CSS override to ensure content displays properly
 st.markdown("""
 <style>
-/* Force content visibility */
+/* Ensure main content is properly displayed */
 .main .block-container {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    padding: 2rem 1rem !important;
+    max-width: 1200px !important;
 }
 
-/* Ensure all content sections are visible */
+/* Fix any display issues */
 div[data-testid="stVerticalBlock"] {
-    display: flex !important;
-    flex-direction: column !important;
-    visibility: visible !important;
-}
-
-/* Make sure metrics are visible */
-div[data-testid="metric-container"] {
     display: block !important;
-    visibility: visible !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -201,72 +192,30 @@ except Exception:
 
 
 
-# Display navigation guidance for multi-page structure
-st.markdown("""
-<div class="trading-header">
-    <h1>TribexAlpha</h1>
-    <p style="font-size: 1.5rem; margin: 1rem 0 0 0; opacity: 0.9; font-weight: 300; color: #00ffff;">
-        🚀 AI-Powered Quant Signal Engine
-    </p>
-    <p style="font-size: 1.1rem; margin: 1rem 0 0 0; opacity: 0.8; color: #b8bcc8;">
-        An AI-powered quant signal engine delivering multi-model predictions for direction, volatility, reversals, and profit zones — built for real-time execution and adaptive to any market regime.
-    </p>
-</div>
-""", unsafe_allow_html=True)
+# Main header
+st.title("⚡ TribexAlpha")
+st.subheader("🚀 AI-Powered Quant Signal Engine")
+st.write("An AI-powered quant signal engine delivering multi-model predictions for direction, volatility, reversals, and profit zones — built for real-time execution and adaptive to any market regime.")
 
-# Enhanced System Status Dashboard
+# System Status Dashboard
+st.subheader("📊 System Status")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     data_status = "🟢 LOADED" if st.session_state.data is not None else "🔴 NO DATA"
-    status_color = "#00ff41" if st.session_state.data is not None else "#ff0080"
     record_count = len(st.session_state.data) if st.session_state.data is not None else 0
-    st.markdown(f"""
-    <div class="metric-container">
-        <h3 style="color: #00ffff; margin: 0; font-family: 'Orbitron', monospace;">⚡ DATA ENGINE</h3>
-        <h2 style="margin: 0.5rem 0; color: {status_color}; font-weight: 800;">{data_status}</h2>
-        <p style="color: #9ca3af; margin: 0; font-family: 'JetBrains Mono', monospace;">
-            {record_count:,} market records loaded
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.metric("⚡ DATA ENGINE", data_status, f"{record_count:,} records")
 
 with col2:
     model_count = len([m for m in st.session_state.models.values() if m is not None])
-    progress_color = "#00ff41" if model_count > 0 else "#ffaa00"
-    st.markdown(f"""
-    <div class="metric-container">
-        <h3 style="color: #00ff41; margin: 0; font-family: 'Orbitron', monospace;">🤖 AI MODELS</h3>
-        <h2 style="margin: 0.5rem 0; color: {progress_color}; font-weight: 800;">{model_count}/4</h2>
-        <p style="color: #9ca3af; margin: 0; font-family: 'JetBrains Mono', monospace;">
-            Machine learning models trained
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.metric("🤖 AI MODELS", f"{model_count}/4", "Models trained")
 
 with col3:
     pred_status = "🟢 ACTIVE" if st.session_state.predictions is not None else "⚠️ STANDBY"
-    pred_color = "#00ff41" if st.session_state.predictions is not None else "#ffaa00"
-    st.markdown(f"""
-    <div class="metric-container">
-        <h3 style="color: #8b5cf6; margin: 0; font-family: 'Orbitron', monospace;">🎯 PREDICTIONS</h3>
-        <h2 style="margin: 0.5rem 0; color: {pred_color}; font-weight: 800;">{pred_status}</h2>
-        <p style="color: #9ca3af; margin: 0; font-family: 'JetBrains Mono', monospace;">
-            Real-time market analysis
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.metric("🎯 PREDICTIONS", pred_status, "Real-time analysis")
 
 with col4:
-    st.markdown(f"""
-    <div class="metric-container glow-animation">
-        <h3 style="color: #ff0080; margin: 0; font-family: 'Orbitron', monospace;">🌐 SYSTEM</h3>
-        <h2 style="margin: 0.5rem 0; color: #00ff41; font-weight: 800;">ONLINE</h2>
-        <p style="color: #b8bcc8; margin: 0; font-family: 'JetBrains Mono', monospace;">
-            All systems operational
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.metric("🌐 SYSTEM", "🟢 ONLINE", "All systems operational")
 
 st.success("🎯 **Navigation**: Use the sidebar to navigate between different modules of the trading system.")
 
