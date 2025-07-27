@@ -18,6 +18,31 @@ st.set_page_config(
 with open('style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
+# Add debug CSS to ensure content is visible
+st.markdown("""
+<style>
+/* Force content visibility */
+.main .block-container {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Ensure all content sections are visible */
+div[data-testid="stVerticalBlock"] {
+    display: flex !important;
+    flex-direction: column !important;
+    visibility: visible !important;
+}
+
+/* Make sure metrics are visible */
+div[data-testid="metric-container"] {
+    display: block !important;
+    visibility: visible !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Auto-restore system
 from auto_restore import auto_restore_system
 auto_restore_system()

@@ -60,11 +60,11 @@ body::before {
     width: 100vw;
     height: 100vh;
     background: 
-        radial-gradient(ellipse at 20% 50%, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 20%, rgba(255, 0, 128, 0.1) 0%, transparent 50%),
-        radial-gradient(ellipse at 40% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+        radial-gradient(ellipse at 20% 50%, rgba(0, 255, 255, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(255, 0, 128, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 40% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
     pointer-events: none;
-    z-index: -1;
+    z-index: -10;
     animation: backgroundShift 20s ease-in-out infinite;
 }
 
@@ -78,10 +78,24 @@ body::before {
     background: transparent !important;
     padding: 2rem 3rem !important;
     max-width: 1400px !important;
+    min-height: 100vh !important;
+    z-index: 1 !important;
+    position: relative !important;
 }
 
 .stApp {
     background: var(--bg-primary) !important;
+}
+
+.stApp > div {
+    background: transparent !important;
+}
+
+/* Ensure main content is visible */
+.main {
+    background: transparent !important;
+    z-index: 10 !important;
+    position: relative !important;
 }
 
 /* Typography */
