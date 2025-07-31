@@ -814,6 +814,37 @@ with tab4:
 # Model Status Section
 st.header("📊 Model Status")
 
+# Check database for existing trained models if session state is empty
+if not hasattr(st.session_state, 'trained_models') or not st.session_state.trained_models:
+    try:
+        from utils.database_adapter import get_trading_database
+        db = get_trading_database()
+        loaded_models = db.load_trained_models()
+        
+        if loaded_models:
+            # Initialize session state with database models
+            if not hasattr(st.session_state, 'trained_models'):
+                st.session_state.trained_models = {}
+            
+            for model_name in ['volatility', 'direction', 'profit_probability', 'reversal']:
+                if model_name in loaded_models:
+                    model_data = loaded_models[model_name]
+                    # Extract metrics from model data
+                    metrics = model_data.get('metrics', {})
+                    if not metrics and 'training_results' in model_data:
+                        metrics = model_data['training_results'].get('metrics', {})
+                    
+                    # Store in session state for UI display
+                    st.session_state.trained_models[model_name] = {
+                        'metrics': metrics,
+                        'feature_importance': model_data.get('feature_importance', {})
+                    }
+            
+            if st.session_state.trained_models:
+                st.info(f"✅ Loaded {len(st.session_state.trained_models)} trained models from database")
+    except Exception as e:
+        print(f"Error loading models from database: {str(e)}")
+
 if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
     col1, col2, col3, col4 = st.columns(4)
     
