@@ -1,0 +1,102 @@
+Part A-Gen
+
+Part A - General Information(Mandatory)
+Details of personal information, contact details, filing status, audit information and bank details	
+Provide your confirmation
+
+PartA BS
+
+Part A - Balance Sheet(Mandatory)
+Balance Sheet as on 31st day of March, 2025 or as on the Date of closure of Business as applicable of the proprietory Business or Profession (fill items 1 to 5 in a case where regular books of accounts are maintained, otherwise fill item 6)	
+Provide your confirmation
+
+MA
+
+Part A - Manufacturing Account
+Manufacturing Account for the financial year 2024-25 (fill items 1 to 3 in a case where regular books of accounts are maintained otherwise fill items 61 to 65 as applicable)	
+Provide your confirmation
+
+TA
+
+Part A - Trading Account
+Trading Account for the financial year 2024-25 (fill items 4 to 12 in a case where regular books of accounts are maintained, otherwise fill items 61 to 65 as applicable)	
+Provide your confirmation
+
+Part A P & L
+
+Part A - P & L(Mandatory)
+Profit and Loss Account for the financial year 2024-25 (fill items 13 to 60 in a case where regular books of accounts are maintained, otherwise fill items 61 to 65 as applicable)	
+Provide your confirmation
+
+BP
+
+Schedule BP(Mandatory)
+Computation of income from business or profession	
+Provide your confirmation
+
+OS
+
+Schedule Other Sources
+Income from other sources	
+Provide your confirmation
+
+CYLA
+
+Schedule CYLA(Mandatory)
+Details of income after set off of current year losses	
+Provide your confirmation
+
+BFLA
+
+Schedule BFLA(Mandatory)
+Details of Income after Set off of Brought Forward Losses of earlier years	
+Provide your confirmation
+
+CFL
+
+Schedule CFL
+Details of Losses to be carried forward to future years	
+Provide your confirmation
+
+AMTC
+
+Schedule AMTC
+Computation of tax credit under section 115JD	
+Provide your confirmation
+
+IF
+
+Schedule IF
+Information regarding partnership firms in which you are partner anytime during the previous year	
+Provide your confirmation
+
+VI-A
+
+Schedule VI-A
+Deductions under Chapter VI-A	
+Provide your confirmation
+
+ESOP
+
+Schedule : Tax deferred on ESOP
+Information related to Tax deferred - relatable to income on perquisites referred in section 17(2)(vi) received from employer, being an eligible start-up referred to in section 80-IAC	
+Provide your confirmation
+
+Part B TI
+
+Part B - TI(Mandatory)
+Computation of Total Income	
+Provide your confirmation
+
+TP
+
+Tax Paid
+Details of Tax Deducted at Source from Salary, Tax collected at Source, payments of Self-Assessment Tax and Advance Tax	
+Provide your confirmation
+
+Part B TTI
+
+Part B - TTI(Mandatory)
+Computation of Tax Liability on Total Income	
+Provide your confirmation
+
