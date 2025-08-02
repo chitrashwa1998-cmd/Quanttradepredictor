@@ -27,10 +27,18 @@ class BlackScholesCalculator:
         today = datetime.now().date()
         today_weekday = today.weekday()
         
-        # Calculate days until next Thursday
+        # Calculate days until next Thursday with market hours consideration
         days_until_thursday = (3 - today_weekday) % 7
+        
+        # If today is Thursday after market close (3:30 PM), use next Thursday
+        current_time = datetime.now().time()
+        market_close = datetime.strptime("15:30", "%H:%M").time()
+        
         if days_until_thursday == 0:
-            days_until_thursday = 7  # If today is Thursday, get next Thursday
+            # If Thursday after market close, get next Thursday
+            if current_time >= market_close:
+                days_until_thursday = 7
+            # If Thursday during market hours, keep as 0 (same day expiry)
         
         expiry_dates = []
         
@@ -42,8 +50,14 @@ class BlackScholesCalculator:
         return expiry_dates
 
     def calculate_time_to_expiry(self, expiry_date: datetime) -> float:
-        """Calculate time to expiry in years."""
+        """Calculate time to expiry in years with proper intraday handling."""
         now = datetime.now()
+        
+        # If today is Thursday and market is open, use today's 3:30 PM as expiry
+        if now.weekday() == 3 and now.hour < 15.5:  # Thursday before 3:30 PM
+            market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+            expiry_date = market_close
+        
         if expiry_date <= now:
             return 0.001  # Minimum time to avoid division by zero
 
