@@ -26,22 +26,25 @@ class BlackScholesCalculator:
         """Get next 3 weekly Thursday expiry dates for Nifty options."""
         today = datetime.now().date()
         today_weekday = today.weekday()
-        
+
         # Calculate days until next Thursday with market hours consideration
-        days_until_thursday = (3 - today_weekday) % 7
-        
+        if today_weekday <= 3:  # Monday to Thursday
+            days_until_thursday = (3 - today_weekday) % 7
+        else:  # Friday (4), Saturday (5), Sunday (6) - use next week's Thursday
+            days_until_thursday = 7 - (today_weekday - 3)
+
         # If today is Thursday after market close (3:30 PM), use next Thursday
         current_time = datetime.now().time()
         market_close = datetime.strptime("15:30", "%H:%M").time()
-        
+
         if days_until_thursday == 0:
             # If Thursday after market close, get next Thursday
             if current_time >= market_close:
                 days_until_thursday = 7
             # If Thursday during market hours, keep as 0 (same day expiry)
-        
+
         expiry_dates = []
-        
+
         for i in range(3):
             # Calculate expiry date for the next Thursday
             expiry_date = today + timedelta(days=days_until_thursday + i * 7)
@@ -52,16 +55,16 @@ class BlackScholesCalculator:
     def calculate_time_to_expiry(self, expiry_date: datetime) -> float:
         """Calculate time to expiry in years with proper intraday handling."""
         now = datetime.now()
-        
+
         # Market hours: 9:15 AM - 3:30 PM for all trading days (Monday-Friday)
         market_start = 9.25  # 9:15 AM as decimal
         market_end = 15.5    # 3:30 PM as decimal
         current_time_decimal = now.hour + now.minute/60
-        
+
         # Check if we're in a trading day (Monday=0 to Friday=4)
         is_trading_day = 0 <= now.weekday() <= 4
         is_market_hours = market_start <= current_time_decimal <= market_end
-        
+
         # If it's a trading day and within market hours, use the appropriate expiry
         if is_trading_day and is_market_hours:
             # If today is Thursday during market hours, use today's 3:30 PM
@@ -70,7 +73,7 @@ class BlackScholesCalculator:
                 expiry_date = market_close
             # For Monday-Wednesday during market hours, use current week's Thursday
             # For Friday during market hours, use next week's Thursday (handled by get_nifty_expiry_dates)
-        
+
         if expiry_date <= now:
             return 0.001  # Minimum time to avoid division by zero
 
