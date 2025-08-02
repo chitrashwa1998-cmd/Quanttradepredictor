@@ -614,7 +614,8 @@ class LivePredictionPipeline:
                                 if instrument_key in self.live_predictions:
                                     self.live_predictions[instrument_key]['black_scholes'] = bs_results
                                     self.live_predictions[instrument_key]['bs_current_price'] = current_price
-                                    self.live_predictions[instrument_key]['bs_volatility_used'] = volatility_value
+                                    self.live_predictions[instrument_key]['bs_volatility_5min'] = volatility_value
+                                    self.live_predictions[instrument_key]['bs_volatility_annualized'] = bs_results.get('annualized_volatility', volatility_value)
                                     self.live_predictions[instrument_key]['bs_last_update'] = current_time
                                     
                                     # Show update every 20 iterations to avoid spam
@@ -624,7 +625,8 @@ class LivePredictionPipeline:
                                     
                                     if self._bs_counter % 20 == 0:
                                         display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-                                        print(f"🔧 Black-Scholes updated: {display_name} @ ₹{current_price:.2f} (vol: {volatility_value:.4f})")
+                                        annualized_vol = bs_results.get('annualized_volatility', volatility_value)
+                                        print(f"🔧 Black-Scholes updated: {display_name} @ ₹{current_price:.2f} (5min: {volatility_value:.4f} → Annual: {annualized_vol:.2f})")
                             
                     except Exception as e:
                         print(f"❌ Error calculating Black-Scholes for {instrument_key}: {e}")
@@ -651,22 +653,34 @@ class LivePredictionPipeline:
         try:
             from utils.black_scholes import BlackScholesCalculator
             
+            # Convert 5-minute volatility to annualized volatility
+            # Trading periods: 75 periods per day (5-min candles in 6.25-hour trading day)
+            # Trading days: 250 per year
+            # Total periods per year: 75 × 250 = 18,750
+            periods_per_year = 75 * 250  # 18,750
+            annualized_volatility = volatility_prediction * (periods_per_year ** 0.5)
+            
+            print(f"📊 Volatility conversion: 5-min={volatility_prediction:.6f} → Annualized={annualized_volatility:.4f}")
+            
             # Initialize Black-Scholes calculator with RBI repo rate 5.50% and dividend yield 1.2%
             bs_calculator = BlackScholesCalculator(risk_free_rate=0.055, dividend_yield=0.012)
             
-            # Calculate index fair value
-            index_fair_value = bs_calculator.calculate_index_fair_value(current_price, volatility_prediction)
+            # Calculate index fair value using annualized volatility
+            index_fair_value = bs_calculator.calculate_index_fair_value(current_price, annualized_volatility)
             
-            # Calculate options fair values for different strikes
-            options_fair_values = bs_calculator.calculate_options_fair_values(current_price, volatility_prediction)
+            # Calculate options fair values for different strikes using annualized volatility
+            options_fair_values = bs_calculator.calculate_options_fair_values(current_price, annualized_volatility)
             
-            # Get quick summary for display
-            quick_summary = bs_calculator.get_quick_summary(current_price, volatility_prediction)
+            # Get quick summary for display using annualized volatility
+            quick_summary = bs_calculator.get_quick_summary(current_price, annualized_volatility)
             
             return {
                 'index_fair_value': index_fair_value,
                 'options_fair_values': options_fair_values,
                 'quick_summary': quick_summary,
+                'raw_volatility_5min': volatility_prediction,
+                'annualized_volatility': annualized_volatility,
+                'conversion_factor': periods_per_year ** 0.5,
                 'calculation_successful': True
             }
             
