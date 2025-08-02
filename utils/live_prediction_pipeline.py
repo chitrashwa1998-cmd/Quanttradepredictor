@@ -29,6 +29,11 @@ class LivePredictionPipeline:
         self.processing_thread = None
         self.update_interval = 10  # Check for new candles every 10 seconds
 
+        # Black-Scholes continuous calculation
+        self.bs_thread = None
+        self.bs_update_interval = 5  # Update Black-Scholes every 5 seconds with live tick data
+        self.latest_volatility_predictions = {}  # Store latest volatility for each instrument
+
         # Minimum data requirements
         self.min_ohlc_rows = 100  # Minimum OHLC rows needed for predictions
         
@@ -106,7 +111,12 @@ class LivePredictionPipeline:
             self.processing_thread = threading.Thread(target=self._processing_loop, daemon=True)
             self.processing_thread.start()
 
+            # Start continuous Black-Scholes calculation thread
+            self.bs_thread = threading.Thread(target=self._black_scholes_continuous_loop, daemon=True)
+            self.bs_thread.start()
+
             print("✅ Live prediction pipeline started successfully")
+            print("🔧 Continuous Black-Scholes calculator started")
             return True
 
         except Exception as e:
@@ -121,12 +131,17 @@ class LivePredictionPipeline:
         if self.processing_thread:
             self.processing_thread.join(timeout=5)
 
+        if self.bs_thread:
+            self.bs_thread.join(timeout=5)
+
         # Reset candle tracking so predictions can restart on reconnection
         self.last_candle_timestamps = {}
         self.live_predictions = {}
         self.prediction_history = {}
+        self.latest_volatility_predictions = {}
 
         print("🔌 Live prediction pipeline stopped")
+        print("🔧 Continuous Black-Scholes calculator stopped")
 
     def subscribe_instruments(self, instrument_keys: List[str]) -> bool:
         """Subscribe to instruments for live predictions."""
@@ -321,16 +336,14 @@ class LivePredictionPipeline:
                             }
                             print(f"✅ Volatility prediction successful: {volatility_level}")
                             
-                            # Calculate Black-Scholes fair values using volatility prediction
-                            print(f"🔧 Calculating Black-Scholes fair values...")
-                            current_price = float(ohlc_row['Close'])
-                            bs_results = self._calculate_black_scholes_fair_values(current_price, volatility_value)
-                            
-                            if bs_results.get('calculation_successful', False):
-                                all_predictions['black_scholes'] = bs_results
-                                print(f"✅ Black-Scholes fair values calculated successfully")
-                            else:
-                                print(f"❌ Black-Scholes calculation failed: {bs_results.get('error', 'Unknown error')}")
+                            # Store latest volatility for continuous Black-Scholes calculations
+                            self.latest_volatility_predictions[instrument_key] = {
+                                'volatility_value': volatility_value,
+                                'volatility_level': volatility_level,
+                                'timestamp': timestamp,
+                                'valid_until': timestamp + pd.Timedelta(minutes=5)  # Valid for next 5 minutes
+                            }
+                            print(f"📊 Volatility stored for continuous Black-Scholes: {volatility_value:.4f}")
                             
                         else:
                             print(f"❌ Volatility model returned None predictions")
@@ -561,6 +574,77 @@ class LivePredictionPipeline:
             return 'High'
         else:
             return 'Very High'
+
+    def _black_scholes_continuous_loop(self):
+        """Continuous loop for Black-Scholes calculations using live tick data."""
+        print(f"🚀 Black-Scholes continuous loop started - updating every {self.bs_update_interval} seconds")
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+
+        while self.is_processing:
+            try:
+                # Check if connection is still alive
+                connection_status = self.live_data_manager.get_connection_status()
+
+                if not connection_status['connected']:
+                    time.sleep(10)
+                    continue
+
+                # Process Black-Scholes for each instrument with available volatility
+                for instrument_key, vol_data in self.latest_volatility_predictions.items():
+                    try:
+                        # Check if volatility prediction is still valid (within 5 minutes)
+                        current_time = pd.Timestamp.now()
+                        if current_time > vol_data['valid_until']:
+                            print(f"⚠️ Volatility prediction expired for {instrument_key}, waiting for new prediction...")
+                            continue
+
+                        # Get latest tick data
+                        latest_tick = self.live_data_manager.ws_client.get_latest_tick(instrument_key)
+                        
+                        if latest_tick and 'ltp' in latest_tick:
+                            current_price = float(latest_tick['ltp'])
+                            volatility_value = vol_data['volatility_value']
+                            
+                            # Calculate Black-Scholes with current tick price
+                            bs_results = self._calculate_black_scholes_fair_values(current_price, volatility_value)
+                            
+                            if bs_results.get('calculation_successful', False):
+                                # Update the live predictions with fresh Black-Scholes data
+                                if instrument_key in self.live_predictions:
+                                    self.live_predictions[instrument_key]['black_scholes'] = bs_results
+                                    self.live_predictions[instrument_key]['bs_current_price'] = current_price
+                                    self.live_predictions[instrument_key]['bs_volatility_used'] = volatility_value
+                                    self.live_predictions[instrument_key]['bs_last_update'] = current_time
+                                    
+                                    # Show update every 20 iterations to avoid spam
+                                    if not hasattr(self, '_bs_counter'):
+                                        self._bs_counter = 0
+                                    self._bs_counter += 1
+                                    
+                                    if self._bs_counter % 20 == 0:
+                                        display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+                                        print(f"🔧 Black-Scholes updated: {display_name} @ ₹{current_price:.2f} (vol: {volatility_value:.4f})")
+                            
+                    except Exception as e:
+                        print(f"❌ Error calculating Black-Scholes for {instrument_key}: {e}")
+                        continue
+
+                # Reset error counter on successful processing
+                consecutive_errors = 0
+
+                # Wait before next Black-Scholes update
+                time.sleep(self.bs_update_interval)
+
+            except Exception as e:
+                consecutive_errors += 1
+                print(f"❌ Error in Black-Scholes loop ({consecutive_errors}/{max_consecutive_errors}): {e}")
+
+                if consecutive_errors >= max_consecutive_errors:
+                    print("❌ Too many consecutive errors in Black-Scholes loop, stopping")
+                    break
+
+                time.sleep(min(30, 5 * consecutive_errors))  # Progressive backoff
     
     def _calculate_black_scholes_fair_values(self, current_price: float, volatility_prediction: float) -> Dict:
         """Calculate Black-Scholes fair values for options and index."""
@@ -610,7 +694,9 @@ class LivePredictionPipeline:
             'models_used': list(all_predictions.keys()),
             'candle_close_prediction': True,  # Flag to indicate this is a candle-close prediction
             'candle_period': '5T',  # 5-minute timeframe
-            'prediction_type': 'candle_completion'
+            'prediction_type': 'candle_completion',
+            'has_volatility_for_bs': instrument_key in self.latest_volatility_predictions,
+            'bs_continuous_active': instrument_key in self.latest_volatility_predictions
         }
 
         # Add predictions from each model
@@ -655,6 +741,8 @@ class LivePredictionPipeline:
             'data_connected': connection_status['connected'],
             'subscribed_instruments': connection_status['subscribed_instruments'],
             'instruments_with_predictions': len(self.live_predictions),
+            'instruments_with_volatility': len(self.latest_volatility_predictions),
+            'black_scholes_active': len(self.latest_volatility_predictions) > 0,
             'total_ticks_received': connection_status['total_ticks_received'],
             'last_prediction_time': max(
                 [pred['generated_at'] for pred in self.live_predictions.values()]
