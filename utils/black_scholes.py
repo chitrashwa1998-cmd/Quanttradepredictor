@@ -29,6 +29,8 @@ class BlackScholesCalculator:
         
         # Calculate days until next Thursday
         days_until_thursday = (3 - today_weekday) % 7
+        if days_until_thursday == 0:
+            days_until_thursday = 7  # If today is Thursday, get next Thursday
         
         expiry_dates = []
         
