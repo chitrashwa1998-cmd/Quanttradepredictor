@@ -746,6 +746,78 @@ def show_live_data_page():
                                     seeding_status = live_manager.get_seeding_status()
 
                                     # Add suffix to filename if seeded
-                                    suffix = "_complete" if export_instrument in seeding_status['instruments_seeded'] else "_live"
+                                    suffix = "_```python
+complete" if export_instrument in seeding_status['instruments_seeded'] else "_live"
+
+                                    display_name = export_instrument.split('|')[-1] if '|' in export_instrument else export_instrument
+                                    file_name = f"{display_name.replace(' ', '_')}_ohlc{suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
                                     st.download_button(
+                                        label=f"📥 Download {display_name} OHLC Data",
+                                        data=csv_data,
+                                        file_name=file_name,
+                                        mime="text/csv",
+                                        use_container_width=True
+                                    )
+
+                                    st.success(f"✅ Ready to download {len(complete_ohlc_data)} rows of OHLC data")
+                                else:
+                                    st.warning("⚠️ No OHLC data available for export")
+
+                            else:
+                                # Export raw tick data
+                                raw_ticks = st.session_state.live_data_manager.get_raw_tick_history(export_instrument)
+
+                                if raw_ticks and len(raw_ticks) > 0:
+                                    # Convert to DataFrame
+                                    tick_df = pd.DataFrame(raw_ticks)
+                                    csv_data = tick_df.to_csv(index=False)
+
+                                    display_name = export_instrument.split('|')[-1] if '|' in export_instrument else export_instrument
+                                    file_name = f"{display_name.replace(' ', '_')}_raw_ticks_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+                                    st.download_button(
+                                        label=f"📥 Download {display_name} Raw Tick Data",
+                                        data=csv_data,
+                                        file_name=file_name,
+                                        mime="text/csv",
+                                        use_container_width=True
+                                    )
+
+                                    st.success(f"✅ Ready to download {len(tick_df)} raw tick records")
+                                else:
+                                    st.warning("⚠️ No raw tick data available for export")
+
+                    if st.button("💾 Save to Database"):
+                        if export_instrument and export_format == "OHLC Data":
+                            try:
+                                live_manager = st.session_state.live_data_manager
+                                complete_ohlc_data = live_manager.get_complete_ohlc_data(export_instrument)
+
+                                if complete_ohlc_data is not None and len(complete_ohlc_data) > 0:
+                                    db = DatabaseAdapter()
+                                    display_name = export_instrument.split('|')[-1] if '|' in export_instrument else export_instrument
+                                    dataset_name = f"live_{display_name.replace(' ', '_').lower()}"
+
+                                    if db.save_ohlc_data(complete_ohlc_data, dataset_name):
+                                        st.success(f"✅ Saved {len(complete_ohlc_data)} rows to database as '{dataset_name}'")
+                                    else:
+                                        st.error("❌ Failed to save data to database")
+                                else:
+                                    st.warning("⚠️ No data available to save")
+                            except Exception as e:
+                                st.error(f"❌ Database error: {str(e)}")
+
+        else:
+            st.info("📊 Connect to live data feed to see real-time market information")
+
+    else:
+        st.info("🔌 Please configure and connect to Upstox WebSocket to start receiving live data")
+
+    # Auto-refresh functionality
+    if auto_refresh and st.session_state.is_live_connected:
+        time.sleep(10)  # Refresh every 10 seconds
+        st.rerun()
+
+if __name__ == "__main__":
+    show_live_data_page()
