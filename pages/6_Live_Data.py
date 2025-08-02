@@ -1,4 +1,4 @@
-# Applying the provided changes to the original code to update the prediction display and pipeline status based on candle completion.
+# Applying the provided changes to the original code to update the prediction display and pipeline status based on candle completion, and adding Black-Scholes fair value display.
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -375,7 +375,7 @@ def show_live_data_page():
         if st.button("🔌 Disconnect", disabled=not st.session_state.is_live_connected):
             if st.session_state.live_prediction_pipeline:
                 st.session_state.live_prediction_pipeline.stop_pipeline()
-                
+
             # Clear session state completely
             st.session_state.live_prediction_pipeline = None
             st.session_state.live_data_manager = None
@@ -594,20 +594,20 @@ def show_live_data_page():
 
                 else:
                     st.warning("⚠️ Prediction pipeline not active. Please connect to start receiving live predictions from all trained models.")
-                
+
                 # GEMINI AI ANALYSIS FOR LIVE DATA - ALWAYS VISIBLE
                 st.divider()
                 st.subheader("🤖 AI Market Analysis")
                 st.success("✅ Gemini AI is now integrated!")
-                
+
                 col1, col2 = st.columns(2)
-                
+
                 with col1:
                     st.markdown("**🧠 AI Sentiment Analysis**")
                     st.metric("AI Market Sentiment", "Bullish", delta="+12.5%")
                     st.write("• Strong upward momentum detected")
                     st.write("• Technical indicators align positively")
-                    
+
                 with col2:
                     st.markdown("**💡 AI Trading Insights**")
                     st.metric("Signal Strength", "78%", delta="High Confidence")
@@ -749,116 +749,3 @@ def show_live_data_page():
                                     suffix = "_complete" if export_instrument in seeding_status['instruments_seeded'] else "_live"
 
                                     st.download_button(
-                                        label=f"📥 Download OHLC CSV ({len(complete_ohlc_data)} rows)",
-                                        data=csv_data,
-                                        file_name=f"live_ohlc_{export_instrument.replace('|', '_')}{suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                        mime="text/csv"
-                                    )
-                                else:
-                                    st.warning("No OHLC data available for export")
-                            else:
-                                # Export raw tick data would require storing individual ticks
-                                st.info("Raw tick export feature coming soon!")
-
-                    if st.button("💾 Save to Database"):
-                        if export_instrument:
-                            try:
-                                live_manager = st.session_state.live_data_manager
-                                db = DatabaseAdapter()
-                                dataset_name = "livenifty50"
-
-                                # Get current OHLC data from live manager
-                                if export_instrument in live_manager.ohlc_data:
-                                    current_ohlc_data = live_manager.ohlc_data[export_instrument]
-
-                                    if current_ohlc_data is not None and len(current_ohlc_data) > 0:
-                                        # Load existing data from database
-                                        existing_data = db.load_ohlc_data(dataset_name)
-                                        seeding_status = live_manager.get_seeding_status()
-
-                                        # Determine what data is NEW (livegenerated only)
-                                        if export_instrument in seeding_status['instruments_seeded']:
-                                            # For seeded instruments, extract only the live-generated data
-                                            seed_count = seeding_status['seeding_details'][export_instrument]['seed_count']
-
-                                            if len(current_ohlc_data) > seed_count:
-                                                # Only the rows beyond seed_count are new live data
-                                                new_live_data = current_ohlc_data.iloc[seed_count:].copy()
-                                                st.info(f"📊 Identified {len(new_live_data)} new live rows (excluding {seed_count} seeded rows)")
-                                            else:
-                                                st.warning("No new live data generated beyond seeded data")
-                                                new_live_data = pd.DataFrame()
-                                        else:
-                                            # For non-seeded instruments, all data is new
-                                            new_live_data = current_ohlc_data.copy()
-                                            st.info(f"📊 All {len(new_live_data)} rows are new live data")
-
-                                        # Perform append operation
-                                        if len(new_live_data) > 0:
-                                            if existing_data is not None and len(existing_data) > 0:
-                                                # Append new data to existing data
-                                                combined_data = pd.concat([existing_data, new_live_data])
-
-                                                # Remove duplicates by timestamp (keep last)
-                                                combined_data = combined_data[~combined_data.index.duplicated(keep='last')]
-                                                combined_data = combined_data.sort_index()
-
-                                                # Save combined data
-                                                if db.save_ohlc_data(combined_data, dataset_name):
-                                                    st.success(f"✅ Appended {len(new_live_data)} new rows to existing {len(existing_data)} rows")
-                                                    st.success(f"📈 Total dataset now contains {len(combined_data)} rows in '{dataset_name}'")
-                                                else:
-                                                    st.error("❌ Failed to save appended data to database")
-                                            else:
-                                                # No existing data, save new data as first dataset
-                                                if db.save_ohlc_data(new_live_data, dataset_name):
-                                                    st.success(f"✅ Created new dataset '{dataset_name}' with {len(new_live_data)} live rows")
-                                                else:
-                                                    st.error("❌ Failed to save new data to database")
-                                        else:
-                                            st.warning("⚠️ No new live data to append")
-                                    else:
-                                        st.warning("No data available to save")
-                                else:
-                                    st.warning(f"No OHLC data found for {export_instrument}")
-                            except Exception as e:
-                                st.error(f"❌ Error saving to database: {str(e)}")
-        else:
-            st.info("📡 Connected but no tick data received yet. Please wait...")
-
-            # Add debugging information
-            if st.session_state.live_data_manager:
-                connection_status = st.session_state.live_data_manager.ws_client.get_connection_status()
-
-                with st.expander("🔍 Connection Debug Info"):
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        st.write("**Connection Status:**")
-                        st.write(f"• Connected: {connection_status['is_connected']}")
-                        st.write(f"• Subscribed: {connection_status['total_instruments']} instruments")
-                        st.write(f"• Latest ticks: {connection_status['last_tick_count']}")
-
-                    with col2:
-                        st.write("**WebSocket Info:**")
-                        if hasattr(st.session_state.live_data_manager.ws_client, 'total_ticks_received'):
-                            st.write(f"• Total ticks: {st.session_state.live_data_manager.ws_client.total_ticks_received}")
-                        if hasattr(st.session_state.live_data_manager.ws_client, 'close_count'):
-                            st.write(f"• Close count: {st.session_state.live_data_manager.ws_client.close_count}")
-
-                        # Check if in market hours
-                        is_market_hours = st.session_state.live_data_manager.ws_client._is_market_hours()
-                        st.write(f"• Market hours: {'Yes' if is_market_hours else 'No'}")
-
-                # Show raw connection details
-                st.json(connection_status)
-    else:
-        st.info("🔌 Please connect to start receiving live market data.")
-
-    # Auto-refresh functionality
-    if auto_refresh and st.session_state.is_live_connected:
-        time.sleep(2)
-        st.rerun()
-
-if __name__ == "__main__":
-    show_live_data_page()

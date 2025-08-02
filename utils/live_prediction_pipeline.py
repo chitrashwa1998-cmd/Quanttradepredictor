@@ -313,11 +313,25 @@ class LivePredictionPipeline:
                         predictions, _ = self.model_manager.predict('volatility', volatility_features)
                         if predictions is not None:
                             volatility_level = self._categorize_volatility(predictions[-1])
+                            volatility_value = float(predictions[-1])
+                            
                             all_predictions['volatility'] = {
                                 'prediction': volatility_level,
-                                'value': float(predictions[-1])
+                                'value': volatility_value
                             }
                             print(f"✅ Volatility prediction successful: {volatility_level}")
+                            
+                            # Calculate Black-Scholes fair values using volatility prediction
+                            print(f"🔧 Calculating Black-Scholes fair values...")
+                            current_price = float(ohlc_row['Close'])
+                            bs_results = self._calculate_black_scholes_fair_values(current_price, volatility_value)
+                            
+                            if bs_results.get('calculation_successful', False):
+                                all_predictions['black_scholes'] = bs_results
+                                print(f"✅ Black-Scholes fair values calculated successfully")
+                            else:
+                                print(f"❌ Black-Scholes calculation failed: {bs_results.get('error', 'Unknown error')}")
+                            
                         else:
                             print(f"❌ Volatility model returned None predictions")
                     except Exception as e:
@@ -547,6 +561,37 @@ class LivePredictionPipeline:
             return 'High'
         else:
             return 'Very High'
+    
+    def _calculate_black_scholes_fair_values(self, current_price: float, volatility_prediction: float) -> Dict:
+        """Calculate Black-Scholes fair values for options and index."""
+        try:
+            from utils.black_scholes import BlackScholesCalculator
+            
+            # Initialize Black-Scholes calculator with RBI repo rate 5.50% and dividend yield 1.2%
+            bs_calculator = BlackScholesCalculator(risk_free_rate=0.055, dividend_yield=0.012)
+            
+            # Calculate index fair value
+            index_fair_value = bs_calculator.calculate_index_fair_value(current_price, volatility_prediction)
+            
+            # Calculate options fair values for different strikes
+            options_fair_values = bs_calculator.calculate_options_fair_values(current_price, volatility_prediction)
+            
+            # Get quick summary for display
+            quick_summary = bs_calculator.get_quick_summary(current_price, volatility_prediction)
+            
+            return {
+                'index_fair_value': index_fair_value,
+                'options_fair_values': options_fair_values,
+                'quick_summary': quick_summary,
+                'calculation_successful': True
+            }
+            
+        except Exception as e:
+            print(f"❌ Error calculating Black-Scholes fair values: {e}")
+            return {
+                'error': str(e),
+                'calculation_successful': False
+            }
 
     def _format_comprehensive_prediction(self, instrument_key: str, timestamp: pd.Timestamp, 
                                         all_predictions: Dict, ohlc_row: pd.Series) -> Dict:
