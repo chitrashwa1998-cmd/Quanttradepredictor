@@ -53,16 +53,23 @@ class BlackScholesCalculator:
         """Calculate time to expiry in years with proper intraday handling."""
         now = datetime.now()
         
-        # Check if we're in market hours on Thursday (9:15 AM - 3:30 PM)
+        # Market hours: 9:15 AM - 3:30 PM for all trading days (Monday-Friday)
         market_start = 9.25  # 9:15 AM as decimal
         market_end = 15.5    # 3:30 PM as decimal
         current_time_decimal = now.hour + now.minute/60
         
-        # If today is Thursday and within market hours, use today's 3:30 PM as expiry
-        if (now.weekday() == 3 and 
-            market_start <= current_time_decimal <= market_end):
-            market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
-            expiry_date = market_close
+        # Check if we're in a trading day (Monday=0 to Friday=4)
+        is_trading_day = 0 <= now.weekday() <= 4
+        is_market_hours = market_start <= current_time_decimal <= market_end
+        
+        # If it's a trading day and within market hours, use the appropriate expiry
+        if is_trading_day and is_market_hours:
+            # If today is Thursday during market hours, use today's 3:30 PM
+            if now.weekday() == 3:
+                market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+                expiry_date = market_close
+            # For Monday-Wednesday during market hours, use current week's Thursday
+            # For Friday during market hours, use next week's Thursday (handled by get_nifty_expiry_dates)
         
         if expiry_date <= now:
             return 0.001  # Minimum time to avoid division by zero
