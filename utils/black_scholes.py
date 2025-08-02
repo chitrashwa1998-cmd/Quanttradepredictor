@@ -31,7 +31,7 @@ class BlackScholesCalculator:
         if today_weekday <= 3:  # Monday to Thursday
             days_until_thursday = (3 - today_weekday) % 7
         else:  # Friday (4), Saturday (5), Sunday (6) - use next week's Thursday
-            days_until_thursday = 7 - (today_weekday - 3)
+            days_until_thursday = 7 + (3 - today_weekday)
 
         # If today is Thursday after market close (3:30 PM), use next Thursday
         current_time = datetime.now().time()
