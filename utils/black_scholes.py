@@ -53,8 +53,14 @@ class BlackScholesCalculator:
         """Calculate time to expiry in years with proper intraday handling."""
         now = datetime.now()
         
-        # If today is Thursday and market is open, use today's 3:30 PM as expiry
-        if now.weekday() == 3 and now.hour < 15.5:  # Thursday before 3:30 PM
+        # Check if we're in market hours on Thursday (9:15 AM - 3:30 PM)
+        market_start = 9.25  # 9:15 AM as decimal
+        market_end = 15.5    # 3:30 PM as decimal
+        current_time_decimal = now.hour + now.minute/60
+        
+        # If today is Thursday and within market hours, use today's 3:30 PM as expiry
+        if (now.weekday() == 3 and 
+            market_start <= current_time_decimal <= market_end):
             market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
             expiry_date = market_close
         
