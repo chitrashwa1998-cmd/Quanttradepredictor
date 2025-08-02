@@ -16,7 +16,7 @@ st.set_page_config(page_title="Live Data", page_icon="📡", layout="wide")
 
 # Load custom CSS
 with open('style.css') as f:
-    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)ue)
+    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 def show_live_data_page():
     """Main live data page."""
