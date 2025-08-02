@@ -746,8 +746,7 @@ def show_live_data_page():
                                     seeding_status = live_manager.get_seeding_status()
 
                                     # Add suffix to filename if seeded
-                                    suffix = "_```python
-complete" if export_instrument in seeding_status['instruments_seeded'] else "_live"
+                                    suffix = "_complete" if export_instrument in seeding_status['instruments_seeded'] else "_live"
 
                                     display_name = export_instrument.split('|')[-1] if '|' in export_instrument else export_instrument
                                     file_name = f"{display_name.replace(' ', '_')}_ohlc{suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
