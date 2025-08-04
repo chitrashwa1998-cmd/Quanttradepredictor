@@ -563,6 +563,56 @@ def show_live_data_page():
                                 time_ago = datetime.now() - prediction['generated_at']
                                 st.caption(f"Generated {time_ago.total_seconds():.0f}s ago")
 
+                                # Black-Scholes Fair Values Section
+                                if 'black_scholes' in prediction and prediction['black_scholes'].get('calculation_successful'):
+                                    st.markdown("---")
+                                    st.markdown("**🔧 Black-Scholes Fair Values (Live)**")
+                                    
+                                    bs_data = prediction['black_scholes']
+                                    current_price = prediction.get('bs_current_price', prediction['current_price'])
+                                    vol_5min = prediction.get('bs_volatility_5min', 0)
+                                    vol_annual = prediction.get('bs_volatility_annualized', 0)
+                                    
+                                    # Display volatility conversion
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("Current Price", f"₹{current_price:.2f}")
+                                    with col2:
+                                        st.metric("5-min Volatility", f"{vol_5min:.4f}")
+                                    with col3:
+                                        st.metric("Annualized Vol", f"{vol_annual:.2f}")
+                                    
+                                    # Quick summary of options fair values
+                                    if 'quick_summary' in bs_data:
+                                        quick_sum = bs_data['quick_summary']
+                                        st.markdown("**📊 Options Fair Values (Next Expiry)**")
+                                        
+                                        options_cols = st.columns(len(quick_sum.get('options', [])))
+                                        for i, option in enumerate(quick_sum.get('options', [])):
+                                            with options_cols[i]:
+                                                strike = option['strike']
+                                                option_type = option['type']
+                                                call_fv = option['call_fair_value']
+                                                put_fv = option['put_fair_value']
+                                                
+                                                st.markdown(f"**{strike} {option_type}**")
+                                                st.write(f"Call: ₹{call_fv}")
+                                                st.write(f"Put: ₹{put_fv}")
+                                    
+                                    # Show days to expiry
+                                    if 'quick_summary' in bs_data:
+                                        days_to_expiry = bs_data['quick_summary'].get('days_to_expiry', 0)
+                                        expiry_date = bs_data['quick_summary'].get('nearest_expiry', 'N/A')
+                                        st.caption(f"Expiry: {expiry_date} ({days_to_expiry} days remaining)")
+                                    
+                                    # Last update timestamp
+                                    if 'bs_last_update' in prediction:
+                                        bs_time_ago = datetime.now() - prediction['bs_last_update']
+                                        st.caption(f"Black-Scholes updated {bs_time_ago.total_seconds():.0f}s ago")
+
+                                elif prediction.get('has_volatility_for_bs'):
+                                    st.info("🔧 Black-Scholes calculations will appear when volatility is available")
+                                
                                 st.divider()
 
                         # Auto-refresh toggle
