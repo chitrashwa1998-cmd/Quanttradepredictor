@@ -372,9 +372,27 @@ def show_live_data_page():
         if st.button("🚀 Connect", type="primary", disabled=not (access_token and api_key)):
             if access_token and api_key:
                 try:
-                    # Initialize prediction pipeline (includes live data manager)
-                    st.session_state.live_prediction_pipeline = LivePredictionPipeline(access_token, api_key)
-                    st.session_state.live_data_manager = st.session_state.live_prediction_pipeline.live_data_manager
+                    # Categorize selected instruments for dual connection
+                    instrument_keys = [popular_instruments.get(inst, inst) for inst in selected_instruments]
+                    
+                    # Separate into index and futures instruments
+                    nifty50_instruments = [key for key in instrument_keys if 'NSE_INDEX' in key]
+                    nifty_fut_instruments = [key for key in instrument_keys if 'NSE_FO' in key or 'FUT' in key]
+                    
+                    # Ensure we have at least one instrument in each category for dual connection
+                    if not nifty50_instruments:
+                        nifty50_instruments = ["NSE_INDEX|Nifty 50"]  # Default index instrument
+                    if not nifty_fut_instruments:
+                        nifty_fut_instruments = ["NSE_FO|NIFTY28AUGFUT"]  # Default futures instrument
+                    
+                    # Initialize prediction pipeline with categorized instruments
+                    st.session_state.live_prediction_pipeline = LivePredictionPipeline(
+                        access_token, 
+                        api_key, 
+                        nifty50_instruments, 
+                        nifty_fut_instruments
+                    )
+                    st.session_state.live_data_manager = st.session_state.live_prediction_pipeline.dual_connection_manager
 
                     # Start the prediction pipeline
                     if st.session_state.live_prediction_pipeline.start_pipeline():
