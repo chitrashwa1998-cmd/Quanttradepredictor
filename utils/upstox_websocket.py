@@ -379,11 +379,11 @@ class UpstoxWebSocketClient:
                         for instrument_key in self.subscribed_instruments:
                             tick_data = self._create_tick_data_for_instrument(instrument_key)
                             if tick_data:
+                                # Call the callback directly for each instrument
                                 self.tick_callback(tick_data)
                     
-                    # Return data for the first instrument (for compatibility)
-                    first_instrument = list(self.subscribed_instruments)[0]
-                    return self._create_tick_data_for_instrument(first_instrument)
+                    # Return None since we're calling callbacks directly for each instrument
+                    return None
 
             except Exception as e:
                 print(f"⚠️ Enhanced protobuf parsing error: {e}")
