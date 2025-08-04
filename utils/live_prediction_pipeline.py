@@ -90,13 +90,12 @@ class LivePredictionPipeline:
 
     def __init__(self, access_token: str, api_key: str, nifty50_instruments: List[str], nifty_fut_instruments: List[str]):
         """Initialize live prediction pipeline with dual connection manager."""
-        # Initialize the dual connection manager
-        self.dual_connection_manager = DualConnectionManager(
-            access_token,
-            api_key,
-            nifty50_instruments,
-            nifty_fut_instruments
-        )
+        # Store instrument lists for later use
+        self.nifty50_instruments = nifty50_instruments
+        self.nifty_fut_instruments = nifty_fut_instruments
+        
+        # Initialize the dual connection manager with just access credentials
+        self.dual_connection_manager = DualConnectionManager(access_token, api_key)
         self.model_manager = ModelManager()
 
         # Prediction storage
