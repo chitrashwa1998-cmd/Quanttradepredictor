@@ -373,8 +373,15 @@ class UpstoxWebSocketClient:
                         'timestamp': datetime.now(ist)
                     }
 
-                    # Return tick data for the first subscribed instrument
-                    # The callback will be called multiple times for different instruments
+                    # Process data for ALL subscribed instruments
+                    # Call callback for each instrument separately
+                    if self.tick_callback:
+                        for instrument_key in self.subscribed_instruments:
+                            tick_data = self._create_tick_data_for_instrument(instrument_key)
+                            if tick_data:
+                                self.tick_callback(tick_data)
+                    
+                    # Return data for the first instrument (for compatibility)
                     first_instrument = list(self.subscribed_instruments)[0]
                     return self._create_tick_data_for_instrument(first_instrument)
 
