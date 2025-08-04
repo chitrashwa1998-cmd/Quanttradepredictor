@@ -113,33 +113,40 @@ class UpstoxWebSocketClient:
             # Track close count
             self.close_count = getattr(self, 'close_count', 0) + 1
 
-            # Don't auto-reconnect during market hours if too many failures
-            if self.close_count > 15:
+            # Don't auto-reconnect if too many failures
+            if self.close_count > 10:
                 print("⚠️ Too many disconnects - stopping auto-reconnect")
                 return
 
         if self.connection_callback:
             self.connection_callback("disconnected")
 
-        # Auto-reconnect only during market hours and if not too many failures
+        # Auto-reconnect with exponential backoff (reduced frequency to avoid spam)
         if (hasattr(self, '_was_connected') and self._was_connected and 
-            self._is_market_hours() and self.close_count <= 15):
+            self.close_count <= 10):
 
             import threading
             def reconnect():
                 import time
-                backoff_time = min(30, 5 * self.close_count)
+                # Exponential backoff: 5s, 10s, 20s, 30s max
+                backoff_time = min(30, 5 * (2 ** min(self.close_count - 1, 3)))
+                print(f"🔄 Scheduled reconnect in {backoff_time}s (attempt {self.close_count})")
                 time.sleep(backoff_time)
 
-                if not self.is_connected and self._is_market_hours():
+                if not self.is_connected:
                     print(f"🔄 Reconnecting attempt {self.close_count}...")
-                    success = self.connect()
+                    try:
+                        success = self.connect()
 
-                    if success and self.subscribed_instruments:
-                        time.sleep(3)  # Wait for connection to stabilize
-                        instruments = list(self.subscribed_instruments)
-                        self.subscribed_instruments.clear()
-                        self.subscribe(instruments)
+                        if success and self.subscribed_instruments:
+                            time.sleep(2)  # Wait for connection to stabilize
+                            instruments = list(self.subscribed_instruments)
+                            self.subscribed_instruments.clear()
+                            self.subscribe(instruments)
+                            # Reset close count on successful reconnect
+                            self.close_count = 0
+                    except Exception as e:
+                        print(f"❌ Reconnection failed: {e}")
 
             thread = threading.Thread(target=reconnect, daemon=True)
             thread.start()
@@ -164,7 +171,19 @@ class UpstoxWebSocketClient:
 
     def on_error(self, ws, error):
         """Handle WebSocket errors."""
-        print(f"❌ Upstox WebSocket error: {error}")
+        error_str = str(error)
+        
+        # Filter out common non-critical errors
+        if "Connection is already closed" in error_str:
+            print(f"ℹ️ WebSocket already closed")
+        elif "Handshake status 403" in error_str:
+            print(f"❌ Authentication error: {error}")
+            print("💡 Please check your access token and API key")
+        elif "timeout" in error_str.lower():
+            print(f"⏰ WebSocket timeout: {error}")
+        else:
+            print(f"❌ Upstox WebSocket error: {error}")
+        
         if self.error_callback:
             self.error_callback(error)
 
@@ -184,7 +203,14 @@ class UpstoxWebSocketClient:
         try:
             # Handle both binary and text messages from Upstox v3
             if isinstance(message, bytes):
-                print(f"📦 Binary message received: {len(message)} bytes")
+                # Only show binary message log occasionally to reduce noise
+                if not hasattr(self, '_msg_counter'):
+                    self._msg_counter = 0
+                self._msg_counter += 1
+                
+                if self._msg_counter % 50 == 0:  # Show every 50th message
+                    print(f"📦 Binary message received: {len(message)} bytes (#{self._msg_counter})")
+                
                 # Try to decode as UTF-8 first (common in v3)
                 try:
                     decoded_message = message.decode('utf-8')
@@ -211,16 +237,21 @@ class UpstoxWebSocketClient:
                 instrument = tick_data.get('instrument_token')
                 if instrument:
                     self.last_tick_data[instrument] = tick_data
-                    print(f"📊 Live tick: {instrument.split('|')[-1]} @ ₹{tick_data.get('ltp', 0):.2f}")
+                    
+                    # Only show tick updates occasionally to reduce noise
+                    if self._msg_counter % 25 == 0:  # Show every 25th tick
+                        print(f"📊 Live tick: {instrument.split('|')[-1]} @ ₹{tick_data.get('ltp', 0):.2f}")
 
                 # Call callback
                 if self.tick_callback:
                     self.tick_callback(tick_data)
 
         except Exception as e:
-            print(f"❌ Error processing message: {e}")
-            import traceback
-            traceback.print_exc()
+            # Don't spam error messages - only show unique errors
+            error_str = str(e)
+            if not hasattr(self, '_last_error') or self._last_error != error_str:
+                print(f"❌ Error processing message: {e}")
+                self._last_error = error_str
 
     def parse_protobuf_message(self, message: bytes) -> Optional[Dict]:
         """Parse protobuf message from Upstox v3 API with enhanced market data extraction."""
@@ -563,6 +594,13 @@ class UpstoxWebSocketClient:
                 print("❌ No WebSocket URL available")
                 return False
 
+            # Disconnect any existing connection
+            if self.ws:
+                try:
+                    self.ws.close()
+                except:
+                    pass
+
             print(f"🔄 Connecting to Upstox v3 WebSocket...")
 
             # Create WebSocket connection with proper headers as per v3 documentation
@@ -582,17 +620,18 @@ class UpstoxWebSocketClient:
                 header=headers
             )
 
-            # Start WebSocket with improved ping mechanism
+            # Start WebSocket with improved ping mechanism and error handling
             wst = threading.Thread(target=lambda: self.ws.run_forever(
                 ping_interval=30,    # Send ping every 30 seconds
-                ping_timeout=20,     # Wait 20 seconds for pong
-                ping_payload="upstox_ping"
+                ping_timeout=10,     # Reduced timeout for faster detection
+                ping_payload="upstox_ping",
+                reconnect=0          # Disable built-in reconnect (we handle it ourselves)
             ))
             wst.daemon = True
             wst.start()
 
             # Wait for connection with timeout
-            max_wait = 10
+            max_wait = 15  # Increased timeout
             wait_time = 0
             while wait_time < max_wait and not self.is_connected:
                 time.sleep(0.5)
@@ -600,6 +639,8 @@ class UpstoxWebSocketClient:
 
             if self.is_connected:
                 print(f"✅ WebSocket connected in {wait_time:.1f}s")
+                # Reset close count on successful connection
+                self.close_count = 0
             else:
                 print(f"❌ WebSocket connection timeout after {max_wait}s")
 
@@ -607,17 +648,30 @@ class UpstoxWebSocketClient:
 
         except Exception as e:
             print(f"❌ Failed to connect to Upstox WebSocket: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def disconnect(self):
         """Close WebSocket connection."""
+        print("🔌 Disconnecting WebSocket...")
+        self.is_connected = False
+        
         if self.ws:
             try:
+                # Properly close the WebSocket
+                self.ws.keep_running = False
                 self.ws.close()
-            except:
-                pass
-            self.is_connected = False
-            print("🔌 Disconnected from WebSocket")
+            except Exception as e:
+                print(f"⚠️ Error during disconnect: {e}")
+            finally:
+                self.ws = None
+        
+        # Clear subscriptions
+        self.subscribed_instruments.clear()
+        self.last_tick_data.clear()
+        
+        print("🔌 WebSocket disconnected and cleaned up")
 
     def subscribe(self, instrument_keys: list, mode: str = "full"):
         """Subscribe to instruments using v3 API format - BINARY messages only."""
