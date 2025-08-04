@@ -382,7 +382,11 @@ class UpstoxWebSocketClient:
                                 # Call the callback directly for each instrument
                                 self.tick_callback(tick_data)
                     
-                    # Return None since we're calling callbacks directly for each instrument
+                    # Return data for the first instrument for any remaining compatibility needs
+                    first_instrument = list(self.subscribed_instruments)[0] if self.subscribed_instruments else None
+                    if first_instrument:
+                        return self._create_tick_data_for_instrument(first_instrument)
+                    
                     return None
 
             except Exception as e:
