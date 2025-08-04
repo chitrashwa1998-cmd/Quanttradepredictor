@@ -71,6 +71,7 @@ def show_live_data_page():
         popular_instruments = {
             "NIFTY 50": "NSE_INDEX|Nifty 50",
             "BANK NIFTY": "NSE_INDEX|Nifty Bank",
+            "NIFTY AUG FUT": "NSE_FO|NIFTY28AUGFUT",
             "RELIANCE": "NSE_EQ|INE002A01018",
             "TCS": "NSE_EQ|INE467B01029",
             "HDFC BANK": "NSE_EQ|INE040A01034",
@@ -80,8 +81,8 @@ def show_live_data_page():
         selected_instruments = st.multiselect(
             "Select Instruments",
             options=list(popular_instruments.keys()),
-            default=["NIFTY 50", "BANK NIFTY"],
-            help="Choose instruments to subscribe for live data"
+            default=["NIFTY 50", "NIFTY AUG FUT"],
+            help="Choose instruments to subscribe for live data (Index + Futures for best results)"
         )
 
         # Custom instrument input
@@ -92,6 +93,31 @@ def show_live_data_page():
 
         if custom_instrument:
             selected_instruments.append(custom_instrument)
+
+        # Dual connection information
+        st.info("""
+        **🔗 Dual WebSocket Connection Architecture:**
+        
+        • **Index Instruments** (NSE_INDEX): Clean tick data for ML models
+        • **Futures Instruments** (NSE_FO): Enhanced market depth for CVD/OBI
+        • **Automatic Routing**: Each instrument type uses its dedicated connection
+        • **No Data Mixing**: Prevents contamination between different instrument types
+        • **Simultaneous Operation**: Both streams run independently for optimal accuracy
+        """)
+        
+        # Show connection routing preview
+        if selected_instruments:
+            index_count = sum(1 for inst in selected_instruments if popular_instruments.get(inst, inst).startswith('NSE_INDEX'))
+            futures_count = sum(1 for inst in selected_instruments if 'NSE_FO' in popular_instruments.get(inst, inst) or 'FUT' in popular_instruments.get(inst, inst))
+            other_count = len(selected_instruments) - index_count - futures_count
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📊 Index Connection", f"{index_count} instruments")
+            with col2:
+                st.metric("📈 Futures Connection", f"{futures_count} instruments") 
+            with col3:
+                st.metric("🔗 Other Connection", f"{other_count} instruments")
 
     with historical_tab:
         st.subheader("📈 Fetch Historical Data from Upstox")
@@ -418,6 +444,28 @@ def show_live_data_page():
 
         with col5:
             st.metric("Live Predictions", pipeline_status['instruments_with_predictions'])
+
+        # Dual connection status
+        if hasattr(st.session_state.live_prediction_pipeline, 'dual_connection_manager'):
+            connection_status = st.session_state.live_prediction_pipeline.dual_connection_manager.get_connection_status()
+            
+            st.subheader("🔗 Dual WebSocket Connection Status")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                index_color = "🟢" if connection_status['index_connected'] else "🔴"
+                st.metric("📊 Index Connection", f"{index_color} {'Active' if connection_status['index_connected'] else 'Inactive'}")
+            
+            with col2:
+                futures_color = "🟢" if connection_status['futures_connected'] else "🔴"
+                st.metric("📈 Futures Connection", f"{futures_color} {'Active' if connection_status['futures_connected'] else 'Inactive'}")
+            
+            with col3:
+                st.metric("📊 Index Instruments", connection_status['index_instruments'])
+            
+            with col4:
+                st.metric("📈 Futures Instruments", connection_status['futures_instruments'])
 
         # Show continuation status if available
         if st.session_state.live_data_manager:
