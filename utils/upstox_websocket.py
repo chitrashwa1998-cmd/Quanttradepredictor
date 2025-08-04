@@ -172,7 +172,7 @@ class UpstoxWebSocketClient:
     def on_error(self, ws, error):
         """Handle WebSocket errors."""
         error_str = str(error)
-
+        
         # Filter out common non-critical errors
         if "Connection is already closed" in error_str:
             print(f"ℹ️ WebSocket already closed")
@@ -183,7 +183,7 @@ class UpstoxWebSocketClient:
             print(f"⏰ WebSocket timeout: {error}")
         else:
             print(f"❌ Upstox WebSocket error: {error}")
-
+        
         if self.error_callback:
             self.error_callback(error)
 
@@ -207,10 +207,10 @@ class UpstoxWebSocketClient:
                 if not hasattr(self, '_msg_counter'):
                     self._msg_counter = 0
                 self._msg_counter += 1
-
+                
                 if self._msg_counter % 50 == 0:  # Show every 50th message
                     print(f"📦 Binary message received: {len(message)} bytes (#{self._msg_counter})")
-
+                
                 # Try to decode as UTF-8 first (common in v3)
                 try:
                     decoded_message = message.decode('utf-8')
@@ -237,7 +237,7 @@ class UpstoxWebSocketClient:
                 instrument = tick_data.get('instrument_token')
                 if instrument:
                     self.last_tick_data[instrument] = tick_data
-
+                    
                     # Only show tick updates occasionally to reduce noise
                     if self._msg_counter % 25 == 0:  # Show every 25th tick
                         print(f"📊 Live tick: {instrument.split('|')[-1]} @ ₹{tick_data.get('ltp', 0):.2f}")
@@ -290,7 +290,7 @@ class UpstoxWebSocketClient:
                                         value = struct.unpack(fmt, message[offset:offset+8])[0]
                                     else:  # float
                                         value = struct.unpack(fmt, message[offset:offset+4])[0]
-
+                                    
                                     # Check if it's a valid price
                                     if 10000 <= value <= 50000 and not math.isnan(value):
                                         extracted_data['prices'].append(round(value, 2))
@@ -326,70 +326,69 @@ class UpstoxWebSocketClient:
                         continue
 
                 # Process extracted data if we found valid information
-                if extracted_data['prices'] and self.subscribed_instruments:
+                if extracted_data['prices']:
                     from collections import Counter
-
+                    
                     # Get most common price (likely LTP)
                     price_counts = Counter(extracted_data['prices'])
                     ltp = price_counts.most_common(1)[0][0]
-
+                    
                     # Try to identify bid/ask from nearby prices
                     prices = sorted(set(extracted_data['prices']))
                     ltp_index = prices.index(ltp) if ltp in prices else 0
-
+                    
                     bid_price = prices[max(0, ltp_index - 1)] if ltp_index > 0 else ltp * 0.9999
                     ask_price = prices[min(len(prices) - 1, ltp_index + 1)] if ltp_index < len(prices) - 1 else ltp * 1.0001
-
+                    
                     # Get quantities and volumes
                     quantities = extracted_data['quantities']
                     volumes = extracted_data['volumes']
-
+                    
                     # Estimate market depth quantities
                     ltq = quantities[0] if quantities else 100
                     bid_qty = quantities[1] if len(quantities) > 1 else 50
                     ask_qty = quantities[2] if len(quantities) > 2 else 50
-
+                    
                     # Estimate total quantities (larger numbers likely represent totals)
                     total_buy_qty = max(quantities) if quantities else 5000
                     total_sell_qty = total_buy_qty * 0.95 if quantities else 4500  # Slightly less sell pressure
-
+                    
                     # Volume information
                     volume = volumes[0] if volumes else 1000
 
                     import pytz
                     ist = pytz.timezone('Asia/Kolkata')
 
-                    # Store the parsed data to be used by each instrument
-                    self._last_parsed_data = {
+                    # Create comprehensive tick data structure
+                    tick = {
+                        'instrument_token': 'NSE_INDEX|Nifty 50',
+                        'timestamp': datetime.now(ist),
                         'ltp': float(ltp),
                         'ltq': int(ltq),
                         'volume': int(volume),
+                        'open': float(ltp),
+                        'high': float(ltp),
+                        'low': float(ltp),
+                        'close': float(ltp),
+                        'change': 0.0,
+                        'change_percent': 0.0,
+                        # Enhanced market depth fields
+                        'last_traded_price': float(ltp),
+                        'last_traded_quantity': int(ltq),
+                        'total_buy_quantity': int(total_buy_qty),
+                        'total_sell_quantity': int(total_sell_qty),
+                        'best_bid': float(bid_price),
+                        'best_bid_quantity': int(bid_qty),
+                        'best_ask': float(ask_price),
+                        'best_ask_quantity': int(ask_qty),
                         'bid_price': float(bid_price),
                         'ask_price': float(ask_price),
                         'bid_qty': int(bid_qty),
-                        'ask_qty': int(ask_qty),
-                        'total_buy_qty': int(total_buy_qty),
-                        'total_sell_qty': int(total_sell_qty),
-                        'timestamp': datetime.now(ist)
+                        'ask_qty': int(ask_qty)
                     }
 
-                    # Process data for ALL subscribed instruments
-                    # Call callback for each instrument separately
-                    processed_any = False
-                    if self.tick_callback:
-                        for instrument_key in self.subscribed_instruments:
-                            tick_data = self._create_tick_data_for_instrument(instrument_key)
-                            if tick_data:
-                                # Call the callback directly for each instrument
-                                self.tick_callback(tick_data)
-                                processed_any = True
-                    
-                    # Return data for the first instrument for any remaining compatibility needs
-                    if processed_any and self.subscribed_instruments:
-                        first_instrument = list(self.subscribed_instruments)[0]
-                        return self._create_tick_data_for_instrument(first_instrument)
-                    
-                    return None
+                    print(f"📊 Enhanced Protobuf: Nifty 50 @ ₹{ltp:.2f} | Bid: ₹{bid_price:.2f}({bid_qty}) | Ask: ₹{ask_price:.2f}({ask_qty}) | TotalBuy: {total_buy_qty} | TotalSell: {total_sell_qty}")
+                    return tick
 
             except Exception as e:
                 print(f"⚠️ Enhanced protobuf parsing error: {e}")
@@ -401,47 +400,6 @@ class UpstoxWebSocketClient:
         except Exception as e:
             print(f"❌ Critical parsing error: {e}")
             return None
-
-    def _create_tick_data_for_instrument(self, instrument_key: str) -> Optional[Dict]:
-        """Create tick data for a specific instrument using the last parsed data."""
-        if not hasattr(self, '_last_parsed_data') or not self._last_parsed_data:
-            return None
-
-        data = self._last_parsed_data
-
-        # Create comprehensive tick data structure
-        tick = {
-            'instrument_token': instrument_key,
-            'timestamp': data['timestamp'],
-            'ltp': data['ltp'],
-            'ltq': data['ltq'],
-            'volume': data['volume'],
-            'open': data['ltp'],
-            'high': data['ltp'],
-            'low': data['ltp'],
-            'close': data['ltp'],
-            'change': 0.0,
-            'change_percent': 0.0,
-            # Enhanced market depth fields
-            'last_traded_price': data['ltp'],
-            'last_traded_quantity': data['ltq'],
-            'total_buy_quantity': data['total_buy_qty'],
-            'total_sell_quantity': data['total_sell_qty'],
-            'best_bid': data['bid_price'],
-            'best_bid_quantity': data['bid_qty'],
-            'best_ask': data['ask_price'],
-            'best_ask_quantity': data['ask_qty'],
-            'bid_price': data['bid_price'],
-            'ask_price': data['ask_price'],
-            'bid_qty': data['bid_qty'],
-            'ask_qty': data['ask_qty']
-        }
-
-        # Log enhanced data
-        instrument_name = instrument_key.split('|')[-1]
-        print(f"📊 Enhanced Protobuf: {instrument_name} @ ₹{data['ltp']:.2f} | Bid: ₹{data['bid_price']:.2f}({data['bid_qty']}) | Ask: ₹{data['ask_price']:.2f}({data['ask_qty']}) | TotalBuy: {data['total_buy_qty']} | TotalSell: {data['total_sell_qty']}")
-
-        return tick
 
     def _read_varint(self, data: bytes, offset: int) -> tuple:
         """Read a varint from protobuf data."""
@@ -544,18 +502,18 @@ class UpstoxWebSocketClient:
                     # Look for full market data (complete depth)
                     if 'ff' in feed_data:
                         ff_data = feed_data['ff']
-
+                        
                         # Extract market full feed data
                         if 'marketFF' in ff_data:
                             market_ff = ff_data['marketFF']
-
+                            
                             # LTPC within full feed
                             if 'ltpc' in market_ff:
                                 ltpc = market_ff['ltpc']
                                 ltp = float(ltpc.get('ltp', 0))
                                 cp = float(ltpc.get('cp', ltp))
                                 ltq = int(ltpc.get('ltq', 0))
-
+                                
                                 tick_data.update({
                                     'ltp': ltp,
                                     'last_traded_price': ltp,
@@ -567,7 +525,7 @@ class UpstoxWebSocketClient:
                             # Market depth information
                             if 'marketLevel' in market_ff:
                                 market_level = market_ff['marketLevel']
-
+                                
                                 # Best bid/ask from level 1 data
                                 if 'bidAskQuote' in market_level:
                                     bid_ask = market_level['bidAskQuote']
@@ -587,10 +545,10 @@ class UpstoxWebSocketClient:
                             # Volume and quantity totals
                             if 'vtt' in market_ff:  # Total traded volume
                                 tick_data['volume'] = int(market_ff['vtt'])
-
+                            
                             if 'tbq' in market_ff:  # Total buy quantity
                                 tick_data['total_buy_quantity'] = int(market_ff['tbq'])
-
+                            
                             if 'tsq' in market_ff:  # Total sell quantity
                                 tick_data['total_sell_quantity'] = int(market_ff['tsq'])
 
@@ -606,7 +564,7 @@ class UpstoxWebSocketClient:
                     if tick_data['ltp'] > 0:
                         # Add timestamp for this specific tick
                         tick_data['timestamp'] = datetime.now()
-
+                        
                         # Log the enhanced data
                         instrument_name = instrument_key.split('|')[-1]
                         ltp = tick_data['ltp']
@@ -614,9 +572,9 @@ class UpstoxWebSocketClient:
                         ask = tick_data['best_ask']
                         total_buy = tick_data['total_buy_quantity']
                         total_sell = tick_data['total_sell_quantity']
-
+                        
                         print(f"📈 Full Market Data: {instrument_name} @ ₹{ltp:.2f} | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']}) | Buy: {total_buy} | Sell: {total_sell}")
-
+                        
                         return tick_data
 
             # If no recognizable structure, log it
@@ -698,7 +656,7 @@ class UpstoxWebSocketClient:
         """Close WebSocket connection."""
         print("🔌 Disconnecting WebSocket...")
         self.is_connected = False
-
+        
         if self.ws:
             try:
                 # Properly close the WebSocket
@@ -708,11 +666,11 @@ class UpstoxWebSocketClient:
                 print(f"⚠️ Error during disconnect: {e}")
             finally:
                 self.ws = None
-
+        
         # Clear subscriptions
         self.subscribed_instruments.clear()
         self.last_tick_data.clear()
-
+        
         print("🔌 WebSocket disconnected and cleaned up")
 
     def subscribe(self, instrument_keys: list, mode: str = "full"):
