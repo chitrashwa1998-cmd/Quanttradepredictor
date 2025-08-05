@@ -23,18 +23,27 @@ class OBICVDConfirmation:
         # Storage for each instrument
         self.instrument_data = {}  # Store CVD and OBI data per instrument
         self.last_cvd_reset = {}   # Track when CVD was last reset
+        self.last_obi_reset = {}   # Track when OBI rolling average was last reset
+        self.last_cvd_rolling_reset = {}  # Track when CVD rolling average was last reset
         
     def _initialize_instrument(self, instrument_key: str):
         """Initialize data storage for a new instrument."""
         if instrument_key not in self.instrument_data:
             self.instrument_data[instrument_key] = {
-                'cvd': 0.0,  # Cumulative Volume Delta
-                'obi_history': deque(maxlen=self.obi_window_seconds * 2),  # Store OBI values with timestamps
+                'cvd': 0.0,  # Cumulative Volume Delta (total accumulation)
+                'obi_history': deque(maxlen=self.obi_window_seconds * 3),  # Store OBI values with timestamps
+                'cvd_history': deque(maxlen=120 * 2),  # Store CVD increments for 2-minute rolling average
+                'current_obi': 0.0,  # Current tick OBI value
+                'current_cvd_increment': 0.0,  # Current tick CVD increment
+                'rolling_obi_1min': deque(maxlen=60 * 2),  # 1-minute rolling OBI values
+                'rolling_cvd_2min': deque(maxlen=120 * 2),  # 2-minute rolling CVD values
                 'last_price': 0.0,
                 'last_volume': 0,
                 'tick_count': 0
             }
             self.last_cvd_reset[instrument_key] = datetime.now()
+            self.last_obi_reset[instrument_key] = datetime.now()
+            self.last_cvd_rolling_reset[instrument_key] = datetime.now()
     
     def calculate_obi(self, tick_data: Dict) -> Optional[float]:
         """
@@ -131,109 +140,229 @@ class OBICVDConfirmation:
             current_time = datetime.now()
             instrument_data = self.instrument_data[instrument_key]
             
-            # Calculate OBI
-            obi_value = self.calculate_obi(tick_data)
-            if obi_value is not None:
-                # Store OBI with timestamp
+            # Calculate current OBI
+            current_obi = self.calculate_obi(tick_data)
+            if current_obi is not None:
+                instrument_data['current_obi'] = current_obi
+                
+                # Store OBI with timestamp for historical tracking
                 instrument_data['obi_history'].append({
                     'timestamp': current_time,
-                    'obi': obi_value
+                    'obi': current_obi
+                })
+                
+                # Add to 1-minute rolling OBI
+                instrument_data['rolling_obi_1min'].append({
+                    'timestamp': current_time,
+                    'obi': current_obi
                 })
             
-            # Calculate CVD increment
-            cvd_increment = self.calculate_cvd_increment(tick_data, instrument_key)
-            if cvd_increment is not None:
-                instrument_data['cvd'] += cvd_increment
+            # Calculate current CVD increment
+            current_cvd_increment = self.calculate_cvd_increment(tick_data, instrument_key)
+            if current_cvd_increment is not None:
+                instrument_data['current_cvd_increment'] = current_cvd_increment
+                instrument_data['cvd'] += current_cvd_increment
+                
+                # Add to CVD history for rolling average
+                instrument_data['cvd_history'].append({
+                    'timestamp': current_time,
+                    'cvd_increment': current_cvd_increment
+                })
+                
+                # Add to 2-minute rolling CVD
+                instrument_data['rolling_cvd_2min'].append({
+                    'timestamp': current_time,
+                    'cvd_increment': current_cvd_increment
+                })
             
-            # Check if CVD should be reset
-            time_since_reset = current_time - self.last_cvd_reset[instrument_key]
-            if time_since_reset.total_seconds() > (self.cvd_reset_minutes * 60):
-                print(f"🔄 Resetting CVD for {instrument_key} after {self.cvd_reset_minutes} minutes")
+            # Check if CVD total should be reset (every 30 minutes)
+            time_since_cvd_reset = current_time - self.last_cvd_reset[instrument_key]
+            if time_since_cvd_reset.total_seconds() > (self.cvd_reset_minutes * 60):
+                print(f"🔄 Resetting total CVD for {instrument_key} after {self.cvd_reset_minutes} minutes")
                 instrument_data['cvd'] = 0.0
                 self.last_cvd_reset[instrument_key] = current_time
             
-            # Calculate averaged OBI
+            # Check if OBI rolling average should be reset (every 1 minute)
+            time_since_obi_reset = current_time - self.last_obi_reset[instrument_key]
+            if time_since_obi_reset.total_seconds() > 60:  # Reset every 1 minute
+                print(f"🔄 Resetting OBI rolling average for {instrument_key} after 1 minute")
+                instrument_data['rolling_obi_1min'].clear()
+                self.last_obi_reset[instrument_key] = current_time
+            
+            # Check if CVD rolling average should be reset (every 2 minutes)
+            time_since_cvd_rolling_reset = current_time - self.last_cvd_rolling_reset[instrument_key]
+            if time_since_cvd_rolling_reset.total_seconds() > 120:  # Reset every 2 minutes
+                print(f"🔄 Resetting CVD rolling average for {instrument_key} after 2 minutes")
+                instrument_data['rolling_cvd_2min'].clear()
+                self.last_cvd_rolling_reset[instrument_key] = current_time
+            
+            # Calculate rolling averages
+            # OBI 1-minute rolling average
+            recent_obi_1min = [
+                entry['obi'] for entry in instrument_data['rolling_obi_1min']
+                if (current_time - entry['timestamp']).total_seconds() <= 60
+            ]
+            rolling_avg_obi_1min = np.mean(recent_obi_1min) if recent_obi_1min else 0.0
+            
+            # CVD 2-minute rolling average
+            recent_cvd_2min = [
+                entry['cvd_increment'] for entry in instrument_data['rolling_cvd_2min']
+                if (current_time - entry['timestamp']).total_seconds() <= 120
+            ]
+            rolling_avg_cvd_2min = np.mean(recent_cvd_2min) if recent_cvd_2min else 0.0
+            
+            # Legacy 60-second OBI average for existing analysis
             recent_obi_values = [
                 entry['obi'] for entry in instrument_data['obi_history']
                 if (current_time - entry['timestamp']).total_seconds() <= self.obi_window_seconds
             ]
-            
-            avg_obi = np.mean(recent_obi_values) if recent_obi_values else 0.0
+            legacy_avg_obi = np.mean(recent_obi_values) if recent_obi_values else 0.0
             
             # Increment tick counter
             instrument_data['tick_count'] += 1
             
-            # Return confirmation analysis
-            return self._analyze_confirmation(instrument_key, obi_value, avg_obi, instrument_data['cvd'])
+            # Return comprehensive analysis
+            return self._analyze_granular_confirmation(
+                instrument_key, 
+                current_obi, 
+                rolling_avg_obi_1min,
+                current_cvd_increment,
+                rolling_avg_cvd_2min,
+                instrument_data['cvd'],
+                legacy_avg_obi
+            )
             
         except Exception as e:
             print(f"❌ Error updating OBI+CVD confirmation for {instrument_key}: {e}")
             return {
                 'error': str(e),
                 'obi_current': 0.0,
-                'obi_average': 0.0,
-                'cvd_current': 0.0,
+                'obi_rolling_1min': 0.0,
+                'cvd_current_increment': 0.0,
+                'cvd_rolling_2min': 0.0,
+                'cvd_total': 0.0,
                 'confirmation': 'Error'
             }
     
-    def _analyze_confirmation(self, instrument_key: str, current_obi: float, avg_obi: float, current_cvd: float) -> Dict:
-        """Analyze OBI and CVD to provide confirmation signals."""
+    def _analyze_granular_confirmation(self, instrument_key: str, current_obi: float, 
+                                          rolling_obi_1min: float, current_cvd_increment: float,
+                                          rolling_cvd_2min: float, total_cvd: float, legacy_avg_obi: float) -> Dict:
+        """Analyze granular OBI and CVD to provide detailed confirmation signals."""
         try:
-            # OBI Analysis
-            if avg_obi > 0.3:
-                obi_signal = 'Strong Bullish'
-            elif avg_obi > 0.1:
-                obi_signal = 'Bullish'
-            elif avg_obi < -0.3:
-                obi_signal = 'Strong Bearish'
-            elif avg_obi < -0.1:
-                obi_signal = 'Bearish'
+            # Current OBI Analysis (instantaneous)
+            if current_obi > 0.5:
+                current_obi_signal = 'Strong Bullish'
+            elif current_obi > 0.2:
+                current_obi_signal = 'Bullish'
+            elif current_obi < -0.5:
+                current_obi_signal = 'Strong Bearish'
+            elif current_obi < -0.2:
+                current_obi_signal = 'Bearish'
             else:
-                obi_signal = 'Neutral'
+                current_obi_signal = 'Neutral'
             
-            # CVD Analysis
-            if current_cvd > 1000:
-                cvd_signal = 'Strong Buying'
-            elif current_cvd > 100:
-                cvd_signal = 'Buying'
-            elif current_cvd < -1000:
-                cvd_signal = 'Strong Selling'
-            elif current_cvd < -100:
-                cvd_signal = 'Selling'
+            # Rolling OBI 1-minute Analysis
+            if rolling_obi_1min > 0.3:
+                rolling_obi_signal = 'Strong Bullish'
+            elif rolling_obi_1min > 0.1:
+                rolling_obi_signal = 'Bullish'
+            elif rolling_obi_1min < -0.3:
+                rolling_obi_signal = 'Strong Bearish'
+            elif rolling_obi_1min < -0.1:
+                rolling_obi_signal = 'Bearish'
             else:
-                cvd_signal = 'Neutral'
+                rolling_obi_signal = 'Neutral'
             
-            # Combined Confirmation
-            if ('Bullish' in obi_signal and 'Buying' in cvd_signal):
+            # Current CVD Increment Analysis (tick-by-tick)
+            if current_cvd_increment > 500:
+                current_cvd_signal = 'Strong Buying'
+            elif current_cvd_increment > 50:
+                current_cvd_signal = 'Buying'
+            elif current_cvd_increment < -500:
+                current_cvd_signal = 'Strong Selling'
+            elif current_cvd_increment < -50:
+                current_cvd_signal = 'Selling'
+            else:
+                current_cvd_signal = 'Neutral'
+            
+            # Rolling CVD 2-minute Analysis
+            if rolling_cvd_2min > 200:
+                rolling_cvd_signal = 'Strong Buying'
+            elif rolling_cvd_2min > 20:
+                rolling_cvd_signal = 'Buying'
+            elif rolling_cvd_2min < -200:
+                rolling_cvd_signal = 'Strong Selling'
+            elif rolling_cvd_2min < -20:
+                rolling_cvd_signal = 'Selling'
+            else:
+                rolling_cvd_signal = 'Neutral'
+            
+            # Total CVD Analysis (cumulative)
+            if total_cvd > 1000:
+                total_cvd_signal = 'Strong Buying'
+            elif total_cvd > 100:
+                total_cvd_signal = 'Buying'
+            elif total_cvd < -1000:
+                total_cvd_signal = 'Strong Selling'
+            elif total_cvd < -100:
+                total_cvd_signal = 'Selling'
+            else:
+                total_cvd_signal = 'Neutral'
+            
+            # Combined Confirmation based on rolling averages
+            if ('Bullish' in rolling_obi_signal and 'Buying' in rolling_cvd_signal):
                 combined_confirmation = 'Strong Bullish'
-            elif ('Bearish' in obi_signal and 'Selling' in cvd_signal):
+            elif ('Bearish' in rolling_obi_signal and 'Selling' in rolling_cvd_signal):
                 combined_confirmation = 'Strong Bearish'
-            elif ('Bullish' in obi_signal or 'Buying' in cvd_signal):
+            elif ('Bullish' in rolling_obi_signal or 'Buying' in rolling_cvd_signal):
                 combined_confirmation = 'Moderate Bullish'
-            elif ('Bearish' in obi_signal or 'Selling' in cvd_signal):
+            elif ('Bearish' in rolling_obi_signal or 'Selling' in rolling_cvd_signal):
                 combined_confirmation = 'Moderate Bearish'
             else:
                 combined_confirmation = 'Neutral'
             
             return {
+                # Current tick values
                 'obi_current': float(current_obi) if current_obi is not None else 0.0,
-                'obi_average': float(avg_obi),
-                'obi_signal': obi_signal,
-                'cvd_current': float(current_cvd),
-                'cvd_signal': cvd_signal,
+                'obi_current_signal': current_obi_signal,
+                'cvd_current_increment': float(current_cvd_increment) if current_cvd_increment is not None else 0.0,
+                'cvd_current_signal': current_cvd_signal,
+                
+                # Rolling averages
+                'obi_rolling_1min': float(rolling_obi_1min),
+                'obi_rolling_signal': rolling_obi_signal,
+                'cvd_rolling_2min': float(rolling_cvd_2min),
+                'cvd_rolling_signal': rolling_cvd_signal,
+                
+                # Total accumulation
+                'cvd_total': float(total_cvd),
+                'cvd_total_signal': total_cvd_signal,
+                
+                # Legacy support
+                'obi_average': float(legacy_avg_obi),  # Keep for backward compatibility
+                'cvd_current': float(total_cvd),  # Legacy field
+                'obi_signal': rolling_obi_signal,  # Use rolling for legacy
+                'cvd_signal': rolling_cvd_signal,  # Use rolling for legacy
+                
+                # Overall confirmation
                 'combined_confirmation': combined_confirmation,
                 'tick_count': self.instrument_data[instrument_key]['tick_count'],
                 'last_update': datetime.now().strftime('%H:%M:%S')
             }
             
         except Exception as e:
-            print(f"❌ Error analyzing confirmation: {e}")
+            print(f"❌ Error analyzing granular confirmation: {e}")
             return {
                 'obi_current': 0.0,
-                'obi_average': 0.0,
-                'obi_signal': 'Error',
-                'cvd_current': 0.0,
-                'cvd_signal': 'Error',
+                'obi_current_signal': 'Error',
+                'cvd_current_increment': 0.0,
+                'cvd_current_signal': 'Error',
+                'obi_rolling_1min': 0.0,
+                'obi_rolling_signal': 'Error',
+                'cvd_rolling_2min': 0.0,
+                'cvd_rolling_signal': 'Error',
+                'cvd_total': 0.0,
+                'cvd_total_signal': 'Error',
                 'combined_confirmation': 'Error'
             }
     

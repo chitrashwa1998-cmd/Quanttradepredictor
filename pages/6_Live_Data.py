@@ -496,48 +496,101 @@ def show_live_data_page():
                             st.info("🔍 **Order Flow Analysis** - Independent of ML model predictions")
                             
                             # Create columns for OBI+CVD display
-                            obi_cvd_cols = st.columns(min(3, len(independent_obi_cvd)))
+                            obi_cvd_cols = st.columns(min(2, len(independent_obi_cvd)))
                             
                             for i, (instrument_key, obi_cvd_data) in enumerate(independent_obi_cvd.items()):
                                 display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
                                 
                                 with obi_cvd_cols[i % len(obi_cvd_cols)]:
-                                    st.markdown(f"**📊 {display_name}**")
+                                    st.markdown(f"**📊 {display_name} - Order Flow Analysis**")
                                     
-                                    # OBI Signal
-                                    obi_signal = obi_cvd_data.get('obi_signal', 'Unknown')
-                                    obi_avg = obi_cvd_data.get('obi_average', 0.0)
-                                    if 'Bullish' in obi_signal:
-                                        obi_color = "🟢"
-                                    elif 'Bearish' in obi_signal:
-                                        obi_color = "🔴"
-                                    else:
-                                        obi_color = "⚪"
+                                    # Create sub-columns for granular display
+                                    obi_col, cvd_col = st.columns(2)
                                     
-                                    st.metric(f"{obi_color} OBI", obi_signal, f"Avg: {obi_avg:.3f}")
+                                    with obi_col:
+                                        st.markdown("**🔍 OBI Analysis**")
+                                        
+                                        # Current OBI (per tick)
+                                        current_obi = obi_cvd_data.get('obi_current', 0.0)
+                                        current_obi_signal = obi_cvd_data.get('obi_current_signal', 'Unknown')
+                                        if 'Bullish' in current_obi_signal:
+                                            current_obi_color = "🟢"
+                                        elif 'Bearish' in current_obi_signal:
+                                            current_obi_color = "🔴"
+                                        else:
+                                            current_obi_color = "⚪"
+                                        
+                                        st.metric(f"{current_obi_color} Current OBI", f"{current_obi:.3f}", current_obi_signal)
+                                        
+                                        # Rolling OBI (1-minute average, resets every minute)
+                                        rolling_obi = obi_cvd_data.get('obi_rolling_1min', 0.0)
+                                        rolling_obi_signal = obi_cvd_data.get('obi_rolling_signal', 'Unknown')
+                                        if 'Bullish' in rolling_obi_signal:
+                                            rolling_obi_color = "🟢"
+                                        elif 'Bearish' in rolling_obi_signal:
+                                            rolling_obi_color = "🔴"
+                                        else:
+                                            rolling_obi_color = "⚪"
+                                        
+                                        st.metric(f"{rolling_obi_color} 1-Min Avg OBI", f"{rolling_obi:.3f}", rolling_obi_signal)
                                     
-                                    # CVD Signal  
-                                    cvd_signal = obi_cvd_data.get('cvd_signal', 'Unknown')
-                                    cvd_current = obi_cvd_data.get('cvd_current', 0.0)
-                                    if 'Buying' in cvd_signal:
-                                        cvd_color = "🟢"
-                                    elif 'Selling' in cvd_signal:
-                                        cvd_color = "🔴"
-                                    else:
-                                        cvd_color = "⚪"
+                                    with cvd_col:
+                                        st.markdown("**💹 CVD Analysis**")
+                                        
+                                        # Current CVD Increment (per tick)
+                                        current_cvd_inc = obi_cvd_data.get('cvd_current_increment', 0.0)
+                                        current_cvd_signal = obi_cvd_data.get('cvd_current_signal', 'Unknown')
+                                        if 'Buying' in current_cvd_signal:
+                                            current_cvd_color = "🟢"
+                                        elif 'Selling' in current_cvd_signal:
+                                            current_cvd_color = "🔴"
+                                        else:
+                                            current_cvd_color = "⚪"
+                                        
+                                        st.metric(f"{current_cvd_color} Current CVD", f"{current_cvd_inc:.0f}", current_cvd_signal)
+                                        
+                                        # Rolling CVD (2-minute average, resets every 2 minutes)
+                                        rolling_cvd = obi_cvd_data.get('cvd_rolling_2min', 0.0)
+                                        rolling_cvd_signal = obi_cvd_data.get('cvd_rolling_signal', 'Unknown')
+                                        if 'Buying' in rolling_cvd_signal:
+                                            rolling_cvd_color = "🟢"
+                                        elif 'Selling' in rolling_cvd_signal:
+                                            rolling_cvd_color = "🔴"
+                                        else:
+                                            rolling_cvd_color = "⚪"
+                                        
+                                        st.metric(f"{rolling_cvd_color} 2-Min Avg CVD", f"{rolling_cvd:.0f}", rolling_cvd_signal)
                                     
-                                    st.metric(f"{cvd_color} CVD", cvd_signal, f"Value: {cvd_current:.0f}")
+                                    # Combined confirmation and total CVD
+                                    col1, col2 = st.columns(2)
                                     
-                                    # Combined Signal
-                                    combined = obi_cvd_data.get('combined_confirmation', 'Unknown')
-                                    if 'Bullish' in combined:
-                                        combined_color = "🟢"
-                                    elif 'Bearish' in combined:
-                                        combined_color = "🔴"
-                                    else:
-                                        combined_color = "⚪"
+                                    with col1:
+                                        # Combined Signal
+                                        combined = obi_cvd_data.get('combined_confirmation', 'Unknown')
+                                        if 'Bullish' in combined:
+                                            combined_color = "🟢"
+                                        elif 'Bearish' in combined:
+                                            combined_color = "🔴"
+                                        else:
+                                            combined_color = "⚪"
+                                        
+                                        st.metric(f"{combined_color} Order Flow", combined, f"Ticks: {obi_cvd_data.get('tick_count', 0)}")
                                     
-                                    st.metric(f"{combined_color} Order Flow", combined, f"Ticks: {obi_cvd_data.get('tick_count', 0)}")
+                                    with col2:
+                                        # Total CVD (cumulative)
+                                        total_cvd = obi_cvd_data.get('cvd_total', 0.0)
+                                        total_cvd_signal = obi_cvd_data.get('cvd_total_signal', 'Unknown')
+                                        if 'Buying' in total_cvd_signal:
+                                            total_cvd_color = "🟢"
+                                        elif 'Selling' in total_cvd_signal:
+                                            total_cvd_color = "🔴"
+                                        else:
+                                            total_cvd_color = "⚪"
+                                        
+                                        st.metric(f"{total_cvd_color} Total CVD", f"{total_cvd:.0f}", total_cvd_signal)
+                                    
+                                    st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
+                                    st.divider()
                             
                             st.divider()
 
