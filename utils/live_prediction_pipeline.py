@@ -425,12 +425,9 @@ class LivePredictionPipeline:
                 print(f"❌ No predictions generated for {instrument_key}")
                 return
 
-            # Get current OBI+CVD confirmation status
-            obi_cvd_status = self.obi_cvd_confirmation.get_confirmation_status(instrument_key)
-            
-            # Format comprehensive prediction
+            # Format comprehensive prediction (without OBI+CVD confirmation)
             latest_prediction = self._format_comprehensive_prediction(
-                instrument_key, timestamp, all_predictions, ohlc_row, obi_cvd_status
+                instrument_key, timestamp, all_predictions, ohlc_row, None
             )
 
             self.live_predictions[instrument_key] = latest_prediction
@@ -619,7 +616,7 @@ class LivePredictionPipeline:
                             # Calculate Black-Scholes with current tick price
                             bs_results = self._calculate_black_scholes_fair_values(current_price, volatility_value)
                             
-                            # Update OBI+CVD confirmation with live tick data
+                            # Update OBI+CVD confirmation with live tick data (independent from ML predictions)
                             obi_cvd_results = self.obi_cvd_confirmation.update_confirmation(instrument_key, latest_tick)
                             
                             if bs_results.get('calculation_successful', False):
@@ -630,9 +627,6 @@ class LivePredictionPipeline:
                                     self.live_predictions[instrument_key]['bs_volatility_5min'] = volatility_value
                                     self.live_predictions[instrument_key]['bs_volatility_annualized'] = bs_results.get('annualized_volatility', volatility_value)
                                     self.live_predictions[instrument_key]['bs_last_update'] = current_time
-                                    
-                                    # Add OBI+CVD confirmation data
-                                    self.live_predictions[instrument_key]['obi_cvd_confirmation'] = obi_cvd_results
                                     
                                     # Show update every 20 iterations to avoid spam
                                     if not hasattr(self, '_bs_counter'):
@@ -788,6 +782,19 @@ class LivePredictionPipeline:
             'total_trained_models': len(trained_models),
             **model_status
         }
+
+    def get_independent_obi_cvd_status(self, instrument_key: str) -> Optional[Dict]:
+        """Get independent OBI+CVD confirmation status separate from ML predictions."""
+        return self.obi_cvd_confirmation.get_confirmation_status(instrument_key)
+
+    def get_all_independent_obi_cvd_status(self) -> Dict:
+        """Get independent OBI+CVD status for all instruments."""
+        obi_cvd_status = {}
+        for instrument_key in self.obi_cvd_confirmation.instrument_data.keys():
+            status = self.get_independent_obi_cvd_status(instrument_key)
+            if status:
+                obi_cvd_status[instrument_key] = status
+        return obi_cvd_status
 
     def get_instrument_summary(self, instrument_key: str) -> Optional[Dict]:
         """Get comprehensive summary for a specific instrument."""

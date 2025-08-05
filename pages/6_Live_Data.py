@@ -485,69 +485,70 @@ def show_live_data_page():
 
                     st.divider()
 
-                    # Get live predictions
+                    # Get live predictions and independent OBI+CVD status
                     live_predictions = st.session_state.live_prediction_pipeline.get_latest_predictions()
+                    independent_obi_cvd = st.session_state.live_prediction_pipeline.get_all_independent_obi_cvd_status()
 
                     if live_predictions:
-                        # Display predictions in a grid
-                        for instrument_key, prediction in live_predictions.items():
-                            display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-
-                            # OBI+CVD Confirmation Display
-                            if 'obi_cvd_confirmation' in prediction:
-                                obi_cvd = prediction['obi_cvd_confirmation']
-
-                                col_obi, col_cvd, col_combined = st.columns(3)
-
-                                with col_obi:
-                                    obi_avg = obi_cvd.get('obi_average', 0.0)
-                                    obi_signal = obi_cvd.get('obi_signal', 'Unknown')
-
+                        # Independent OBI+CVD Market Analysis Section
+                        if independent_obi_cvd:
+                            st.subheader("📈 Independent OBI+CVD Market Analysis")
+                            st.info("🔍 **Order Flow Analysis** - Independent of ML model predictions")
+                            
+                            # Create columns for OBI+CVD display
+                            obi_cvd_cols = st.columns(min(3, len(independent_obi_cvd)))
+                            
+                            for i, (instrument_key, obi_cvd_data) in enumerate(independent_obi_cvd.items()):
+                                display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+                                
+                                with obi_cvd_cols[i % len(obi_cvd_cols)]:
+                                    st.markdown(f"**📊 {display_name}**")
+                                    
+                                    # OBI Signal
+                                    obi_signal = obi_cvd_data.get('obi_signal', 'Unknown')
+                                    obi_avg = obi_cvd_data.get('obi_average', 0.0)
                                     if 'Bullish' in obi_signal:
                                         obi_color = "🟢"
                                     elif 'Bearish' in obi_signal:
                                         obi_color = "🔴"
                                     else:
                                         obi_color = "⚪"
-
-                                    st.metric(
-                                        label=f"{obi_color} OBI Signal",
-                                        value=obi_signal,
-                                        delta=f"Avg: {obi_avg:.3f}"
-                                    )
-
-                                with col_cvd:
-                                    cvd_current = obi_cvd.get('cvd_current', 0.0)
-                                    cvd_signal = obi_cvd.get('cvd_signal', 'Unknown')
-
+                                    
+                                    st.metric(f"{obi_color} OBI", obi_signal, f"Avg: {obi_avg:.3f}")
+                                    
+                                    # CVD Signal  
+                                    cvd_signal = obi_cvd_data.get('cvd_signal', 'Unknown')
+                                    cvd_current = obi_cvd_data.get('cvd_current', 0.0)
                                     if 'Buying' in cvd_signal:
                                         cvd_color = "🟢"
                                     elif 'Selling' in cvd_signal:
                                         cvd_color = "🔴"
                                     else:
                                         cvd_color = "⚪"
-
-                                    st.metric(
-                                        label=f"{cvd_color} CVD Signal",
-                                        value=cvd_signal,
-                                        delta=f"Value: {cvd_current:.0f}"
-                                    )
-
-                                with col_combined:
-                                    combined = obi_cvd.get('combined_confirmation', 'Unknown')
-
+                                    
+                                    st.metric(f"{cvd_color} CVD", cvd_signal, f"Value: {cvd_current:.0f}")
+                                    
+                                    # Combined Signal
+                                    combined = obi_cvd_data.get('combined_confirmation', 'Unknown')
                                     if 'Bullish' in combined:
                                         combined_color = "🟢"
                                     elif 'Bearish' in combined:
                                         combined_color = "🔴"
                                     else:
                                         combined_color = "⚪"
+                                    
+                                    st.metric(f"{combined_color} Order Flow", combined, f"Ticks: {obi_cvd_data.get('tick_count', 0)}")
+                            
+                            st.divider()
 
-                                    st.metric(
-                                        label=f"{combined_color} Combined Confirmation",
-                                        value=combined,
-                                        delta=f"Ticks: {obi_cvd.get('tick_count', 0)}"
-                                    )
+                        # Display ML model predictions in a grid
+                        for instrument_key, prediction in live_predictions.items():
+                            display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+
+                            # Remove old OBI+CVD display code since it's now independent
+                            # if 'obi_cvd_confirmation' in prediction:
+                                # ML Model predictions display (OBI+CVD now shown independently above)
+                            st.markdown(f"**🤖 ML Model Predictions - {display_name}**")
 
                             # Show prediction details in expandable sections
                             with st.expander(f"📊 Prediction Details - {display_name}", expanded=False):
@@ -573,36 +574,8 @@ def show_live_data_page():
 
                                     st.write(f"*Last updated: {prediction.get('bs_last_update', 'Unknown')}*")
 
-                                # Show OBI+CVD Confirmation Details
-                                if 'obi_cvd_confirmation' in prediction:
-                                    st.subheader("📈 OBI+CVD Confirmation Analysis")
-                                    obi_cvd = prediction['obi_cvd_confirmation']
-
-                                    # Create columns for detailed view
-                                    obi_col, cvd_col = st.columns(2)
-
-                                    with obi_col:
-                                        st.write("**Order Book Imbalance (OBI):**")
-                                        st.write(f"• Current OBI: {obi_cvd.get('obi_current', 0):.3f}")
-                                        st.write(f"• Average OBI (60s): {obi_cvd.get('obi_average', 0):.3f}")
-                                        st.write(f"• OBI Signal: {obi_cvd.get('obi_signal', 'Unknown')}")
-
-                                        # OBI explanation
-                                        st.caption("OBI ranges from -1 (only sellers) to +1 (only buyers)")
-
-                                    with cvd_col:
-                                        st.write("**Cumulative Volume Delta (CVD):**")
-                                        st.write(f"• Current CVD: {obi_cvd.get('cvd_current', 0):.0f}")
-                                        st.write(f"• CVD Signal: {obi_cvd.get('cvd_signal', 'Unknown')}")
-                                        st.write(f"• Combined Confirmation: {obi_cvd.get('combined_confirmation', 'Unknown')}")
-
-                                        # CVD explanation
-                                        st.caption("CVD accumulates buy volume (+) vs sell volume (-)")
-
-                                    st.write(f"**Analysis:** Based on {obi_cvd.get('tick_count', 0)} ticks processed")
-                                    st.write(f"*Last updated: {obi_cvd.get('last_update', 'Unknown')}*")
-
-                                    st.divider()
+                                # OBI+CVD is now shown independently above, removed from here
+                                st.info("📈 Order flow analysis (OBI+CVD) is displayed independently above")
 
 
                                 # Get detailed summary
