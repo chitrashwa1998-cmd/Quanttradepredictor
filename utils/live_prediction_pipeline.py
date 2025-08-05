@@ -8,6 +8,7 @@ from collections import deque
 from utils.live_data_manager import LiveDataManager
 from models.model_manager import ModelManager
 from features.direction_technical_indicators import DirectionTechnicalIndicators
+from utils.obi_cvd_confirmation import OBICVDConfirmation
 import pytz
 import streamlit as st
 
@@ -39,6 +40,9 @@ class LivePredictionPipeline:
         
         # Candle completion tracking
         self.last_candle_timestamps = {}  # Track last processed candle for each instrument
+        
+        # OBI+CVD Confirmation
+        self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
 
     def start_pipeline(self) -> bool:
         """Start the live prediction pipeline."""
@@ -139,6 +143,9 @@ class LivePredictionPipeline:
         self.live_predictions = {}
         self.prediction_history = {}
         self.latest_volatility_predictions = {}
+        
+        # Reset OBI+CVD confirmation data
+        self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
 
         print("🔌 Live prediction pipeline stopped")
         print("🔧 Continuous Black-Scholes calculator stopped")
@@ -418,9 +425,12 @@ class LivePredictionPipeline:
                 print(f"❌ No predictions generated for {instrument_key}")
                 return
 
+            # Get current OBI+CVD confirmation status
+            obi_cvd_status = self.obi_cvd_confirmation.get_confirmation_status(instrument_key)
+            
             # Format comprehensive prediction
             latest_prediction = self._format_comprehensive_prediction(
-                instrument_key, timestamp, all_predictions, ohlc_row
+                instrument_key, timestamp, all_predictions, ohlc_row, obi_cvd_status
             )
 
             self.live_predictions[instrument_key] = latest_prediction
@@ -609,6 +619,9 @@ class LivePredictionPipeline:
                             # Calculate Black-Scholes with current tick price
                             bs_results = self._calculate_black_scholes_fair_values(current_price, volatility_value)
                             
+                            # Update OBI+CVD confirmation with live tick data
+                            obi_cvd_results = self.obi_cvd_confirmation.update_confirmation(instrument_key, latest_tick)
+                            
                             if bs_results.get('calculation_successful', False):
                                 # Update the live predictions with fresh Black-Scholes data
                                 if instrument_key in self.live_predictions:
@@ -618,6 +631,9 @@ class LivePredictionPipeline:
                                     self.live_predictions[instrument_key]['bs_volatility_annualized'] = bs_results.get('annualized_volatility', volatility_value)
                                     self.live_predictions[instrument_key]['bs_last_update'] = current_time
                                     
+                                    # Add OBI+CVD confirmation data
+                                    self.live_predictions[instrument_key]['obi_cvd_confirmation'] = obi_cvd_results
+                                    
                                     # Show update every 20 iterations to avoid spam
                                     if not hasattr(self, '_bs_counter'):
                                         self._bs_counter = 0
@@ -626,7 +642,8 @@ class LivePredictionPipeline:
                                     if self._bs_counter % 20 == 0:
                                         display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
                                         annualized_vol = bs_results.get('annualized_volatility', volatility_value)
-                                        print(f"🔧 Black-Scholes updated: {display_name} @ ₹{current_price:.2f} (5min: {volatility_value:.4f} → Annual: {annualized_vol:.2f})")
+                                        obi_signal = obi_cvd_results.get('combined_confirmation', 'Unknown')
+                                        print(f"🔧 Live Update: {display_name} @ ₹{current_price:.2f} | Vol: {volatility_value:.4f}→{annualized_vol:.2f} | OBI+CVD: {obi_signal}")
                             
                     except Exception as e:
                         print(f"❌ Error calculating Black-Scholes for {instrument_key}: {e}")
@@ -692,7 +709,7 @@ class LivePredictionPipeline:
             }
 
     def _format_comprehensive_prediction(self, instrument_key: str, timestamp: pd.Timestamp, 
-                                        all_predictions: Dict, ohlc_row: pd.Series) -> Dict:
+                                        all_predictions: Dict, ohlc_row: pd.Series, obi_cvd_status: Optional[Dict] = None) -> Dict:
         """Format comprehensive prediction data from all models."""
         # Ensure timestamp is timezone-naive
         if hasattr(timestamp, 'tz_localize'):
@@ -716,6 +733,10 @@ class LivePredictionPipeline:
         # Add predictions from each model
         for model_name, prediction_data in all_predictions.items():
             formatted_prediction[model_name] = prediction_data
+
+        # Add OBI+CVD confirmation if available
+        if obi_cvd_status:
+            formatted_prediction['obi_cvd_confirmation'] = obi_cvd_status
 
         # Legacy support - use direction as primary if available
         if 'direction' in all_predictions:
@@ -757,6 +778,8 @@ class LivePredictionPipeline:
             'instruments_with_predictions': len(self.live_predictions),
             'instruments_with_volatility': len(self.latest_volatility_predictions),
             'black_scholes_active': len(self.latest_volatility_predictions) > 0,
+            'obi_cvd_active': len(self.obi_cvd_confirmation.instrument_data) > 0,
+            'instruments_with_obi_cvd': len(self.obi_cvd_confirmation.instrument_data),
             'total_ticks_received': connection_status['total_ticks_received'],
             'last_prediction_time': max(
                 [pred['generated_at'] for pred in self.live_predictions.values()]

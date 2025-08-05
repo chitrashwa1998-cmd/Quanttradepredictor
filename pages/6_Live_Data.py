@@ -52,14 +52,14 @@ def show_live_data_page():
     with col1:
         st.subheader("📱 Upstox API Credentials")
         access_token = st.text_input(
-            "Access Token", 
-            type="password", 
+            "Access Token",
+            type="password",
             help="Your Upstox access token",
             key="upstox_access_token"
         )
         api_key = st.text_input(
-            "API Key", 
-            type="password", 
+            "API Key",
+            type="password",
             help="Your Upstox API key",
             key="upstox_api_key"
         )
@@ -108,7 +108,7 @@ def show_live_data_page():
                 key="hist_access_token"
             )
             hist_api_key = st.text_input(
-                "API Key", 
+                "API Key",
                 type="password",
                 help="Your Upstox API key for historical data",
                 key="hist_api_key"
@@ -149,7 +149,7 @@ def show_live_data_page():
             st.write("**Data Parameters**")
             interval_options = {
                 "1 minute": "1minute",
-                "5 minutes": "5minute", 
+                "5 minutes": "5minute",
                 "15 minutes": "15minute",
                 "30 minutes": "30minute",
                 "1 hour": "1hour",
@@ -213,7 +213,7 @@ def show_live_data_page():
                                     # Rename columns to standard format
                                     df = df.rename(columns={
                                         'open': 'Open',
-                                        'high': 'High', 
+                                        'high': 'High',
                                         'low': 'Low',
                                         'close': 'Close',
                                         'volume': 'Volume'
@@ -327,7 +327,7 @@ def show_live_data_page():
 
         **To enable continuation:**
         1. Go to **Data Upload** page
-        2. Upload your historical data  
+        2. Upload your historical data
         3. Save it with name: `livenifty50` (for Nifty 50)
         4. Return here and connect live data
         5. System will automatically detect and use your historical data
@@ -449,7 +449,7 @@ def show_live_data_page():
             overview_tab, predictions_tab, charts_tab, tick_details_tab, export_tab = st.tabs([
                 "📊 Market Overview",
                 "🎯 Live Predictions",
-                "📈 Live Charts", 
+                "📈 Live Charts",
                 "🔍 Tick Details",
                 "💾 Export Data"
             ])
@@ -493,126 +493,189 @@ def show_live_data_page():
                         for instrument_key, prediction in live_predictions.items():
                             display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
 
-                            # Get detailed summary
-                            summary = st.session_state.live_prediction_pipeline.get_instrument_summary(instrument_key)
+                            # OBI+CVD Confirmation Display
+                            if 'obi_cvd_confirmation' in prediction:
+                                obi_cvd = prediction['obi_cvd_confirmation']
 
-                            with st.container():
-                                col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
+                                col_obi, col_cvd, col_combined = st.columns(3)
 
-                                with col1:
-                                    st.markdown(f"**📊 {display_name}**")
+                                with col_obi:
+                                    obi_avg = obi_cvd.get('obi_average', 0.0)
+                                    obi_signal = obi_cvd.get('obi_signal', 'Unknown')
 
-                                    # Direction prediction
-                                    if 'direction' in prediction:
-                                        direction_data = prediction.get('direction', {})
-                                        if isinstance(direction_data, dict):
-                                            direction = direction_data.get('prediction', 'Unknown')
-                                            confidence = direction_data.get('confidence', 0.5)
-                                        else:
-                                            direction = prediction.get('direction', 'Unknown')
-                                            confidence = prediction.get('confidence', 0.5)
+                                    if 'Bullish' in obi_signal:
+                                        obi_color = "🟢"
+                                    elif 'Bearish' in obi_signal:
+                                        obi_color = "🔴"
+                                    else:
+                                        obi_color = "⚪"
 
-                                        direction_color = "🟢" if direction == 'Bullish' else "🔴"
-                                        st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
+                                    st.metric(
+                                        label=f"{obi_color} OBI Signal",
+                                        value=obi_signal,
+                                        delta=f"Avg: {obi_avg:.3f}"
+                                    )
 
-                                with col2:
-                                    # Volatility prediction
-                                    if 'volatility' in prediction:
-                                        vol_data = prediction['volatility']
-                                        vol_level = vol_data.get('prediction', 'Unknown')
-                                        vol_value = vol_data.get('value', 0.0)
-                                        vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
-                                        st.markdown(f"**{vol_color} Volatility:** {vol_level}")
-                                        st.markdown(f"**📊 Predicted Vol:** {vol_value:.4f} ({vol_value*100:.2f}%)")
+                                with col_cvd:
+                                    cvd_current = obi_cvd.get('cvd_current', 0.0)
+                                    cvd_signal = obi_cvd.get('cvd_signal', 'Unknown')
 
-                                    # Profit probability
-                                    if 'profit_probability' in prediction:
-                                        profit_data = prediction['profit_probability']
-                                        profit_level = profit_data.get('prediction', 'Unknown')
-                                        profit_conf = profit_data.get('confidence', 0.5)
-                                        profit_color = "💰" if profit_level == 'High' else "⚠️"
-                                        st.markdown(f"**{profit_color} Profit:** {profit_level} ({profit_conf:.1%})")
+                                    if 'Buying' in cvd_signal:
+                                        cvd_color = "🟢"
+                                    elif 'Selling' in cvd_signal:
+                                        cvd_color = "🔴"
+                                    else:
+                                        cvd_color = "⚪"
 
-                                with col3:
-                                    # Reversal prediction
-                                    if 'reversal' in prediction:
-                                        reversal_data = prediction['reversal']
-                                        reversal_expected = reversal_data.get('prediction', 'Unknown')
-                                        reversal_conf = reversal_data.get('confidence', 0.5)
-                                        reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
-                                        st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
+                                    st.metric(
+                                        label=f"{cvd_color} CVD Signal",
+                                        value=cvd_signal,
+                                        delta=f"Value: {cvd_current:.0f}"
+                                    )
 
-                                    # Models used
-                                    models_used = prediction.get('models_used', [])
-                                    st.markdown(f"**📋 Active Models:** {len(models_used)}/4")
+                                with col_combined:
+                                    combined = obi_cvd.get('combined_confirmation', 'Unknown')
 
-                                with col4:
-                                    pred_time = prediction['generated_at'].strftime('%H:%M:%S')
-                                    candle_time = prediction['timestamp'].strftime('%H:%M:%S')
-                                    st.markdown(f"**🕐 Candle Close Time:** {candle_time}")
-                                    st.markdown(f"**⏰ Prediction Generated:** {pred_time}")
-                                    st.markdown(f"**💰 Candle Close Price:** ₹{prediction['current_price']:.2f}")
-                                    st.markdown(f"**📊 Volume:** {prediction['volume']:,}")
-                                    st.markdown(f"**🤖 Models Used:** {len(prediction['models_used'])}")
+                                    if 'Bullish' in combined:
+                                        combined_color = "🟢"
+                                    elif 'Bearish' in combined:
+                                        combined_color = "🔴"
+                                    else:
+                                        combined_color = "⚪"
 
-                                    # Show prediction type
-                                    if prediction.get('candle_close_prediction'):
-                                        st.success("✅ Complete 5-minute candle prediction")
+                                    st.metric(
+                                        label=f"{combined_color} Combined Confirmation",
+                                        value=combined,
+                                        delta=f"Ticks: {obi_cvd.get('tick_count', 0)}"
+                                    )
+
+                            # Show prediction details in expandable sections
+                            with st.expander(f"📊 Prediction Details - {display_name}", expanded=False):
+
+                                # Show Black-Scholes information if available
+                                if 'black_scholes' in prediction and prediction['black_scholes'].get('calculation_successful', False):
+                                    st.subheader("⚡ Black-Scholes Fair Values")
+                                    bs_data = prediction['black_scholes']
+
+                                    # Quick summary
+                                    if 'quick_summary' in bs_data:
+                                        quick = bs_data['quick_summary']
+                                        st.write(f"**Index Fair Value:** ₹{quick.get('index_fair_value', 0):.2f}")
+                                        st.write(f"**Volatility (Annualized):** {bs_data.get('annualized_volatility', 0):.2f}%")
+                                        st.write(f"**Current Price:** ₹{prediction.get('bs_current_price', 0):.2f}")
+
+                                        # Options summary
+                                        if 'option_summary' in quick:
+                                            opt_summary = quick['option_summary']
+                                            st.write("**Options Quick View:**")
+                                            for strike_info in opt_summary[:3]:  # Show first 3 strikes
+                                                st.write(f"  - Strike {strike_info['strike']}: Call ₹{strike_info['call_premium']:.2f}, Put ₹{strike_info['put_premium']:.2f}")
+
+                                    st.write(f"*Last updated: {prediction.get('bs_last_update', 'Unknown')}*")
+
+                                # Show OBI+CVD Confirmation Details
+                                if 'obi_cvd_confirmation' in prediction:
+                                    st.subheader("📈 OBI+CVD Confirmation Analysis")
+                                    obi_cvd = prediction['obi_cvd_confirmation']
+
+                                    # Create columns for detailed view
+                                    obi_col, cvd_col = st.columns(2)
+
+                                    with obi_col:
+                                        st.write("**Order Book Imbalance (OBI):**")
+                                        st.write(f"• Current OBI: {obi_cvd.get('obi_current', 0):.3f}")
+                                        st.write(f"• Average OBI (60s): {obi_cvd.get('obi_average', 0):.3f}")
+                                        st.write(f"• OBI Signal: {obi_cvd.get('obi_signal', 'Unknown')}")
+
+                                        # OBI explanation
+                                        st.caption("OBI ranges from -1 (only sellers) to +1 (only buyers)")
+
+                                    with cvd_col:
+                                        st.write("**Cumulative Volume Delta (CVD):**")
+                                        st.write(f"• Current CVD: {obi_cvd.get('cvd_current', 0):.0f}")
+                                        st.write(f"• CVD Signal: {obi_cvd.get('cvd_signal', 'Unknown')}")
+                                        st.write(f"• Combined Confirmation: {obi_cvd.get('combined_confirmation', 'Unknown')}")
+
+                                        # CVD explanation
+                                        st.caption("CVD accumulates buy volume (+) vs sell volume (-)")
+
+                                    st.write(f"**Analysis:** Based on {obi_cvd.get('tick_count', 0)} ticks processed")
+                                    st.write(f"*Last updated: {obi_cvd.get('last_update', 'Unknown')}*")
+
+                                    st.divider()
+
+
+                                # Get detailed summary
+                                summary = st.session_state.live_prediction_pipeline.get_instrument_summary(instrument_key)
+
+                                with st.container():
+                                    col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
+
+                                    with col1:
+                                        st.markdown(f"**📊 {display_name}**")
+
+                                        # Direction prediction
+                                        if 'direction' in prediction:
+                                            direction_data = prediction.get('direction', {})
+                                            if isinstance(direction_data, dict):
+                                                direction = direction_data.get('prediction', 'Unknown')
+                                                confidence = direction_data.get('confidence', 0.5)
+                                            else:
+                                                direction = prediction.get('direction', 'Unknown')
+                                                confidence = prediction.get('confidence', 0.5)
+
+                                            direction_color = "🟢" if direction == 'Bullish' else "🔴"
+                                            st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
+
+                                    with col2:
+                                        # Volatility prediction
+                                        if 'volatility' in prediction:
+                                            vol_data = prediction['volatility']
+                                            vol_level = vol_data.get('prediction', 'Unknown')
+                                            vol_value = vol_data.get('value', 0.0)
+                                            vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
+                                            st.markdown(f"**{vol_color} Volatility:** {vol_level}")
+                                            st.markdown(f"**📊 Predicted Vol:** {vol_value:.4f} ({vol_value*100:.2f}%)")
+
+                                        # Profit probability
+                                        if 'profit_probability' in prediction:
+                                            profit_data = prediction['profit_probability']
+                                            profit_level = profit_data.get('prediction', 'Unknown')
+                                            profit_conf = profit_data.get('confidence', 0.5)
+                                            profit_color = "💰" if profit_level == 'High' else "⚠️"
+                                            st.markdown(f"**{profit_color} Profit:** {profit_level} ({profit_conf:.1%})")
+
+                                    with col3:
+                                        # Reversal prediction
+                                        if 'reversal' in prediction:
+                                            reversal_data = prediction['reversal']
+                                            reversal_expected = reversal_data.get('prediction', 'Unknown')
+                                            reversal_conf = reversal_data.get('confidence', 0.5)
+                                            reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
+                                            st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
+
+                                        # Models used
+                                        models_used = prediction.get('models_used', [])
+                                        st.markdown(f"**📋 Active Models:** {len(models_used)}/4")
+
+                                    with col4:
+                                        pred_time = prediction['generated_at'].strftime('%H:%M:%S')
+                                        candle_time = prediction['timestamp'].strftime('%H:%M:%S')
+                                        st.markdown(f"**🕐 Candle Close Time:** {candle_time}")
+                                        st.markdown(f"**⏰ Prediction Generated:** {pred_time}")
+                                        st.markdown(f"**💰 Candle Close Price:** ₹{prediction['current_price']:.2f}")
+                                        st.markdown(f"**📊 Volume:** {prediction['volume']:,}")
+                                        st.markdown(f"**🤖 Models Used:** {len(prediction['models_used'])}")
+
+                                        # Show prediction type
+                                        if prediction.get('candle_close_prediction'):
+                                            st.success("✅ Complete 5-minute candle prediction")
 
                                 # Show prediction timestamp
                                 time_ago = datetime.now() - prediction['generated_at']
                                 st.caption(f"Generated {time_ago.total_seconds():.0f}s ago")
 
-                                # Black-Scholes Fair Values Section
-                                if 'black_scholes' in prediction and prediction['black_scholes'].get('calculation_successful'):
-                                    st.markdown("---")
-                                    st.markdown("**🔧 Black-Scholes Fair Values (Live)**")
-                                    
-                                    bs_data = prediction['black_scholes']
-                                    current_price = prediction.get('bs_current_price', prediction['current_price'])
-                                    vol_5min = prediction.get('bs_volatility_5min', 0)
-                                    vol_annual = prediction.get('bs_volatility_annualized', 0)
-                                    
-                                    # Display volatility conversion
-                                    col1, col2, col3 = st.columns(3)
-                                    with col1:
-                                        st.metric("Current Price", f"₹{current_price:.2f}")
-                                    with col2:
-                                        st.metric("5-min Volatility", f"{vol_5min:.4f}")
-                                    with col3:
-                                        st.metric("Annualized Vol", f"{vol_annual:.2f}")
-                                    
-                                    # Quick summary of options fair values
-                                    if 'quick_summary' in bs_data:
-                                        quick_sum = bs_data['quick_summary']
-                                        st.markdown("**📊 Options Fair Values (Next Expiry)**")
-                                        
-                                        options_cols = st.columns(len(quick_sum.get('options', [])))
-                                        for i, option in enumerate(quick_sum.get('options', [])):
-                                            with options_cols[i]:
-                                                strike = option['strike']
-                                                option_type = option['type']
-                                                call_fv = option['call_fair_value']
-                                                put_fv = option['put_fair_value']
-                                                
-                                                st.markdown(f"**{strike} {option_type}**")
-                                                st.write(f"Call: ₹{call_fv}")
-                                                st.write(f"Put: ₹{put_fv}")
-                                    
-                                    # Show days to expiry
-                                    if 'quick_summary' in bs_data:
-                                        days_to_expiry = bs_data['quick_summary'].get('days_to_expiry', 0)
-                                        expiry_date = bs_data['quick_summary'].get('nearest_expiry', 'N/A')
-                                        st.caption(f"Expiry: {expiry_date} ({days_to_expiry} days remaining)")
-                                    
-                                    # Last update timestamp
-                                    if 'bs_last_update' in prediction:
-                                        bs_time_ago = datetime.now() - prediction['bs_last_update']
-                                        st.caption(f"Black-Scholes updated {bs_time_ago.total_seconds():.0f}s ago")
 
-                                elif prediction.get('has_volatility_for_bs'):
-                                    st.info("🔧 Black-Scholes calculations will appear when volatility is available")
-                                
                                 st.divider()
 
                         # Auto-refresh toggle
