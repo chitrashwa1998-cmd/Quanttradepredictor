@@ -33,10 +33,6 @@ class LiveDataManager:
         
         # Continuation tracking
         self.seeded_instruments = {}  # Track which instruments were seeded from database
-        
-        # Instrument routing - define which instruments need OHLC vs raw ticks only
-        self.ml_model_instruments = {"NSE_INDEX|Nifty 50"}  # Instruments that need OHLC for ML models
-        self.obi_cvd_only_instruments = {"NSE_FO|NIFTY28AUGFUT"}  # Instruments that only need raw ticks for OBI+CVD
 
     def on_tick_received(self, tick_data: Dict):
         """Handle incoming tick data."""
@@ -47,22 +43,15 @@ class LiveDataManager:
             # Initialize buffer for new instrument
             if instrument_key not in self.tick_buffer:
                 self.tick_buffer[instrument_key] = deque(maxlen=self.buffer_size)
-                
-                # Only initialize OHLC data for ML model instruments
-                if instrument_key in self.ml_model_instruments:
-                    self.ohlc_data[instrument_key] = pd.DataFrame()
-                    print(f"📊 OHLC tracking enabled for ML instrument: {instrument_key}")
-                elif instrument_key in self.obi_cvd_only_instruments:
-                    print(f"🎯 Raw tick tracking only for OBI+CVD instrument: {instrument_key}")
+                self.ohlc_data[instrument_key] = pd.DataFrame()
 
-            # Add tick to buffer (all instruments get tick buffering)
+            # Add tick to buffer
             self.tick_buffer[instrument_key].append(tick_data)
             self.total_ticks_received += 1
             self.last_update_time = timestamp
 
-            # Update OHLC data ONLY for ML model instruments
-            if (instrument_key in self.ml_model_instruments and 
-                len(self.tick_buffer[instrument_key]) >= 5):
+            # Update OHLC data if we have enough ticks
+            if len(self.tick_buffer[instrument_key]) >= 5:
                 self.update_ohlc_data(instrument_key)
 
         except Exception as e:
@@ -249,15 +238,11 @@ class LiveDataManager:
 
     def subscribe_instruments(self, instrument_keys: List[str], mode: str = "full") -> bool:
         """Subscribe to instruments for live data with automatic database seeding."""
-        # Only seed instruments that need OHLC data for ML models
+        # First, try to seed each instrument from database
         for instrument_key in instrument_keys:
-            if instrument_key in self.ml_model_instruments:
-                print(f"🌱 Seeding ML instrument: {instrument_key}")
-                self.seed_live_data_from_database(instrument_key)
-            elif instrument_key in self.obi_cvd_only_instruments:
-                print(f"🎯 OBI+CVD instrument (no seeding needed): {instrument_key}")
+            self.seed_live_data_from_database(instrument_key)
         
-        # Subscribe for live updates (all instruments)
+        # Then subscribe for live updates
         return self.ws_client.subscribe(instrument_keys, mode)
 
     def unsubscribe_instruments(self, instrument_keys: List[str]) -> bool:
@@ -266,10 +251,6 @@ class LiveDataManager:
 
     def get_live_ohlc(self, instrument_key: str, rows: int = 100) -> Optional[pd.DataFrame]:
         """Get latest OHLC data for an instrument."""
-        if instrument_key in self.obi_cvd_only_instruments:
-            print(f"⚠️ No OHLC data available for OBI+CVD-only instrument: {instrument_key}")
-            return None
-        
         if instrument_key in self.ohlc_data:
             ohlc = self.ohlc_data[instrument_key]
             return ohlc.tail(rows) if len(ohlc) > 0 else None
@@ -303,18 +284,13 @@ class LiveDataManager:
             if ticks:
                 latest_tick = ticks[-1]
                 ohlc_rows = len(self.ohlc_data.get(instrument_key, pd.DataFrame()))
-                
-                # Determine instrument purpose
-                purpose = "ML Models + OHLC" if instrument_key in self.ml_model_instruments else "OBI+CVD Only"
-                
                 stats[instrument_key] = {
                     'tick_count': len(ticks),
                     'ohlc_rows': ohlc_rows,
                     'latest_price': latest_tick.get('ltp', 0),
                     'latest_volume': latest_tick.get('volume', 0),
                     'change_percent': latest_tick.get('change_percent', 0),
-                    'last_update': latest_tick.get('timestamp'),
-                    'purpose': purpose
+                    'last_update': latest_tick.get('timestamp')
                 }
         return stats
 
