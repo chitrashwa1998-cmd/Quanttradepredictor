@@ -388,7 +388,7 @@ def show_live_data_page():
             st.rerun()
 
     with col4:
-        auto_refresh = st.toggle("🔄 Auto Refresh", value=False)
+        auto_refresh = st.toggle("🔄 Auto Refresh", value=False, key="auto_refresh_main")
 
 
 
@@ -494,22 +494,22 @@ def show_live_data_page():
                         if independent_obi_cvd:
                             st.subheader("📈 Independent OBI+CVD Market Analysis")
                             st.info("🔍 **Order Flow Analysis** - Independent of ML model predictions")
-                            
+
                             # Create columns for OBI+CVD display
                             obi_cvd_cols = st.columns(min(2, len(independent_obi_cvd)))
-                            
+
                             for i, (instrument_key, obi_cvd_data) in enumerate(independent_obi_cvd.items()):
                                 display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-                                
+
                                 with obi_cvd_cols[i % len(obi_cvd_cols)]:
                                     st.markdown(f"**📊 {display_name} - Order Flow Analysis**")
-                                    
+
                                     # Create sub-columns for granular display
                                     obi_col, cvd_col = st.columns(2)
-                                    
+
                                     with obi_col:
                                         st.markdown("**🔍 OBI Analysis**")
-                                        
+
                                         # Current OBI (per tick)
                                         current_obi = obi_cvd_data.get('obi_current', 0.0)
                                         current_obi_signal = obi_cvd_data.get('obi_current_signal', 'Unknown')
@@ -519,9 +519,9 @@ def show_live_data_page():
                                             current_obi_color = "🔴"
                                         else:
                                             current_obi_color = "⚪"
-                                        
+
                                         st.metric(f"{current_obi_color} Current OBI", f"{current_obi:.3f}", current_obi_signal)
-                                        
+
                                         # Rolling OBI (1-minute average, resets every minute)
                                         rolling_obi = obi_cvd_data.get('obi_rolling_1min', 0.0)
                                         rolling_obi_signal = obi_cvd_data.get('obi_rolling_signal', 'Unknown')
@@ -531,12 +531,12 @@ def show_live_data_page():
                                             rolling_obi_color = "🔴"
                                         else:
                                             rolling_obi_color = "⚪"
-                                        
+
                                         st.metric(f"{rolling_obi_color} 1-Min Avg OBI", f"{rolling_obi:.3f}", rolling_obi_signal)
-                                    
+
                                     with cvd_col:
                                         st.markdown("**💹 CVD Analysis**")
-                                        
+
                                         # Current CVD Increment (per tick)
                                         current_cvd_inc = obi_cvd_data.get('cvd_current_increment', 0.0)
                                         current_cvd_signal = obi_cvd_data.get('cvd_current_signal', 'Unknown')
@@ -546,9 +546,9 @@ def show_live_data_page():
                                             current_cvd_color = "🔴"
                                         else:
                                             current_cvd_color = "⚪"
-                                        
+
                                         st.metric(f"{current_cvd_color} Current CVD", f"{current_cvd_inc:.0f}", current_cvd_signal)
-                                        
+
                                         # Rolling CVD (2-minute average, resets every 2 minutes)
                                         rolling_cvd = obi_cvd_data.get('cvd_rolling_2min', 0.0)
                                         rolling_cvd_signal = obi_cvd_data.get('cvd_rolling_signal', 'Unknown')
@@ -558,12 +558,12 @@ def show_live_data_page():
                                             rolling_cvd_color = "🔴"
                                         else:
                                             rolling_cvd_color = "⚪"
-                                        
+
                                         st.metric(f"{rolling_cvd_color} 2-Min Avg CVD", f"{rolling_cvd:.0f}", rolling_cvd_signal)
-                                    
+
                                     # Combined confirmation and total CVD
                                     col1, col2 = st.columns(2)
-                                    
+
                                     with col1:
                                         # Combined Signal
                                         combined = obi_cvd_data.get('combined_confirmation', 'Unknown')
@@ -573,9 +573,9 @@ def show_live_data_page():
                                             combined_color = "🔴"
                                         else:
                                             combined_color = "⚪"
-                                        
+
                                         st.metric(f"{combined_color} Order Flow", combined, f"Ticks: {obi_cvd_data.get('tick_count', 0)}")
-                                    
+
                                     with col2:
                                         # Total CVD (cumulative)
                                         total_cvd = obi_cvd_data.get('cvd_total', 0.0)
@@ -586,50 +586,77 @@ def show_live_data_page():
                                             total_cvd_color = "🔴"
                                         else:
                                             total_cvd_color = "⚪"
-                                        
+
                                         st.metric(f"{total_cvd_color} Total CVD", f"{total_cvd:.0f}", total_cvd_signal)
-                                    
+
                                     st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
                                     st.divider()
-                            
+
                             st.divider()
 
                         # Display ML model predictions in a grid
                         for instrument_key, prediction in live_predictions.items():
                             display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
 
-                            # Remove old OBI+CVD display code since it's now independent
-                            # if 'obi_cvd_confirmation' in prediction:
-                                # ML Model predictions display (OBI+CVD now shown independently above)
+                            # Show Black-Scholes information if available
+                            if 'black_scholes' in prediction:
+                                bs_data = prediction['black_scholes']
+                                if bs_data and bs_data.get('calculation_successful', False):
+                                    st.subheader("⚡ Black-Scholes Fair Values")
+
+                                    # Current price and volatility info
+                                    current_price = prediction.get('bs_current_price', prediction.get('current_price', 0))
+                                    vol_5min = bs_data.get('raw_volatility_5min', 0)
+                                    vol_annualized = bs_data.get('annualized_volatility', 0)
+
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("Current Price", f"₹{current_price:.2f}")
+                                    with col2:
+                                        st.metric("5-Min Volatility", f"{vol_5min:.6f}")
+                                    with col3:
+                                        st.metric("Annualized Vol", f"{vol_annualized:.2%}")
+
+                                    # Index fair value
+                                    if 'index_fair_value' in bs_data:
+                                        index_fv = bs_data['index_fair_value']
+                                        if isinstance(index_fv, dict):
+                                            st.write("**Index Fair Value Analysis:**")
+                                            fair_range = index_fv.get('fair_value_range', {})
+                                            if fair_range:
+                                                st.write(f"• Fair Value: ₹{fair_range.get('fair', 0):.2f}")
+                                                st.write(f"• Range: ₹{fair_range.get('lower', 0):.2f} - ₹{fair_range.get('upper', 0):.2f}")
+                                            forward_price = index_fv.get('forward_price', 0)
+                                            if forward_price > 0:
+                                                st.write(f"• Forward Price: ₹{forward_price:.2f}")
+
+                                    # Options quick summary
+                                    if 'quick_summary' in bs_data:
+                                        quick = bs_data['quick_summary']
+                                        if 'options' in quick and quick['options']:
+                                            st.write("**Options Quick View:**")
+                                            for opt in quick['options'][:5]:  # Show first 5 strikes
+                                                strike = opt.get('strike', 0)
+                                                option_type = opt.get('type', '')
+                                                call_price = opt.get('call_fair_value', 0)
+                                                put_price = opt.get('put_fair_value', 0)
+                                                st.write(f"  • {strike} {option_type}: Call ₹{call_price:.2f}, Put ₹{put_price:.2f}")
+
+                                    # Last update time
+                                    if 'bs_last_update' in prediction:
+                                        update_time = prediction['bs_last_update']
+                                        if hasattr(update_time, 'strftime'):
+                                            st.caption(f"Last updated: {update_time.strftime('%H:%M:%S')}")
+                                elif prediction.get('has_volatility_for_bs', False):
+                                    st.info("⏳ Black-Scholes fair values will appear once volatility prediction is available...")
+                                else:
+                                    st.info("📊 Black-Scholes fair values require volatility predictions to be generated first.")
+
+                            # ML Model predictions display (OBI+CVD now shown independently above)
                             st.markdown(f"**🤖 ML Model Predictions - {display_name}**")
 
                             # Show prediction details in expandable sections
                             with st.expander(f"📊 Prediction Details - {display_name}", expanded=False):
-
-                                # Show Black-Scholes information if available
-                                if 'black_scholes' in prediction and prediction['black_scholes'].get('calculation_successful', False):
-                                    st.subheader("⚡ Black-Scholes Fair Values")
-                                    bs_data = prediction['black_scholes']
-
-                                    # Quick summary
-                                    if 'quick_summary' in bs_data:
-                                        quick = bs_data['quick_summary']
-                                        st.write(f"**Index Fair Value:** ₹{quick.get('index_fair_value', 0):.2f}")
-                                        st.write(f"**Volatility (Annualized):** {bs_data.get('annualized_volatility', 0):.2f}%")
-                                        st.write(f"**Current Price:** ₹{prediction.get('bs_current_price', 0):.2f}")
-
-                                        # Options summary
-                                        if 'option_summary' in quick:
-                                            opt_summary = quick['option_summary']
-                                            st.write("**Options Quick View:**")
-                                            for strike_info in opt_summary[:3]:  # Show first 3 strikes
-                                                st.write(f"  - Strike {strike_info['strike']}: Call ₹{strike_info['call_premium']:.2f}, Put ₹{strike_info['put_premium']:.2f}")
-
-                                    st.write(f"*Last updated: {prediction.get('bs_last_update', 'Unknown')}*")
-
-                                # OBI+CVD is now shown independently above, removed from here
-                                st.info("📈 Order flow analysis (OBI+CVD) is displayed independently above")
-
 
                                 # Get detailed summary
                                 summary = st.session_state.live_prediction_pipeline.get_instrument_summary(instrument_key)
