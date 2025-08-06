@@ -1,0 +1,25 @@
+AttributeError: This app has encountered an error. The original error message is redacted to prevent data leaks. Full error details have been recorded in the logs (if you're on Streamlit Cloud, click on 'Manage app' in the lower right of your app).
+Traceback:
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 121, in exec_func_with_error_handling
+    result = func()
+             ^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 643, in code_to_exec
+    _mpa_v1(self._main_script_path)
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 164, in _mpa_v1
+    page.run()
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/navigation/page.py", line 297, in run
+    exec(code, module.__dict__)
+File "/home/runner/workspace/pages/6_Live_Data.py", line 961, in <module>
+    show_live_data_page()
+File "/home/runner/workspace/pages/6_Live_Data.py", line 490, in show_live_data_page
+    independent_obi_cvd = st.session_state.live_prediction_pipeline.get_all_independent_obi_cvd_status()
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/utils/live_prediction_pipeline.py", line 794, in get_all_independent_obi_cvd_status
+    status = self.get_independent_obi_cvd_status(instrument_key)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/utils/live_prediction_pipeline.py", line 788, in get_independent_obi_cvd_status
+    return self.obi_cvd_confirmation.get_confirmation_status(instrument_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/utils/obi_cvd_confirmation.py", line 385, in get_confirmation_status
+    return self._analyze_confirmation(instrument_key,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
