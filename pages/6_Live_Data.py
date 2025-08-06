@@ -617,11 +617,37 @@ def show_live_data_page():
                                     with col3:
                                         st.metric("Annualized Vol", f"{vol_annualized:.2%}")
 
+                                    # Expiry information
+                                    if 'quick_summary' in bs_data:
+                                        quick = bs_data['quick_summary']
+                                        if 'nearest_expiry' in quick and 'days_to_expiry' in quick:
+                                            expiry_date = quick.get('nearest_expiry', 'N/A')
+                                            days_to_expiry = quick.get('days_to_expiry', 0)
+
+                                            col1, col2 = st.columns(2)
+                                            with col1:
+                                                st.metric("⏰ Next Expiry", expiry_date)
+                                            with col2:
+                                                st.metric("🕐 Time Left", f"{days_to_expiry:.1f} days")
+
+                                    # Show all available expiry dates from options data
+                                    if 'options_fair_values' in bs_data and 'expiries' in bs_data['options_fair_values']:
+                                        expiries_data = bs_data['options_fair_values']['expiries']
+                                        if expiries_data:
+                                            st.write("**📅 Available Expiry Dates:**")
+                                            expiry_cols = st.columns(min(3, len(expiries_data)))
+
+                                            for i, (expiry_str, expiry_info) in enumerate(list(expiries_data.items())[:3]):
+                                                with expiry_cols[i]:
+                                                    days_left = expiry_info.get('days_to_expiry', 0)
+                                                    st.write(f"**{expiry_str}**")
+                                                    st.write(f"⏱️ {days_left:.1f} days")
+
                                     # Index fair value
                                     if 'index_fair_value' in bs_data:
                                         index_fv = bs_data['index_fair_value']
                                         if isinstance(index_fv, dict):
-                                            st.write("**Index Fair Value Analysis:**")
+                                            st.write("**💰 Index Fair Value Analysis:**")
                                             fair_range = index_fv.get('fair_value_range', {})
                                             if fair_range:
                                                 st.write(f"• Fair Value: ₹{fair_range.get('fair', 0):.2f}")
@@ -630,23 +656,41 @@ def show_live_data_page():
                                             if forward_price > 0:
                                                 st.write(f"• Forward Price: ₹{forward_price:.2f}")
 
+                                            # Show time to expiry from index fair value
+                                            time_to_expiry_days = index_fv.get('time_to_expiry_days', 0)
+                                            if time_to_expiry_days > 0:
+                                                st.write(f"• Time to Expiry: {time_to_expiry_days:.1f} days")
+
                                     # Options quick summary
                                     if 'quick_summary' in bs_data:
                                         quick = bs_data['quick_summary']
                                         if 'options' in quick and quick['options']:
-                                            st.write("**Options Quick View:**")
+                                            st.write("**📊 Options Quick View (ATM & Nearby):**")
+
+                                            # Create a table for better display
+                                            option_data = []
                                             for opt in quick['options'][:5]:  # Show first 5 strikes
                                                 strike = opt.get('strike', 0)
                                                 option_type = opt.get('type', '')
                                                 call_price = opt.get('call_fair_value', 0)
                                                 put_price = opt.get('put_fair_value', 0)
-                                                st.write(f"  • {strike} {option_type}: Call ₹{call_price:.2f}, Put ₹{put_price:.2f}")
+                                                option_data.append({
+                                                    'Strike': f"₹{strike}",
+                                                    'Type': option_type,
+                                                    'Call Fair Value': f"₹{call_price:.2f}",
+                                                    'Put Fair Value': f"₹{put_price:.2f}"
+                                                })
+
+                                            if option_data:
+                                                import pandas as pd
+                                                df_options = pd.DataFrame(option_data)
+                                                st.dataframe(df_options, use_container_width=True, hide_index=True)
 
                                     # Last update time
                                     if 'bs_last_update' in prediction:
                                         update_time = prediction['bs_last_update']
                                         if hasattr(update_time, 'strftime'):
-                                            st.caption(f"Last updated: {update_time.strftime('%H:%M:%S')}")
+                                            st.caption(f"🔄 Last updated: {update_time.strftime('%H:%M:%S')}")
                                 elif prediction.get('has_volatility_for_bs', False):
                                     st.info("⏳ Black-Scholes fair values will appear once volatility prediction is available...")
                                 else:
@@ -729,7 +773,7 @@ def show_live_data_page():
                                 st.caption(f"Generated {time_ago.total_seconds():.0f}s ago")
 
 
-                                st.divider()
+                            st.divider()
 
                         # Auto-refresh toggle
                         col1, col2 = st.columns(2)
