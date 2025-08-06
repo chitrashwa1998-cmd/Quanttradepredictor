@@ -43,7 +43,7 @@ class LivePredictionPipeline:
         
         # Dedicated instrument routing
         self.ml_models_instrument = "NSE_INDEX|Nifty 50"  # Dedicated to ML models + BSM
-        self.obi_cvd_instrument = "NSE_FO|37419"  # Dedicated to OBI+CVD (Nifty Future August)
+        self.obi_cvd_instrument = "NSE_FO|NIFTY28AUGFUT"  # Dedicated to OBI+CVD (Nifty Future August)
         
         # OBI+CVD Confirmation
         self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
