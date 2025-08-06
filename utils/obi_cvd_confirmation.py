@@ -374,18 +374,42 @@ class OBICVDConfirmation:
         data = self.instrument_data[instrument_key]
         current_time = datetime.now()
         
-        # Calculate current averaged OBI
+        # Calculate current values
+        current_obi = data.get('current_obi', 0.0)
+        current_cvd_increment = data.get('current_cvd_increment', 0.0)
+        total_cvd = data.get('cvd', 0.0)
+        
+        # Calculate rolling averages
+        # OBI 1-minute rolling average
+        recent_obi_1min = [
+            entry['obi'] for entry in data.get('rolling_obi_1min', [])
+            if (current_time - entry['timestamp']).total_seconds() <= 60
+        ]
+        rolling_avg_obi_1min = np.mean(recent_obi_1min) if recent_obi_1min else 0.0
+        
+        # CVD 2-minute rolling average
+        recent_cvd_2min = [
+            entry['cvd_increment'] for entry in data.get('rolling_cvd_2min', [])
+            if (current_time - entry['timestamp']).total_seconds() <= 120
+        ]
+        rolling_avg_cvd_2min = np.mean(recent_cvd_2min) if recent_cvd_2min else 0.0
+        
+        # Legacy 60-second OBI average for existing analysis
         recent_obi_values = [
-            entry['obi'] for entry in data['obi_history']
+            entry['obi'] for entry in data.get('obi_history', [])
             if (current_time - entry['timestamp']).total_seconds() <= self.obi_window_seconds
         ]
+        legacy_avg_obi = np.mean(recent_obi_values) if recent_obi_values else 0.0
         
-        avg_obi = np.mean(recent_obi_values) if recent_obi_values else 0.0
-        
-        return self._analyze_confirmation(instrument_key, 
-                                        recent_obi_values[-1] if recent_obi_values else 0.0,
-                                        avg_obi, 
-                                        data['cvd'])
+        return self._analyze_granular_confirmation(
+            instrument_key, 
+            current_obi, 
+            rolling_avg_obi_1min,
+            current_cvd_increment,
+            rolling_avg_cvd_2min,
+            total_cvd,
+            legacy_avg_obi
+        )
     
     def reset_instrument(self, instrument_key: str):
         """Reset all data for an instrument."""
