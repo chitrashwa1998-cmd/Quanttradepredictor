@@ -396,28 +396,16 @@ def show_live_data_page():
     if st.session_state.live_prediction_pipeline:
         pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
 
-        st.header("📊 Live Prediction Pipeline Status")
+        # Show dedicated routing status
+        if st.session_state.live_prediction_pipeline:
+            ml_instrument = st.session_state.live_prediction_pipeline.ml_models_instrument
+            obi_cvd_instrument = st.session_state.live_prediction_pipeline.obi_cvd_instrument
 
-        col1, col2, col3, col4, col5 = st.columns(5)
-
-        with col1:
-            status_color = "🟢" if pipeline_status['data_connected'] else "🔴"
-            st.metric("Data Connection", f"{status_color} {'Connected' if pipeline_status['data_connected'] else 'Disconnected'}")
-
-        with col2:
-            pipeline_color = "🟢" if pipeline_status['pipeline_active'] else "🔴"
-            st.metric("Prediction Pipeline", f"{pipeline_color} {'Active' if pipeline_status['pipeline_active'] else 'Inactive'}")
-
-        with col3:
-            total_models = pipeline_status.get('total_trained_models', 0)
-            model_color = "🟢" if total_models > 0 else "🔴"
-            st.metric("Trained Models", f"{model_color} {total_models}/4")
-
-        with col4:
-            st.metric("Subscribed Instruments", pipeline_status['subscribed_instruments'])
-
-        with col5:
-            st.metric("Live Predictions", pipeline_status['instruments_with_predictions'])
+            st.info(f"""
+            🎯 **Dedicated Instrument Routing Active:**
+            • ML Models + BSM: {ml_instrument.split('|')[-1]} (Spot)
+            • OBI+CVD Analysis: {obi_cvd_instrument.split('|')[-1]} (Future)
+            """)
 
         # Show continuation status if available
         if st.session_state.live_data_manager:
@@ -435,6 +423,29 @@ def show_live_data_page():
                         st.write(f"• Seeded at: {details['seeded_at'].strftime('%H:%M:%S')}")
             else:
                 st.info("📊 **Fresh Start:** No historical data found - building OHLC from live ticks only")
+
+    st.header("📊 Live Prediction Pipeline Status")
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        status_color = "🟢" if pipeline_status['data_connected'] else "🔴"
+        st.metric("Data Connection", f"{status_color} {'Connected' if pipeline_status['data_connected'] else 'Disconnected'}")
+
+    with col2:
+        pipeline_color = "🟢" if pipeline_status['pipeline_active'] else "🔴"
+        st.metric("Prediction Pipeline", f"{pipeline_color} {'Active' if pipeline_status['pipeline_active'] else 'Inactive'}")
+
+    with col3:
+        total_models = pipeline_status.get('total_trained_models', 0)
+        model_color = "🟢" if total_models > 0 else "🔴"
+        st.metric("Trained Models", f"{model_color} {total_models}/4")
+
+    with col4:
+        st.metric("Subscribed Instruments", pipeline_status['subscribed_instruments'])
+
+    with col5:
+        st.metric("Live Predictions", pipeline_status['instruments_with_predictions'])
 
     # Live data display
     if st.session_state.is_live_connected and st.session_state.live_data_manager:

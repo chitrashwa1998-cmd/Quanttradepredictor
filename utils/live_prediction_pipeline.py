@@ -41,6 +41,10 @@ class LivePredictionPipeline:
         # Candle completion tracking
         self.last_candle_timestamps = {}  # Track last processed candle for each instrument
         
+        # Dedicated instrument routing
+        self.ml_models_instrument = "NSE_INDEX|Nifty 50"  # Dedicated to ML models + BSM
+        self.obi_cvd_instrument = "NSE_FO|37419"  # Dedicated to OBI+CVD (Nifty Future August)
+        
         # OBI+CVD Confirmation
         self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
 
@@ -151,8 +155,19 @@ class LivePredictionPipeline:
         print("🔧 Continuous Black-Scholes calculator stopped")
 
     def subscribe_instruments(self, instrument_keys: List[str]) -> bool:
-        """Subscribe to instruments for live predictions."""
-        return self.live_data_manager.subscribe_instruments(instrument_keys)
+        """Subscribe to instruments for live predictions with dedicated routing."""
+        # Always subscribe to both dedicated instruments regardless of user selection
+        dedicated_instruments = [self.ml_models_instrument, self.obi_cvd_instrument]
+        
+        # Combine with user selected instruments but avoid duplicates
+        all_instruments = list(set(instrument_keys + dedicated_instruments))
+        
+        print(f"🎯 Subscribing with dedicated instrument routing:")
+        print(f"   ML Models + BSM: {self.ml_models_instrument}")
+        print(f"   OBI+CVD: {self.obi_cvd_instrument}")
+        print(f"   Additional instruments: {[inst for inst in instrument_keys if inst not in dedicated_instruments]}")
+        
+        return self.live_data_manager.subscribe_instruments(all_instruments)
 
     def _processing_loop(self):
         """Main processing loop for generating live predictions."""
@@ -174,7 +189,8 @@ class LivePredictionPipeline:
                 tick_stats = self.live_data_manager.get_tick_statistics()
 
                 if tick_stats:
-                    for instrument_key, stats in tick_stats.items():
+                    # Process ML models predictions only on dedicated ML instrument
+                    if self.ml_models_instrument in tick_stats:
                         # Debug: Show processing attempt
                         if not hasattr(self, '_debug_counter'):
                             self._debug_counter = 0
@@ -182,12 +198,19 @@ class LivePredictionPipeline:
                         
                         # Only show debug every 20 iterations to avoid spam
                         if self._debug_counter % 20 == 0:
-                            print(f"🔍 Processing loop #{self._debug_counter} - checking {instrument_key}")
+                            print(f"🔍 Processing loop #{self._debug_counter} - checking ML models on {self.ml_models_instrument}")
                         
                         # Check if a new candle has closed before processing predictions
-                        if self._has_new_candle_closed(instrument_key):
-                            print(f"🎯 New candle detected for {instrument_key}, processing predictions...")
-                            self._process_instrument_predictions(instrument_key)
+                        if self._has_new_candle_closed(self.ml_models_instrument):
+                            print(f"🎯 New candle detected for ML models on {self.ml_models_instrument}, processing predictions...")
+                            self._process_instrument_predictions(self.ml_models_instrument)
+                    
+                    # Process any additional user-selected instruments (legacy support)
+                    for instrument_key, stats in tick_stats.items():
+                        if instrument_key not in [self.ml_models_instrument, self.obi_cvd_instrument]:
+                            if self._has_new_candle_closed(instrument_key):
+                                print(f"🎯 New candle detected for additional instrument {instrument_key}, processing predictions...")
+                                self._process_instrument_predictions(instrument_key)
 
                 # Reset error counter on successful processing
                 consecutive_errors = 0
@@ -597,27 +620,34 @@ class LivePredictionPipeline:
                     time.sleep(10)
                     continue
 
-                # Process Black-Scholes for each instrument with available volatility
-                for instrument_key, vol_data in self.latest_volatility_predictions.items():
+                # Process Black-Scholes only for ML models instrument (where volatility is predicted)
+                if self.ml_models_instrument in self.latest_volatility_predictions:
+                    instrument_key = self.ml_models_instrument
+                    vol_data = self.latest_volatility_predictions[instrument_key]
+                    
                     try:
                         # Check if volatility prediction is still valid (within 5 minutes)
                         current_time = pd.Timestamp.now()
                         if current_time > vol_data['valid_until']:
                             print(f"⚠️ Volatility prediction expired for {instrument_key}, waiting for new prediction...")
+                            time.sleep(self.bs_update_interval)
                             continue
 
-                        # Get latest tick data
+                        # Get latest tick data from ML models instrument
                         latest_tick = self.live_data_manager.ws_client.get_latest_tick(instrument_key)
+                        
+                        # Also update OBI+CVD with dedicated futures instrument data
+                        if self.obi_cvd_instrument in self.live_data_manager.ws_client.last_tick_data:
+                            obi_cvd_tick = self.live_data_manager.ws_client.get_latest_tick(self.obi_cvd_instrument)
+                            if obi_cvd_tick:
+                                obi_cvd_results = self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
                         
                         if latest_tick and 'ltp' in latest_tick:
                             current_price = float(latest_tick['ltp'])
                             volatility_value = vol_data['volatility_value']
                             
-                            # Calculate Black-Scholes with current tick price
+                            # Calculate Black-Scholes with current tick price from ML models instrument
                             bs_results = self._calculate_black_scholes_fair_values(current_price, volatility_value)
-                            
-                            # Update OBI+CVD confirmation with live tick data (independent from ML predictions)
-                            obi_cvd_results = self.obi_cvd_confirmation.update_confirmation(instrument_key, latest_tick)
                             
                             if bs_results.get('calculation_successful', False):
                                 # Update the live predictions with fresh Black-Scholes data
@@ -636,8 +666,17 @@ class LivePredictionPipeline:
                                     if self._bs_counter % 20 == 0:
                                         display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
                                         annualized_vol = bs_results.get('annualized_volatility', volatility_value)
-                                        obi_signal = obi_cvd_results.get('combined_confirmation', 'Unknown')
-                                        print(f"🔧 Live Update: {display_name} @ ₹{current_price:.2f} | Vol: {volatility_value:.4f}→{annualized_vol:.2f} | OBI+CVD: {obi_signal}")
+                                        
+                                        # Get OBI+CVD signal from futures instrument
+                                        obi_cvd_signal = 'Unknown'
+                                        if self.obi_cvd_instrument in self.obi_cvd_confirmation.instrument_data:
+                                            obi_cvd_status = self.obi_cvd_confirmation.get_confirmation_status(self.obi_cvd_instrument)
+                                            if obi_cvd_status:
+                                                obi_cvd_signal = obi_cvd_status.get('combined_confirmation', 'Unknown')
+                                        
+                                        futures_name = self.obi_cvd_instrument.split('|')[-1] if '|' in self.obi_cvd_instrument else self.obi_cvd_instrument
+                                        print(f"🔧 Live Update: {display_name} @ ₹{current_price:.2f} | Vol: {volatility_value:.4f}→{annualized_vol:.2f}")
+                                        print(f"📊 OBI+CVD ({futures_name}): {obi_cvd_signal}")
                             
                     except Exception as e:
                         print(f"❌ Error calculating Black-Scholes for {instrument_key}: {e}")
@@ -783,17 +822,19 @@ class LivePredictionPipeline:
             **model_status
         }
 
-    def get_independent_obi_cvd_status(self, instrument_key: str) -> Optional[Dict]:
-        """Get independent OBI+CVD confirmation status separate from ML predictions."""
-        return self.obi_cvd_confirmation.get_confirmation_status(instrument_key)
+    def get_independent_obi_cvd_status(self, instrument_key: str = None) -> Optional[Dict]:
+        """Get independent OBI+CVD confirmation status from dedicated futures instrument."""
+        # Always use dedicated OBI+CVD instrument regardless of input
+        target_instrument = self.obi_cvd_instrument
+        return self.obi_cvd_confirmation.get_confirmation_status(target_instrument)
 
     def get_all_independent_obi_cvd_status(self) -> Dict:
-        """Get independent OBI+CVD status for all instruments."""
+        """Get independent OBI+CVD status for dedicated futures instrument."""
         obi_cvd_status = {}
-        for instrument_key in self.obi_cvd_confirmation.instrument_data.keys():
-            status = self.get_independent_obi_cvd_status(instrument_key)
-            if status:
-                obi_cvd_status[instrument_key] = status
+        # Only return status for the dedicated OBI+CVD instrument
+        status = self.get_independent_obi_cvd_status()
+        if status:
+            obi_cvd_status[self.obi_cvd_instrument] = status
         return obi_cvd_status
 
     def get_instrument_summary(self, instrument_key: str) -> Optional[Dict]:
