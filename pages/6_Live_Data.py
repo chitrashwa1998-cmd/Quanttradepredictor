@@ -392,6 +392,15 @@ def show_live_data_page():
 
 
 
+    # Initialize pipeline_status with default values
+    pipeline_status = {
+        'data_connected': False,
+        'pipeline_active': False,
+        'total_trained_models': 0,
+        'subscribed_instruments': 0,
+        'instruments_with_predictions': 0
+    }
+
     # Status dashboard
     if st.session_state.live_prediction_pipeline:
         pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
