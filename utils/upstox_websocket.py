@@ -202,60 +202,81 @@ class UpstoxWebSocketClient:
         pass
 
     def on_message(self, ws, message):
-        """Handle incoming WebSocket messages."""
+        """Handle incoming WebSocket messages - JSON ONLY processing."""
         try:
             # Handle both binary and text messages from Upstox v3
             if isinstance(message, bytes):
-                # Only show binary message log occasionally to reduce noise
+                # Message counter for logging
                 if not hasattr(self, '_msg_counter'):
                     self._msg_counter = 0
                 self._msg_counter += 1
                 
-                if self._msg_counter % 50 == 0:  # Show every 50th message
-                    print(f"📦 Binary message received: {len(message)} bytes (#{self._msg_counter})")
+                if self._msg_counter % 25 == 0:  # Show every 25th message
+                    print(f"📦 Processing JSON message #{self._msg_counter}")
                 
-                # Try to decode as UTF-8 first (common in v3)
+                # STRICT JSON-ONLY DECODING - NO FALLBACK
                 try:
-                    decoded_message = message.decode('utf-8')
-                    if decoded_message.startswith('{'):
-                        data = json.loads(decoded_message)
-                        tick_data = self.parse_json_message(data)
-                    else:
-                        # Parse as protobuf if not JSON
-                        tick_data = self.parse_protobuf_message(message)
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    # Pure protobuf message
-                    tick_data = self.parse_protobuf_message(message)
+                    # Decode as UTF-8 with proper error handling
+                    decoded_message = message.decode('utf-8', errors='replace')
+                    
+                    # Clean any null bytes or control characters
+                    decoded_message = decoded_message.strip('\x00').strip()
+                    
+                    # Ensure it's valid JSON format
+                    if not decoded_message.startswith('{'):
+                        # Try to find JSON start in the message
+                        json_start = decoded_message.find('{')
+                        if json_start > 0:
+                            decoded_message = decoded_message[json_start:]
+                        else:
+                            print(f"⚠️ Message #{self._msg_counter}: No JSON structure found, skipping...")
+                            return
+                    
+                    # Parse JSON strictly
+                    data = json.loads(decoded_message)
+                    print(f"✅ JSON Message #{self._msg_counter} parsed successfully")
+                    tick_data = self.parse_json_message(data)
+                    
+                except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                    print(f"❌ JSON parsing failed for message #{self._msg_counter}: {e}")
+                    print(f"🔍 Message preview: {message[:100]}...")
+                    return  # Skip non-JSON messages completely
+                    
             else:
+                # Handle text messages
                 print(f"📄 Text message received")
                 try:
                     data = json.loads(message)
+                    print(f"✅ Text JSON message parsed successfully")
                     tick_data = self.parse_json_message(data)
-                except json.JSONDecodeError:
-                    print(f"❌ Invalid JSON in text message")
+                except json.JSONDecodeError as e:
+                    print(f"❌ Invalid JSON in text message: {e}")
                     return
 
+            # Process valid tick data
             if tick_data:
                 # Store latest tick data
                 instrument = tick_data.get('instrument_token')
                 if instrument:
                     self.last_tick_data[instrument] = tick_data
                     
-                    # Only show tick updates occasionally to reduce noise
-                    if self._msg_counter % 25 == 0:  # Show every 25th tick
+                    # Show live updates
+                    if self._msg_counter % 10 == 0:  # Show every 10th tick
                         instrument_name = instrument.split('|')[-1] if '|' in instrument else instrument
-                        print(f"📊 Live tick: {instrument_name} @ ₹{tick_data.get('ltp', 0):.2f}")
+                        ltp = tick_data.get('ltp', 0)
+                        print(f"📊 Live JSON tick: {instrument_name} @ ₹{ltp:.2f}")
 
                 # Call callback
                 if self.tick_callback:
                     self.tick_callback(tick_data)
+            else:
+                print(f"⚠️ No valid tick data extracted from JSON message #{self._msg_counter}")
 
         except Exception as e:
-            # Don't spam error messages - only show unique errors
-            error_str = str(e)
-            if not hasattr(self, '_last_error') or self._last_error != error_str:
-                print(f"❌ Error processing message: {e}")
-                self._last_error = error_str
+            # Show all errors for JSON debugging
+            print(f"❌ Critical JSON processing error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def parse_protobuf_message(self, message: bytes) -> Optional[Dict]:
         """Parse protobuf message from Upstox v3 API with enhanced JSON priority and instrument separation."""
@@ -474,28 +495,43 @@ class UpstoxWebSocketClient:
         return value, bytes_consumed
 
     def parse_json_message(self, data: Dict) -> Optional[Dict]:
-        """Parse JSON message format for v3 API responses with DIRECT instrument identification."""
+        """Parse JSON message format for v3 API responses with DIRECT instrument identification - ERROR-FREE."""
         try:
+            # Validate input data structure
+            if not isinstance(data, dict):
+                print(f"❌ Invalid JSON structure: Expected dict, got {type(data)}")
+                return None
+            
             # Handle subscription acknowledgment
             if data.get('status') == 'success' and 'data' in data:
                 if 'subscribed' in data['data']:
-                    print(f"✅ Subscription confirmed: {data['data']['subscribed']}")
+                    subscribed_count = len(data['data']['subscribed']) if isinstance(data['data']['subscribed'], list) else 1
+                    print(f"✅ JSON Subscription confirmed: {subscribed_count} instruments")
                 return None
 
             # Handle market status (initial message)
             if 'type' in data and data['type'] == 'initial':
                 self.market_status = data
-                print(f"📊 Market status received")
+                print(f"📊 JSON Market status received successfully")
                 return None
 
             # Handle live feed data - Look for feeds structure
-            if 'feeds' in data:
+            if 'feeds' in data and isinstance(data['feeds'], dict):
                 feeds = data['feeds']
+                
+                if not feeds:
+                    print(f"⚠️ Empty feeds structure in JSON message")
+                    return None
 
                 # Process each instrument in feeds with DIRECT key mapping
                 processed_instruments = []
                 
+                print(f"📊 Processing JSON feeds for {len(feeds)} instruments")
+                
                 for instrument_key, feed_data in feeds.items():
+                    if not isinstance(feed_data, dict):
+                        print(f"⚠️ Invalid feed data for {instrument_key}: {type(feed_data)}")
+                        continue
                     # DIRECT instrument identification - NO GUESSING
                     exact_instrument_key = instrument_key  # Use exact key from JSON
                     
@@ -527,12 +563,16 @@ class UpstoxWebSocketClient:
                         'ask_qty': 0
                     }
 
-                    # Look for LTPC data (basic price info)
-                    if 'ltpc' in feed_data:
+                    # Look for LTPC data (basic price info) with validation
+                    if 'ltpc' in feed_data and isinstance(feed_data['ltpc'], dict):
                         ltpc = feed_data['ltpc']
-                        ltp = float(ltpc.get('ltp', 0))
-                        cp = float(ltpc.get('cp', ltp))
-                        ltq = int(ltpc.get('ltq', 0))
+                        try:
+                            ltp = float(ltpc.get('ltp', 0))
+                            cp = float(ltpc.get('cp', ltp))
+                            ltq = int(ltpc.get('ltq', 0))
+                        except (ValueError, TypeError) as e:
+                            print(f"⚠️ Invalid LTPC data for {instrument_key}: {e}")
+                            continue
 
                         if ltp > 0:
                             tick_data.update({
@@ -549,12 +589,12 @@ class UpstoxWebSocketClient:
                                 'change_percent': ((ltp - cp) / cp * 100) if cp > 0 else 0.0
                             })
 
-                    # Look for full market data (complete depth)
-                    if 'ff' in feed_data:
+                    # Look for full market data (complete depth) with validation
+                    if 'ff' in feed_data and isinstance(feed_data['ff'], dict):
                         ff_data = feed_data['ff']
                         
-                        # Extract market full feed data
-                        if 'marketFF' in ff_data:
+                        # Extract market full feed data with validation
+                        if 'marketFF' in ff_data and isinstance(ff_data['marketFF'], dict):
                             market_ff = ff_data['marketFF']
                             
                             # LTPC within full feed
@@ -572,25 +612,28 @@ class UpstoxWebSocketClient:
                                     'close': cp
                                 })
 
-                            # Market depth information
-                            if 'marketLevel' in market_ff:
+                            # Market depth information with validation
+                            if 'marketLevel' in market_ff and isinstance(market_ff['marketLevel'], dict):
                                 market_level = market_ff['marketLevel']
                                 
-                                # Best bid/ask from level 1 data
-                                if 'bidAskQuote' in market_level:
+                                # Best bid/ask from level 1 data with validation
+                                if 'bidAskQuote' in market_level and isinstance(market_level['bidAskQuote'], list):
                                     bid_ask = market_level['bidAskQuote']
-                                    if len(bid_ask) > 0:
+                                    if len(bid_ask) > 0 and isinstance(bid_ask[0], dict):
                                         level1 = bid_ask[0]
-                                        tick_data.update({
-                                            'best_bid': float(level1.get('bq', 0)),
-                                            'best_bid_quantity': int(level1.get('bs', 0)),
-                                            'best_ask': float(level1.get('aq', 0)),
-                                            'best_ask_quantity': int(level1.get('as', 0)),
-                                            'bid_price': float(level1.get('bq', 0)),
-                                            'ask_price': float(level1.get('aq', 0)),
-                                            'bid_qty': int(level1.get('bs', 0)),
-                                            'ask_qty': int(level1.get('as', 0))
-                                        })
+                                        try:
+                                            tick_data.update({
+                                                'best_bid': float(level1.get('bq', 0)),
+                                                'best_bid_quantity': int(level1.get('bs', 0)),
+                                                'best_ask': float(level1.get('aq', 0)),
+                                                'best_ask_quantity': int(level1.get('as', 0)),
+                                                'bid_price': float(level1.get('bq', 0)),
+                                                'ask_price': float(level1.get('aq', 0)),
+                                                'bid_qty': int(level1.get('bs', 0)),
+                                                'ask_qty': int(level1.get('as', 0))
+                                            })
+                                        except (ValueError, TypeError) as e:
+                                            print(f"⚠️ Invalid bid/ask data for {instrument_key}: {e}")
 
                             # Volume and quantity totals
                             if 'vtt' in market_ff:  # Total traded volume
@@ -753,7 +796,7 @@ class UpstoxWebSocketClient:
                 print(f"✅ All instruments already subscribed")
                 return True
 
-            # Create subscription request exactly as per v3 documentation
+            # Create subscription request for JSON format explicitly
             subscribe_request = {
                 "guid": str(uuid.uuid4()),
                 "method": "sub",
@@ -762,18 +805,35 @@ class UpstoxWebSocketClient:
                     "instrumentKeys": new_instruments
                 }
             }
+            
+            # Add JSON format header explicitly
+            headers_request = {
+                "guid": str(uuid.uuid4()),
+                "method": "configure", 
+                "data": {
+                    "format": "json",
+                    "compression": false
+                }
+            }
 
-            print(f"🔄 Subscribing to {len(new_instruments)} instruments in '{mode}' mode")
+            print(f"🔄 Configuring JSON format and subscribing to {len(new_instruments)} instruments in '{mode}' mode")
             print(f"📋 Instruments: {[key.split('|')[-1] for key in new_instruments]}")
 
-            # Convert to binary format (v3 requirement)
-            message_json = json.dumps(subscribe_request)
-            message_binary = message_json.encode('utf-8')
-
             if self.ws and hasattr(self.ws, 'send'):
-                # Send as binary message
+                # First, configure JSON format
+                headers_json = json.dumps(headers_request)
+                headers_binary = headers_json.encode('utf-8')
+                self.ws.send(headers_binary, websocket.ABNF.OPCODE_BINARY)
+                print(f"📤 JSON format configuration sent")
+                
+                # Small delay for configuration processing
+                time.sleep(0.5)
+                
+                # Then send subscription request
+                message_json = json.dumps(subscribe_request)
+                message_binary = message_json.encode('utf-8')
                 self.ws.send(message_binary, websocket.ABNF.OPCODE_BINARY)
-                print(f"📤 Subscription sent as binary message")
+                print(f"📤 JSON subscription sent for {len(new_instruments)} instruments")
 
                 # Update subscribed instruments
                 self.subscribed_instruments.update(new_instruments)
