@@ -589,54 +589,75 @@ class UpstoxWebSocketClient:
                                 'change_percent': ((ltp - cp) / cp * 100) if cp > 0 else 0.0
                             })
 
-                    # Look for full market data (complete depth) with validation
+                    # Look for full market data (complete V3 depth structure) with validation
                     if 'ff' in feed_data and isinstance(feed_data['ff'], dict):
                         ff_data = feed_data['ff']
                         
-                        # Extract market full feed data with validation
+                        # Extract market full feed data with validation (V3 structure)
                         if 'marketFF' in ff_data and isinstance(ff_data['marketFF'], dict):
                             market_ff = ff_data['marketFF']
                             
-                            # LTPC within full feed
-                            if 'ltpc' in market_ff:
+                            # LTPC within full feed (exact V3 structure)
+                            if 'ltpc' in market_ff and isinstance(market_ff['ltpc'], dict):
                                 ltpc = market_ff['ltpc']
                                 ltp = float(ltpc.get('ltp', 0))
                                 cp = float(ltpc.get('cp', ltp))
                                 ltq = int(ltpc.get('ltq', 0))
+                                ltt = ltpc.get('ltt', '')  # Last traded time
                                 
                                 tick_data.update({
                                     'ltp': ltp,
                                     'last_traded_price': ltp,
                                     'ltq': ltq,
                                     'last_traded_quantity': ltq,
-                                    'close': cp
+                                    'close': cp,
+                                    'last_traded_time': ltt
                                 })
 
-                            # Market depth information with validation
+                            # Market depth information (exact V3 bidAskQuote structure)
                             if 'marketLevel' in market_ff and isinstance(market_ff['marketLevel'], dict):
                                 market_level = market_ff['marketLevel']
                                 
-                                # Best bid/ask from level 1 data with validation
+                                # 5-level bid/ask data as per V3 specification
                                 if 'bidAskQuote' in market_level and isinstance(market_level['bidAskQuote'], list):
-                                    bid_ask = market_level['bidAskQuote']
-                                    if len(bid_ask) > 0 and isinstance(bid_ask[0], dict):
-                                        level1 = bid_ask[0]
+                                    bid_ask_quotes = market_level['bidAskQuote']
+                                    
+                                    if len(bid_ask_quotes) > 0 and isinstance(bid_ask_quotes[0], dict):
+                                        # Level 1 (best bid/ask) - using correct V3 field names
+                                        level1 = bid_ask_quotes[0]
                                         try:
                                             tick_data.update({
-                                                'best_bid': float(level1.get('bq', 0)),
-                                                'best_bid_quantity': int(level1.get('bs', 0)),
-                                                'best_ask': float(level1.get('aq', 0)),
-                                                'best_ask_quantity': int(level1.get('as', 0)),
-                                                'bid_price': float(level1.get('bq', 0)),
-                                                'ask_price': float(level1.get('aq', 0)),
-                                                'bid_qty': int(level1.get('bs', 0)),
-                                                'ask_qty': int(level1.get('as', 0))
+                                                'best_bid': float(level1.get('bidP', 0)),
+                                                'best_bid_quantity': int(level1.get('bidQ', 0)),
+                                                'best_ask': float(level1.get('askP', 0)),
+                                                'best_ask_quantity': int(level1.get('askQ', 0)),
+                                                'bid_price': float(level1.get('bidP', 0)),
+                                                'ask_price': float(level1.get('askP', 0)),
+                                                'bid_qty': int(level1.get('bidQ', 0)),
+                                                'ask_qty': int(level1.get('askQ', 0))
                                             })
+                                            
+                                            # Store all 5 levels for complete market depth
+                                            tick_data['market_depth'] = {
+                                                'bid_levels': [],
+                                                'ask_levels': []
+                                            }
+                                            
+                                            for i, level in enumerate(bid_ask_quotes[:5]):  # Top 5 levels
+                                                tick_data['market_depth']['bid_levels'].append({
+                                                    'price': float(level.get('bidP', 0)),
+                                                    'quantity': int(level.get('bidQ', 0))
+                                                })
+                                                tick_data['market_depth']['ask_levels'].append({
+                                                    'price': float(level.get('askP', 0)),
+                                                    'quantity': int(level.get('askQ', 0))
+                                                })
+                                                
                                         except (ValueError, TypeError) as e:
-                                            print(f"⚠️ Invalid bid/ask data for {instrument_key}: {e}")
+                                            print(f"⚠️ Invalid V3 bid/ask data for {instrument_key}: {e}")
 
-                            # Volume and quantity totals
-                            if 'vtt' in market_ff:  # Total traded volume
+                            # Volume and quantity totals (V3 field names)
+                            if 'vtt' in market_ff:  # Volume traded today
                                 tick_data['volume'] = int(market_ff['vtt'])
                             
                             if 'tbq' in market_ff:  # Total buy quantity
@@ -644,14 +665,37 @@ class UpstoxWebSocketClient:
                             
                             if 'tsq' in market_ff:  # Total sell quantity
                                 tick_data['total_sell_quantity'] = int(market_ff['tsq'])
+                                
+                            if 'atp' in market_ff:  # Average traded price
+                                tick_data['average_traded_price'] = float(market_ff['atp'])
+                                
+                            if 'oi' in market_ff:  # Open interest
+                                tick_data['open_interest'] = int(market_ff['oi'])
 
-                            # OHLC data if available
-                            if 'op' in market_ff:
-                                tick_data['open'] = float(market_ff['op'])
-                            if 'hp' in market_ff:
-                                tick_data['high'] = float(market_ff['hp'])
-                            if 'lp' in market_ff:
-                                tick_data['low'] = float(market_ff['lp'])
+                            # OHLC data from marketOHLC (V3 structure)
+                            if 'marketOHLC' in market_ff and isinstance(market_ff['marketOHLC'], dict):
+                                ohlc_data = market_ff['marketOHLC']
+                                if 'ohlc' in ohlc_data and isinstance(ohlc_data['ohlc'], list):
+                                    # Get daily OHLC (interval: "1d")
+                                    for ohlc_item in ohlc_data['ohlc']:
+                                        if ohlc_item.get('interval') == '1d':
+                                            tick_data.update({
+                                                'open': float(ohlc_item.get('open', 0)),
+                                                'high': float(ohlc_item.get('high', 0)),
+                                                'low': float(ohlc_item.get('low', 0))
+                                            })
+                                            break
+                                            
+                            # Option Greeks if available (for option instruments)
+                            if 'optionGreeks' in market_ff and isinstance(market_ff['optionGreeks'], dict):
+                                greeks = market_ff['optionGreeks']
+                                tick_data['option_greeks'] = {
+                                    'delta': float(greeks.get('delta', 0)),
+                                    'theta': float(greeks.get('theta', 0)),
+                                    'gamma': float(greeks.get('gamma', 0)),
+                                    'vega': float(greeks.get('vega', 0)),
+                                    'rho': float(greeks.get('rho', 0))
+                                }
 
                     # Only process tick if we have valid price data
                     if tick_data['ltp'] > 0:
@@ -782,7 +826,7 @@ class UpstoxWebSocketClient:
         print("🔌 WebSocket disconnected and cleaned up")
 
     def subscribe(self, instrument_keys: list, mode: str = "full"):
-        """Subscribe to instruments using v3 API format - BINARY messages only."""
+        """Subscribe to instruments using exact V3 API format for complete JSON market data."""
         if not self.is_connected:
             print("❌ WebSocket not connected. Please connect first.")
             return False
@@ -796,7 +840,7 @@ class UpstoxWebSocketClient:
                 print(f"✅ All instruments already subscribed")
                 return True
 
-            # Create subscription request for JSON format explicitly
+            # Create subscription request exactly as per V3 documentation
             subscribe_request = {
                 "guid": str(uuid.uuid4()),
                 "method": "sub",
@@ -805,54 +849,27 @@ class UpstoxWebSocketClient:
                     "instrumentKeys": new_instruments
                 }
             }
-            
-            # Add JSON format header explicitly
-            headers_request = {
-                "guid": str(uuid.uuid4()),
-                "method": "configure", 
-                "data": {
-                    "format": "json",
-                    "compression": False
-                }
-            }
 
-            print(f"🔄 Configuring JSON format and subscribing to {len(new_instruments)} instruments in '{mode}' mode")
+            print(f"🔄 Subscribing to {len(new_instruments)} instruments in '{mode}' mode (V3 JSON Format)")
             print(f"📋 Instruments: {[key.split('|')[-1] for key in new_instruments]}")
+            print(f"📊 Expected data: Full market depth, LTPC, 5-level quotes, OHLC, Greeks")
 
             if self.ws and hasattr(self.ws, 'send'):
-                # First, configure JSON format
-                headers_json = json.dumps(headers_request)
-                headers_binary = headers_json.encode('utf-8')
-                self.ws.send(headers_binary, websocket.ABNF.OPCODE_BINARY)
-                print(f"📤 JSON format configuration sent")
-                
-                # Small delay for configuration processing
-                time.sleep(0.5)
-                
-                # Then send subscription request
+                # Send subscription request as binary (as per V3 documentation)
                 message_json = json.dumps(subscribe_request)
                 message_binary = message_json.encode('utf-8')
                 self.ws.send(message_binary, websocket.ABNF.OPCODE_BINARY)
-                print(f"📤 JSON subscription sent for {len(new_instruments)} instruments")
+                print(f"📤 V3 Full Market Data subscription sent")
 
                 # Update subscribed instruments
                 self.subscribed_instruments.update(new_instruments)
 
-                # Small delay then subscribe to LTPC mode as well for better data coverage
-                time.sleep(1)
-
-                ltpc_request = {
-                    "guid": str(uuid.uuid4()),
-                    "method": "sub", 
-                    "data": {
-                        "mode": "ltpc",
-                        "instrumentKeys": new_instruments
-                    }
-                }
-
-                ltpc_binary = json.dumps(ltpc_request).encode('utf-8')
-                self.ws.send(ltpc_binary, websocket.ABNF.OPCODE_BINARY)
-                print(f"📤 LTPC subscription also sent for data redundancy")
+                # Log expected JSON structure
+                print(f"📋 Expected JSON structure:")
+                print(f"   - feeds.{new_instruments[0]}.ltpc (price data)")
+                print(f"   - feeds.{new_instruments[0]}.ff.marketFF.marketLevel.bidAskQuote (5 levels)")
+                print(f"   - feeds.{new_instruments[0]}.ff.marketFF.marketOHLC (OHLC data)")
+                print(f"   - feeds.{new_instruments[0]}.ff.marketFF.tbq/tsq (total quantities)")
 
                 return True
 
