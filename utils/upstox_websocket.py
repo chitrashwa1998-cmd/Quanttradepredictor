@@ -255,19 +255,33 @@ class UpstoxWebSocketClient:
                 self._last_error = error_str
 
     def parse_protobuf_message(self, message: bytes) -> Optional[Dict]:
-        """Parse protobuf message from Upstox v3 API with enhanced market data extraction."""
+        """Parse protobuf message from Upstox v3 API with enhanced JSON priority and instrument separation."""
         try:
             if len(message) < 4:
                 return None
 
-            # First, try to decode as JSON (common in Upstox v3)
-            if message.startswith(b'{"') or b'"feeds"' in message[:100]:
-                try:
+            # PRIORITY 1: Try to decode as JSON first (has proper instrument identification)
+            try:
+                # Check for JSON patterns more thoroughly
+                if (message.startswith(b'{') or 
+                    b'"feeds"' in message[:200] or 
+                    b'"ltpc"' in message[:200] or
+                    b'"NSE_' in message[:500]):
+                    
                     json_str = message.decode('utf-8', errors='ignore')
-                    data = json.loads(json_str)
-                    return self.parse_json_message(data)
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    pass
+                    
+                    # Clean up any binary artifacts
+                    json_str = json_str.strip('\x00').strip()
+                    
+                    if json_str.startswith('{'):
+                        data = json.loads(json_str)
+                        print(f"📊 JSON Message Parsed - processing feeds data...")
+                        return self.parse_json_message(data)
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                # Continue to protobuf parsing if JSON fails
+                pass
+
+            # PRIORITY 2: Enhanced protobuf parsing with better instrument detection
 
             # Enhanced protobuf parsing for full market data extraction
             try:
@@ -408,8 +422,8 @@ class UpstoxWebSocketClient:
             return None
 
     def _determine_instrument_from_price(self, price: float) -> str:
-        """Determine which subscribed instrument this price likely belongs to."""
-        # Get all subscribed instruments
+        """Determine which subscribed instrument this price likely belongs to using improved logic."""
+        # Get all subscribed instruments in order
         subscribed_list = list(self.subscribed_instruments)
         
         # If no subscriptions, default to Nifty 50
@@ -420,53 +434,45 @@ class UpstoxWebSocketClient:
         if len(subscribed_list) == 1:
             return subscribed_list[0]
         
-        # Smart price-based detection for multiple instruments
-        # Nifty 50 typically trades between 18,000-30,000
-        # Nifty futures typically trade close to Nifty 50 but may have slight differences
+        # Improved sequential assignment based on message order
+        if not hasattr(self, '_instrument_assignment_counter'):
+            self._instrument_assignment_counter = 0
         
+        # Separate index and futures instruments
         nifty_index_instruments = [inst for inst in subscribed_list if 'NSE_INDEX|Nifty' in inst]
         nifty_future_instruments = [inst for inst in subscribed_list if 'NSE_FO|NIFTY' in inst]
         
-        # If we have both index and futures subscribed
+        # If we have both types, use structured alternating assignment
         if nifty_index_instruments and nifty_future_instruments:
-            # Check if we have recent price data to compare
-            nifty_50_key = 'NSE_INDEX|Nifty 50'
-            futures_key = next((k for k in subscribed_list if 'NIFTY28AUGFUT' in k), None)
+            self._instrument_assignment_counter += 1
             
-            if nifty_50_key in self.last_tick_data and futures_key:
-                last_nifty_price = self.last_tick_data[nifty_50_key].get('ltp', 0)
+            # During market hours, prices will naturally diverge more
+            if self._is_market_hours():
+                # Use price-based detection with wider tolerance
+                nifty_50_key = 'NSE_INDEX|Nifty 50'
+                futures_key = next((k for k in subscribed_list if 'NIFTY28AUGFUT' in k), None)
                 
-                # If current price is closer to last known futures price vs index price
-                # or if this is significantly different from known Nifty 50 price
-                price_diff_threshold = 50  # Allow 50 points difference
-                
-                if abs(price - last_nifty_price) > price_diff_threshold:
-                    # Alternate between instruments based on message timing
-                    if not hasattr(self, '_last_instrument_used'):
-                        self._last_instrument_used = nifty_50_key
+                if nifty_50_key in self.last_tick_data and futures_key:
+                    last_nifty_price = self.last_tick_data[nifty_50_key].get('ltp', 0)
                     
-                    # Alternate assignment
-                    if self._last_instrument_used == nifty_50_key:
-                        self._last_instrument_used = futures_key
+                    # If this price differs significantly from last Nifty price, likely futures
+                    if abs(price - last_nifty_price) > 25:  # 25 point threshold
                         return futures_key
                     else:
-                        self._last_instrument_used = nifty_50_key
                         return nifty_50_key
             
-            # Default rotation for fair distribution
-            if not hasattr(self, '_instrument_rotation_counter'):
-                self._instrument_rotation_counter = 0
-            
-            self._instrument_rotation_counter += 1
-            
-            # Rotate between index and futures (60% index, 40% futures)
-            if self._instrument_rotation_counter % 5 < 3:
+            # Outside market hours or fallback: structured alternation
+            # Assign based on subscription order and counter
+            if self._instrument_assignment_counter % 2 == 1:
+                # First message goes to first instrument (usually Nifty 50)
                 return nifty_index_instruments[0]
             else:
+                # Second message goes to futures instrument
                 return nifty_future_instruments[0]
         
-        # Default to first subscribed instrument
-        return subscribed_list[0]
+        # Single type of instrument - just rotate through them
+        instrument_index = self._instrument_assignment_counter % len(subscribed_list)
+        return subscribed_list[instrument_index]
 
     def _read_varint(self, data: bytes, offset: int) -> tuple:
         """Read a varint from protobuf data."""
@@ -491,11 +497,8 @@ class UpstoxWebSocketClient:
         return value, bytes_consumed
 
     def parse_json_message(self, data: Dict) -> Optional[Dict]:
-        """Parse JSON message format for v3 API responses with full market depth extraction."""
+        """Parse JSON message format for v3 API responses with proper instrument identification."""
         try:
-            # Debug: Print the full structure of received data
-            print(f"🔍 Received JSON structure: {json.dumps(data, indent=2)[:500]}...")
-
             # Handle subscription acknowledgment
             if data.get('status') == 'success' and 'data' in data:
                 if 'subscribed' in data['data']:
@@ -512,13 +515,12 @@ class UpstoxWebSocketClient:
             if 'feeds' in data:
                 feeds = data['feeds']
 
-                # Process each instrument in feeds
+                # Process each instrument in feeds - THIS IS THE KEY FIX
+                all_ticks = []
                 for instrument_key, feed_data in feeds.items():
-                    print(f"🔍 Processing {instrument_key}: {list(feed_data.keys())}")
-
-                    # Enhanced parsing for full market data
+                    # Create separate tick for each instrument
                     tick_data = {
-                        'instrument_token': instrument_key,
+                        'instrument_token': instrument_key,  # EXACT instrument identification
                         'timestamp': datetime.now(),
                         'ltp': 0.0,
                         'ltq': 0,
@@ -627,12 +629,12 @@ class UpstoxWebSocketClient:
                             if 'lp' in market_ff:
                                 tick_data['low'] = float(market_ff['lp'])
 
-                    # Only return tick if we have valid price data
+                    # Only add tick if we have valid price data
                     if tick_data['ltp'] > 0:
                         # Add timestamp for this specific tick
                         tick_data['timestamp'] = datetime.now()
                         
-                        # Log the enhanced data
+                        # Log the enhanced data with proper instrument identification
                         instrument_name = instrument_key.split('|')[-1]
                         ltp = tick_data['ltp']
                         bid = tick_data['best_bid']
@@ -640,9 +642,19 @@ class UpstoxWebSocketClient:
                         total_buy = tick_data['total_buy_quantity']
                         total_sell = tick_data['total_sell_quantity']
                         
-                        print(f"📈 Full Market Data: {instrument_name} @ ₹{ltp:.2f} | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']}) | Buy: {total_buy} | Sell: {total_sell}")
+                        print(f"📈 JSON Market Data: {instrument_name} @ ₹{ltp:.2f} | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']}) | Buy: {total_buy} | Sell: {total_sell}")
                         
-                        return tick_data
+                        all_ticks.append(tick_data)
+
+                # Return all valid ticks (could be multiple instruments)
+                if all_ticks:
+                    # If multiple ticks, return them one by one via callback
+                    if len(all_ticks) > 1:
+                        for tick in all_ticks[1:]:  # Process additional ticks
+                            if self.tick_callback:
+                                self.tick_callback(tick)
+                    
+                    return all_ticks[0]  # Return first tick
 
             # If no recognizable structure, log it
             print(f"📊 Unrecognized message structure. Keys: {list(data.keys())}")
