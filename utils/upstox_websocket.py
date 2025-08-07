@@ -94,11 +94,8 @@ class UpstoxWebSocketClient:
         self.ping_count = 0
         self.pong_count = 0
         
-        # Reset message tracking to prevent cross-contamination on reconnect
-        if hasattr(self, '_message_sequence_counter'):
-            self._message_sequence_counter = 0
-            self._last_assigned_instrument = None
-            print("🔄 Reset message sequence tracking for clean assignment")
+        # Reset price tracking for clean assignment
+        print("🔄 Price-based instrument assignment ready")
 
         # Check market hours
         if self._is_market_hours():
@@ -431,70 +428,76 @@ class UpstoxWebSocketClient:
             return None
 
     def _determine_instrument_from_price(self, price: float) -> str:
-        """Determine which subscribed instrument this price likely belongs to using message sequence tracking."""
-        # Get all subscribed instruments in order
+        """Determine instrument using price-based logic and expected ranges."""
         subscribed_list = list(self.subscribed_instruments)
         
-        # If no subscriptions, default to Nifty 50
         if not subscribed_list:
             return 'NSE_INDEX|Nifty 50'
         
-        # If only one instrument subscribed, return it
         if len(subscribed_list) == 1:
             return subscribed_list[0]
         
-        # Initialize message sequence tracking
-        if not hasattr(self, '_message_sequence_counter'):
-            self._message_sequence_counter = 0
-            self._last_assigned_instrument = None
-            
-        self._message_sequence_counter += 1
-        
-        # Separate index and futures instruments
+        # Separate by instrument types
         nifty_index_instruments = [inst for inst in subscribed_list if 'NSE_INDEX|Nifty' in inst]
         nifty_future_instruments = [inst for inst in subscribed_list if 'NSE_FO|NIFTY' in inst]
         
-        # If we have both types, use deterministic assignment
+        # If we have both index and futures
         if nifty_index_instruments and nifty_future_instruments:
             nifty_50_key = nifty_index_instruments[0]
             futures_key = nifty_future_instruments[0]
             
-            # During market hours, try price-based detection first
-            if self._is_market_hours():
-                # Futures typically trade at premium to spot
-                if nifty_50_key in self.last_tick_data:
-                    last_nifty_price = self.last_tick_data[nifty_50_key].get('ltp', 0)
-                    
-                    # If current price is significantly higher, likely futures
-                    if price > last_nifty_price + 50:  # 50 point threshold
-                        print(f"🎯 Price-based assignment: ₹{price:.2f} → Futures (higher than Nifty ₹{last_nifty_price:.2f})")
-                        return futures_key
-                    elif price < last_nifty_price - 10:  # Lower price, likely spot
-                        print(f"🎯 Price-based assignment: ₹{price:.2f} → Nifty 50 (lower than futures)")
-                        return nifty_50_key
+            # Get last known prices
+            last_nifty_price = self.last_tick_data.get(nifty_50_key, {}).get('ltp', 0)
+            last_futures_price = self.last_tick_data.get(futures_key, {}).get('ltp', 0)
             
-            # Fallback: Strict alternating assignment starting with Nifty 50
-            if self._message_sequence_counter % 2 == 1:
-                # Odd messages → Nifty 50
-                assigned_instrument = nifty_50_key
-                print(f"🔄 Sequence assignment #{self._message_sequence_counter}: ₹{price:.2f} → Nifty 50")
-            else:
-                # Even messages → Futures
-                assigned_instrument = futures_key
-                print(f"🔄 Sequence assignment #{self._message_sequence_counter}: ₹{price:.2f} → Futures")
+            # First assignment - use expected price ranges
+            if last_nifty_price == 0 and last_futures_price == 0:
+                # No previous data - assign based on expected price ranges
+                # Typically futures trade at premium (50-200 points higher)
+                if price <= 24600:  # Lower range likely spot
+                    print(f"🎯 Initial assignment: ₹{price:.2f} → Nifty 50 (spot range)")
+                    return nifty_50_key
+                else:  # Higher range likely futures
+                    print(f"🎯 Initial assignment: ₹{price:.2f} → Futures (premium range)")
+                    return futures_key
             
-            # Prevent consecutive assignments to same instrument
-            if assigned_instrument == self._last_assigned_instrument:
-                # Switch to the other instrument
-                assigned_instrument = futures_key if assigned_instrument == nifty_50_key else nifty_50_key
-                print(f"🔄 Switched to avoid duplicate: → {assigned_instrument.split('|')[-1]}")
+            # Subsequent assignments - use relative price logic
+            if last_nifty_price > 0 and last_futures_price > 0:
+                # Calculate distances to last known prices
+                distance_to_spot = abs(price - last_nifty_price)
+                distance_to_futures = abs(price - last_futures_price)
+                
+                # Assign to instrument with closest last price
+                if distance_to_spot < distance_to_futures:
+                    print(f"🎯 Distance-based: ₹{price:.2f} → Nifty 50 (dist: {distance_to_spot:.1f})")
+                    return nifty_50_key
+                else:
+                    print(f"🎯 Distance-based: ₹{price:.2f} → Futures (dist: {distance_to_futures:.1f})")
+                    return futures_key
             
-            self._last_assigned_instrument = assigned_instrument
-            return assigned_instrument
+            # One instrument has data - use logic based on known price
+            elif last_nifty_price > 0:
+                # We know spot price, determine if current is spot or futures
+                price_diff = price - last_nifty_price
+                if abs(price_diff) < 30:  # Close to last spot - likely spot update
+                    print(f"🎯 Spot update: ₹{price:.2f} → Nifty 50 (diff: {price_diff:.1f})")
+                    return nifty_50_key
+                else:  # Significant difference - likely futures
+                    print(f"🎯 Futures by elimination: ₹{price:.2f} → Futures (premium: {price_diff:.1f})")
+                    return futures_key
+            
+            elif last_futures_price > 0:
+                # We know futures price, determine if current is futures or spot
+                price_diff = price - last_futures_price
+                if abs(price_diff) < 30:  # Close to last futures - likely futures update
+                    print(f"🎯 Futures update: ₹{price:.2f} → Futures (diff: {price_diff:.1f})")
+                    return futures_key
+                else:  # Significant difference - likely spot
+                    print(f"🎯 Spot by elimination: ₹{price:.2f} → Nifty 50 (discount: {-price_diff:.1f})")
+                    return nifty_50_key
         
-        # Single type of instrument - rotate through them
-        instrument_index = (self._message_sequence_counter - 1) % len(subscribed_list)
-        return subscribed_list[instrument_index]
+        # Fallback to first instrument
+        return subscribed_list[0]
 
     def _read_varint(self, data: bytes, offset: int) -> tuple:
         """Read a varint from protobuf data."""
