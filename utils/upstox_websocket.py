@@ -170,6 +170,7 @@ class UpstoxWebSocketClient:
         is_weekday = now.weekday() < 5  # Monday = 0, Friday = 4
         is_market_time = market_start <= current_time <= market_end
 
+        print(f"🕐 Market hours check: {current_time.strftime('%H:%M')} IST - {'OPEN' if is_weekday and is_market_time else 'CLOSED'}")
         return is_weekday and is_market_time
 
     def on_error(self, ws, error):
@@ -229,8 +230,16 @@ class UpstoxWebSocketClient:
                         if json_start > 0:
                             decoded_message = decoded_message[json_start:]
                         else:
-                            print(f"⚠️ Message #{self._msg_counter}: No JSON structure found, skipping...")
-                            return
+                            # During off-market hours, fall back to protobuf parsing
+                            if not self._is_market_hours():
+                                print(f"⚠️ Message #{self._msg_counter}: Off-market hours - attempting protobuf parsing...")
+                                tick_data = self.parse_protobuf_message(message)
+                                if tick_data and self.tick_callback:
+                                    self.tick_callback(tick_data)
+                                return
+                            else:
+                                print(f"⚠️ Message #{self._msg_counter}: No JSON structure found during market hours, skipping...")
+                                return
                     
                     # Parse JSON strictly
                     data = json.loads(decoded_message)
