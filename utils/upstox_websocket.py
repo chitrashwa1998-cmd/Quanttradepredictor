@@ -377,10 +377,10 @@ class UpstoxWebSocketClient:
                     import pytz
                     ist = pytz.timezone('Asia/Kolkata')
 
-                    # Determine which instrument this data belongs to based on message sequence and price
-                    likely_instrument = self._determine_instrument_from_price(ltp)
+                    # Use message sequence to determine instrument (no price-based guessing)
+                    likely_instrument = self._get_next_instrument_in_sequence()
                     
-                    # Add validation to prevent obvious cross-contamination
+                    # Get clean display name
                     instrument_display = likely_instrument.split('|')[-1] if '|' in likely_instrument else likely_instrument
                     
                     # Create comprehensive tick data structure
@@ -427,8 +427,8 @@ class UpstoxWebSocketClient:
             print(f"❌ Critical parsing error: {e}")
             return None
 
-    def _determine_instrument_from_price(self, price: float) -> str:
-        """Determine instrument using price-based logic and expected ranges."""
+    def _get_next_instrument_in_sequence(self) -> str:
+        """Get next instrument in sequence for protobuf assignment (no price guessing)."""
         subscribed_list = list(self.subscribed_instruments)
         
         if not subscribed_list:
@@ -437,67 +437,19 @@ class UpstoxWebSocketClient:
         if len(subscribed_list) == 1:
             return subscribed_list[0]
         
-        # Separate by instrument types
-        nifty_index_instruments = [inst for inst in subscribed_list if 'NSE_INDEX|Nifty' in inst]
-        nifty_future_instruments = [inst for inst in subscribed_list if 'NSE_FO|NIFTY' in inst]
+        # Initialize sequence counter if not exists
+        if not hasattr(self, '_protobuf_sequence_counter'):
+            self._protobuf_sequence_counter = 0
         
-        # If we have both index and futures
-        if nifty_index_instruments and nifty_future_instruments:
-            nifty_50_key = nifty_index_instruments[0]
-            futures_key = nifty_future_instruments[0]
-            
-            # Get last known prices
-            last_nifty_price = self.last_tick_data.get(nifty_50_key, {}).get('ltp', 0)
-            last_futures_price = self.last_tick_data.get(futures_key, {}).get('ltp', 0)
-            
-            # First assignment - use expected price ranges
-            if last_nifty_price == 0 and last_futures_price == 0:
-                # No previous data - assign based on expected price ranges
-                # Typically futures trade at premium (50-200 points higher)
-                if price <= 24600:  # Lower range likely spot
-                    print(f"🎯 Initial assignment: ₹{price:.2f} → Nifty 50 (spot range)")
-                    return nifty_50_key
-                else:  # Higher range likely futures
-                    print(f"🎯 Initial assignment: ₹{price:.2f} → Futures (premium range)")
-                    return futures_key
-            
-            # Subsequent assignments - use relative price logic
-            if last_nifty_price > 0 and last_futures_price > 0:
-                # Calculate distances to last known prices
-                distance_to_spot = abs(price - last_nifty_price)
-                distance_to_futures = abs(price - last_futures_price)
-                
-                # Assign to instrument with closest last price
-                if distance_to_spot < distance_to_futures:
-                    print(f"🎯 Distance-based: ₹{price:.2f} → Nifty 50 (dist: {distance_to_spot:.1f})")
-                    return nifty_50_key
-                else:
-                    print(f"🎯 Distance-based: ₹{price:.2f} → Futures (dist: {distance_to_futures:.1f})")
-                    return futures_key
-            
-            # One instrument has data - use logic based on known price
-            elif last_nifty_price > 0:
-                # We know spot price, determine if current is spot or futures
-                price_diff = price - last_nifty_price
-                if abs(price_diff) < 30:  # Close to last spot - likely spot update
-                    print(f"🎯 Spot update: ₹{price:.2f} → Nifty 50 (diff: {price_diff:.1f})")
-                    return nifty_50_key
-                else:  # Significant difference - likely futures
-                    print(f"🎯 Futures by elimination: ₹{price:.2f} → Futures (premium: {price_diff:.1f})")
-                    return futures_key
-            
-            elif last_futures_price > 0:
-                # We know futures price, determine if current is futures or spot
-                price_diff = price - last_futures_price
-                if abs(price_diff) < 30:  # Close to last futures - likely futures update
-                    print(f"🎯 Futures update: ₹{price:.2f} → Futures (diff: {price_diff:.1f})")
-                    return futures_key
-                else:  # Significant difference - likely spot
-                    print(f"🎯 Spot by elimination: ₹{price:.2f} → Nifty 50 (discount: {-price_diff:.1f})")
-                    return nifty_50_key
+        # Round-robin assignment to prevent contamination
+        instrument = subscribed_list[self._protobuf_sequence_counter % len(subscribed_list)]
+        self._protobuf_sequence_counter += 1
         
-        # Fallback to first instrument
-        return subscribed_list[0]
+        # Log assignment for debugging
+        instrument_name = instrument.split('|')[-1] if '|' in instrument else instrument
+        print(f"🔄 Sequential assignment: Message #{self._protobuf_sequence_counter} → {instrument_name}")
+        
+        return instrument
 
     def _read_varint(self, data: bytes, offset: int) -> tuple:
         """Read a varint from protobuf data."""
@@ -522,7 +474,7 @@ class UpstoxWebSocketClient:
         return value, bytes_consumed
 
     def parse_json_message(self, data: Dict) -> Optional[Dict]:
-        """Parse JSON message format for v3 API responses with proper instrument identification."""
+        """Parse JSON message format for v3 API responses with DIRECT instrument identification."""
         try:
             # Handle subscription acknowledgment
             if data.get('status') == 'success' and 'data' in data:
@@ -540,12 +492,16 @@ class UpstoxWebSocketClient:
             if 'feeds' in data:
                 feeds = data['feeds']
 
-                # Process each instrument in feeds - THIS IS THE KEY FIX
-                all_ticks = []
+                # Process each instrument in feeds with DIRECT key mapping
+                processed_instruments = []
+                
                 for instrument_key, feed_data in feeds.items():
-                    # Create separate tick for each instrument
+                    # DIRECT instrument identification - NO GUESSING
+                    exact_instrument_key = instrument_key  # Use exact key from JSON
+                    
+                    # Create separate tick for each instrument with exact identification
                     tick_data = {
-                        'instrument_token': instrument_key,  # EXACT instrument identification
+                        'instrument_token': exact_instrument_key,  # EXACT instrument key
                         'timestamp': datetime.now(),
                         'ltp': 0.0,
                         'ltq': 0,
@@ -654,32 +610,37 @@ class UpstoxWebSocketClient:
                             if 'lp' in market_ff:
                                 tick_data['low'] = float(market_ff['lp'])
 
-                    # Only add tick if we have valid price data
+                    # Only process tick if we have valid price data
                     if tick_data['ltp'] > 0:
-                        # Add timestamp for this specific tick
-                        tick_data['timestamp'] = datetime.now()
+                        # Store with EXACT instrument key (no contamination possible)
+                        self.last_tick_data[exact_instrument_key] = tick_data
                         
-                        # Log the enhanced data with proper instrument identification
-                        instrument_name = instrument_key.split('|')[-1]
+                        # Get clean display name for logging
+                        display_name = exact_instrument_key.split('|')[-1] if '|' in exact_instrument_key else exact_instrument_key
                         ltp = tick_data['ltp']
                         bid = tick_data['best_bid']
                         ask = tick_data['best_ask']
                         total_buy = tick_data['total_buy_quantity']
                         total_sell = tick_data['total_sell_quantity']
                         
-                        print(f"📈 JSON Market Data: {instrument_name} @ ₹{ltp:.2f} | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']}) | Buy: {total_buy} | Sell: {total_sell}")
+                        # Enhanced logging with instrument validation
+                        if 'NIFTY28AUGFUT' in exact_instrument_key:
+                            print(f"🚀 FUTURES: {display_name} @ ₹{ltp:.2f} | Premium | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
+                        elif 'Nifty 50' in exact_instrument_key:
+                            print(f"📊 SPOT: {display_name} @ ₹{ltp:.2f} | Index | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
+                        else:
+                            print(f"📈 {display_name} @ ₹{ltp:.2f} | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
                         
-                        all_ticks.append(tick_data)
+                        processed_instruments.append(tick_data)
 
-                # Return all valid ticks (could be multiple instruments)
-                if all_ticks:
-                    # If multiple ticks, return them one by one via callback
-                    if len(all_ticks) > 1:
-                        for tick in all_ticks[1:]:  # Process additional ticks
-                            if self.tick_callback:
-                                self.tick_callback(tick)
+                # Process all instruments via callback to prevent data mixing
+                if processed_instruments:
+                    for tick in processed_instruments:
+                        if self.tick_callback:
+                            self.tick_callback(tick)
                     
-                    return all_ticks[0]  # Return first tick
+                    # Return first tick (others already processed via callback)
+                    return processed_instruments[0]
 
             # If no recognizable structure, log it
             print(f"📊 Unrecognized message structure. Keys: {list(data.keys())}")
