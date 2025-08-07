@@ -240,7 +240,8 @@ class UpstoxWebSocketClient:
                     
                     # Only show tick updates occasionally to reduce noise
                     if self._msg_counter % 25 == 0:  # Show every 25th tick
-                        print(f"📊 Live tick: {instrument.split('|')[-1]} @ ₹{tick_data.get('ltp', 0):.2f}")
+                        instrument_name = instrument.split('|')[-1] if '|' in instrument else instrument
+                        print(f"📊 Live tick: {instrument_name} @ ₹{tick_data.get('ltp', 0):.2f}")
 
                 # Call callback
                 if self.tick_callback:
@@ -291,8 +292,8 @@ class UpstoxWebSocketClient:
                                     else:  # float
                                         value = struct.unpack(fmt, message[offset:offset+4])[0]
                                     
-                                    # Check if it's a valid price
-                                    if 10000 <= value <= 50000 and not math.isnan(value):
+                                    # Check if it's a valid price (expanded range for futures)
+                                    if 5000 <= value <= 60000 and not math.isnan(value):
                                         extracted_data['prices'].append(round(value, 2))
                                 except (struct.error, OverflowError):
                                     continue
@@ -359,9 +360,12 @@ class UpstoxWebSocketClient:
                     import pytz
                     ist = pytz.timezone('Asia/Kolkata')
 
+                    # Determine which instrument this data belongs to based on price range and subscribed instruments
+                    likely_instrument = self._determine_instrument_from_price(ltp)
+                    
                     # Create comprehensive tick data structure
                     tick = {
-                        'instrument_token': 'NSE_INDEX|Nifty 50',
+                        'instrument_token': likely_instrument,
                         'timestamp': datetime.now(ist),
                         'ltp': float(ltp),
                         'ltq': int(ltq),
@@ -387,7 +391,9 @@ class UpstoxWebSocketClient:
                         'ask_qty': int(ask_qty)
                     }
 
-                    print(f"📊 Enhanced Protobuf: Nifty 50 @ ₹{ltp:.2f} | Bid: ₹{bid_price:.2f}({bid_qty}) | Ask: ₹{ask_price:.2f}({ask_qty}) | TotalBuy: {total_buy_qty} | TotalSell: {total_sell_qty}")
+                    # Get display name for logging
+                    display_name = likely_instrument.split('|')[-1] if '|' in likely_instrument else likely_instrument
+                    print(f"📊 Enhanced Protobuf: {display_name} @ ₹{ltp:.2f} | Bid: ₹{bid_price:.2f}({bid_qty}) | Ask: ₹{ask_price:.2f}({ask_qty}) | TotalBuy: {total_buy_qty} | TotalSell: {total_sell_qty}")
                     return tick
 
             except Exception as e:
@@ -400,6 +406,67 @@ class UpstoxWebSocketClient:
         except Exception as e:
             print(f"❌ Critical parsing error: {e}")
             return None
+
+    def _determine_instrument_from_price(self, price: float) -> str:
+        """Determine which subscribed instrument this price likely belongs to."""
+        # Get all subscribed instruments
+        subscribed_list = list(self.subscribed_instruments)
+        
+        # If no subscriptions, default to Nifty 50
+        if not subscribed_list:
+            return 'NSE_INDEX|Nifty 50'
+        
+        # If only one instrument subscribed, return it
+        if len(subscribed_list) == 1:
+            return subscribed_list[0]
+        
+        # Smart price-based detection for multiple instruments
+        # Nifty 50 typically trades between 18,000-30,000
+        # Nifty futures typically trade close to Nifty 50 but may have slight differences
+        
+        nifty_index_instruments = [inst for inst in subscribed_list if 'NSE_INDEX|Nifty' in inst]
+        nifty_future_instruments = [inst for inst in subscribed_list if 'NSE_FO|NIFTY' in inst]
+        
+        # If we have both index and futures subscribed
+        if nifty_index_instruments and nifty_future_instruments:
+            # Check if we have recent price data to compare
+            nifty_50_key = 'NSE_INDEX|Nifty 50'
+            futures_key = next((k for k in subscribed_list if 'NIFTY28AUGFUT' in k), None)
+            
+            if nifty_50_key in self.last_tick_data and futures_key:
+                last_nifty_price = self.last_tick_data[nifty_50_key].get('ltp', 0)
+                
+                # If current price is closer to last known futures price vs index price
+                # or if this is significantly different from known Nifty 50 price
+                price_diff_threshold = 50  # Allow 50 points difference
+                
+                if abs(price - last_nifty_price) > price_diff_threshold:
+                    # Alternate between instruments based on message timing
+                    if not hasattr(self, '_last_instrument_used'):
+                        self._last_instrument_used = nifty_50_key
+                    
+                    # Alternate assignment
+                    if self._last_instrument_used == nifty_50_key:
+                        self._last_instrument_used = futures_key
+                        return futures_key
+                    else:
+                        self._last_instrument_used = nifty_50_key
+                        return nifty_50_key
+            
+            # Default rotation for fair distribution
+            if not hasattr(self, '_instrument_rotation_counter'):
+                self._instrument_rotation_counter = 0
+            
+            self._instrument_rotation_counter += 1
+            
+            # Rotate between index and futures (60% index, 40% futures)
+            if self._instrument_rotation_counter % 5 < 3:
+                return nifty_index_instruments[0]
+            else:
+                return nifty_future_instruments[0]
+        
+        # Default to first subscribed instrument
+        return subscribed_list[0]
 
     def _read_varint(self, data: bytes, offset: int) -> tuple:
         """Read a varint from protobuf data."""

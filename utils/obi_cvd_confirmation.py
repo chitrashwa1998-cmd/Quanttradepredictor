@@ -225,7 +225,10 @@ class OBICVDConfirmation:
             return self._analyze_granular_confirmation(
                 instrument_key, 
                 current_obi, 
-                rolling_avg_obi_1min,
+                rolling_avg_cvd_2min, 
+                rolling_avg_obi_1min, 
+                legacy_avg_obi,
+                current_timeg_avg_obi_1min,
                 current_cvd_increment,
                 rolling_avg_cvd_2min,
                 instrument_data['cvd'],

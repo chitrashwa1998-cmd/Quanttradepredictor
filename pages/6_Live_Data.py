@@ -882,7 +882,7 @@ def show_live_data_page():
                                 status_text = f"Live ({tick_count:,} ticks)"
                                 status_color = "#00ff41"  # Green for live data
                             else:
-                                # Try to get last known data from OHLC
+                                # Try to get last known data from OHLC or WebSocket
                                 ohlc_data = st.session_state.live_data_manager.get_live_ohlc(instrument, 1)
                                 if ohlc_data is not None and len(ohlc_data) > 0:
                                     latest_price = float(ohlc_data['Close'].iloc[-1])
