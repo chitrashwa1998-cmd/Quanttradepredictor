@@ -93,6 +93,12 @@ class UpstoxWebSocketClient:
         self.connection_start_time = time.time()
         self.ping_count = 0
         self.pong_count = 0
+        
+        # Reset message tracking to prevent cross-contamination on reconnect
+        if hasattr(self, '_message_sequence_counter'):
+            self._message_sequence_counter = 0
+            self._last_assigned_instrument = None
+            print("🔄 Reset message sequence tracking for clean assignment")
 
         # Check market hours
         if self._is_market_hours():
@@ -374,8 +380,11 @@ class UpstoxWebSocketClient:
                     import pytz
                     ist = pytz.timezone('Asia/Kolkata')
 
-                    # Determine which instrument this data belongs to based on price range and subscribed instruments
+                    # Determine which instrument this data belongs to based on message sequence and price
                     likely_instrument = self._determine_instrument_from_price(ltp)
+                    
+                    # Add validation to prevent obvious cross-contamination
+                    instrument_display = likely_instrument.split('|')[-1] if '|' in likely_instrument else likely_instrument
                     
                     # Create comprehensive tick data structure
                     tick = {
@@ -422,7 +431,7 @@ class UpstoxWebSocketClient:
             return None
 
     def _determine_instrument_from_price(self, price: float) -> str:
-        """Determine which subscribed instrument this price likely belongs to using improved logic."""
+        """Determine which subscribed instrument this price likely belongs to using message sequence tracking."""
         # Get all subscribed instruments in order
         subscribed_list = list(self.subscribed_instruments)
         
@@ -434,44 +443,57 @@ class UpstoxWebSocketClient:
         if len(subscribed_list) == 1:
             return subscribed_list[0]
         
-        # Improved sequential assignment based on message order
-        if not hasattr(self, '_instrument_assignment_counter'):
-            self._instrument_assignment_counter = 0
+        # Initialize message sequence tracking
+        if not hasattr(self, '_message_sequence_counter'):
+            self._message_sequence_counter = 0
+            self._last_assigned_instrument = None
+            
+        self._message_sequence_counter += 1
         
         # Separate index and futures instruments
         nifty_index_instruments = [inst for inst in subscribed_list if 'NSE_INDEX|Nifty' in inst]
         nifty_future_instruments = [inst for inst in subscribed_list if 'NSE_FO|NIFTY' in inst]
         
-        # If we have both types, use structured alternating assignment
+        # If we have both types, use deterministic assignment
         if nifty_index_instruments and nifty_future_instruments:
-            self._instrument_assignment_counter += 1
+            nifty_50_key = nifty_index_instruments[0]
+            futures_key = nifty_future_instruments[0]
             
-            # During market hours, prices will naturally diverge more
+            # During market hours, try price-based detection first
             if self._is_market_hours():
-                # Use price-based detection with wider tolerance
-                nifty_50_key = 'NSE_INDEX|Nifty 50'
-                futures_key = next((k for k in subscribed_list if 'NIFTY28AUGFUT' in k), None)
-                
-                if nifty_50_key in self.last_tick_data and futures_key:
+                # Futures typically trade at premium to spot
+                if nifty_50_key in self.last_tick_data:
                     last_nifty_price = self.last_tick_data[nifty_50_key].get('ltp', 0)
                     
-                    # If this price differs significantly from last Nifty price, likely futures
-                    if abs(price - last_nifty_price) > 25:  # 25 point threshold
+                    # If current price is significantly higher, likely futures
+                    if price > last_nifty_price + 50:  # 50 point threshold
+                        print(f"🎯 Price-based assignment: ₹{price:.2f} → Futures (higher than Nifty ₹{last_nifty_price:.2f})")
                         return futures_key
-                    else:
+                    elif price < last_nifty_price - 10:  # Lower price, likely spot
+                        print(f"🎯 Price-based assignment: ₹{price:.2f} → Nifty 50 (lower than futures)")
                         return nifty_50_key
             
-            # Outside market hours or fallback: structured alternation
-            # Assign based on subscription order and counter
-            if self._instrument_assignment_counter % 2 == 1:
-                # First message goes to first instrument (usually Nifty 50)
-                return nifty_index_instruments[0]
+            # Fallback: Strict alternating assignment starting with Nifty 50
+            if self._message_sequence_counter % 2 == 1:
+                # Odd messages → Nifty 50
+                assigned_instrument = nifty_50_key
+                print(f"🔄 Sequence assignment #{self._message_sequence_counter}: ₹{price:.2f} → Nifty 50")
             else:
-                # Second message goes to futures instrument
-                return nifty_future_instruments[0]
+                # Even messages → Futures
+                assigned_instrument = futures_key
+                print(f"🔄 Sequence assignment #{self._message_sequence_counter}: ₹{price:.2f} → Futures")
+            
+            # Prevent consecutive assignments to same instrument
+            if assigned_instrument == self._last_assigned_instrument:
+                # Switch to the other instrument
+                assigned_instrument = futures_key if assigned_instrument == nifty_50_key else nifty_50_key
+                print(f"🔄 Switched to avoid duplicate: → {assigned_instrument.split('|')[-1]}")
+            
+            self._last_assigned_instrument = assigned_instrument
+            return assigned_instrument
         
-        # Single type of instrument - just rotate through them
-        instrument_index = self._instrument_assignment_counter % len(subscribed_list)
+        # Single type of instrument - rotate through them
+        instrument_index = (self._message_sequence_counter - 1) % len(subscribed_list)
         return subscribed_list[instrument_index]
 
     def _read_varint(self, data: bytes, offset: int) -> tuple:
