@@ -812,7 +812,7 @@ class UpstoxWebSocketClient:
                 "method": "configure", 
                 "data": {
                     "format": "json",
-                    "compression": false
+                    "compression": False
                 }
             }
 
