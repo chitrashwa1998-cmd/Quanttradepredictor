@@ -598,13 +598,25 @@ class UpstoxWebSocketClient:
                                 'change_percent': ((ltp - cp) / cp * 100) if cp > 0 else 0.0
                             })
 
-                    # Look for full market data (complete V3 depth structure) with validation
-                    if 'ff' in feed_data and isinstance(feed_data['ff'], dict):
+                    # Look for full market data (complete V3 full_d30 structure) with validation
+                    # Handle both 'ff' (legacy) and 'fullFeed' (full_d30) structures
+                    market_ff = None
+                    
+                    if 'fullFeed' in feed_data and isinstance(feed_data['fullFeed'], dict):
+                        # full_d30 mode uses 'fullFeed' structure
+                        full_feed = feed_data['fullFeed']
+                        if 'marketFF' in full_feed and isinstance(full_feed['marketFF'], dict):
+                            market_ff = full_feed['marketFF']
+                            # Store request mode for validation
+                            tick_data['request_mode'] = full_feed.get('requestMode', 'unknown')
+                    elif 'ff' in feed_data and isinstance(feed_data['ff'], dict):
+                        # Legacy 'full' mode uses 'ff' structure
                         ff_data = feed_data['ff']
-                        
-                        # Extract market full feed data with validation (V3 structure)
                         if 'marketFF' in ff_data and isinstance(ff_data['marketFF'], dict):
                             market_ff = ff_data['marketFF']
+                            tick_data['request_mode'] = 'full'
+                    
+                    if market_ff:
                             
                             # LTPC within full feed (exact V3 structure)
                             if 'ltpc' in market_ff and isinstance(market_ff['ltpc'], dict):
@@ -623,11 +635,11 @@ class UpstoxWebSocketClient:
                                     'last_traded_time': ltt
                                 })
 
-                            # Market depth information (exact V3 bidAskQuote structure)
+                            # Market depth information (full_d30 bidAskQuote structure - 30 levels)
                             if 'marketLevel' in market_ff and isinstance(market_ff['marketLevel'], dict):
                                 market_level = market_ff['marketLevel']
                                 
-                                # 5-level bid/ask data as per V3 specification
+                                # Up to 30-level bid/ask data as per V3 full_d30 specification
                                 if 'bidAskQuote' in market_level and isinstance(market_level['bidAskQuote'], list):
                                     bid_ask_quotes = market_level['bidAskQuote']
                                     
@@ -646,24 +658,38 @@ class UpstoxWebSocketClient:
                                                 'ask_qty': int(level1.get('askQ', 0))
                                             })
                                             
-                                            # Store all 5 levels for complete market depth
+                                            # Store all 30 levels for complete D30 market depth
                                             tick_data['market_depth'] = {
                                                 'bid_levels': [],
-                                                'ask_levels': []
+                                                'ask_levels': [],
+                                                'total_levels': len(bid_ask_quotes)
                                             }
                                             
-                                            for i, level in enumerate(bid_ask_quotes[:5]):  # Top 5 levels
+                                            # Process all available levels (up to 30 for full_d30)
+                                            for i, level in enumerate(bid_ask_quotes[:30]):  # Up to 30 levels
                                                 tick_data['market_depth']['bid_levels'].append({
+                                                    'level': i + 1,
                                                     'price': float(level.get('bidP', 0)),
                                                     'quantity': int(level.get('bidQ', 0))
                                                 })
                                                 tick_data['market_depth']['ask_levels'].append({
+                                                    'level': i + 1,
                                                     'price': float(level.get('askP', 0)),
                                                     'quantity': int(level.get('askQ', 0))
                                                 })
+                                            
+                                            # Calculate total quantities across all levels for D30
+                                            total_bid_qty = sum(int(level.get('bidQ', 0)) for level in bid_ask_quotes)
+                                            total_ask_qty = sum(int(level.get('askQ', 0)) for level in bid_ask_quotes)
+                                            
+                                            tick_data.update({
+                                                'total_bid_quantity_all_levels': total_bid_qty,
+                                                'total_ask_quantity_all_levels': total_ask_qty,
+                                                'market_depth_levels': len(bid_ask_quotes)
+                                            })
                                                 
                                         except (ValueError, TypeError) as e:
-                                            print(f"⚠️ Invalid V3 bid/ask data for {instrument_key}: {e}")
+                                            print(f"⚠️ Invalid V3 D30 bid/ask data for {instrument_key}: {e}")
 
                             # Volume and quantity totals (V3 field names)
                             if 'vtt' in market_ff:  # Volume traded today
@@ -719,13 +745,20 @@ class UpstoxWebSocketClient:
                         total_buy = tick_data['total_buy_quantity']
                         total_sell = tick_data['total_sell_quantity']
                         
-                        # Enhanced logging with instrument validation
+                        # Enhanced logging with full_d30 depth information
+                        depth_levels = tick_data.get('market_depth_levels', 0)
+                        request_mode = tick_data.get('request_mode', 'unknown')
+                        
                         if 'NIFTY28AUGFUT' in exact_instrument_key:
-                            print(f"🚀 FUTURES: {display_name} @ ₹{ltp:.2f} | Premium | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
+                            print(f"🚀 FUTURES: {display_name} @ ₹{ltp:.2f} | {request_mode} | {depth_levels} levels | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
                         elif 'Nifty 50' in exact_instrument_key:
-                            print(f"📊 SPOT: {display_name} @ ₹{ltp:.2f} | Index | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
+                            print(f"📊 SPOT: {display_name} @ ₹{ltp:.2f} | {request_mode} | {depth_levels} levels | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
                         else:
-                            print(f"📈 {display_name} @ ₹{ltp:.2f} | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
+                            print(f"📈 {display_name} @ ₹{ltp:.2f} | {request_mode} | {depth_levels} levels | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
+                        
+                        # Log deep market information for full_d30
+                        if depth_levels >= 10:
+                            print(f"   📊 Deep Market: L5 Bid: ₹{tick_data['market_depth']['bid_levels'][4]['price']:.2f}({tick_data['market_depth']['bid_levels'][4]['quantity']}) | L10 Ask: ₹{tick_data['market_depth']['ask_levels'][9]['price']:.2f}({tick_data['market_depth']['ask_levels'][9]['quantity']})")
                         
                         processed_instruments.append(tick_data)
 
@@ -834,8 +867,8 @@ class UpstoxWebSocketClient:
         
         print("🔌 WebSocket disconnected and cleaned up")
 
-    def subscribe(self, instrument_keys: list, mode: str = "full"):
-        """Subscribe to instruments using exact V3 API format for complete JSON market data."""
+    def subscribe(self, instrument_keys: list, mode: str = "full_d30"):
+        """Subscribe to instruments using exact V3 API format for complete 30-level market data (Upstox Plus)."""
         if not self.is_connected:
             print("❌ WebSocket not connected. Please connect first.")
             return False
@@ -849,6 +882,12 @@ class UpstoxWebSocketClient:
                 print(f"✅ All instruments already subscribed")
                 return True
 
+            # Validate instrument count for full_d30 mode (Upstox Plus limit: 50 instruments)
+            if mode == "full_d30" and len(new_instruments) > 50:
+                print(f"⚠️ full_d30 mode limited to 50 instruments (Upstox Plus). Requested: {len(new_instruments)}")
+                print(f"🔄 Truncating to first 50 instruments...")
+                new_instruments = new_instruments[:50]
+
             # Create subscription request exactly as per V3 documentation
             subscribe_request = {
                 "guid": str(uuid.uuid4()),
@@ -859,9 +898,9 @@ class UpstoxWebSocketClient:
                 }
             }
 
-            print(f"🔄 Subscribing to {len(new_instruments)} instruments in '{mode}' mode (V3 JSON Format)")
+            print(f"🔄 Subscribing to {len(new_instruments)} instruments in '{mode}' mode (V3 JSON Format - Upstox Plus)")
             print(f"📋 Instruments: {[key.split('|')[-1] for key in new_instruments]}")
-            print(f"📊 Expected data: Full market depth, LTPC, 5-level quotes, OHLC, Greeks")
+            print(f"📊 Expected data: FULL D30 - LTPC, 30-level quotes, extended metadata, OHLC, Greeks")
 
             if self.ws and hasattr(self.ws, 'send'):
                 # Send subscription request as binary (as per V3 documentation)
@@ -873,12 +912,14 @@ class UpstoxWebSocketClient:
                 # Update subscribed instruments
                 self.subscribed_instruments.update(new_instruments)
 
-                # Log expected JSON structure
-                print(f"📋 Expected JSON structure:")
-                print(f"   - feeds.{new_instruments[0]}.ltpc (price data)")
-                print(f"   - feeds.{new_instruments[0]}.ff.marketFF.marketLevel.bidAskQuote (5 levels)")
-                print(f"   - feeds.{new_instruments[0]}.ff.marketFF.marketOHLC (OHLC data)")
-                print(f"   - feeds.{new_instruments[0]}.ff.marketFF.tbq/tsq (total quantities)")
+                # Log expected JSON structure for full_d30
+                print(f"📋 Expected full_d30 JSON structure:")
+                print(f"   - feeds.{new_instruments[0]}.fullFeed.marketFF.ltpc (price data)")
+                print(f"   - feeds.{new_instruments[0]}.fullFeed.marketFF.marketLevel.bidAskQuote (30 levels)")
+                print(f"   - feeds.{new_instruments[0]}.fullFeed.marketFF.marketOHLC (OHLC data)")
+                print(f"   - feeds.{new_instruments[0]}.fullFeed.marketFF.optionGreeks (Greeks)")
+                print(f"   - feeds.{new_instruments[0]}.fullFeed.marketFF.tbq/tsq (total quantities)")
+                print(f"   - feeds.{new_instruments[0]}.fullFeed.requestMode: '{mode}'")
 
                 return True
 
