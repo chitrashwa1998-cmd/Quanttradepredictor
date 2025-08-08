@@ -77,7 +77,7 @@ class UpstoxWebSocketClient:
         self.websocket_url = f"wss://api.upstox.com/v2/feed/market-data-feed?access_token={self.access_token}"
         print(f"🔄 Using fallback WebSocket URL (v3)")
 
-    def set_callbacks(self, 
+    def set_callbacks(self,
                      tick_callback: Optional[Callable] = None,
                      error_callback: Optional[Callable] = None,
                      connection_callback: Optional[Callable] = None):
@@ -93,7 +93,7 @@ class UpstoxWebSocketClient:
         self.connection_start_time = time.time()
         self.ping_count = 0
         self.pong_count = 0
-        
+
         # Reset price tracking for clean assignment
         print("🔄 Price-based instrument assignment ready")
 
@@ -125,7 +125,7 @@ class UpstoxWebSocketClient:
             self.connection_callback("disconnected")
 
         # Auto-reconnect with exponential backoff (reduced frequency to avoid spam)
-        if (hasattr(self, '_was_connected') and self._was_connected and 
+        if (hasattr(self, '_was_connected') and self._was_connected and
             self.close_count <= 10):
 
             import threading
@@ -176,7 +176,7 @@ class UpstoxWebSocketClient:
     def on_error(self, ws, error):
         """Handle WebSocket errors."""
         error_str = str(error)
-        
+
         # Filter out common non-critical errors
         if "Connection is already closed" in error_str:
             print(f"ℹ️ WebSocket already closed")
@@ -187,7 +187,7 @@ class UpstoxWebSocketClient:
             print(f"⏰ WebSocket timeout: {error}")
         else:
             print(f"❌ Upstox WebSocket error: {error}")
-        
+
         if self.error_callback:
             self.error_callback(error)
 
@@ -211,18 +211,18 @@ class UpstoxWebSocketClient:
                 if not hasattr(self, '_msg_counter'):
                     self._msg_counter = 0
                 self._msg_counter += 1
-                
+
                 if self._msg_counter % 25 == 0:  # Show every 25th message
                     print(f"📦 Processing JSON message #{self._msg_counter}")
-                
+
                 # STRICT JSON-ONLY DECODING - NO FALLBACK
                 try:
                     # Decode as UTF-8 with proper error handling
                     decoded_message = message.decode('utf-8', errors='replace')
-                    
+
                     # Clean any null bytes or control characters
                     decoded_message = decoded_message.strip('\x00').strip()
-                    
+
                     # Ensure it's valid JSON format
                     if not decoded_message.startswith('{'):
                         # Try to find JSON start in the message
@@ -240,17 +240,17 @@ class UpstoxWebSocketClient:
                             else:
                                 print(f"⚠️ Message #{self._msg_counter}: No JSON structure found during market hours, skipping...")
                                 return
-                    
+
                     # Parse JSON strictly
                     data = json.loads(decoded_message)
                     print(f"✅ JSON Message #{self._msg_counter} parsed successfully")
                     tick_data = self.parse_json_message(data)
-                    
+
                 except (UnicodeDecodeError, json.JSONDecodeError) as e:
                     print(f"❌ JSON parsing failed for message #{self._msg_counter}: {e}")
                     print(f"🔍 Message preview: {message[:100]}...")
                     return  # Skip non-JSON messages completely
-                    
+
             else:
                 # Handle text messages
                 print(f"📄 Text message received")
@@ -268,7 +268,7 @@ class UpstoxWebSocketClient:
                 instrument = tick_data.get('instrument_token')
                 if instrument:
                     self.last_tick_data[instrument] = tick_data
-                    
+
                     # Show live updates
                     if self._msg_counter % 10 == 0:  # Show every 10th tick
                         instrument_name = instrument.split('|')[-1] if '|' in instrument else instrument
@@ -296,16 +296,16 @@ class UpstoxWebSocketClient:
             # PRIORITY 1: Try to decode as JSON first (has proper instrument identification)
             try:
                 # Check for JSON patterns more thoroughly
-                if (message.startswith(b'{') or 
-                    b'"feeds"' in message[:200] or 
+                if (message.startswith(b'{') or
+                    b'"feeds"' in message[:200] or
                     b'"ltpc"' in message[:200] or
                     b'"NSE_' in message[:500]):
-                    
+
                     json_str = message.decode('utf-8', errors='ignore')
-                    
+
                     # Clean up any binary artifacts
                     json_str = json_str.strip('\x00').strip()
-                    
+
                     if json_str.startswith('{'):
                         data = json.loads(json_str)
                         print(f"📊 JSON Message Parsed - processing feeds data...")
@@ -338,7 +338,7 @@ class UpstoxWebSocketClient:
                                         value = struct.unpack(fmt, message[offset:offset+8])[0]
                                     else:  # float
                                         value = struct.unpack(fmt, message[offset:offset+4])[0]
-                                    
+
                                     # Check if it's a valid price (expanded range for futures)
                                     if 5000 <= value <= 60000 and not math.isnan(value):
                                         extracted_data['prices'].append(round(value, 2))
@@ -376,31 +376,31 @@ class UpstoxWebSocketClient:
                 # Process extracted data if we found valid information
                 if extracted_data['prices']:
                     from collections import Counter
-                    
+
                     # Get most common price (likely LTP)
                     price_counts = Counter(extracted_data['prices'])
                     ltp = price_counts.most_common(1)[0][0]
-                    
+
                     # Try to identify bid/ask from nearby prices
                     prices = sorted(set(extracted_data['prices']))
                     ltp_index = prices.index(ltp) if ltp in prices else 0
-                    
+
                     bid_price = prices[max(0, ltp_index - 1)] if ltp_index > 0 else ltp * 0.9999
                     ask_price = prices[min(len(prices) - 1, ltp_index + 1)] if ltp_index < len(prices) - 1 else ltp * 1.0001
-                    
+
                     # Get quantities and volumes
                     quantities = extracted_data['quantities']
                     volumes = extracted_data['volumes']
-                    
+
                     # Estimate market depth quantities
                     ltq = quantities[0] if quantities else 100
                     bid_qty = quantities[1] if len(quantities) > 1 else 50
                     ask_qty = quantities[2] if len(quantities) > 2 else 50
-                    
+
                     # Estimate total quantities (larger numbers likely represent totals)
                     total_buy_qty = max(quantities) if quantities else 5000
                     total_sell_qty = total_buy_qty * 0.95 if quantities else 4500  # Slightly less sell pressure
-                    
+
                     # Volume information
                     volume = volumes[0] if volumes else 1000
 
@@ -409,10 +409,10 @@ class UpstoxWebSocketClient:
 
                     # Use message sequence to determine instrument (no price-based guessing)
                     likely_instrument = self._get_next_instrument_in_sequence()
-                    
+
                     # Get clean display name
                     instrument_display = likely_instrument.split('|')[-1] if '|' in likely_instrument else likely_instrument
-                    
+
                     # Create comprehensive tick data structure
                     tick = {
                         'instrument_token': likely_instrument,
@@ -460,25 +460,25 @@ class UpstoxWebSocketClient:
     def _get_next_instrument_in_sequence(self) -> str:
         """Get next instrument in sequence for protobuf assignment (no price guessing)."""
         subscribed_list = list(self.subscribed_instruments)
-        
+
         if not subscribed_list:
             return 'NSE_INDEX|Nifty 50'
-        
+
         if len(subscribed_list) == 1:
             return subscribed_list[0]
-        
+
         # Initialize sequence counter if not exists
         if not hasattr(self, '_protobuf_sequence_counter'):
             self._protobuf_sequence_counter = 0
-        
+
         # Round-robin assignment to prevent contamination
         instrument = subscribed_list[self._protobuf_sequence_counter % len(subscribed_list)]
         self._protobuf_sequence_counter += 1
-        
+
         # Log assignment for debugging
         instrument_name = instrument.split('|')[-1] if '|' in instrument else instrument
         print(f"🔄 Sequential assignment: Message #{self._protobuf_sequence_counter} → {instrument_name}")
-        
+
         return instrument
 
     def _read_varint(self, data: bytes, offset: int) -> tuple:
@@ -510,7 +510,7 @@ class UpstoxWebSocketClient:
             if not isinstance(data, dict):
                 print(f"❌ Invalid JSON structure: Expected dict, got {type(data)}")
                 return None
-            
+
             # Handle subscription acknowledgment
             if data.get('status') == 'success' and 'data' in data:
                 if 'subscribed' in data['data']:
@@ -527,23 +527,23 @@ class UpstoxWebSocketClient:
             # Handle live feed data - Look for feeds structure
             if 'feeds' in data and isinstance(data['feeds'], dict):
                 feeds = data['feeds']
-                
+
                 if not feeds:
                     print(f"⚠️ Empty feeds structure in JSON message")
                     return None
 
                 # Process each instrument in feeds with DIRECT key mapping
                 processed_instruments = []
-                
+
                 print(f"📊 Processing JSON feeds for {len(feeds)} instruments")
-                
+
                 for instrument_key, feed_data in feeds.items():
                     if not isinstance(feed_data, dict):
                         print(f"⚠️ Invalid feed data for {instrument_key}: {type(feed_data)}")
                         continue
                     # DIRECT instrument identification - NO GUESSING
                     exact_instrument_key = instrument_key  # Use exact key from JSON
-                    
+
                     # Create separate tick for each instrument with exact identification
                     tick_data = {
                         'instrument_token': exact_instrument_key,  # EXACT instrument key
@@ -601,7 +601,7 @@ class UpstoxWebSocketClient:
                     # Look for full market data (complete V3 full_d30 structure) with validation
                     # Handle both 'ff' (legacy) and 'fullFeed' (full_d30) structures
                     market_ff = None
-                    
+
                     if 'fullFeed' in feed_data and isinstance(feed_data['fullFeed'], dict):
                         # full_d30 mode uses 'fullFeed' structure
                         full_feed = feed_data['fullFeed']
@@ -615,9 +615,9 @@ class UpstoxWebSocketClient:
                         if 'marketFF' in ff_data and isinstance(ff_data['marketFF'], dict):
                             market_ff = ff_data['marketFF']
                             tick_data['request_mode'] = 'full'
-                    
+
                     if market_ff:
-                            
+
                             # LTPC within full feed (exact V3 structure)
                             if 'ltpc' in market_ff and isinstance(market_ff['ltpc'], dict):
                                 ltpc = market_ff['ltpc']
@@ -625,7 +625,7 @@ class UpstoxWebSocketClient:
                                 cp = float(ltpc.get('cp', ltp))
                                 ltq = int(ltpc.get('ltq', 0))
                                 ltt = ltpc.get('ltt', '')  # Last traded time
-                                
+
                                 tick_data.update({
                                     'ltp': ltp,
                                     'last_traded_price': ltp,
@@ -638,11 +638,11 @@ class UpstoxWebSocketClient:
                             # Market depth information (full_d30 bidAskQuote structure - 30 levels)
                             if 'marketLevel' in market_ff and isinstance(market_ff['marketLevel'], dict):
                                 market_level = market_ff['marketLevel']
-                                
+
                                 # Up to 30-level bid/ask data as per V3 full_d30 specification
                                 if 'bidAskQuote' in market_level and isinstance(market_level['bidAskQuote'], list):
                                     bid_ask_quotes = market_level['bidAskQuote']
-                                    
+
                                     if len(bid_ask_quotes) > 0 and isinstance(bid_ask_quotes[0], dict):
                                         # Level 1 (best bid/ask) - using correct V3 field names
                                         level1 = bid_ask_quotes[0]
@@ -657,14 +657,14 @@ class UpstoxWebSocketClient:
                                                 'bid_qty': int(level1.get('bidQ', 0)),
                                                 'ask_qty': int(level1.get('askQ', 0))
                                             })
-                                            
+
                                             # Store all 30 levels for complete D30 market depth
                                             tick_data['market_depth'] = {
                                                 'bid_levels': [],
                                                 'ask_levels': [],
                                                 'total_levels': len(bid_ask_quotes)
                                             }
-                                            
+
                                             # Process all available levels (up to 30 for full_d30)
                                             for i, level in enumerate(bid_ask_quotes[:30]):  # Up to 30 levels
                                                 tick_data['market_depth']['bid_levels'].append({
@@ -677,33 +677,33 @@ class UpstoxWebSocketClient:
                                                     'price': float(level.get('askP', 0)),
                                                     'quantity': int(level.get('askQ', 0))
                                                 })
-                                            
+
                                             # Calculate total quantities across all levels for D30
                                             total_bid_qty = sum(int(level.get('bidQ', 0)) for level in bid_ask_quotes)
                                             total_ask_qty = sum(int(level.get('askQ', 0)) for level in bid_ask_quotes)
-                                            
+
                                             tick_data.update({
                                                 'total_bid_quantity_all_levels': total_bid_qty,
                                                 'total_ask_quantity_all_levels': total_ask_qty,
                                                 'market_depth_levels': len(bid_ask_quotes)
                                             })
-                                                
+
                                         except (ValueError, TypeError) as e:
                                             print(f"⚠️ Invalid V3 D30 bid/ask data for {instrument_key}: {e}")
 
                             # Volume and quantity totals (V3 field names)
                             if 'vtt' in market_ff:  # Volume traded today
                                 tick_data['volume'] = int(market_ff['vtt'])
-                            
+
                             if 'tbq' in market_ff:  # Total buy quantity
                                 tick_data['total_buy_quantity'] = int(market_ff['tbq'])
-                            
+
                             if 'tsq' in market_ff:  # Total sell quantity
                                 tick_data['total_sell_quantity'] = int(market_ff['tsq'])
-                                
+
                             if 'atp' in market_ff:  # Average traded price
                                 tick_data['average_traded_price'] = float(market_ff['atp'])
-                                
+
                             if 'oi' in market_ff:  # Open interest
                                 tick_data['open_interest'] = int(market_ff['oi'])
 
@@ -720,7 +720,7 @@ class UpstoxWebSocketClient:
                                                 'low': float(ohlc_item.get('low', 0))
                                             })
                                             break
-                                            
+
                             # Option Greeks if available (for option instruments)
                             if 'optionGreeks' in market_ff and isinstance(market_ff['optionGreeks'], dict):
                                 greeks = market_ff['optionGreeks']
@@ -736,7 +736,7 @@ class UpstoxWebSocketClient:
                     if tick_data['ltp'] > 0:
                         # Store with EXACT instrument key (no contamination possible)
                         self.last_tick_data[exact_instrument_key] = tick_data
-                        
+
                         # Get clean display name for logging
                         display_name = exact_instrument_key.split('|')[-1] if '|' in exact_instrument_key else exact_instrument_key
                         ltp = tick_data['ltp']
@@ -744,22 +744,22 @@ class UpstoxWebSocketClient:
                         ask = tick_data['best_ask']
                         total_buy = tick_data['total_buy_quantity']
                         total_sell = tick_data['total_sell_quantity']
-                        
+
                         # Enhanced logging with full_d30 depth information
                         depth_levels = tick_data.get('market_depth_levels', 0)
                         request_mode = tick_data.get('request_mode', 'unknown')
-                        
-                        if 'NIFTY28AUGFUT' in exact_instrument_key:
+
+                        if '42633' in exact_instrument_key: # NIFTY AUG 2025 FUT
                             print(f"🚀 FUTURES: {display_name} @ ₹{ltp:.2f} | {request_mode} | {depth_levels} levels | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
                         elif 'Nifty 50' in exact_instrument_key:
                             print(f"📊 SPOT: {display_name} @ ₹{ltp:.2f} | {request_mode} | {depth_levels} levels | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
                         else:
                             print(f"📈 {display_name} @ ₹{ltp:.2f} | {request_mode} | {depth_levels} levels | Bid: ₹{bid:.2f}({tick_data['best_bid_quantity']}) | Ask: ₹{ask:.2f}({tick_data['best_ask_quantity']})")
-                        
+
                         # Log deep market information for full_d30
                         if depth_levels >= 10:
                             print(f"   📊 Deep Market: L5 Bid: ₹{tick_data['market_depth']['bid_levels'][4]['price']:.2f}({tick_data['market_depth']['bid_levels'][4]['quantity']}) | L10 Ask: ₹{tick_data['market_depth']['ask_levels'][9]['price']:.2f}({tick_data['market_depth']['ask_levels'][9]['quantity']})")
-                        
+
                         processed_instruments.append(tick_data)
 
                 # Process all instruments via callback to prevent data mixing
@@ -767,7 +767,7 @@ class UpstoxWebSocketClient:
                     for tick in processed_instruments:
                         if self.tick_callback:
                             self.tick_callback(tick)
-                    
+
                     # Return first tick (others already processed via callback)
                     return processed_instruments[0]
 
@@ -850,7 +850,7 @@ class UpstoxWebSocketClient:
         """Close WebSocket connection."""
         print("🔌 Disconnecting WebSocket...")
         self.is_connected = False
-        
+
         if self.ws:
             try:
                 # Properly close the WebSocket
@@ -860,11 +860,11 @@ class UpstoxWebSocketClient:
                 print(f"⚠️ Error during disconnect: {e}")
             finally:
                 self.ws = None
-        
+
         # Clear subscriptions
         self.subscribed_instruments.clear()
         self.last_tick_data.clear()
-        
+
         print("🔌 WebSocket disconnected and cleaned up")
 
     def subscribe(self, instrument_keys: list, mode: str = "full_d30"):
