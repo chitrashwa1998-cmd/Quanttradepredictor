@@ -37,14 +37,17 @@ class LivePredictionPipeline:
 
         # Minimum data requirements
         self.min_ohlc_rows = 100  # Minimum OHLC rows needed for predictions
-        
+
         # Candle completion tracking
         self.last_candle_timestamps = {}  # Track last processed candle for each instrument
-        
-        # Dedicated instrument routing
-        self.ml_models_instrument = "NSE_INDEX|Nifty 50"  # Dedicated to ML models + BSM
-        self.obi_cvd_instrument = "NSE_FO|NIFTY28AUGFUT"  # Dedicated to OBI+CVD (Nifty Future August)
-        
+
+        # Dedicated instrument routing for specialized analysis
+        # ML Models + Black-Scholes: Use spot index for accurate pricing models
+        self.ml_models_instrument = "NSE_INDEX|Nifty 50"
+
+        # OBI+CVD Analysis: Use futures for better order flow visibility
+        self.obi_cvd_instrument = "NSE_FO|64103"  # Nifty Aug Future - better for order flow
+
         # OBI+CVD Confirmation
         self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
 
@@ -59,14 +62,14 @@ class LivePredictionPipeline:
             # Force refresh of model manager to ensure latest models are loaded
             print(f"🔄 Refreshing ModelManager to load latest trained models...")
             self.model_manager._load_existing_models()
-            
+
             # Check which models are trained
             available_models = []
             model_names = ['direction', 'volatility', 'profit_probability', 'reversal']
 
             print(f"🔍 Checking model availability after refresh...")
             print(f"🔍 ModelManager.trained_models keys: {list(self.model_manager.trained_models.keys())}")
-            
+
             # Also check database directly
             try:
                 from utils.database_adapter import get_trading_database
@@ -75,13 +78,13 @@ class LivePredictionPipeline:
                 print(f"🔍 Direct database check - available models: {list(db_models.keys()) if db_models else 'None'}")
             except Exception as e:
                 print(f"❌ Could not check database directly: {e}")
-            
+
             for model_name in model_names:
                 is_trained = self.model_manager.is_model_trained(model_name)
                 if is_trained:
                     available_models.append(model_name)
                     print(f"✅ {model_name} model ready for live predictions")
-                    
+
                     # Check if model has all required components
                     model_data = self.model_manager.trained_models.get(model_name, {})
                     has_model = 'model' in model_data or 'ensemble' in model_data
@@ -90,21 +93,21 @@ class LivePredictionPipeline:
                     print(f"   - Has model: {has_model}, Has scaler: {has_scaler}, Has features: {has_features}")
                 else:
                     print(f"⚠️ {model_name} model not trained")
-                    
+
                     # Check what's in session state for this model
                     if hasattr(st, 'session_state'):
                         # Check main trained_models
                         if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
                             if model_name in st.session_state.trained_models:
                                 print(f"   - Found {model_name} in session_state.trained_models")
-                        
+
                         # Check individual model session states
                         if hasattr(st.session_state, f'{model_name}_trained_models'):
                             session_models = getattr(st.session_state, f'{model_name}_trained_models', {})
                             print(f"   - Found in {model_name}_trained_models: {list(session_models.keys())}")
                         else:
                             print(f"   - No session state found for {model_name}_trained_models")
-            
+
             print(f"🎯 Total available models: {len(available_models)} out of {len(model_names)}")
 
             if not available_models:
@@ -147,7 +150,7 @@ class LivePredictionPipeline:
         self.live_predictions = {}
         self.prediction_history = {}
         self.latest_volatility_predictions = {}
-        
+
         # Reset OBI+CVD confirmation data
         self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
 
@@ -158,15 +161,15 @@ class LivePredictionPipeline:
         """Subscribe to instruments for live predictions with dedicated routing."""
         # Always subscribe to both dedicated instruments regardless of user selection
         dedicated_instruments = [self.ml_models_instrument, self.obi_cvd_instrument]
-        
+
         # Combine with user selected instruments but avoid duplicates
         all_instruments = list(set(instrument_keys + dedicated_instruments))
-        
+
         print(f"🎯 Subscribing with dedicated instrument routing:")
         print(f"   ML Models + BSM: {self.ml_models_instrument}")
         print(f"   OBI+CVD: {self.obi_cvd_instrument}")
         print(f"   Additional instruments: {[inst for inst in instrument_keys if inst not in dedicated_instruments]}")
-        
+
         return self.live_data_manager.subscribe_instruments(all_instruments)
 
     def _processing_loop(self):
@@ -195,16 +198,16 @@ class LivePredictionPipeline:
                         if not hasattr(self, '_debug_counter'):
                             self._debug_counter = 0
                         self._debug_counter += 1
-                        
+
                         # Only show debug every 20 iterations to avoid spam
                         if self._debug_counter % 20 == 0:
                             print(f"🔍 Processing loop #{self._debug_counter} - checking ML models on {self.ml_models_instrument}")
-                        
+
                         # Check if a new candle has closed before processing predictions
                         if self._has_new_candle_closed(self.ml_models_instrument):
                             print(f"🎯 New candle detected for ML models on {self.ml_models_instrument}, processing predictions...")
                             self._process_instrument_predictions(self.ml_models_instrument)
-                    
+
                     # Process any additional user-selected instruments (legacy support)
                     for instrument_key, stats in tick_stats.items():
                         if instrument_key not in [self.ml_models_instrument, self.obi_cvd_instrument]:
@@ -234,13 +237,13 @@ class LivePredictionPipeline:
         try:
             # Get latest OHLC data
             ohlc_data = self.live_data_manager.get_live_ohlc(instrument_key, rows=200)
-            
+
             if ohlc_data is None or len(ohlc_data) < 1:
                 return False
-            
+
             # Get the latest candle timestamp
             latest_candle_timestamp = ohlc_data.index[-1]
-            
+
             # Check if this is a new candle compared to last processed
             if instrument_key not in self.last_candle_timestamps:
                 # First time processing this instrument
@@ -255,21 +258,21 @@ class LivePredictionPipeline:
                     print(f"🎯 First prediction for {instrument_key} - sufficient data available ({len(ohlc_data)} rows)")
                     return True
                 return False
-            
+
             # Check if we have a new candle timestamp (this means a new candle was formed)
             if latest_candle_timestamp > self.last_candle_timestamps[instrument_key]:
                 print(f"🕐 NEW 5-MINUTE CANDLE CLOSED for {instrument_key}!")
                 print(f"   Previous candle: {self.last_candle_timestamps[instrument_key]}")
                 print(f"   New candle: {latest_candle_timestamp}")
                 print(f"   Processing prediction immediately...")
-                
+
                 # Update our tracking and trigger prediction
                 self.last_candle_timestamps[instrument_key] = latest_candle_timestamp
                 return True
-            
+
             # No new candle detected
             return False
-            
+
         except Exception as e:
             print(f"❌ Error checking candle completion for {instrument_key}: {e}")
             return False
@@ -285,11 +288,11 @@ class LivePredictionPipeline:
             # Check if we have pre-seeded data
             seeding_status = self.live_data_manager.get_seeding_status()
             is_seeded = instrument_key in seeding_status.get('instruments_seeded', [])
-            
+
             if ohlc_data is None or len(ohlc_data) < 1:
                 print(f"📊 No OHLC data available for {instrument_display}")
                 return
-                
+
             # If we have pre-seeded data, we can proceed with any amount of data
             if not is_seeded and len(ohlc_data) < self.min_ohlc_rows:
                 current_rows = len(ohlc_data) if ohlc_data is not None else 0
@@ -300,7 +303,7 @@ class LivePredictionPipeline:
             all_predictions = {}
             timestamp = ohlc_data.index[-1]
             ohlc_row = ohlc_data.iloc[-1]
-            
+
             # Debug: Show which models are detected as trained
             trained_models = self.model_manager.get_trained_models()
             print(f"🎯 Starting prediction generation for {instrument_key}")
@@ -315,7 +318,7 @@ class LivePredictionPipeline:
 
             # Direction Model
             direction_trained = self.model_manager.is_model_trained('direction')
-            
+
             if direction_trained:
                 print(f"🔧 Calculating direction features for {instrument_key}...")
                 direction_features = self._calculate_direction_features(ohlc_data)
@@ -346,11 +349,11 @@ class LivePredictionPipeline:
             # Volatility Model
             volatility_trained = self.model_manager.is_model_trained('volatility')
             print(f"🔍 Volatility model trained status: {volatility_trained}")
-            
+
             if volatility_trained:
                 print(f"🔧 Calculating volatility features for {instrument_key}...")
                 volatility_features = self._calculate_volatility_features(ohlc_data)
-                
+
                 if volatility_features is not None and len(volatility_features) > 0:
                     print(f"✅ Volatility features calculated: {volatility_features.shape}")
                     try:
@@ -359,13 +362,13 @@ class LivePredictionPipeline:
                         if predictions is not None:
                             volatility_level = self._categorize_volatility(predictions[-1])
                             volatility_value = float(predictions[-1])
-                            
+
                             all_predictions['volatility'] = {
                                 'prediction': volatility_level,
                                 'value': volatility_value
                             }
                             print(f"✅ Volatility prediction successful: {volatility_level}")
-                            
+
                             # Store latest volatility for continuous Black-Scholes calculations
                             self.latest_volatility_predictions[instrument_key] = {
                                 'volatility_value': volatility_value,
@@ -374,7 +377,7 @@ class LivePredictionPipeline:
                                 'valid_until': timestamp + pd.Timedelta(minutes=5)  # Valid for next 5 minutes
                             }
                             print(f"📊 Volatility stored for continuous Black-Scholes: {volatility_value:.4f}")
-                            
+
                         else:
                             print(f"❌ Volatility model returned None predictions")
                     except Exception as e:
@@ -389,7 +392,7 @@ class LivePredictionPipeline:
             # Profit Probability Model
             profit_trained = self.model_manager.is_model_trained('profit_probability')
             print(f"🔍 Profit probability model trained status: {profit_trained}")
-            
+
             if profit_trained:
                 print(f"🔧 Calculating profit probability features for {instrument_key}...")
                 profit_features = self._calculate_profit_probability_features(ohlc_data)
@@ -418,7 +421,7 @@ class LivePredictionPipeline:
             # Reversal Model
             reversal_trained = self.model_manager.is_model_trained('reversal')
             print(f"🔍 Reversal model trained status: {reversal_trained}")
-            
+
             if reversal_trained:
                 print(f"🔧 Calculating reversal features for {instrument_key}...")
                 reversal_features = self._calculate_reversal_features(ohlc_data)
@@ -466,7 +469,7 @@ class LivePredictionPipeline:
             model_names = list(all_predictions.keys())
             print(f"✅ Generated {model_count} live predictions for {instrument_key} on CANDLE CLOSE: {model_names}")
             print(f"🕐 Prediction timestamp: {timestamp} (Complete 5-minute candle)")
-            
+
             # Show clear indication that this is a candle-close prediction
             seeding_status = self.live_data_manager.get_seeding_status()
             if instrument_key in seeding_status.get('instruments_seeded', []):
@@ -496,40 +499,40 @@ class LivePredictionPipeline:
             # Get expected features from trained model
             model_data = self.model_manager.trained_models.get('volatility', {})
             expected_features = model_data.get('feature_names', [])
-            
+
             if not expected_features:
                 print(f"❌ No feature names found for volatility model")
                 return None
-            
+
             # Use volatility model's prepare_features method directly
             features = self.model_manager.models['volatility'].prepare_features(ohlc_data)
-            
+
             if features is None:
                 return None
-            
+
             # Ensure we have all expected features
             missing_features = [col for col in expected_features if col not in features.columns]
             available_features = [col for col in expected_features if col in features.columns]
-            
+
             if missing_features:
                 print(f"⚠️ Missing features for volatility: {missing_features}")
-                
+
                 # Add missing OHLC features if they exist in original data
                 for missing_col in missing_features:
                     if missing_col in ['Open', 'High', 'Low', 'Close', 'Volume'] and missing_col in ohlc_data.columns:
                         features[missing_col] = ohlc_data[missing_col]
                         available_features.append(missing_col)
                         print(f"✅ Added missing OHLC feature: {missing_col}")
-            
+
             # Use only available features that match training
             final_features = [col for col in expected_features if col in features.columns]
-            
+
             if len(final_features) < len(expected_features) * 0.8:
                 print(f"❌ Too many missing features for volatility. Available: {len(final_features)}, Expected: {len(expected_features)}")
                 return None
-            
+
             return features[final_features]
-            
+
         except Exception as e:
             print(f"❌ Error calculating volatility features: {e}")
             import traceback
@@ -542,40 +545,40 @@ class LivePredictionPipeline:
             # Get expected features from trained model
             model_data = self.model_manager.trained_models.get('profit_probability', {})
             expected_features = model_data.get('feature_names', [])
-            
+
             if not expected_features:
                 print(f"❌ No feature names found for profit probability model")
                 return None
-            
+
             # Use profit probability model's prepare_features method directly
             features = self.model_manager.models['profit_probability'].prepare_features(ohlc_data)
-            
+
             if features is None:
                 return None
-            
+
             # Ensure we have all expected features
             missing_features = [col for col in expected_features if col not in features.columns]
             available_features = [col for col in expected_features if col in features.columns]
-            
+
             if missing_features:
                 print(f"⚠️ Missing features for profit probability: {missing_features}")
-                
+
                 # Add missing OHLC features if they exist in original data
                 for missing_col in missing_features:
                     if missing_col in ['Open', 'High', 'Low', 'Close', 'Volume'] and missing_col in ohlc_data.columns:
                         features[missing_col] = ohlc_data[missing_col]
                         available_features.append(missing_col)
                         print(f"✅ Added missing OHLC feature: {missing_col}")
-            
+
             # Use only available features that match training
             final_features = [col for col in expected_features if col in features.columns]
-            
+
             if len(final_features) < len(expected_features) * 0.8:
                 print(f"❌ Too many missing features for profit probability. Available: {len(final_features)}, Expected: {len(expected_features)}")
                 return None
-            
+
             return features[final_features]
-            
+
         except Exception as e:
             print(f"❌ Error calculating profit probability features: {e}")
             import traceback
@@ -624,7 +627,7 @@ class LivePredictionPipeline:
                 if self.ml_models_instrument in self.latest_volatility_predictions:
                     instrument_key = self.ml_models_instrument
                     vol_data = self.latest_volatility_predictions[instrument_key]
-                    
+
                     try:
                         # Check if volatility prediction is still valid (within 5 minutes)
                         current_time = pd.Timestamp.now()
@@ -635,20 +638,20 @@ class LivePredictionPipeline:
 
                         # Get latest tick data from ML models instrument
                         latest_tick = self.live_data_manager.ws_client.get_latest_tick(instrument_key)
-                        
+
                         # Also update OBI+CVD with dedicated futures instrument data
                         if self.obi_cvd_instrument in self.live_data_manager.ws_client.last_tick_data:
                             obi_cvd_tick = self.live_data_manager.ws_client.get_latest_tick(self.obi_cvd_instrument)
                             if obi_cvd_tick:
                                 obi_cvd_results = self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
-                        
+
                         if latest_tick and 'ltp' in latest_tick:
                             current_price = float(latest_tick['ltp'])
                             volatility_value = vol_data['volatility_value']
-                            
+
                             # Calculate Black-Scholes with current tick price from ML models instrument
                             bs_results = self._calculate_black_scholes_fair_values(current_price, volatility_value)
-                            
+
                             if bs_results.get('calculation_successful', False):
                                 # Update the live predictions with fresh Black-Scholes data
                                 if instrument_key in self.live_predictions:
@@ -657,27 +660,27 @@ class LivePredictionPipeline:
                                     self.live_predictions[instrument_key]['bs_volatility_5min'] = volatility_value
                                     self.live_predictions[instrument_key]['bs_volatility_annualized'] = bs_results.get('annualized_volatility', volatility_value)
                                     self.live_predictions[instrument_key]['bs_last_update'] = current_time
-                                    
+
                                     # Show update every 20 iterations to avoid spam
                                     if not hasattr(self, '_bs_counter'):
                                         self._bs_counter = 0
                                     self._bs_counter += 1
-                                    
+
                                     if self._bs_counter % 20 == 0:
                                         display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
                                         annualized_vol = bs_results.get('annualized_volatility', volatility_value)
-                                        
+
                                         # Get OBI+CVD signal from futures instrument
                                         obi_cvd_signal = 'Unknown'
                                         if self.obi_cvd_instrument in self.obi_cvd_confirmation.instrument_data:
                                             obi_cvd_status = self.obi_cvd_confirmation.get_confirmation_status(self.obi_cvd_instrument)
                                             if obi_cvd_status:
                                                 obi_cvd_signal = obi_cvd_status.get('combined_confirmation', 'Unknown')
-                                        
+
                                         futures_name = self.obi_cvd_instrument.split('|')[-1] if '|' in self.obi_cvd_instrument else self.obi_cvd_instrument
                                         print(f"🔧 Live Update: {display_name} @ ₹{current_price:.2f} | Vol: {volatility_value:.4f}→{annualized_vol:.2f}")
                                         print(f"📊 OBI+CVD ({futures_name}): {obi_cvd_signal}")
-                            
+
                     except Exception as e:
                         print(f"❌ Error calculating Black-Scholes for {instrument_key}: {e}")
                         continue
@@ -697,33 +700,33 @@ class LivePredictionPipeline:
                     break
 
                 time.sleep(min(30, 5 * consecutive_errors))  # Progressive backoff
-    
+
     def _calculate_black_scholes_fair_values(self, current_price: float, volatility_prediction: float) -> Dict:
         """Calculate Black-Scholes fair values for options and index."""
         try:
             from utils.black_scholes import BlackScholesCalculator
-            
+
             # Convert 5-minute volatility to annualized volatility
             # Trading periods: 75 periods per day (5-min candles in 6.25-hour trading day)
             # Trading days: 250 per year
             # Total periods per year: 75 × 250 = 18,750
             periods_per_year = 75 * 250  # 18,750
             annualized_volatility = volatility_prediction * (periods_per_year ** 0.5)
-            
+
             print(f"📊 Volatility conversion: 5-min={volatility_prediction:.6f} → Annualized={annualized_volatility:.4f}")
-            
+
             # Initialize Black-Scholes calculator with RBI repo rate 5.50% and dividend yield 1.2%
             bs_calculator = BlackScholesCalculator(risk_free_rate=0.055, dividend_yield=0.012)
-            
+
             # Calculate index fair value using annualized volatility
             index_fair_value = bs_calculator.calculate_index_fair_value(current_price, annualized_volatility)
-            
+
             # Calculate options fair values for different strikes using annualized volatility
             options_fair_values = bs_calculator.calculate_options_fair_values(current_price, annualized_volatility)
-            
+
             # Get quick summary for display using annualized volatility
             quick_summary = bs_calculator.get_quick_summary(current_price, annualized_volatility)
-            
+
             return {
                 'index_fair_value': index_fair_value,
                 'options_fair_values': options_fair_values,
@@ -733,7 +736,7 @@ class LivePredictionPipeline:
                 'conversion_factor': periods_per_year ** 0.5,
                 'calculation_successful': True
             }
-            
+
         except Exception as e:
             print(f"❌ Error calculating Black-Scholes fair values: {e}")
             return {
@@ -865,7 +868,7 @@ class LivePredictionPipeline:
                     else:
                         prediction = str(direction_data)
                     recent_directions.append(prediction)
-            
+
             bullish_count = recent_directions.count('Bullish')
             bearish_count = recent_directions.count('Bearish')
 
@@ -886,7 +889,7 @@ class LivePredictionPipeline:
                     else:
                         prediction = str(volatility_data)
                     recent_volatility.append(prediction)
-            
+
             if recent_volatility:
                 high_vol_count = sum(1 for v in recent_volatility if v in ['High', 'Very High'])
                 stats['volatility_stats'] = {
@@ -904,7 +907,7 @@ class LivePredictionPipeline:
                     else:
                         prediction = str(profit_data)
                     recent_profit.append(prediction)
-            
+
             if recent_profit:
                 high_profit_count = recent_profit.count('High')
                 stats['profit_stats'] = {
