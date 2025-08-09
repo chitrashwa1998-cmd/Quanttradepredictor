@@ -459,23 +459,21 @@ def show_live_data_page():
     with col5:
         st.metric("Live Predictions", pipeline_status['instruments_with_predictions'])
 
-    # Live data display
+    # Live data display - Show sections when connected, regardless of tick data availability
     if st.session_state.is_live_connected and st.session_state.live_data_manager:
+        st.header("📈 Live Market Data")
 
-        # Get tick statistics
+        # Get tick statistics (may be empty during market closed)
         tick_stats = st.session_state.live_data_manager.get_tick_statistics()
 
-        if tick_stats:
-            st.header("📈 Live Market Data")
-
-            # Create tabs for different views
-            overview_tab, predictions_tab, charts_tab, tick_details_tab, export_tab = st.tabs([
-                "📊 Market Overview",
-                "🎯 Live Predictions",
-                "📈 Live Charts",
-                "🔍 Tick Details",
-                "💾 Export Data"
-            ])
+        # Create tabs for different views - always show when connected
+        overview_tab, predictions_tab, charts_tab, tick_details_tab, export_tab = st.tabs([
+            "📊 Market Overview",
+            "🎯 Live Predictions", 
+            "📈 Live Charts",
+            "🔍 Tick Details",
+            "💾 Export Data"
+        ])
 
             with predictions_tab:
                 if st.session_state.is_prediction_pipeline_active:
@@ -850,73 +848,73 @@ def show_live_data_page():
                         st.info("Advanced AI insights would be generated here with your live predictions")
 
             with overview_tab:
-                st.subheader("💹 Real-time Price Dashboard")
+            st.subheader("💹 Real-time Price Dashboard")
 
-                # Get all instruments from pipeline (including those without live ticks)
-                all_instruments = set()
+            # Get all instruments from pipeline (including those without live ticks)
+            all_instruments = set()
 
-                # Add instruments with tick data
-                if tick_stats:
-                    all_instruments.update(tick_stats.keys())
+            # Add instruments with tick data
+            if tick_stats:
+                all_instruments.update(tick_stats.keys())
 
-                # Add dedicated routing instruments even if no live ticks
-                if st.session_state.live_prediction_pipeline:
-                    ml_instrument = st.session_state.live_prediction_pipeline.ml_models_instrument
-                    obi_cvd_instrument = st.session_state.live_prediction_pipeline.obi_cvd_instrument
-                    all_instruments.add(ml_instrument)
-                    all_instruments.add(obi_cvd_instrument)
+            # Add dedicated routing instruments even if no live ticks
+            if st.session_state.live_prediction_pipeline:
+                ml_instrument = st.session_state.live_prediction_pipeline.ml_models_instrument
+                obi_cvd_instrument = st.session_state.live_prediction_pipeline.obi_cvd_instrument
+                all_instruments.add(ml_instrument)
+                all_instruments.add(obi_cvd_instrument)
 
-                if all_instruments:
+            if all_instruments:
                     # Display all instruments in a grid
-                    cols = st.columns(min(3, len(all_instruments)))
+                cols = st.columns(min(3, len(all_instruments)))
 
-                    for i, instrument in enumerate(sorted(all_instruments)):
-                        with cols[i % len(cols)]:
-                            # Get instrument display name
-                            display_name = instrument.split('|')[-1] if '|' in instrument else instrument
+                for i, instrument in enumerate(sorted(all_instruments)):
+                    with cols[i % len(cols)]:
+                        # Get instrument display name
+                        display_name = instrument.split('|')[-1] if '|' in instrument else instrument
 
-                            # Get stats if available, otherwise use defaults
-                            if instrument in tick_stats:
-                                stats = tick_stats[instrument]
-                                latest_price = stats['latest_price']
-                                change_pct = stats.get('change_percent', 0)
-                                latest_volume = stats['latest_volume']
-                                tick_count = stats['tick_count']
-                                status_text = f"Live ({tick_count:,} ticks)"
-                                status_color = "#00ff41"  # Green for live data
+                        # Get stats if available, otherwise use defaults
+                        if tick_stats and instrument in tick_stats:
+                            stats = tick_stats[instrument]
+                            latest_price = stats['latest_price']
+                            change_pct = stats.get('change_percent', 0)
+                            latest_volume = stats['latest_volume']
+                            tick_count = stats['tick_count']
+                            status_text = f"Live ({tick_count:,} ticks)"
+                            status_color = "#00ff41"  # Green for live data
+                        else:
+                            # Try to get last known data from OHLC or WebSocket
+                            ohlc_data = st.session_state.live_data_manager.get_live_ohlc(instrument, 1)
+                            if ohlc_data is not None and len(ohlc_data) > 0:
+                                latest_price = float(ohlc_data['Close'].iloc[-1])
+                                latest_volume = int(ohlc_data['Volume'].iloc[-1])
+                                change_pct = 0.0  # No live change data
+                                status_text = "Market Closed"
+                                status_color = "#ff8c00"  # Orange for market closed
                             else:
-                                # Try to get last known data from OHLC or WebSocket
-                                ohlc_data = st.session_state.live_data_manager.get_live_ohlc(instrument, 1)
-                                if ohlc_data is not None and len(ohlc_data) > 0:
-                                    latest_price = float(ohlc_data['Close'].iloc[-1])
-                                    latest_volume = int(ohlc_data['Volume'].iloc[-1])
-                                    change_pct = 0.0  # No live change data
-                                    status_text = "Market Closed"
-                                    status_color = "#ff8c00"  # Orange for market closed
-                                else:
-                                    latest_price = 0.0
-                                    latest_volume = 0
-                                    change_pct = 0.0
-                                    status_text = "No Data"
-                                    status_color = "#ff0080"  # Red for no data
+                                latest_price = 0.0
+                                latest_volume = 0
+                                change_pct = 0.0
+                                status_text = "No Data"
+                                status_color = "#ff0080"  # Red for no data
 
-                            # Color based on change
-                            price_color = "🟢" if change_pct >= 0 else "🔴" if change_pct < 0 else "⚪"
+                        # Color based on change
+                        price_color = "🟢" if change_pct >= 0 else "🔴" if change_pct < 0 else "⚪"
 
-                            st.markdown(f"""
-                            <div class="metric-container">
-                                <h4 style="color: #00ffff; margin: 0;">{price_color} {display_name}</h4>
-                                <h2 style="margin: 0.5rem 0; color: #00ff41;">₹{latest_price:.2f}</h2>
-                                <p style="color: #9ca3af; margin: 0;">
-                                    {change_pct:+.2f}% | Vol: {latest_volume:,}
-                                </p>
-                                <p style="color: {status_color}; font-size: 0.8rem; margin: 0;">
-                                    {status_text}
-                                </p>
-                            </div>
-                            """, unsafe_allow_html=True)
-                else:
-                    st.info("📊 No instruments subscribed or no data available")
+                        st.markdown(f"""
+                        <div class="metric-container">
+                            <h4 style="color: #00ffff; margin: 0;">{price_color} {display_name}</h4>
+                            <h2 style="margin: 0.5rem 0; color: #00ff41;">₹{latest_price:.2f}</h2>
+                            <p style="color: #9ca3af; margin: 0;">
+                                {change_pct:+.2f}% | Vol: {latest_volume:,}
+                            </p>
+                            <p style="color: {status_color}; font-size: 0.8rem; margin: 0;">
+                                {status_text}
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("📊 No instruments subscribed or no data available")
 
             with charts_tab:
                 st.subheader("📈 Real-time Price Charts")
@@ -959,7 +957,8 @@ def show_live_data_page():
             with tick_details_tab:
                 st.subheader("🔍 Detailed Tick Information")
 
-                # Show latest ticks for each instrument
+            # Show latest ticks for each instrument
+            if tick_stats:
                 for instrument, stats in tick_stats.items():
                     with st.expander(f"📊 {instrument.split('|')[-1] if '|' in instrument else instrument} - Latest Tick"):
                         latest_tick = st.session_state.live_data_manager.get_latest_tick(instrument)
@@ -982,10 +981,13 @@ def show_live_data_page():
                                 st.write(f"• Ask: ₹{latest_tick.get('ask_price', 0):.2f} ({latest_tick.get('ask_qty', 0):,})")
                                 st.write(f"• Change: {latest_tick.get('change_percent', 0):+.2f}%")
                                 st.write(f"• Timestamp: {latest_tick.get('timestamp', 'N/A')}")
+            else:
+                st.info("📊 No live tick data available (market may be closed)")
 
             with export_tab:
                 st.subheader("💾 Export Live Data")
 
+            if tick_stats:
                 col1, col2 = st.columns(2)
 
                 with col1:
@@ -1080,9 +1082,11 @@ def show_live_data_page():
                                     st.warning("⚠️ No data available to save")
                             except Exception as e:
                                 st.error(f"❌ Database error: {str(e)}")
+            else:
+                st.info("📊 No live data available for export (market may be closed)")
 
-        else:
-            st.info("📊 Connect to live data feed to see real-time market information")
+    else:
+        st.info("📊 Connect to live data feed to see real-time market information")
 
     else:
         st.info("🔌 Please configure and connect to Upstox WebSocket to start receiving live data")
