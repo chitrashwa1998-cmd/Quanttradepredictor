@@ -92,10 +92,16 @@ class UpstoxWebSocketClient:
         try:
             feed_response = pb.FeedResponse()
             feed_response.ParseFromString(buffer)
+            
+            # Verify the protobuf object is properly constructed
+            if not hasattr(feed_response, 'feeds'):
+                print(f"⚠️ Protobuf object missing 'feeds' attribute, using manual decoding")
+                return self._manual_protobuf_decode(buffer)
+                
             return feed_response
         except Exception as e:
-            print(f"❌ Protobuf decode error: {e}")
-            return None
+            print(f"⚠️ Protobuf decode error: {e}, falling back to manual decoding")
+            return self._manual_protobuf_decode(buffer)
 
     def _manual_protobuf_decode(self, buffer):
         """Manual protobuf decoding when generated classes not available."""
@@ -211,11 +217,22 @@ class UpstoxWebSocketClient:
 
             # Convert the decoded data to a dictionary (official approach)
             if pb and hasattr(decoded_data, 'feeds'):
-                data_dict = MessageToDict(decoded_data)
-
-                # Process feeds data
-                if 'feeds' in data_dict:
-                    await self._process_feeds(data_dict['feeds'])
+                try:
+                    # Only use MessageToDict if the protobuf object has proper DESCRIPTOR
+                    if hasattr(decoded_data, 'DESCRIPTOR'):
+                        data_dict = MessageToDict(decoded_data)
+                        # Process feeds data
+                        if 'feeds' in data_dict:
+                            await self._process_feeds(data_dict['feeds'])
+                    else:
+                        # Fallback to manual processing if DESCRIPTOR is missing
+                        if hasattr(decoded_data, 'feeds') and decoded_data.feeds:
+                            await self._process_feeds(decoded_data.feeds)
+                except Exception as protobuf_error:
+                    print(f"⚠️ Protobuf conversion error: {protobuf_error}, using manual processing")
+                    # Fallback to manual processing
+                    if hasattr(decoded_data, 'feeds') and decoded_data.feeds:
+                        await self._process_feeds(decoded_data.feeds)
 
             else:
                 # Manual processing for mock response
