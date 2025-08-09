@@ -99,6 +99,8 @@ class UpstoxWebSocketClient:
     def _manual_protobuf_decode(self, buffer):
         """Manual protobuf decoding when generated classes not available."""
         try:
+            import time
+            
             # Basic protobuf structure simulation
             class MockFeedResponse:
                 def __init__(self):
@@ -129,6 +131,8 @@ class UpstoxWebSocketClient:
                                 break
                         except:
                             continue
+                except:
+                    pass
 
             return mock_response
 
