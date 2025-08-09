@@ -10,6 +10,8 @@ from utils.live_prediction_pipeline import LivePredictionPipeline
 from utils.database_adapter import DatabaseAdapter
 from utils.gemini_analysis import GeminiAnalyzer, test_gemini_connection
 import json
+import pytz
+import requests
 
 # Page configuration
 st.set_page_config(page_title="Live Data", page_icon="📡", layout="wide")
