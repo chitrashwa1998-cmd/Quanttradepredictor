@@ -469,385 +469,385 @@ def show_live_data_page():
         # Create tabs for different views - always show when connected
         overview_tab, predictions_tab, charts_tab, tick_details_tab, export_tab = st.tabs([
             "📊 Market Overview",
-            "🎯 Live Predictions", 
+            "🎯 Live Predictions",
             "📈 Live Charts",
             "🔍 Tick Details",
             "💾 Export Data"
         ])
 
-            with predictions_tab:
-                if st.session_state.is_prediction_pipeline_active:
-                    st.subheader("🎯 Real-time ML Model Predictions")
-
-                    # Show model status
-                    pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
-                    trained_models = pipeline_status.get('trained_models', [])
-
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        direction_ready = "direction" in trained_models
-                        status_icon = "✅" if direction_ready else "❌"
-                        st.markdown(f"**{status_icon} Direction Model:** {'Ready' if direction_ready else 'Not Trained'}")
-
-                    with col2:
-                        volatility_ready = "volatility" in trained_models
-                        status_icon = "✅" if volatility_ready else "❌"
-                        st.markdown(f"**{status_icon} Volatility Model:** {'Ready' if volatility_ready else 'Not Trained'}")
-
-                    with col3:
-                        profit_ready = "profit_probability" in trained_models
-                        status_icon = "✅" if profit_ready else "❌"
-                        st.markdown(f"**{status_icon} Profit Probability:** {'Ready' if profit_ready else 'Not Trained'}")
-
-                    with col4:
-                        reversal_ready = "reversal" in trained_models
-                        status_icon = "✅" if reversal_ready else "❌"
-                        st.markdown(f"**{status_icon} Reversal Model:** {'Ready' if reversal_ready else 'Not Trained'}")
-
-                    st.divider()
-
-                    # Get live predictions and independent OBI+CVD status
-                    live_predictions = st.session_state.live_prediction_pipeline.get_latest_predictions()
-                    independent_obi_cvd = st.session_state.live_prediction_pipeline.get_all_independent_obi_cvd_status()
-
-                    if live_predictions:
-                        # Independent OBI+CVD Market Analysis Section
-                        if independent_obi_cvd:
-                            st.subheader("📈 Independent OBI+CVD Market Analysis")
-                            st.info("🔍 **Order Flow Analysis** - Independent of ML model predictions")
-
-                            # Create columns for OBI+CVD display
-                            obi_cvd_cols = st.columns(min(2, len(independent_obi_cvd)))
-
-                            for i, (instrument_key, obi_cvd_data) in enumerate(independent_obi_cvd.items()):
-                                display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-
-                                with obi_cvd_cols[i % len(obi_cvd_cols)]:
-                                    st.markdown(f"**📊 {display_name} - Order Flow Analysis**")
-
-                                    # Create sub-columns for granular display
-                                    obi_col, cvd_col = st.columns(2)
-
-                                    with obi_col:
-                                        st.markdown("**🔍 OBI Analysis**")
-
-                                        # Current OBI (per tick)
-                                        current_obi = obi_cvd_data.get('obi_current', 0.0)
-                                        current_obi_signal = obi_cvd_data.get('obi_current_signal', 'Unknown')
-                                        if 'Bullish' in current_obi_signal:
-                                            current_obi_color = "🟢"
-                                        elif 'Bearish' in current_obi_signal:
-                                            current_obi_color = "🔴"
-                                        else:
-                                            current_obi_color = "⚪"
-
-                                        st.metric(f"{current_obi_color} Current OBI", f"{current_obi:.3f}", current_obi_signal)
-
-                                        # Rolling OBI (1-minute average, resets every minute)
-                                        rolling_obi = obi_cvd_data.get('obi_rolling_1min', 0.0)
-                                        rolling_obi_signal = obi_cvd_data.get('obi_rolling_signal', 'Unknown')
-                                        if 'Bullish' in rolling_obi_signal:
-                                            rolling_obi_color = "🟢"
-                                        elif 'Bearish' in rolling_obi_signal:
-                                            rolling_obi_color = "🔴"
-                                        else:
-                                            rolling_obi_color = "⚪"
-
-                                        st.metric(f"{rolling_obi_color} 1-Min Avg OBI", f"{rolling_obi:.3f}", rolling_obi_signal)
-
-                                    with cvd_col:
-                                        st.markdown("**💹 CVD Analysis**")
-
-                                        # Current CVD Increment (per tick)
-                                        current_cvd_inc = obi_cvd_data.get('cvd_current_increment', 0.0)
-                                        current_cvd_signal = obi_cvd_data.get('cvd_current_signal', 'Unknown')
-                                        if 'Buying' in current_cvd_signal:
-                                            current_cvd_color = "🟢"
-                                        elif 'Selling' in current_cvd_signal:
-                                            current_cvd_color = "🔴"
-                                        else:
-                                            current_cvd_color = "⚪"
-
-                                        st.metric(f"{current_cvd_color} Current CVD", f"{current_cvd_inc:.0f}", current_cvd_signal)
-
-                                        # Rolling CVD (2-minute average, resets every 2 minutes)
-                                        rolling_cvd = obi_cvd_data.get('cvd_rolling_2min', 0.0)
-                                        rolling_cvd_signal = obi_cvd_data.get('cvd_rolling_signal', 'Unknown')
-                                        if 'Buying' in rolling_cvd_signal:
-                                            rolling_cvd_color = "🟢"
-                                        elif 'Selling' in rolling_cvd_signal:
-                                            rolling_cvd_color = "🔴"
-                                        else:
-                                            rolling_cvd_color = "⚪"
-
-                                        st.metric(f"{rolling_cvd_color} 2-Min Avg CVD", f"{rolling_cvd:.0f}", rolling_cvd_signal)
-
-                                    # Combined confirmation and total CVD
-                                    col1, col2 = st.columns(2)
-
-                                    with col1:
-                                        # Combined Signal
-                                        combined = obi_cvd_data.get('combined_confirmation', 'Unknown')
-                                        if 'Bullish' in combined:
-                                            combined_color = "🟢"
-                                        elif 'Bearish' in combined:
-                                            combined_color = "🔴"
-                                        else:
-                                            combined_color = "⚪"
-
-                                        st.metric(f"{combined_color} Order Flow", combined, f"Ticks: {obi_cvd_data.get('tick_count', 0)}")
-
-                                    with col2:
-                                        # Total CVD (cumulative)
-                                        total_cvd = obi_cvd_data.get('cvd_total', 0.0)
-                                        total_cvd_signal = obi_cvd_data.get('cvd_total_signal', 'Unknown')
-                                        if 'Buying' in total_cvd_signal:
-                                            total_cvd_color = "🟢"
-                                        elif 'Selling' in total_cvd_signal:
-                                            total_cvd_color = "🔴"
-                                        else:
-                                            total_cvd_color = "⚪"
-
-                                        st.metric(f"{total_cvd_color} Total CVD", f"{total_cvd:.0f}", total_cvd_signal)
-
-                                    st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
-                                    st.divider()
-
-                            st.divider()
-
-                        # Display ML model predictions in a grid
-                        for instrument_key, prediction in live_predictions.items():
-                            display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-
-                            # Show Black-Scholes information if available
-                            if 'black_scholes' in prediction:
-                                bs_data = prediction['black_scholes']
-                                if bs_data and bs_data.get('calculation_successful', False):
-                                    st.subheader("⚡ Black-Scholes Fair Values")
-
-                                    # Current price and volatility info
-                                    current_price = prediction.get('bs_current_price', prediction.get('current_price', 0))
-                                    vol_5min = bs_data.get('raw_volatility_5min', 0)
-                                    vol_annualized = bs_data.get('annualized_volatility', 0)
-
-                                    col1, col2, col3 = st.columns(3)
-                                    with col1:
-                                        st.metric("Current Price", f"₹{current_price:.2f}")
-                                    with col2:
-                                        st.metric("5-Min Volatility", f"{vol_5min:.6f}")
-                                    with col3:
-                                        st.metric("Annualized Vol", f"{vol_annualized:.2%}")
-
-                                    # Expiry information
-                                    if 'quick_summary' in bs_data:
-                                        quick = bs_data['quick_summary']
-                                        if 'nearest_expiry' in quick and 'days_to_expiry' in quick:
-                                            expiry_date = quick.get('nearest_expiry', 'N/A')
-                                            days_to_expiry = quick.get('days_to_expiry', 0)
-
-                                            col1, col2 = st.columns(2)
-                                            with col1:
-                                                st.metric("⏰ Next Expiry", expiry_date)
-                                            with col2:
-                                                st.metric("🕐 Time Left", f"{days_to_expiry:.1f} days")
-
-                                    # Show all available expiry dates from options data
-                                    if 'options_fair_values' in bs_data and 'expiries' in bs_data['options_fair_values']:
-                                        expiries_data = bs_data['options_fair_values']['expiries']
-                                        if expiries_data:
-                                            st.write("**📅 Available Expiry Dates:**")
-                                            expiry_cols = st.columns(min(3, len(expiries_data)))
-
-                                            for i, (expiry_str, expiry_info) in enumerate(list(expiries_data.items())[:3]):
-                                                with expiry_cols[i]:
-                                                    days_left = expiry_info.get('days_to_expiry', 0)
-                                                    st.write(f"**{expiry_str}**")
-                                                    st.write(f"⏱️ {days_left:.1f} days")
-
-                                    # Index fair value
-                                    if 'index_fair_value' in bs_data:
-                                        index_fv = bs_data['index_fair_value']
-                                        if isinstance(index_fv, dict):
-                                            st.write("**💰 Index Fair Value Analysis:**")
-                                            fair_range = index_fv.get('fair_value_range', {})
-                                            if fair_range:
-                                                st.write(f"• Fair Value: ₹{fair_range.get('fair', 0):.2f}")
-                                                st.write(f"• Range: ₹{fair_range.get('lower', 0):.2f} - ₹{fair_range.get('upper', 0):.2f}")
-                                            forward_price = index_fv.get('forward_price', 0)
-                                            if forward_price > 0:
-                                                st.write(f"• Forward Price: ₹{forward_price:.2f}")
-
-                                            # Show time to expiry from index fair value
-                                            time_to_expiry_days = index_fv.get('time_to_expiry_days', 0)
-                                            if time_to_expiry_days > 0:
-                                                st.write(f"• Time to Expiry: {time_to_expiry_days:.1f} days")
-
-                                    # Options quick summary
-                                    if 'quick_summary' in bs_data:
-                                        quick = bs_data['quick_summary']
-                                        if 'options' in quick and quick['options']:
-                                            st.write("**📊 Options Quick View (ATM & Nearby):**")
-
-                                            # Create a table for better display
-                                            option_data = []
-                                            for opt in quick['options'][:5]:  # Show first 5 strikes
-                                                strike = opt.get('strike', 0)
-                                                option_type = opt.get('type', '')
-                                                call_price = opt.get('call_fair_value', 0)
-                                                put_price = opt.get('put_fair_value', 0)
-                                                option_data.append({
-                                                    'Strike': f"₹{strike}",
-                                                    'Type': option_type,
-                                                    'Call Fair Value': f"₹{call_price:.2f}",
-                                                    'Put Fair Value': f"₹{put_price:.2f}"
-                                                })
-
-                                            if option_data:
-                                                import pandas as pd
-                                                df_options = pd.DataFrame(option_data)
-                                                st.dataframe(df_options, use_container_width=True, hide_index=True)
-
-                                    # Last update time
-                                    if 'bs_last_update' in prediction:
-                                        update_time = prediction['bs_last_update']
-                                        if hasattr(update_time, 'strftime'):
-                                            st.caption(f"🔄 Last updated: {update_time.strftime('%H:%M:%S')}")
-                                elif prediction.get('has_volatility_for_bs', False):
-                                    st.info("⏳ Black-Scholes fair values will appear once volatility prediction is available...")
-                                else:
-                                    st.info("📊 Black-Scholes fair values require volatility predictions to be generated first.")
-
-                            # ML Model predictions display (OBI+CVD now shown independently above)
-                            st.markdown(f"**🤖 ML Model Predictions - {display_name}**")
-
-                            # Show prediction details in expandable sections
-                            with st.expander(f"📊 Prediction Details - {display_name}", expanded=False):
-
-                                # Get detailed summary
-                                summary = st.session_state.live_prediction_pipeline.get_instrument_summary(instrument_key)
-
-                                with st.container():
-                                    col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
-
-                                    with col1:
-                                        st.markdown(f"**📊 {display_name}**")
-
-                                        # Direction prediction
-                                        if 'direction' in prediction:
-                                            direction_data = prediction.get('direction', {})
-                                            if isinstance(direction_data, dict):
-                                                direction = direction_data.get('prediction', 'Unknown')
-                                                confidence = direction_data.get('confidence', 0.5)
-                                            else:
-                                                direction = prediction.get('direction', 'Unknown')
-                                                confidence = prediction.get('confidence', 0.5)
-
-                                            direction_color = "🟢" if direction == 'Bullish' else "🔴"
-                                            st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
-
-                                    with col2:
-                                        # Volatility prediction
-                                        if 'volatility' in prediction:
-                                            vol_data = prediction['volatility']
-                                            vol_level = vol_data.get('prediction', 'Unknown')
-                                            vol_value = vol_data.get('value', 0.0)
-                                            vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
-                                            st.markdown(f"**{vol_color} Volatility:** {vol_level}")
-                                            st.markdown(f"**📊 Predicted Vol:** {vol_value:.4f} ({vol_value*100:.2f}%)")
-
-                                        # Profit probability
-                                        if 'profit_probability' in prediction:
-                                            profit_data = prediction['profit_probability']
-                                            profit_level = profit_data.get('prediction', 'Unknown')
-                                            profit_conf = profit_data.get('confidence', 0.5)
-                                            profit_color = "💰" if profit_level == 'High' else "⚠️"
-                                            st.markdown(f"**{profit_color} Profit:** {profit_level} ({profit_conf:.1%})")
-
-                                    with col3:
-                                        # Reversal prediction
-                                        if 'reversal' in prediction:
-                                            reversal_data = prediction['reversal']
-                                            reversal_expected = reversal_data.get('prediction', 'Unknown')
-                                            reversal_conf = reversal_data.get('confidence', 0.5)
-                                            reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
-                                            st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
-
-                                        # Models used
-                                        models_used = prediction.get('models_used', [])
-                                        st.markdown(f"**📋 Active Models:** {len(models_used)}/4")
-
-                                    with col4:
-                                        pred_time = prediction['generated_at'].strftime('%H:%M:%S')
-                                        candle_time = prediction['timestamp'].strftime('%H:%M:%S')
-                                        st.markdown(f"**🕐 Candle Close Time:** {candle_time}")
-                                        st.markdown(f"**⏰ Prediction Generated:** {pred_time}")
-                                        st.markdown(f"**💰 Candle Close Price:** ₹{prediction['current_price']:.2f}")
-                                        st.markdown(f"**📊 Volume:** {prediction['volume']:,}")
-                                        st.markdown(f"**🤖 Models Used:** {len(prediction['models_used'])}")
-
-                                        # Show prediction type
-                                        if prediction.get('candle_close_prediction'):
-                                            st.success("✅ Complete 5-minute candle prediction")
-
-                                # Show prediction timestamp
-                                time_ago = datetime.now() - prediction['generated_at']
-                                st.caption(f"Generated {time_ago.total_seconds():.0f}s ago")
-
-
-                            st.divider()
-
-                        # Auto-refresh toggle
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if st.button("🔄 Refresh Predictions"):
-                                st.rerun()
-
-                        with col2:
-                            auto_refresh_predictions = st.toggle("🔄 Auto Refresh (30s)", value=False, key="auto_refresh_predictions")
-
-                        # Auto-refresh functionality for predictions
-                        if auto_refresh_predictions:
-                            time.sleep(30)
-                            st.rerun()
-
-                    else:
-                        st.info("🎯 Prediction pipeline is active but no predictions generated yet. Please wait for sufficient OHLC data to accumulate...")
-
-                        # Show requirements for all models
-                        st.write("**Requirements for comprehensive predictions:**")
-                        st.write("• Minimum 100 OHLC data points")
-                        st.write("• At least one of the 4 models must be trained:")
-                        st.write("  - Direction Model (price movement prediction)")
-                        st.write("  - Volatility Model (market volatility forecasting)")
-                        st.write("  - Profit Probability Model (profit opportunity detection)")
-                        st.write("  - Reversal Model (trend reversal identification)")
-                        st.write("• Sufficient tick data for feature calculation")
-
-                else:
-                    st.warning("⚠️ Prediction pipeline not active. Please connect to start receiving live predictions from all trained models.")
-
-                # GEMINI AI ANALYSIS FOR LIVE DATA - ALWAYS VISIBLE
-                st.divider()
-                st.subheader("🤖 AI Market Analysis")
-                st.success("✅ Gemini AI is now integrated!")
-
-                col1, col2 = st.columns(2)
-
+        with predictions_tab:
+            if st.session_state.is_prediction_pipeline_active:
+                st.subheader("🎯 Real-time ML Model Predictions")
+
+                # Show model status
+                pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
+                trained_models = pipeline_status.get('trained_models', [])
+
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.markdown("**🧠 AI Sentiment Analysis**")
-                    st.metric("AI Market Sentiment", "Bullish", delta="+12.5%")
-                    st.write("• Strong upward momentum detected")
-                    st.write("• Technical indicators align positively")
+                    direction_ready = "direction" in trained_models
+                    status_icon = "✅" if direction_ready else "❌"
+                    st.markdown(f"**{status_icon} Direction Model:** {'Ready' if direction_ready else 'Not Trained'}")
 
                 with col2:
-                    st.markdown("**💡 AI Trading Insights**")
-                    st.metric("Signal Strength", "78%", delta="High Confidence")
-                    if st.button("🚀 Generate Full AI Report", key="live_ai_analysis"):
-                        st.balloons()
-                        st.success("AI Analysis Complete!")
-                        st.info("Advanced AI insights would be generated here with your live predictions")
+                    volatility_ready = "volatility" in trained_models
+                    status_icon = "✅" if volatility_ready else "❌"
+                    st.markdown(f"**{status_icon} Volatility Model:** {'Ready' if volatility_ready else 'Not Trained'}")
 
-            with overview_tab:
+                with col3:
+                    profit_ready = "profit_probability" in trained_models
+                    status_icon = "✅" if profit_ready else "❌"
+                    st.markdown(f"**{status_icon} Profit Probability:** {'Ready' if profit_ready else 'Not Trained'}")
+
+                with col4:
+                    reversal_ready = "reversal" in trained_models
+                    status_icon = "✅" if reversal_ready else "❌"
+                    st.markdown(f"**{status_icon} Reversal Model:** {'Ready' if reversal_ready else 'Not Trained'}")
+
+                st.divider()
+
+                # Get live predictions and independent OBI+CVD status
+                live_predictions = st.session_state.live_prediction_pipeline.get_latest_predictions()
+                independent_obi_cvd = st.session_state.live_prediction_pipeline.get_all_independent_obi_cvd_status()
+
+                if live_predictions:
+                    # Independent OBI+CVD Market Analysis Section
+                    if independent_obi_cvd:
+                        st.subheader("📈 Independent OBI+CVD Market Analysis")
+                        st.info("🔍 **Order Flow Analysis** - Independent of ML model predictions")
+
+                        # Create columns for OBI+CVD display
+                        obi_cvd_cols = st.columns(min(2, len(independent_obi_cvd)))
+
+                        for i, (instrument_key, obi_cvd_data) in enumerate(independent_obi_cvd.items()):
+                            display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+
+                            with obi_cvd_cols[i % len(obi_cvd_cols)]:
+                                st.markdown(f"**📊 {display_name} - Order Flow Analysis**")
+
+                                # Create sub-columns for granular display
+                                obi_col, cvd_col = st.columns(2)
+
+                                with obi_col:
+                                    st.markdown("**🔍 OBI Analysis**")
+
+                                    # Current OBI (per tick)
+                                    current_obi = obi_cvd_data.get('obi_current', 0.0)
+                                    current_obi_signal = obi_cvd_data.get('obi_current_signal', 'Unknown')
+                                    if 'Bullish' in current_obi_signal:
+                                        current_obi_color = "🟢"
+                                    elif 'Bearish' in current_obi_signal:
+                                        current_obi_color = "🔴"
+                                    else:
+                                        current_obi_color = "⚪"
+
+                                    st.metric(f"{current_obi_color} Current OBI", f"{current_obi:.3f}", current_obi_signal)
+
+                                    # Rolling OBI (1-minute average, resets every minute)
+                                    rolling_obi = obi_cvd_data.get('obi_rolling_1min', 0.0)
+                                    rolling_obi_signal = obi_cvd_data.get('obi_rolling_signal', 'Unknown')
+                                    if 'Bullish' in rolling_obi_signal:
+                                        rolling_obi_color = "🟢"
+                                    elif 'Bearish' in rolling_obi_signal:
+                                        rolling_obi_color = "🔴"
+                                    else:
+                                        rolling_obi_color = "⚪"
+
+                                    st.metric(f"{rolling_obi_color} 1-Min Avg OBI", f"{rolling_obi:.3f}", rolling_obi_signal)
+
+                                with cvd_col:
+                                    st.markdown("**💹 CVD Analysis**")
+
+                                    # Current CVD Increment (per tick)
+                                    current_cvd_inc = obi_cvd_data.get('cvd_current_increment', 0.0)
+                                    current_cvd_signal = obi_cvd_data.get('cvd_current_signal', 'Unknown')
+                                    if 'Buying' in current_cvd_signal:
+                                        current_cvd_color = "🟢"
+                                    elif 'Selling' in current_cvd_signal:
+                                        current_cvd_color = "🔴"
+                                    else:
+                                        current_cvd_color = "⚪"
+
+                                    st.metric(f"{current_cvd_color} Current CVD", f"{current_cvd_inc:.0f}", current_cvd_signal)
+
+                                    # Rolling CVD (2-minute average, resets every 2 minutes)
+                                    rolling_cvd = obi_cvd_data.get('cvd_rolling_2min', 0.0)
+                                    rolling_cvd_signal = obi_cvd_data.get('cvd_rolling_signal', 'Unknown')
+                                    if 'Buying' in rolling_cvd_signal:
+                                        rolling_cvd_color = "🟢"
+                                    elif 'Selling' in rolling_cvd_signal:
+                                        rolling_cvd_color = "🔴"
+                                    else:
+                                        rolling_cvd_color = "⚪"
+
+                                    st.metric(f"{rolling_cvd_color} 2-Min Avg CVD", f"{rolling_cvd:.0f}", rolling_cvd_signal)
+
+                                # Combined confirmation and total CVD
+                                col1, col2 = st.columns(2)
+
+                                with col1:
+                                    # Combined Signal
+                                    combined = obi_cvd_data.get('combined_confirmation', 'Unknown')
+                                    if 'Bullish' in combined:
+                                        combined_color = "🟢"
+                                    elif 'Bearish' in combined:
+                                        combined_color = "🔴"
+                                    else:
+                                        combined_color = "⚪"
+
+                                    st.metric(f"{combined_color} Order Flow", combined, f"Ticks: {obi_cvd_data.get('tick_count', 0)}")
+
+                                with col2:
+                                    # Total CVD (cumulative)
+                                    total_cvd = obi_cvd_data.get('cvd_total', 0.0)
+                                    total_cvd_signal = obi_cvd_data.get('cvd_total_signal', 'Unknown')
+                                    if 'Buying' in total_cvd_signal:
+                                        total_cvd_color = "🟢"
+                                    elif 'Selling' in total_cvd_signal:
+                                        total_cvd_color = "🔴"
+                                    else:
+                                        total_cvd_color = "⚪"
+
+                                    st.metric(f"{total_cvd_color} Total CVD", f"{total_cvd:.0f}", total_cvd_signal)
+
+                                st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
+                                st.divider()
+
+                        st.divider()
+
+                    # Display ML model predictions in a grid
+                    for instrument_key, prediction in live_predictions.items():
+                        display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+
+                        # Show Black-Scholes information if available
+                        if 'black_scholes' in prediction:
+                            bs_data = prediction['black_scholes']
+                            if bs_data and bs_data.get('calculation_successful', False):
+                                st.subheader("⚡ Black-Scholes Fair Values")
+
+                                # Current price and volatility info
+                                current_price = prediction.get('bs_current_price', prediction.get('current_price', 0))
+                                vol_5min = bs_data.get('raw_volatility_5min', 0)
+                                vol_annualized = bs_data.get('annualized_volatility', 0)
+
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("Current Price", f"₹{current_price:.2f}")
+                                with col2:
+                                    st.metric("5-Min Volatility", f"{vol_5min:.6f}")
+                                with col3:
+                                    st.metric("Annualized Vol", f"{vol_annualized:.2%}")
+
+                                # Expiry information
+                                if 'quick_summary' in bs_data:
+                                    quick = bs_data['quick_summary']
+                                    if 'nearest_expiry' in quick and 'days_to_expiry' in quick:
+                                        expiry_date = quick.get('nearest_expiry', 'N/A')
+                                        days_to_expiry = quick.get('days_to_expiry', 0)
+
+                                        col1, col2 = st.columns(2)
+                                        with col1:
+                                            st.metric("⏰ Next Expiry", expiry_date)
+                                        with col2:
+                                            st.metric("🕐 Time Left", f"{days_to_expiry:.1f} days")
+
+                                # Show all available expiry dates from options data
+                                if 'options_fair_values' in bs_data and 'expiries' in bs_data['options_fair_values']:
+                                    expiries_data = bs_data['options_fair_values']['expiries']
+                                    if expiries_data:
+                                        st.write("**📅 Available Expiry Dates:**")
+                                        expiry_cols = st.columns(min(3, len(expiries_data)))
+
+                                        for i, (expiry_str, expiry_info) in enumerate(list(expiries_data.items())[:3]):
+                                            with expiry_cols[i]:
+                                                days_left = expiry_info.get('days_to_expiry', 0)
+                                                st.write(f"**{expiry_str}**")
+                                                st.write(f"⏱️ {days_left:.1f} days")
+
+                                # Index fair value
+                                if 'index_fair_value' in bs_data:
+                                    index_fv = bs_data['index_fair_value']
+                                    if isinstance(index_fv, dict):
+                                        st.write("**💰 Index Fair Value Analysis:**")
+                                        fair_range = index_fv.get('fair_value_range', {})
+                                        if fair_range:
+                                            st.write(f"• Fair Value: ₹{fair_range.get('fair', 0):.2f}")
+                                            st.write(f"• Range: ₹{fair_range.get('lower', 0):.2f} - ₹{fair_range.get('upper', 0):.2f}")
+                                        forward_price = index_fv.get('forward_price', 0)
+                                        if forward_price > 0:
+                                            st.write(f"• Forward Price: ₹{forward_price:.2f}")
+
+                                        # Show time to expiry from index fair value
+                                        time_to_expiry_days = index_fv.get('time_to_expiry_days', 0)
+                                        if time_to_expiry_days > 0:
+                                            st.write(f"• Time to Expiry: {time_to_expiry_days:.1f} days")
+
+                                # Options quick summary
+                                if 'quick_summary' in bs_data:
+                                    quick = bs_data['quick_summary']
+                                    if 'options' in quick and quick['options']:
+                                        st.write("**📊 Options Quick View (ATM & Nearby):**")
+
+                                        # Create a table for better display
+                                        option_data = []
+                                        for opt in quick['options'][:5]:  # Show first 5 strikes
+                                            strike = opt.get('strike', 0)
+                                            option_type = opt.get('type', '')
+                                            call_price = opt.get('call_fair_value', 0)
+                                            put_price = opt.get('put_fair_value', 0)
+                                            option_data.append({
+                                                'Strike': f"₹{strike}",
+                                                'Type': option_type,
+                                                'Call Fair Value': f"₹{call_price:.2f}",
+                                                'Put Fair Value': f"₹{put_price:.2f}"
+                                            })
+
+                                        if option_data:
+                                            import pandas as pd
+                                            df_options = pd.DataFrame(option_data)
+                                            st.dataframe(df_options, use_container_width=True, hide_index=True)
+
+                                # Last update time
+                                if 'bs_last_update' in prediction:
+                                    update_time = prediction['bs_last_update']
+                                    if hasattr(update_time, 'strftime'):
+                                        st.caption(f"🔄 Last updated: {update_time.strftime('%H:%M:%S')}")
+                            elif prediction.get('has_volatility_for_bs', False):
+                                st.info("⏳ Black-Scholes fair values will appear once volatility prediction is available...")
+                            else:
+                                st.info("📊 Black-Scholes fair values require volatility predictions to be generated first.")
+
+                        # ML Model predictions display (OBI+CVD now shown independently above)
+                        st.markdown(f"**🤖 ML Model Predictions - {display_name}**")
+
+                        # Show prediction details in expandable sections
+                        with st.expander(f"📊 Prediction Details - {display_name}", expanded=False):
+
+                            # Get detailed summary
+                            summary = st.session_state.live_prediction_pipeline.get_instrument_summary(instrument_key)
+
+                            with st.container():
+                                col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
+
+                                with col1:
+                                    st.markdown(f"**📊 {display_name}**")
+
+                                    # Direction prediction
+                                    if 'direction' in prediction:
+                                        direction_data = prediction.get('direction', {})
+                                        if isinstance(direction_data, dict):
+                                            direction = direction_data.get('prediction', 'Unknown')
+                                            confidence = direction_data.get('confidence', 0.5)
+                                        else:
+                                            direction = prediction.get('direction', 'Unknown')
+                                            confidence = prediction.get('confidence', 0.5)
+
+                                        direction_color = "🟢" if direction == 'Bullish' else "🔴"
+                                        st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
+
+                                with col2:
+                                    # Volatility prediction
+                                    if 'volatility' in prediction:
+                                        vol_data = prediction['volatility']
+                                        vol_level = vol_data.get('prediction', 'Unknown')
+                                        vol_value = vol_data.get('value', 0.0)
+                                        vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
+                                        st.markdown(f"**{vol_color} Volatility:** {vol_level}")
+                                        st.markdown(f"**📊 Predicted Vol:** {vol_value:.4f} ({vol_value*100:.2f}%)")
+
+                                    # Profit probability
+                                    if 'profit_probability' in prediction:
+                                        profit_data = prediction['profit_probability']
+                                        profit_level = profit_data.get('prediction', 'Unknown')
+                                        profit_conf = profit_data.get('confidence', 0.5)
+                                        profit_color = "💰" if profit_level == 'High' else "⚠️"
+                                        st.markdown(f"**{profit_color} Profit:** {profit_level} ({profit_conf:.1%})")
+
+                                with col3:
+                                    # Reversal prediction
+                                    if 'reversal' in prediction:
+                                        reversal_data = prediction['reversal']
+                                        reversal_expected = reversal_data.get('prediction', 'Unknown')
+                                        reversal_conf = reversal_data.get('confidence', 0.5)
+                                        reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
+                                        st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
+
+                                    # Models used
+                                    models_used = prediction.get('models_used', [])
+                                    st.markdown(f"**📋 Active Models:** {len(models_used)}/4")
+
+                                with col4:
+                                    pred_time = prediction['generated_at'].strftime('%H:%M:%S')
+                                    candle_time = prediction['timestamp'].strftime('%H:%M:%S')
+                                    st.markdown(f"**🕐 Candle Close Time:** {candle_time}")
+                                    st.markdown(f"**⏰ Prediction Generated:** {pred_time}")
+                                    st.markdown(f"**💰 Candle Close Price:** ₹{prediction['current_price']:.2f}")
+                                    st.markdown(f"**📊 Volume:** {prediction['volume']:,}")
+                                    st.markdown(f"**🤖 Models Used:** {len(prediction['models_used'])}")
+
+                                    # Show prediction type
+                                    if prediction.get('candle_close_prediction'):
+                                        st.success("✅ Complete 5-minute candle prediction")
+
+                            # Show prediction timestamp
+                            time_ago = datetime.now() - prediction['generated_at']
+                            st.caption(f"Generated {time_ago.total_seconds():.0f}s ago")
+
+
+                        st.divider()
+
+                    # Auto-refresh toggle
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("🔄 Refresh Predictions"):
+                            st.rerun()
+
+                    with col2:
+                        auto_refresh_predictions = st.toggle("🔄 Auto Refresh (30s)", value=False, key="auto_refresh_predictions")
+
+                    # Auto-refresh functionality for predictions
+                    if auto_refresh_predictions:
+                        time.sleep(30)
+                        st.rerun()
+
+                else:
+                    st.info("🎯 Prediction pipeline is active but no predictions generated yet. Please wait for sufficient OHLC data to accumulate...")
+
+                    # Show requirements for all models
+                    st.write("**Requirements for comprehensive predictions:**")
+                    st.write("• Minimum 100 OHLC data points")
+                    st.write("• At least one of the 4 models must be trained:")
+                    st.write("  - Direction Model (price movement prediction)")
+                    st.write("  - Volatility Model (market volatility forecasting)")
+                    st.write("  - Profit Probability Model (profit opportunity detection)")
+                    st.write("  - Reversal Model (trend reversal identification)")
+                    st.write("• Sufficient tick data for feature calculation")
+
+            else:
+                st.warning("⚠️ Prediction pipeline not active. Please connect to start receiving live predictions from all trained models.")
+
+            # GEMINI AI ANALYSIS FOR LIVE DATA - ALWAYS VISIBLE
+            st.divider()
+            st.subheader("🤖 AI Market Analysis")
+            st.success("✅ Gemini AI is now integrated!")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**🧠 AI Sentiment Analysis**")
+                st.metric("AI Market Sentiment", "Bullish", delta="+12.5%")
+                st.write("• Strong upward momentum detected")
+                st.write("• Technical indicators align positively")
+
+            with col2:
+                st.markdown("**💡 AI Trading Insights**")
+                st.metric("Signal Strength", "78%", delta="High Confidence")
+                if st.button("🚀 Generate Full AI Report", key="live_ai_analysis"):
+                    st.balloons()
+                    st.success("AI Analysis Complete!")
+                    st.info("Advanced AI insights would be generated here with your live predictions")
+
+        with overview_tab:
             st.subheader("💹 Real-time Price Dashboard")
 
             # Get all instruments from pipeline (including those without live ticks)
@@ -865,7 +865,7 @@ def show_live_data_page():
                 all_instruments.add(obi_cvd_instrument)
 
             if all_instruments:
-                    # Display all instruments in a grid
+                # Display all instruments in a grid
                 cols = st.columns(min(3, len(all_instruments)))
 
                 for i, instrument in enumerate(sorted(all_instruments)):
@@ -916,180 +916,177 @@ def show_live_data_page():
             else:
                 st.info("📊 No instruments subscribed or no data available")
 
-            with charts_tab:
-                st.subheader("📈 Real-time Price Charts")
+        with charts_tab:
+            st.subheader("📈 Real-time Price Charts")
 
-                # Select instrument for detailed chart
-                if tick_stats:
-                    selected_instrument = st.selectbox(
-                        "Select Instrument for Chart",
-                        options=list(tick_stats.keys()),
-                        format_func=lambda x: x.split('|')[-1] if '|' in x else x
-                    )
-
-                    if selected_instrument:
-                        # Get OHLC data
-                        ohlc_data = st.session_state.live_data_manager.get_live_ohlc(selected_instrument)
-
-                        if ohlc_data is not None and len(ohlc_data) > 0:
-                            # Create candlestick chart
-                            fig = go.Figure(data=go.Candlestick(
-                                x=ohlc_data.index,
-                                open=ohlc_data['Open'],
-                                high=ohlc_data['High'],
-                                low=ohlc_data['Low'],
-                                close=ohlc_data['Close'],
-                                name="Price"
-                            ))
-
-                            fig.update_layout(
-                                title=f"Live Chart - {selected_instrument.split('|')[-1] if '|' in selected_instrument else selected_instrument}",
-                                xaxis_title="Time",
-                                yaxis_title="Price",
-                                height=500,
-                                template="plotly_dark"
-                            )
-
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.info("📊 Accumulating tick data... Please wait for OHLC chart generation.")
-
-            with tick_details_tab:
-                st.subheader("🔍 Detailed Tick Information")
-
-            # Show latest ticks for each instrument
+            # Select instrument for detailed chart
             if tick_stats:
-                for instrument, stats in tick_stats.items():
-                    with st.expander(f"📊 {instrument.split('|')[-1] if '|' in instrument else instrument} - Latest Tick"):
-                        latest_tick = st.session_state.live_data_manager.get_latest_tick(instrument)
+                selected_instrument = st.selectbox(
+                    "Select Instrument for Chart",
+                    options=list(tick_stats.keys()),
+                    format_func=lambda x: x.split('|')[-1] if '|' in x else x
+                )
 
-                        if latest_tick:
-                            col1, col2 = st.columns(2)
+                if selected_instrument:
+                    # Get OHLC data
+                    ohlc_data = st.session_state.live_data_manager.get_live_ohlc(selected_instrument)
 
-                            with col1:
-                                st.write("**Price Information:**")
-                                st.write(f"• LTP: ₹{latest_tick.get('ltp', 0):.2f}")
-                                st.write(f"• Open: ₹{latest_tick.get('open', 0):.2f}")
-                                st.write(f"• High: ₹{latest_tick.get('high', 0):.2f}")
-                                st.write(f"• Low: ₹{latest_tick.get('low', 0):.2f}")
-                                st.write(f"• Close: ₹{latest_tick.get('close', 0):.2f}")
+                    if ohlc_data is not None and len(ohlc_data) > 0:
+                        # Create candlestick chart
+                        fig = go.Figure(data=go.Candlestick(
+                            x=ohlc_data.index,
+                            open=ohlc_data['Open'],
+                            high=ohlc_data['High'],
+                            low=ohlc_data['Low'],
+                            close=ohlc_data['Close'],
+                            name="Price"
+                        ))
 
-                            with col2:
-                                st.write("**Market Data:**")
-                                st.write(f"• Volume: {latest_tick.get('volume', 0):,}")
-                                st.write(f"• Bid: ₹{latest_tick.get('bid_price', 0):.2f} ({latest_tick.get('bid_qty', 0):,})")
-                                st.write(f"• Ask: ₹{latest_tick.get('ask_price', 0):.2f} ({latest_tick.get('ask_qty', 0):,})")
-                                st.write(f"• Change: {latest_tick.get('change_percent', 0):+.2f}%")
-                                st.write(f"• Timestamp: {latest_tick.get('timestamp', 'N/A')}")
-            else:
-                st.info("📊 No live tick data available (market may be closed)")
+                        fig.update_layout(
+                            title=f"Live Chart - {selected_instrument.split('|')[-1] if '|' in selected_instrument else selected_instrument}",
+                            xaxis_title="Time",
+                            yaxis_title="Price",
+                            height=500,
+                            template="plotly_dark"
+                        )
 
-            with export_tab:
-                st.subheader("💾 Export Live Data")
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("📊 Accumulating tick data... Please wait for OHLC chart generation.")
 
-            if tick_stats:
-                col1, col2 = st.columns(2)
+        with tick_details_tab:
+            st.subheader("🔍 Detailed Tick Information")
 
-                with col1:
-                    st.write("**Export Options:**")
+        # Show latest ticks for each instrument
+        if tick_stats:
+            for instrument, stats in tick_stats.items():
+                with st.expander(f"📊 {instrument.split('|')[-1] if '|' in instrument else instrument} - Latest Tick"):
+                    latest_tick = st.session_state.live_data_manager.get_latest_tick(instrument)
 
-                    # Select instrument to export
-                    export_instrument = st.selectbox(
-                        "Select Instrument to Export",
-                        options=list(tick_stats.keys()),
-                        format_func=lambda x: x.split('|')[-1] if '|' in x else x,
-                        key="export_instrument"
-                    )
+                    if latest_tick:
+                        col1, col2 = st.columns(2)
 
-                    export_format = st.radio(
-                        "Export Format",
-                        ["OHLC Data", "Raw Tick Data"],
-                        key="export_format"
-                    )
+                        with col1:
+                            st.write("**Price Information:**")
+                            st.write(f"• LTP: ₹{latest_tick.get('ltp', 0):.2f}")
+                            st.write(f"• Open: ₹{latest_tick.get('open', 0):.2f}")
+                            st.write(f"• High: ₹{latest_tick.get('high', 0):.2f}")
+                            st.write(f"• Low: ₹{latest_tick.get('low', 0):.2f}")
+                            st.write(f"• Close: ₹{latest_tick.get('close', 0):.2f}")
 
-                with col2:
-                    st.write("**Export Actions:**")
+                        with col2:
+                            st.write("**Market Data:**")
+                            st.write(f"• Volume: {latest_tick.get('volume', 0):,}")
+                            st.write(f"• Bid: ₹{latest_tick.get('bid_price', 0):.2f} ({latest_tick.get('bid_qty', 0):,})")
+                            st.write(f"• Ask: ₹{latest_tick.get('ask_price', 0):.2f} ({latest_tick.get('ask_qty', 0):,})")
+                            st.write(f"• Change: {latest_tick.get('change_percent', 0):+.2f}%")
+                            st.write(f"• Timestamp: {latest_tick.get('timestamp', 'N/A')}")
+        else:
+            st.info("📊 No live tick data available (market may be closed)")
 
-                    if st.button("📥 Download CSV", type="primary"):
-                        if export_instrument:
-                            if export_format == "OHLC Data":
-                                # Get complete dataset (seeded + live)
-                                live_manager = st.session_state.live_data_manager
-                                complete_ohlc_data = live_manager.get_complete_ohlc_data(export_instrument)
+        with export_tab:
+            st.subheader("💾 Export Live Data")
 
-                                if complete_ohlc_data is not None and len(complete_ohlc_data) > 0:
-                                    csv_data = complete_ohlc_data.to_csv()
-                                    seeding_status = live_manager.get_seeding_status()
+        if tick_stats:
+            col1, col2 = st.columns(2)
 
-                                    # Add suffix to filename if seeded
-                                    suffix = "_complete" if export_instrument in seeding_status['instruments_seeded'] else "_live"
+            with col1:
+                st.write("**Export Options:**")
 
-                                    display_name = export_instrument.split('|')[-1] if '|' in export_instrument else export_instrument
-                                    file_name = f"{display_name.replace(' ', '_')}_ohlc{suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                # Select instrument to export
+                export_instrument = st.selectbox(
+                    "Select Instrument to Export",
+                    options=list(tick_stats.keys()),
+                    format_func=lambda x: x.split('|')[-1] if '|' in x else x,
+                    key="export_instrument"
+                )
 
-                                    st.download_button(
-                                        label=f"📥 Download {display_name} OHLC Data",
-                                        data=csv_data,
-                                        file_name=file_name,
-                                        mime="text/csv",
-                                        use_container_width=True
-                                    )
+                export_format = st.radio(
+                    "Export Format",
+                    ["OHLC Data", "Raw Tick Data"],
+                    key="export_format"
+                )
 
-                                    st.success(f"✅ Ready to download {len(complete_ohlc_data)} rows of OHLC data")
-                                else:
-                                    st.warning("⚠️ No OHLC data available for export")
+            with col2:
+                st.write("**Export Actions:**")
 
+                if st.button("📥 Download CSV", type="primary"):
+                    if export_instrument:
+                        if export_format == "OHLC Data":
+                            # Get complete dataset (seeded + live)
+                            live_manager = st.session_state.live_data_manager
+                            complete_ohlc_data = live_manager.get_complete_ohlc_data(export_instrument)
+
+                            if complete_ohlc_data is not None and len(complete_ohlc_data) > 0:
+                                csv_data = complete_ohlc_data.to_csv()
+                                seeding_status = live_manager.get_seeding_status()
+
+                                # Add suffix to filename if seeded
+                                suffix = "_complete" if export_instrument in seeding_status['instruments_seeded'] else "_live"
+
+                                display_name = export_instrument.split('|')[-1] if '|' in export_instrument else export_instrument
+                                file_name = f"{display_name.replace(' ', '_')}_ohlc{suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+                                st.download_button(
+                                    label=f"📥 Download {display_name} OHLC Data",
+                                    data=csv_data,
+                                    file_name=file_name,
+                                    mime="text/csv",
+                                    use_container_width=True
+                                )
+
+                                st.success(f"✅ Ready to download {len(complete_ohlc_data)} rows of OHLC data")
                             else:
-                                # Export raw tick data
-                                raw_ticks = st.session_state.live_data_manager.get_raw_tick_history(export_instrument)
+                                st.warning("⚠️ No OHLC data available for export")
 
-                                if raw_ticks and len(raw_ticks) > 0:
-                                    # Convert to DataFrame
-                                    tick_df = pd.DataFrame(raw_ticks)
-                                    csv_data = tick_df.to_csv(index=False)
+                        else:
+                            # Export raw tick data
+                            raw_ticks = st.session_state.live_data_manager.get_raw_tick_history(export_instrument)
 
-                                    display_name = export_instrument.split('|')[-1] if '|' in export_instrument else export_instrument
-                                    file_name = f"{display_name.replace(' ', '_')}_raw_ticks_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                            if raw_ticks and len(raw_ticks) > 0:
+                                # Convert to DataFrame
+                                tick_df = pd.DataFrame(raw_ticks)
+                                csv_data = tick_df.to_csv(index=False)
 
-                                    st.download_button(
-                                        label=f"📥 Download {display_name} Raw Tick Data",
-                                        data=csv_data,
-                                        file_name=file_name,
-                                        mime="text/csv",
-                                        use_container_width=True
-                                    )
+                                display_name = export_instrument.split('|')[-1] if '|' in export_instrument else export_instrument
+                                file_name = f"{display_name.replace(' ', '_')}_raw_ticks_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
-                                    st.success(f"✅ Ready to download {len(tick_df)} raw tick records")
+                                st.download_button(
+                                    label=f"📥 Download {display_name} Raw Tick Data",
+                                    data=csv_data,
+                                    file_name=file_name,
+                                    mime="text/csv",
+                                    use_container_width=True
+                                )
+
+                                st.success(f"✅ Ready to download {len(tick_df)} raw tick records")
+                            else:
+                                st.warning("⚠️ No raw tick data available for export")
+
+                if st.button("💾 Save to Database"):
+                    if export_instrument and export_format == "OHLC Data":
+                        try:
+                            live_manager = st.session_state.live_data_manager
+                            complete_ohlc_data = live_manager.get_complete_ohlc_data(export_instrument)
+
+                            if complete_ohlc_data is not None and len(complete_ohlc_data) > 0:
+                                db = DatabaseAdapter()
+                                display_name = export_instrument.split('|')[-1] if '|' in export_instrument else export_instrument
+                                dataset_name = f"live_{display_name.replace(' ', '_').lower()}"
+
+                                if db.save_ohlc_data(complete_ohlc_data, dataset_name):
+                                    st.success(f"✅ Saved {len(complete_ohlc_data)} rows to database as '{dataset_name}'")
                                 else:
-                                    st.warning("⚠️ No raw tick data available for export")
-
-                    if st.button("💾 Save to Database"):
-                        if export_instrument and export_format == "OHLC Data":
-                            try:
-                                live_manager = st.session_state.live_data_manager
-                                complete_ohlc_data = live_manager.get_complete_ohlc_data(export_instrument)
-
-                                if complete_ohlc_data is not None and len(complete_ohlc_data) > 0:
-                                    db = DatabaseAdapter()
-                                    display_name = export_instrument.split('|')[-1] if '|' in export_instrument else export_instrument
-                                    dataset_name = f"live_{display_name.replace(' ', '_').lower()}"
-
-                                    if db.save_ohlc_data(complete_ohlc_data, dataset_name):
-                                        st.success(f"✅ Saved {len(complete_ohlc_data)} rows to database as '{dataset_name}'")
-                                    else:
-                                        st.error("❌ Failed to save data to database")
-                                else:
-                                    st.warning("⚠️ No data available to save")
-                            except Exception as e:
-                                st.error(f"❌ Database error: {str(e)}")
-            else:
-                st.info("📊 No live data available for export (market may be closed)")
+                                    st.error("❌ Failed to save data to database")
+                            else:
+                                st.warning("⚠️ No data available to save")
+                        except Exception as e:
+                            st.error(f"❌ Database error: {str(e)}")
+        else:
+            st.info("📊 No live data available for export (market may be closed)")
 
     else:
         st.info("📊 Connect to live data feed to see real-time market information")
-
-    else:
-        st.info("🔌 Please configure and connect to Upstox WebSocket to start receiving live data")
 
     # Auto-refresh functionality
     if auto_refresh and st.session_state.is_live_connected:
