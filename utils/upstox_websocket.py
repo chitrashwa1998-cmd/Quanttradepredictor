@@ -180,7 +180,7 @@ class UpstoxWebSocketClient:
                     await self._send_subscription(list(self.subscribed_instruments))
 
                 # Continuously receive and decode data from WebSocket (official loop)
-                while not self._stop_event.is_set():
+                while self._stop_event and not self._stop_event.is_set():
                     try:
                         message = await asyncio.wait_for(websocket.recv(), timeout=30.0)
                         await self._process_message(message)
@@ -191,6 +191,10 @@ class UpstoxWebSocketClient:
 
                     except websockets.exceptions.ConnectionClosed:
                         print("🔌 WebSocket connection closed")
+                        break
+
+                    except Exception as e:
+                        print(f"❌ Error in message loop: {e}")
                         break
 
         except Exception as e:
@@ -446,22 +450,30 @@ class UpstoxWebSocketClient:
 
         try:
             # Signal stop to asyncio loop
-            if self._stop_event:
-                if self._asyncio_loop and self._asyncio_loop.is_running():
-                    asyncio.run_coroutine_threadsafe(
-                        self._stop_event.set(), 
-                        self._asyncio_loop
-                    )
+            if self._stop_event and self._asyncio_loop:
+                try:
+                    if self._asyncio_loop.is_running():
+                        future = asyncio.run_coroutine_threadsafe(
+                            self._stop_event.set(), 
+                            self._asyncio_loop
+                        )
+                        # Wait briefly for the signal to be processed
+                        future.result(timeout=2.0)
+                except Exception as e:
+                    print(f"⚠️ Error setting stop event: {e}")
 
             # Close websocket connection
             if self.websocket and self._asyncio_loop:
                 try:
-                    asyncio.run_coroutine_threadsafe(
-                        self.websocket.close(), 
-                        self._asyncio_loop
-                    )
-                except:
-                    pass
+                    if self._asyncio_loop.is_running():
+                        future = asyncio.run_coroutine_threadsafe(
+                            self.websocket.close(), 
+                            self._asyncio_loop
+                        )
+                        # Wait briefly for close to complete
+                        future.result(timeout=2.0)
+                except Exception as e:
+                    print(f"⚠️ Error closing websocket: {e}")
 
             self.is_connected = False
 
@@ -472,7 +484,7 @@ class UpstoxWebSocketClient:
         except Exception as e:
             print(f"⚠️ Error during disconnect: {e}")
 
-        # Clear data
+        # Clear data after operations complete
         self.subscribed_instruments.clear()
         self.last_tick_data.clear()
         self.websocket = None
