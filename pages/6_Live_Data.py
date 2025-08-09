@@ -381,7 +381,7 @@ def show_live_data_page():
             st.session_state.live_data_manager = None
             st.session_state.is_live_connected = False
             st.session_state.is_prediction_pipeline_active = False
-            st.info("🔌 Disconnected from live data feed and prediction pipeline")
+            st.info("Disconnected from live data feed and prediction pipeline")
 
     with col3:
         if st.button("🔄 Refresh Status"):
@@ -851,11 +851,11 @@ def show_live_data_page():
 
                 # Get all instruments from pipeline (including those without live ticks)
                 all_instruments = set()
-                
+
                 # Add instruments with tick data
                 if tick_stats:
                     all_instruments.update(tick_stats.keys())
-                
+
                 # Add dedicated routing instruments even if no live ticks
                 if st.session_state.live_prediction_pipeline:
                     ml_instrument = st.session_state.live_prediction_pipeline.ml_models_instrument
@@ -871,7 +871,7 @@ def show_live_data_page():
                         with cols[i % len(cols)]:
                             # Get instrument display name
                             display_name = instrument.split('|')[-1] if '|' in instrument else instrument
-                            
+
                             # Get stats if available, otherwise use defaults
                             if instrument in tick_stats:
                                 stats = tick_stats[instrument]
