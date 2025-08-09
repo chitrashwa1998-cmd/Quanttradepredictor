@@ -206,6 +206,7 @@ def show_live_data_page():
 
                                 if candles:
                                     # Convert to DataFrame
+                                    import pandas as pd
                                     df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'oi'])
 
                                     # Convert timestamp to datetime
