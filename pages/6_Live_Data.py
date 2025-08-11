@@ -69,6 +69,26 @@ def show_live_data_page():
     with col2:
         st.subheader("📊 Instrument Configuration")
 
+        # Diagnostic section
+        if st.checkbox("🔍 Enable Diagnostics Mode"):
+            st.info("""
+            **Diagnostic Mode Enabled:**
+            - More detailed logging in console
+            - Test multiple instrument types
+            - Enhanced connection monitoring
+            """)
+
+            # Test instruments with high liquidity
+            test_instruments = [
+                "NSE_INDEX|Nifty 50",
+                "NSE_INDEX|Nifty Bank",
+                "NSE_EQ|INE002A01018",  # Reliance (most liquid stock)
+            ]
+
+            if st.button("🧪 Test High-Liquidity Instruments"):
+                st.info(f"Testing with high-liquidity instruments: {[inst.split('|')[-1] for inst in test_instruments]}")
+                # This will be used in the connection logic
+
         # Common instrument keys for Indian market
         popular_instruments = {
             "NIFTY 50": "NSE_INDEX|Nifty 50",
@@ -338,7 +358,44 @@ def show_live_data_page():
         **Naming pattern:** `livenifty50`, `liveniftybank`, `livereliance`, etc.
         """)
 
-    # Continue with live data configuration
+    # Market hours validation
+    import pytz
+    ist = pytz.timezone('Asia/Kolkata')
+    current_time = datetime.now(ist)
+    current_hour = current_time.hour
+    current_minute = current_time.minute
+    current_weekday = current_time.weekday()  # 0=Monday, 6=Sunday
+
+    # Market hours: 9:15 AM to 3:30 PM IST, Monday to Friday
+    market_start = 9 * 60 + 15  # 9:15 AM in minutes
+    market_end = 15 * 60 + 30   # 3:30 PM in minutes
+    current_minutes = current_hour * 60 + current_minute
+
+    is_trading_day = current_weekday < 5  # Monday to Friday
+    is_trading_hours = market_start <= current_minutes <= market_end
+    is_market_open = is_trading_day and is_trading_hours
+
+    # Market status display
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        status_color = "🟢" if is_market_open else "🔴"
+        st.metric("Market Status", f"{status_color} {'OPEN' if is_market_open else 'CLOSED'}")
+    with col2:
+        st.metric("Current Time (IST)", current_time.strftime("%H:%M:%S"))
+    with col3:
+        if not is_market_open:
+            if not is_trading_day:
+                reason = "Weekend"
+            elif current_minutes < market_start:
+                reason = "Pre-market"
+            else:
+                reason = "Post-market"
+            st.metric("Reason", reason)
+        else:
+            st.metric("Trading Active", "Live Data Expected")
+
+    if not is_market_open:
+        st.warning(f"⚠️ **Market is currently CLOSED**. Live tick data will not be available until market opens (9:15 AM - 3:30 PM IST, Monday-Friday). Current time: {current_time.strftime('%A, %H:%M:%S IST')}")
 
     # Connection controls for live data
     st.header("🔌 Live Data Connection")
@@ -869,11 +926,11 @@ def show_live_data_page():
                 with st.expander("🔍 Debug: Instrument Data", expanded=False):
                     st.write("**Subscribed Instruments:**", list(all_instruments))
                     st.write("**Tick Stats Available:**", list(tick_stats.keys()) if tick_stats else "None")
-                    
+
                     for instrument in all_instruments:
                         ohlc_data = st.session_state.live_data_manager.get_live_ohlc(instrument, 1)
                         latest_tick = st.session_state.live_data_manager.get_latest_tick(instrument)
-                        
+
                         st.write(f"**{instrument}:**")
                         st.write(f"  - OHLC rows: {len(ohlc_data) if ohlc_data is not None else 0}")
                         st.write(f"  - Latest tick: {latest_tick is not None}")

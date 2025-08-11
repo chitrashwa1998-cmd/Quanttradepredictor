@@ -186,7 +186,28 @@ class UpstoxWebSocketClient:
                         await self._process_message(message)
 
                     except asyncio.TimeoutError:
-                        print("⏰ WebSocket timeout, sending ping...")
+                        # Check if this is during market hours
+                        import pytz
+                        ist = pytz.timezone('Asia/Kolkata')
+                        current_time = datetime.now(ist)
+                        current_hour = current_time.hour
+                        current_minute = current_time.minute
+                        current_weekday = current_time.weekday()
+                        
+                        market_start = 9 * 60 + 15  # 9:15 AM
+                        market_end = 15 * 60 + 30   # 3:30 PM
+                        current_minutes = current_hour * 60 + current_minute
+                        
+                        is_trading_hours = (current_weekday < 5 and 
+                                          market_start <= current_minutes <= market_end)
+                        
+                        if is_trading_hours:
+                            print(f"⚠️ MARKET OPEN but no tick data! Time: {current_time.strftime('%H:%M:%S IST')}")
+                            print(f"🔍 Subscribed instruments: {list(self.subscribed_instruments)}")
+                            print(f"📊 Last tick count: {len(self.last_tick_data)}")
+                        else:
+                            print(f"⏰ WebSocket timeout (Market closed: {current_time.strftime('%H:%M:%S IST')})")
+                        
                         await websocket.ping()
 
                     except websockets.exceptions.ConnectionClosed:
@@ -338,11 +359,18 @@ class UpstoxWebSocketClient:
                 # Log with clean format
                 display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
                 ltp = tick_data['ltp']
+                volume = tick_data['volume']
 
-                if self._msg_counter % 25 == 0:
-                    print(f"📊 Official: {display_name} @ ₹{ltp:.2f}")
+                # More frequent logging during market hours for debugging
+                if self._msg_counter % 10 == 0:
+                    print(f"📊 LIVE TICK: {display_name} @ ₹{ltp:.2f} | Vol: {volume:,} | Time: {tick_data['timestamp'].strftime('%H:%M:%S')}")
 
                 return tick_data
+            else:
+                # Debug: Log when we receive data but no valid price
+                if self._msg_counter % 50 == 0:
+                    display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+                    print(f"⚠️ Received data for {display_name} but LTP is 0 or invalid")
 
             return None
 
