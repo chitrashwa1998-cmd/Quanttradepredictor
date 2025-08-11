@@ -44,7 +44,7 @@ class LivePredictionPipeline:
         # Dedicated instrument routing for specialized analysis
         # ML Models + Black-Scholes: Use spot index for accurate pricing models
         self.ml_models_instrument = "NSE_INDEX|Nifty 50"  # Spot price for ML models + Black-Scholes
-        self.obi_cvd_instrument = "NSE_FO|NIFTY28AUGFUT"  # Current month futures for OBI+CVD
+        self.obi_cvd_instrument = "NSE_FO|64103"  # Active futures contract for OBI+CVD
 
         # OBI+CVD Confirmation
         self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
