@@ -60,10 +60,10 @@ class UpstoxWebSocketClient:
         """Get authorization for market data feed - Official implementation."""
         try:
             headers = {
-                'Accept': 'application/json',
+                'Accept': '*/*',
                 'Authorization': f'Bearer {self.access_token}'
             }
-            url = 'https://api.upstox.com/v2/feed/market-data-feed/authorize'
+            url = 'https://api.upstox.com/v3/feed/market-data-feed/authorize'
             api_response = requests.get(url=url, headers=headers)
 
             if api_response.status_code == 200:
@@ -401,8 +401,10 @@ class UpstoxWebSocketClient:
             print(f"🔄 Official subscription for {len(instrument_keys)} instruments")
             print(f"📋 Instruments: {[key.split('|')[-1] for key in instrument_keys]}")
 
-            # Convert data to binary and send over WebSocket (official approach)
-            binary_data = json.dumps(data).encode('utf-8')
+            # Convert data to binary and send over WebSocket (V3 format)
+            message_json = json.dumps(data)
+            print(f"📤 Sending subscription: {message_json}")
+            binary_data = message_json.encode('utf-8')
             await self.websocket.send(binary_data)
 
             print(f"📤 Official subscription sent")
