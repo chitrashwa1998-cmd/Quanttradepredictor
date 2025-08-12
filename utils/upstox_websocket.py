@@ -70,6 +70,10 @@ class UpstoxWebSocketClient:
                 response_data = api_response.json()
                 if response_data.get("status") == "success" and "data" in response_data:
                     self.websocket_url = response_data["data"]["authorized_redirect_uri"]
+                    # Fix version mismatch: Replace v2 with v3 in WebSocket URL
+                    if "/v2/" in self.websocket_url:
+                        self.websocket_url = self.websocket_url.replace("/v2/", "/v3/")
+                        print(f"🔧 Fixed WebSocket URL version from v2 to v3")
                     print(f"✅ Got WebSocket URL (Official v3): {self.websocket_url}")
                     return response_data
                 else:
