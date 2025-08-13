@@ -236,12 +236,17 @@ class UpstoxWebSocketClient:
         try:
             self._msg_counter += 1
 
-            if self._msg_counter % 50 == 0:
-                print(f"📦 Processing message #{self._msg_counter} (Official)")
+            # More frequent debugging during market hours
+            if self._msg_counter % 25 == 0:
+                print(f"📦 Processing V3 message #{self._msg_counter}")
+                print(f"🔍 Message size: {len(message)} bytes")
+                print(f"📊 Subscribed instruments: {list(self.subscribed_instruments)}")
 
             # Decode protobuf message (official approach)
             decoded_data = self.decode_protobuf(message)
             if not decoded_data:
+                if self._msg_counter % 25 == 0:
+                    print(f"⚠️ Failed to decode V3 message #{self._msg_counter}")
                 return
 
             # Convert the decoded data to a dictionary (official approach)
@@ -251,14 +256,18 @@ class UpstoxWebSocketClient:
                     if hasattr(decoded_data, 'DESCRIPTOR'):
                         data_dict = MessageToDict(decoded_data)
                         # Process feeds data
-                        if 'feeds' in data_dict:
+                        if 'feeds' in data_dict and data_dict['feeds']:
                             await self._process_feeds(data_dict['feeds'])
+                        elif self._msg_counter % 25 == 0:
+                            print(f"⚠️ V3 message has no feeds data")
                     else:
                         # Fallback to manual processing if DESCRIPTOR is missing
                         if hasattr(decoded_data, 'feeds') and decoded_data.feeds:
                             await self._process_feeds(decoded_data.feeds)
+                        elif self._msg_counter % 25 == 0:
+                            print(f"⚠️ No feeds in decoded data")
                 except Exception as protobuf_error:
-                    print(f"⚠️ Protobuf conversion error: {protobuf_error}, using manual processing")
+                    print(f"⚠️ V3 protobuf conversion error: {protobuf_error}, using manual processing")
                     # Fallback to manual processing
                     if hasattr(decoded_data, 'feeds') and decoded_data.feeds:
                         await self._process_feeds(decoded_data.feeds)
@@ -267,9 +276,11 @@ class UpstoxWebSocketClient:
                 # Manual processing for mock response
                 if hasattr(decoded_data, 'feeds') and decoded_data.feeds:
                     await self._process_feeds(decoded_data.feeds)
+                elif self._msg_counter % 25 == 0:
+                    print(f"⚠️ No protobuf data or feeds available")
 
         except Exception as e:
-            print(f"❌ Message processing error: {e}")
+            print(f"❌ V3 message processing error: {e}")
 
     async def _process_feeds(self, feeds_data):
         """Process feeds data from official protobuf structure."""
@@ -388,30 +399,32 @@ class UpstoxWebSocketClient:
             if not self.websocket or not self.is_connected:
                 return False
 
-            # Data to be sent over the WebSocket (official format)
+            # Data to be sent over the WebSocket (V3 official format)
             data = {
                 "guid": "someguid",
                 "method": "sub", 
                 "data": {
-                    "mode": "full",
+                    "mode": "ltpc",  # Changed from "full" to "ltpc" for better compatibility
                     "instrumentKeys": instrument_keys
                 }
             }
 
-            print(f"🔄 Official subscription for {len(instrument_keys)} instruments")
+            print(f"🔄 Official V3 subscription for {len(instrument_keys)} instruments")
             print(f"📋 Instruments: {[key.split('|')[-1] for key in instrument_keys]}")
 
-            # Convert data to binary and send over WebSocket (V3 format)
+            # Convert to JSON first, then to binary (V3 requirement)
             message_json = json.dumps(data)
-            print(f"📤 Sending subscription: {message_json}")
+            print(f"📤 Sending V3 subscription: {message_json}")
+            
+            # Send as binary data (V3 requirement)
             binary_data = message_json.encode('utf-8')
             await self.websocket.send(binary_data)
 
-            print(f"📤 Official subscription sent")
+            print(f"📤 V3 subscription sent successfully")
             return True
 
         except Exception as e:
-            print(f"❌ Subscription error: {e}")
+            print(f"❌ V3 subscription error: {e}")
             return False
 
     def _get_next_instrument_in_sequence(self):
@@ -527,7 +540,7 @@ class UpstoxWebSocketClient:
 
         print("🔌 Official WebSocket disconnected")
 
-    def subscribe(self, instrument_keys: list, mode: str = "full"):
+    def subscribe(self, instrument_keys: list, mode: str = "ltpc"):
         """Subscribe to instruments using official implementation."""
         if not instrument_keys:
             return False
@@ -535,32 +548,41 @@ class UpstoxWebSocketClient:
         try:
             # Remove duplicates and add to subscribed set
             unique_keys = list(set(instrument_keys))
-            new_instruments = [key for key in unique_keys if key not in self.subscribed_instruments]
+            
+            # Clear existing subscriptions to avoid conflicts
+            self.subscribed_instruments.clear()
+            self.subscribed_instruments.update(unique_keys)
 
-            if not new_instruments:
-                print(f"✅ All instruments already subscribed")
-                return True
-
-            self.subscribed_instruments.update(new_instruments)
+            print(f"🎯 V3 Subscription Request:")
+            print(f"   - Instruments: {len(unique_keys)}")
+            for key in unique_keys:
+                display_name = key.split('|')[-1] if '|' in key else key
+                print(f"   - {key} ({display_name})")
 
             # If connected, send subscription immediately
             if self.is_connected and self._asyncio_loop:
                 try:
                     future = asyncio.run_coroutine_threadsafe(
-                        self._send_subscription(new_instruments),
+                        self._send_subscription(unique_keys),
                         self._asyncio_loop
                     )
-                    result = future.result(timeout=10.0)
+                    result = future.result(timeout=15.0)  # Increased timeout
+                    
+                    if result:
+                        print(f"✅ V3 subscription successful for {len(unique_keys)} instruments")
+                    else:
+                        print(f"❌ V3 subscription failed")
+                    
                     return result
                 except Exception as e:
                     print(f"❌ Async subscription error: {e}")
                     return False
             else:
-                print(f"🔄 Instruments queued for subscription: {len(new_instruments)}")
+                print(f"🔄 V3 instruments queued for subscription: {len(unique_keys)}")
                 return True
 
         except Exception as e:
-            print(f"❌ Subscription failed: {e}")
+            print(f"❌ V3 subscription failed: {e}")
             return False
 
     def unsubscribe(self, instrument_keys: list):
