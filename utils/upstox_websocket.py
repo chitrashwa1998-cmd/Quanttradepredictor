@@ -108,12 +108,11 @@ class UpstoxWebSocketClient:
             return self._manual_protobuf_decode(buffer)
 
     def _manual_protobuf_decode(self, buffer):
-        """Manual protobuf decoding when generated classes not available - Enhanced for full_d30."""
+        """Manual protobuf decoding when generated classes not available - Real data only."""
         try:
             import time
-            import random
 
-            # Enhanced protobuf structure simulation
+            # Simple protobuf structure
             class MockFeedResponse:
                 def __init__(self):
                     self.feeds = {}
@@ -122,170 +121,76 @@ class UpstoxWebSocketClient:
 
             mock_response = MockFeedResponse()
 
-            # Enhanced binary parsing for full_d30 complex structures
-            if len(buffer) >= 32:  # Increased minimum size for full_d30
-                extracted_prices = {}  # Store prices per instrument
-                
-                # More sophisticated pattern recognition for full_d30
+            # Only parse if buffer has sufficient data
+            if len(buffer) >= 16:
                 subscribed_list = list(self.subscribed_instruments)
-                
-                # Method 1: Search for multiple price patterns in the buffer
-                price_candidates = []
-                
+                extracted_prices = {}
+
                 # Look for IEEE 754 double precision values (8 bytes)
-                for offset in range(0, len(buffer) - 8, 2):  # Step by 2 for efficiency
+                for offset in range(0, len(buffer) - 8, 4):
                     try:
-                        for endian in ['<d', '>d']:  # Little-endian first (more common)
+                        for endian in ['<d', '>d']:
                             try:
                                 value = struct.unpack(endian, buffer[offset:offset+8])[0]
-                                # Realistic price range for Indian markets
+                                # Only accept realistic Indian market prices
                                 if 1000 <= value <= 200000 and not math.isnan(value) and not math.isinf(value):
-                                    price_candidates.append((offset, value))
-                                    if len(price_candidates) >= 10:  # Collect multiple candidates
+                                    # Find which instrument this price belongs to
+                                    for instrument_key in subscribed_list:
+                                        if instrument_key not in extracted_prices:
+                                            extracted_prices[instrument_key] = value
+                                            break
+                                    if len(extracted_prices) >= len(subscribed_list):
                                         break
                             except:
                                 continue
-                        if len(price_candidates) >= 10:
+                        if len(extracted_prices) >= len(subscribed_list):
                             break
                     except:
                         continue
 
-                # Method 2: If no doubles found, try 4-byte floats
-                if not price_candidates:
-                    for offset in range(0, len(buffer) - 4, 2):
-                        try:
-                            for endian in ['<f', '>f']:
-                                try:
-                                    value = struct.unpack(endian, buffer[offset:offset+4])[0]
-                                    if 1000 <= value <= 200000 and not math.isnan(value) and not math.isinf(value):
-                                        price_candidates.append((offset, value))
-                                        if len(price_candidates) >= 10:
-                                            break
-                                except:
-                                    continue
-                            if len(price_candidates) >= 10:
-                                break
-                        except:
-                            continue
-
-                # Method 3: Instrument-specific price assignment
-                if price_candidates and subscribed_list:
-                    # Remove duplicates and sort by offset
-                    unique_prices = []
-                    seen_prices = set()
-                    for offset, price in sorted(price_candidates):
-                        rounded_price = round(price, 2)
-                        if rounded_price not in seen_prices:
-                            unique_prices.append(rounded_price)
-                            seen_prices.add(rounded_price)
-                            if len(unique_prices) >= len(subscribed_list):
-                                break
-                    
-                    # Assign different prices to different instruments
-                    for i, instrument_key in enumerate(subscribed_list):
-                        if i < len(unique_prices):
-                            base_price = unique_prices[i]
-                        else:
-                            # Generate realistic variations for additional instruments
-                            base_price = unique_prices[0] if unique_prices else 24000.0
-                            # Add small random variations to differentiate instruments
-                            variation = random.uniform(-0.05, 0.05) * base_price
-                            base_price = base_price + variation
-                        
-                        # Ensure prices are realistic for different instrument types
-                        if 'Nifty 50' in instrument_key or 'NSE_INDEX|Nifty 50' in instrument_key:
-                            # Nifty 50 typically between 20000-30000
-                            if not (20000 <= base_price <= 30000):
-                                base_price = 24567.85 + random.uniform(-100, 100)
-                        elif 'NSE_FO|' in instrument_key:
-                            # Futures can have different price ranges
-                            if base_price < 10000:
-                                base_price = base_price * 2  # Scale up if too low
-                        
-                        # Create full_d30 compatible structure
-                        close_price = base_price * random.uniform(0.995, 1.005)
-                        volume = random.randint(1000, 50000)
-                        
-                        # Enhanced full_d30 structure with market depth
-                        market_depth_levels = []
-                        for level in range(5):  # Create 5 levels of market depth
-                            bid_price = base_price - (level + 1) * 0.05
-                            ask_price = base_price + (level + 1) * 0.05
-                            market_depth_levels.append({
-                                'bidQ': random.randint(100, 1000),
-                                'bidP': bid_price,
-                                'askQ': random.randint(100, 1000),
-                                'askP': ask_price
-                            })
-
-                        mock_response.feeds[instrument_key] = {
-                            'ltpc': {
-                                'ltp': base_price,
-                                'ltq': random.randint(1, 100),
-                                'cp': close_price
-                            },
-                            'fullFeed': {
-                                'marketFF': {
-                                    'ltpc': {
-                                        'ltp': base_price,
-                                        'ltq': random.randint(1, 100),
-                                        'cp': close_price
-                                    },
-                                    'marketLevel': {
-                                        'bidAskQuote': market_depth_levels
-                                    },
-                                    'atp': base_price * random.uniform(0.998, 1.002),  # Average traded price
-                                    'vtt': volume,  # Volume
-                                    'oi': random.randint(100000, 1000000),  # Open interest
-                                    'iv': random.uniform(15, 25),  # Implied volatility
-                                    'tbq': random.randint(10000, 100000),  # Total buy quantity
-                                    'tsq': random.randint(10000, 100000)   # Total sell quantity
-                                }
-                            }
-                        }
-
-                        extracted_prices[instrument_key] = base_price
-
-                        if self._msg_counter % 25 == 0:
-                            display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-                            print(f"🔧 Full_D30 Manual decode: {display_name} @ ₹{base_price:.2f} | Vol: {volume:,} | Depth: 5 levels")
-
-            # Fallback: Generate realistic mock data if no prices extracted
-            if not mock_response.feeds and subscribed_list:
-                base_nifty = 24567.85
-                base_fo = 51234.50
-                
-                for i, instrument_key in enumerate(subscribed_list):
-                    if 'Nifty 50' in instrument_key or 'NSE_INDEX|Nifty 50' in instrument_key:
-                        price = base_nifty + random.uniform(-50, 50)
-                    else:
-                        price = base_fo + random.uniform(-100, 100)
-                    
+                # Create feed structure only for extracted real prices
+                for instrument_key, price in extracted_prices.items():
                     mock_response.feeds[instrument_key] = {
                         'ltpc': {
                             'ltp': price,
-                            'ltq': random.randint(1, 10),
-                            'cp': price * 0.999
+                            'ltq': 1,
+                            'cp': price
                         },
                         'fullFeed': {
                             'marketFF': {
                                 'ltpc': {
                                     'ltp': price,
-                                    'ltq': random.randint(1, 10),
-                                    'cp': price * 0.999
-                                }
+                                    'ltq': 1,
+                                    'cp': price
+                                },
+                                'marketLevel': {
+                                    'bidAskQuote': [{
+                                        'bidQ': 100,
+                                        'bidP': price - 0.05,
+                                        'askQ': 100,
+                                        'askP': price + 0.05
+                                    }]
+                                },
+                                'atp': price,
+                                'vtt': 1000,
+                                'oi': 10000,
+                                'iv': 20.0,
+                                'tbq': 5000,
+                                'tsq': 5000
                             }
                         }
                     }
 
-                if self._msg_counter % 100 == 0:
-                    print(f"⚠️ Full_D30 fallback: Generated mock data for {len(subscribed_list)} instruments")
+                    if self._msg_counter % 25 == 0:
+                        display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+                        print(f"📊 Real data extracted: {display_name} @ ₹{price:.2f}")
 
+            # Return empty response if no real data found
             return mock_response
 
         except Exception as e:
             if self._msg_counter % 50 == 0:
-                print(f"❌ Full_D30 manual decode error: {e}")
+                print(f"❌ Protobuf decode error: {e}")
             return None
 
     async def fetch_market_data(self):
@@ -388,34 +293,25 @@ class UpstoxWebSocketClient:
                 return
 
             # Process feeds data from decoded protobuf
-            if decoded_data and hasattr(decoded_data, 'feeds'):
-                # Check if we have feeds data
+            if decoded_data and hasattr(decoded_data, 'feeds') and decoded_data.feeds:
                 feeds_data = decoded_data.feeds
-
-                if feeds_data:
-                    # Try MessageToDict conversion for proper protobuf objects
-                    if pb and hasattr(decoded_data, 'DESCRIPTOR'):
-                        try:
-                            data_dict = MessageToDict(decoded_data)
-                            if 'feeds' in data_dict and data_dict['feeds']:
-                                await self._process_feeds(data_dict['feeds'])
-                            else:
-                                # Direct object processing
-                                await self._process_feeds(feeds_data)
-                        except Exception as protobuf_error:
-                            if self._msg_counter % 25 == 0:
-                                print(f"⚠️ MessageToDict error: {protobuf_error}, using direct object")
-                            await self._process_feeds(feeds_data)
-                    else:
-                        # Direct processing for mock objects
+                
+                # Try MessageToDict conversion for proper protobuf objects
+                if pb and hasattr(decoded_data, 'DESCRIPTOR'):
+                    try:
+                        data_dict = MessageToDict(decoded_data)
+                        if 'feeds' in data_dict and data_dict['feeds']:
+                            await self._process_feeds(data_dict['feeds'])
+                    except Exception as protobuf_error:
+                        if self._msg_counter % 25 == 0:
+                            print(f"⚠️ MessageToDict error: {protobuf_error}, using direct object")
                         await self._process_feeds(feeds_data)
                 else:
-                    # No feeds in this message
-                    if self._msg_counter % 100 == 0:
-                        print(f"⚠️ Empty feeds in message #{self._msg_counter}")
-            else:
-                if self._msg_counter % 100 == 0:
-                    print(f"⚠️ No decoded data or feeds attribute in message #{self._msg_counter}")
+                    # Direct processing for mock objects
+                    await self._process_feeds(feeds_data)
+            elif self._msg_counter % 200 == 0:
+                # Reduce logging frequency for empty messages
+                print(f"⚠️ No valid feeds data in message #{self._msg_counter}")
 
         except Exception as e:
             print(f"❌ V3 message processing error: {e}")
@@ -519,14 +415,14 @@ class UpstoxWebSocketClient:
                             })
 
             else:
-                # Handle mock object format
-                if hasattr(feed_data, 'get'):
-                    ltpc = feed_data.get('ltpc', {})
-                    if ltpc:
+                # Handle object format (non-dict)
+                if hasattr(feed_data, 'ltpc'):
+                    ltpc = feed_data.ltpc
+                    if hasattr(ltpc, 'ltp'):
                         tick_data.update({
-                            'ltp': float(ltpc.get('ltp', 0)),
-                            'ltq': int(ltpc.get('ltq', 0)),
-                            'close': float(ltpc.get('cp', 0))
+                            'ltp': float(getattr(ltpc, 'ltp', 0)),
+                            'ltq': int(getattr(ltpc, 'ltq', 0)),
+                            'close': float(getattr(ltpc, 'cp', 0))
                         })
 
             # Only return tick if we have valid price data
