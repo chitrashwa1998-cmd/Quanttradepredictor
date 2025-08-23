@@ -70,7 +70,11 @@ class UpstoxWebSocketClient:
                 response_data = api_response.json()
                 if response_data.get("status") == "success" and "data" in response_data:
                     self.websocket_url = response_data["data"]["authorized_redirect_uri"]
-                    print(f"✅ Got Official V3 WebSocket URL: {self.websocket_url}")
+                    # Fix version mismatch: Replace v2 with v3 in WebSocket URL
+                    if "/v2/" in self.websocket_url:
+                        self.websocket_url = self.websocket_url.replace("/v2/", "/v3/")
+                        print(f"🔧 Fixed WebSocket URL version from v2 to v3")
+                    print(f"✅ Got WebSocket URL (Official v3): {self.websocket_url}")
                     return response_data
                 else:
                     print(f"❌ API Error: {response_data}")
@@ -389,13 +393,13 @@ class UpstoxWebSocketClient:
                         'last_traded_quantity': int(ltpc.get('ltq', 0))
                     })
 
-                # Handle full feed data (full_d30 structure)
+                # Handle full feed data
                 if 'fullFeed' in feed_data:
                     full_feed = feed_data['fullFeed']
                     if 'marketFF' in full_feed:
                         market_ff = full_feed['marketFF']
 
-                        # Market level data (up to 30 levels for full_d30)
+                        # Market level data
                         if 'marketLevel' in market_ff and 'bidAskQuote' in market_ff['marketLevel']:
                             quotes = market_ff['marketLevel']['bidAskQuote']
                             if quotes and len(quotes) > 0:
@@ -404,32 +408,8 @@ class UpstoxWebSocketClient:
                                     'best_bid': float(first_quote.get('bidP', 0)),
                                     'best_bid_quantity': int(first_quote.get('bidQ', 0)),
                                     'best_ask': float(first_quote.get('askP', 0)),
-                                    'best_ask_quantity': int(first_quote.get('askQ', 0)),
-                                    'market_depth_levels': len(quotes),  # Number of market depth levels
-                                    'total_buy_quantity': float(market_ff.get('tbq', 0)),
-                                    'total_sell_quantity': float(market_ff.get('tsq', 0))
+                                    'best_ask_quantity': int(first_quote.get('askQ', 0))
                                 })
-
-                        # Additional full_d30 data
-                        if 'atp' in market_ff:
-                            tick_data['avg_traded_price'] = float(market_ff['atp'])
-                        if 'vtt' in market_ff:
-                            tick_data['volume'] = int(market_ff['vtt'])
-                        if 'oi' in market_ff:
-                            tick_data['open_interest'] = float(market_ff['oi'])
-                        if 'iv' in market_ff:
-                            tick_data['implied_volatility'] = float(market_ff['iv'])
-
-                        # Option Greeks (if available)
-                        if 'optionGreeks' in market_ff:
-                            greeks = market_ff['optionGreeks']
-                            tick_data.update({
-                                'delta': float(greeks.get('delta', 0)),
-                                'theta': float(greeks.get('theta', 0)),
-                                'gamma': float(greeks.get('gamma', 0)),
-                                'vega': float(greeks.get('vega', 0)),
-                                'rho': float(greeks.get('rho', 0))
-                            })
 
             else:
                 # Handle mock object format
@@ -453,10 +433,7 @@ class UpstoxWebSocketClient:
 
                 # More frequent logging during market hours for debugging
                 if self._msg_counter % 10 == 0:
-                    depth_levels = tick_data.get('market_depth_levels', 0)
-                    avg_price = tick_data.get('avg_traded_price', 0)
-                    oi = tick_data.get('open_interest', 0)
-                    print(f"📊 FULL_D30 TICK: {display_name} @ ₹{ltp:.2f} | Vol: {volume:,} | Depth: {depth_levels} levels | ATP: ₹{avg_price:.2f} | OI: {oi:,.0f} | Time: {tick_data['timestamp'].strftime('%H:%M:%S')}")
+                    print(f"📊 LIVE TICK: {display_name} @ ₹{ltp:.2f} | Vol: {volume:,} | Time: {tick_data['timestamp'].strftime('%H:%M:%S')}")
 
                 return tick_data
             else:
@@ -480,29 +457,24 @@ class UpstoxWebSocketClient:
             # Official V3 GUID format (simple string as per documentation)
             guid = "someguid"
 
-            # Official V3 subscription format for full_d30 (30 market levels + all data)
+            # Official V3 subscription format (exact match to documentation)
             data = {
                 "guid": guid,
                 "method": "sub",
                 "data": {
-                    "mode": "full_d30",  # Full D30 mode for complete market depth (requires Upstox Plus)
+                    "mode": "ltpc",  # Changed from "full" to "ltpc" for better compatibility
                     "instrumentKeys": instrument_keys
                 }
             }
 
-            print(f"🔄 Official V3 full_d30 subscription for {len(instrument_keys)} instruments")
+            print(f"🔄 Official V3 subscription for {len(instrument_keys)} instruments")
             print(f"📋 Instruments: {[key.split('|')[-1] for key in instrument_keys]}")
-            
-            # Validate full_d30 limits (max 50 instruments for Upstox Plus)
-            if len(instrument_keys) > 50:
-                print(f"⚠️ WARNING: full_d30 mode limited to 50 instruments (you have {len(instrument_keys)})")
-                print(f"💡 Consider using 'full' mode for more instruments or upgrade to Upstox Plus")
 
             # Convert data to binary and send over WebSocket (official V3 approach)
             binary_data = json.dumps(data).encode('utf-8')
             await self.websocket.send(binary_data)
 
-            print(f"📤 Official V3 full_d30 subscription sent")
+            print(f"📤 Official V3 subscription sent")
             return True
 
         except Exception as e:
@@ -622,7 +594,7 @@ class UpstoxWebSocketClient:
 
         print("🔌 Official WebSocket disconnected")
 
-    def subscribe(self, instrument_keys: list, mode: str = "full_d30"):
+    def subscribe(self, instrument_keys: list, mode: str = "ltpc"):
         """Subscribe to instruments using official implementation."""
         if not instrument_keys:
             return False
