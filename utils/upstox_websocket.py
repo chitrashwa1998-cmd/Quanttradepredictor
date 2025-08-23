@@ -248,7 +248,7 @@ class UpstoxWebSocketClient:
             print(f"❌ Feeds processing error: {e}")
 
     def _create_tick_from_feed(self, instrument_key, feed_data):
-        """Create tick data from feed structure."""
+        """Create tick data from feed structure - Optimized for full_d30 mode."""
         try:
             tick_data = {
                 'instrument_token': instrument_key,
@@ -273,24 +273,34 @@ class UpstoxWebSocketClient:
                 'bid_price': 0.0,
                 'ask_price': 0.0,
                 'bid_qty': 0,
-                'ask_qty': 0
+                'ask_qty': 0,
+                'market_depth_levels': 0,
+                'all_bid_prices': [],
+                'all_ask_prices': [],
+                'all_bid_quantities': [],
+                'all_ask_quantities': []
             }
 
-            # Extract data based on feed structure (official V3 documentation)
+            # Extract data based on feed structure (full_d30 mode prioritized)
             if isinstance(feed_data, dict):
-                # Priority 1: Handle full_d30 structure (fullFeed.marketFF.ltpc.ltp)
+                
+                # **PRIORITY 1: Handle full_d30 structure (main path)**
                 if 'fullFeed' in feed_data:
                     full_feed = feed_data['fullFeed']
                     
-                    # Check for marketFF (equity/futures) or indexFF (index)
+                    # Determine market data type (equity/futures vs index)
                     market_data = None
+                    feed_type = None
+                    
                     if 'marketFF' in full_feed:
                         market_data = full_feed['marketFF']
+                        feed_type = 'marketFF'
                     elif 'indexFF' in full_feed:
                         market_data = full_feed['indexFF']
+                        feed_type = 'indexFF'
                     
                     if market_data:
-                        # Extract LTPC from full_d30 structure
+                        # **Extract LTPC data (core pricing)**
                         if 'ltpc' in market_data:
                             ltpc = market_data['ltpc']
                             tick_data.update({
@@ -301,34 +311,64 @@ class UpstoxWebSocketClient:
                                 'last_traded_quantity': int(ltpc.get('ltq', 0))
                             })
 
-                        # Extract market depth data (full_d30 specific)
-                        if 'marketLevel' in market_data and 'bidAskQuote' in market_data['marketLevel']:
-                            quotes = market_data['marketLevel']['bidAskQuote']
-                            if quotes and len(quotes) > 0:
-                                first_quote = quotes[0]
-                                tick_data.update({
-                                    'best_bid': float(first_quote.get('bidP', 0)),
-                                    'best_bid_quantity': int(first_quote.get('bidQ', 0)),
-                                    'best_ask': float(first_quote.get('askP', 0)),
-                                    'best_ask_quantity': int(first_quote.get('askQ', 0)),
-                                    'market_depth_levels': len(quotes)
-                                })
+                        # **Extract full_d30 specific: 30-level market depth**
+                        if 'marketLevel' in market_data:
+                            market_level = market_data['marketLevel']
+                            
+                            # Get 30 levels of bid/ask quotes (full_d30 feature)
+                            if 'bidAskQuote' in market_level:
+                                quotes = market_level['bidAskQuote']
+                                if quotes and len(quotes) > 0:
+                                    # Store all 30 levels for full_d30
+                                    bid_prices = []
+                                    ask_prices = []
+                                    bid_quantities = []
+                                    ask_quantities = []
+                                    
+                                    for quote in quotes:
+                                        bid_prices.append(float(quote.get('bP', 0)))
+                                        ask_prices.append(float(quote.get('aP', 0)))
+                                        bid_quantities.append(int(quote.get('bQ', 0)))
+                                        ask_quantities.append(int(quote.get('aQ', 0)))
+                                    
+                                    tick_data.update({
+                                        'market_depth_levels': len(quotes),
+                                        'all_bid_prices': bid_prices,
+                                        'all_ask_prices': ask_prices,
+                                        'all_bid_quantities': bid_quantities,
+                                        'all_ask_quantities': ask_quantities,
+                                        'best_bid': bid_prices[0] if bid_prices else 0.0,
+                                        'best_ask': ask_prices[0] if ask_prices else 0.0,
+                                        'best_bid_quantity': bid_quantities[0] if bid_quantities else 0,
+                                        'best_ask_quantity': ask_quantities[0] if ask_quantities else 0
+                                    })
 
-                        # Extract additional full_d30 data
-                        if 'atp' in market_data:
-                            tick_data['avg_traded_price'] = float(market_data['atp'])
+                        # **Extract additional full_d30 metadata**
+                        # Volume and trading data
                         if 'vtt' in market_data:
                             tick_data['volume'] = int(market_data['vtt'])
+                        if 'atp' in market_data:
+                            tick_data['avg_traded_price'] = float(market_data['atp'])
+                        if 'tbq' in market_data:
+                            tick_data['total_buy_quantity'] = int(market_data['tbq'])
+                        if 'tsq' in market_data:
+                            tick_data['total_sell_quantity'] = int(market_data['tsq'])
+                        
+                        # OHLC data
+                        if 'op' in market_data:
+                            tick_data['open'] = float(market_data['op'])
+                        if 'hp' in market_data:
+                            tick_data['high'] = float(market_data['hp'])
+                        if 'lp' in market_data:
+                            tick_data['low'] = float(market_data['lp'])
+                        
+                        # Derivatives specific data
                         if 'oi' in market_data:
                             tick_data['open_interest'] = float(market_data['oi'])
-                        if 'iv' in market_data:
-                            tick_data['implied_volatility'] = float(market_data['iv'])
-                        if 'tbq' in market_data:
-                            tick_data['total_buy_quantity'] = float(market_data['tbq'])
-                        if 'tsq' in market_data:
-                            tick_data['total_sell_quantity'] = float(market_data['tsq'])
-
-                        # Option Greeks (if available)
+                        if 'poi' in market_data:
+                            tick_data['prev_open_interest'] = float(market_data['poi'])
+                        
+                        # **Option Greeks (full_d30 includes this)**
                         if 'optionGreeks' in market_data:
                             greeks = market_data['optionGreeks']
                             tick_data.update({
@@ -336,10 +376,11 @@ class UpstoxWebSocketClient:
                                 'theta': float(greeks.get('theta', 0)),
                                 'gamma': float(greeks.get('gamma', 0)),
                                 'vega': float(greeks.get('vega', 0)),
-                                'rho': float(greeks.get('rho', 0))
+                                'rho': float(greeks.get('rho', 0)),
+                                'iv': float(greeks.get('iv', 0))
                             })
 
-                # Priority 2: Handle direct LTPC structure (ltpc mode)
+                # **PRIORITY 2: Handle direct LTPC structure (fallback for ltpc mode)**
                 elif 'ltpc' in feed_data:
                     ltpc = feed_data['ltpc']
                     tick_data.update({
@@ -351,7 +392,7 @@ class UpstoxWebSocketClient:
                     })
 
             else:
-                # Handle protobuf object format (non-dict)
+                # **Handle protobuf object format (non-dict)**
                 if hasattr(feed_data, 'fullFeed'):
                     full_feed = feed_data.fullFeed
                     market_data = None
@@ -377,74 +418,85 @@ class UpstoxWebSocketClient:
                         'close': float(getattr(ltpc, 'cp', 0))
                     })
 
-            # Enhanced validation and logging
+            # **Enhanced validation and logging for full_d30**
             if tick_data['ltp'] > 0:
                 self.last_tick_data[instrument_key] = tick_data
 
-                # Clean logging
+                # Enhanced logging for full_d30 data
                 display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
                 ltp = tick_data['ltp']
                 volume = tick_data['volume']
                 depth_levels = tick_data.get('market_depth_levels', 0)
-
-                # Log every tick for debugging (during development)
-                if self._msg_counter % 5 == 0:  # More frequent logging
-                    print(f"✅ FULL_D30 EXTRACTED: {display_name} @ ₹{ltp:.2f} | Vol: {volume:,} | Depth: {depth_levels} levels | Time: {tick_data['timestamp'].strftime('%H:%M:%S')}")
+                
+                # Log full_d30 specific data every few ticks
+                if self._msg_counter % 10 == 0:
+                    print(f"✅ FULL_D30: {display_name} @ ₹{ltp:.2f} | Vol: {volume:,} | Depth: {depth_levels}/30 levels")
+                    if depth_levels > 0:
+                        best_bid = tick_data.get('best_bid', 0)
+                        best_ask = tick_data.get('best_ask', 0)
+                        print(f"   📊 Best Bid: ₹{best_bid:.2f} | Best Ask: ₹{best_ask:.2f} | Spread: ₹{best_ask-best_bid:.2f}")
 
                 return tick_data
             else:
-                # Enhanced debugging for when LTP is 0 or missing
+                # **Enhanced debugging for full_d30 structure issues**
                 display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
                 
                 if self._msg_counter % 25 == 0:
-                    print(f"⚠️ NO LTP EXTRACTED for {display_name}")
+                    print(f"⚠️ NO LTP in FULL_D30 for {display_name}")
                     if isinstance(feed_data, dict):
-                        print(f"🔍 Feed structure keys: {list(feed_data.keys())}")
+                        print(f"🔍 Root keys: {list(feed_data.keys())}")
+                        
                         if 'fullFeed' in feed_data:
                             full_feed = feed_data['fullFeed']
-                            print(f"🔍 FullFeed keys: {list(full_feed.keys()) if isinstance(full_feed, dict) else 'Not dict'}")
                             if isinstance(full_feed, dict):
-                                if 'marketFF' in full_feed and isinstance(full_feed['marketFF'], dict):
-                                    print(f"🔍 MarketFF keys: {list(full_feed['marketFF'].keys())}")
-                                if 'indexFF' in full_feed and isinstance(full_feed['indexFF'], dict):
-                                    print(f"🔍 IndexFF keys: {list(full_feed['indexFF'].keys())}")
+                                print(f"🔍 FullFeed keys: {list(full_feed.keys())}")
+                                
+                                # Check market data structure
+                                for feed_key in ['marketFF', 'indexFF']:
+                                    if feed_key in full_feed and isinstance(full_feed[feed_key], dict):
+                                        market_data = full_feed[feed_key]
+                                        print(f"🔍 {feed_key} keys: {list(market_data.keys())}")
+                                        
+                                        if 'ltpc' in market_data:
+                                            ltpc = market_data['ltpc']
+                                            print(f"🔍 LTPC keys: {list(ltpc.keys()) if isinstance(ltpc, dict) else 'Not dict'}")
 
             return None
 
         except Exception as e:
             display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-            print(f"❌ Tick creation error for {display_name}: {e}")
+            print(f"❌ FULL_D30 tick creation error for {display_name}: {e}")
             return None
 
-    async def _send_subscription(self, instrument_keys):
-        """Send subscription request - Official V3 implementation as per documentation."""
+    async def _send_subscription(self, instrument_keys, mode="full_d30"):
+        """Send subscription request - Official V3 implementation with full_d30 mode."""
         try:
             if not self.websocket or not self.is_connected:
                 return False
 
             # Official V3 subscription format exactly as per documentation
             subscription_request = {
-                "guid": "someguid",
+                "guid": "tribex_full_d30_sub",
                 "method": "sub",
                 "data": {
-                    "mode": "full_d30",
+                    "mode": mode,
                     "instrumentKeys": instrument_keys
                 }
             }
 
-            print(f"🔄 Official V3 subscription for {len(instrument_keys)} instruments")
-            print(f"📋 Mode: full_d30 (as per V3 documentation)")
+            print(f"🔄 Official V3 FULL_D30 subscription for {len(instrument_keys)} instruments")
+            print(f"📋 Mode: {mode} (30 market levels + complete data)")
             print(f"📋 Instruments: {[key.split('|')[-1] for key in instrument_keys]}")
 
             # Send subscription as JSON string over WebSocket (official V3 method)
             message = json.dumps(subscription_request)
             await self.websocket.send(message)
 
-            print(f"📤 Official V3 subscription message sent")
+            print(f"📤 FULL_D30 subscription message sent successfully")
             return True
 
         except Exception as e:
-            print(f"❌ V3 subscription error: {e}")
+            print(f"❌ FULL_D30 subscription error: {e}")
             return False
 
     def _get_next_instrument_in_sequence(self):
@@ -561,11 +613,14 @@ class UpstoxWebSocketClient:
         print("🔌 Official WebSocket disconnected")
 
     def subscribe(self, instrument_keys: list, mode: str = "full_d30"):
-        """Subscribe to instruments using official implementation."""
+        """Subscribe to instruments using full_d30 mode for complete market data."""
         if not instrument_keys:
             return False
 
         try:
+            # Force full_d30 mode for complete market data (30 levels + all features)
+            subscription_mode = "full_d30"
+            
             # Remove duplicates and add to subscribed set
             unique_keys = list(set(instrument_keys))
 
@@ -573,7 +628,8 @@ class UpstoxWebSocketClient:
             self.subscribed_instruments.clear()
             self.subscribed_instruments.update(unique_keys)
 
-            print(f"🎯 V3 Subscription Request:")
+            print(f"🎯 FULL_D30 Subscription Request:")
+            print(f"   - Mode: {subscription_mode} (30 market levels + full data)")
             print(f"   - Instruments: {len(unique_keys)}")
             for key in unique_keys:
                 display_name = key.split('|')[-1] if '|' in key else key
@@ -583,26 +639,26 @@ class UpstoxWebSocketClient:
             if self.is_connected and self._asyncio_loop:
                 try:
                     future = asyncio.run_coroutine_threadsafe(
-                        self._send_subscription(unique_keys),
+                        self._send_subscription(unique_keys, subscription_mode),
                         self._asyncio_loop
                     )
-                    result = future.result(timeout=15.0)  # Increased timeout
+                    result = future.result(timeout=15.0)
 
                     if result:
-                        print(f"✅ V3 subscription successful for {len(unique_keys)} instruments")
+                        print(f"✅ FULL_D30 subscription successful for {len(unique_keys)} instruments")
                     else:
-                        print(f"❌ V3 subscription failed")
+                        print(f"❌ FULL_D30 subscription failed")
 
                     return result
                 except Exception as e:
-                    print(f"❌ Async subscription error: {e}")
+                    print(f"❌ FULL_D30 async subscription error: {e}")
                     return False
             else:
-                print(f"🔄 V3 instruments queued for subscription: {len(unique_keys)}")
+                print(f"🔄 FULL_D30 instruments queued for subscription: {len(unique_keys)}")
                 return True
 
         except Exception as e:
-            print(f"❌ V3 subscription failed: {e}")
+            print(f"❌ FULL_D30 subscription failed: {e}")
             return False
 
     def unsubscribe(self, instrument_keys: list):

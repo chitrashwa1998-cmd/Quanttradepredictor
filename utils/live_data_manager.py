@@ -236,13 +236,13 @@ class LiveDataManager:
         self.ws_client.disconnect()
         self.connection_status = "disconnected"
 
-    def subscribe_instruments(self, instrument_keys: List[str], mode: str = "full") -> bool:
-        """Subscribe to instruments for live data with automatic database seeding."""
+    def subscribe_instruments(self, instrument_keys: List[str], mode: str = "full_d30") -> bool:
+        """Subscribe to instruments for live data with full_d30 mode (30 market levels)."""
         # First, try to seed each instrument from database
         for instrument_key in instrument_keys:
             self.seed_live_data_from_database(instrument_key)
         
-        # Then subscribe for live updates
+        # Then subscribe for live updates with full_d30 mode
         return self.ws_client.subscribe(instrument_keys, mode)
 
     def unsubscribe_instruments(self, instrument_keys: List[str]) -> bool:
