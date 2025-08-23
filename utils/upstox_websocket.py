@@ -276,10 +276,71 @@ class UpstoxWebSocketClient:
                 'ask_qty': 0
             }
 
-            # Extract LTPC data (official structure)
+            # Extract data based on feed structure (official V3 documentation)
             if isinstance(feed_data, dict):
-                # Handle dictionary format (from MessageToDict)
-                if 'ltpc' in feed_data:
+                # Priority 1: Handle full_d30 structure (fullFeed.marketFF.ltpc.ltp)
+                if 'fullFeed' in feed_data:
+                    full_feed = feed_data['fullFeed']
+                    
+                    # Check for marketFF (equity/futures) or indexFF (index)
+                    market_data = None
+                    if 'marketFF' in full_feed:
+                        market_data = full_feed['marketFF']
+                    elif 'indexFF' in full_feed:
+                        market_data = full_feed['indexFF']
+                    
+                    if market_data:
+                        # Extract LTPC from full_d30 structure
+                        if 'ltpc' in market_data:
+                            ltpc = market_data['ltpc']
+                            tick_data.update({
+                                'ltp': float(ltpc.get('ltp', 0)),
+                                'ltq': int(ltpc.get('ltq', 0)),
+                                'close': float(ltpc.get('cp', 0)),
+                                'last_traded_price': float(ltpc.get('ltp', 0)),
+                                'last_traded_quantity': int(ltpc.get('ltq', 0))
+                            })
+
+                        # Extract market depth data (full_d30 specific)
+                        if 'marketLevel' in market_data and 'bidAskQuote' in market_data['marketLevel']:
+                            quotes = market_data['marketLevel']['bidAskQuote']
+                            if quotes and len(quotes) > 0:
+                                first_quote = quotes[0]
+                                tick_data.update({
+                                    'best_bid': float(first_quote.get('bidP', 0)),
+                                    'best_bid_quantity': int(first_quote.get('bidQ', 0)),
+                                    'best_ask': float(first_quote.get('askP', 0)),
+                                    'best_ask_quantity': int(first_quote.get('askQ', 0)),
+                                    'market_depth_levels': len(quotes)
+                                })
+
+                        # Extract additional full_d30 data
+                        if 'atp' in market_data:
+                            tick_data['avg_traded_price'] = float(market_data['atp'])
+                        if 'vtt' in market_data:
+                            tick_data['volume'] = int(market_data['vtt'])
+                        if 'oi' in market_data:
+                            tick_data['open_interest'] = float(market_data['oi'])
+                        if 'iv' in market_data:
+                            tick_data['implied_volatility'] = float(market_data['iv'])
+                        if 'tbq' in market_data:
+                            tick_data['total_buy_quantity'] = float(market_data['tbq'])
+                        if 'tsq' in market_data:
+                            tick_data['total_sell_quantity'] = float(market_data['tsq'])
+
+                        # Option Greeks (if available)
+                        if 'optionGreeks' in market_data:
+                            greeks = market_data['optionGreeks']
+                            tick_data.update({
+                                'delta': float(greeks.get('delta', 0)),
+                                'theta': float(greeks.get('theta', 0)),
+                                'gamma': float(greeks.get('gamma', 0)),
+                                'vega': float(greeks.get('vega', 0)),
+                                'rho': float(greeks.get('rho', 0))
+                            })
+
+                # Priority 2: Handle direct LTPC structure (ltpc mode)
+                elif 'ltpc' in feed_data:
                     ltpc = feed_data['ltpc']
                     tick_data.update({
                         'ltp': float(ltpc.get('ltp', 0)),
@@ -289,86 +350,70 @@ class UpstoxWebSocketClient:
                         'last_traded_quantity': int(ltpc.get('ltq', 0))
                     })
 
-                # Handle full feed data (full_d30 structure)
-                if 'fullFeed' in feed_data:
-                    full_feed = feed_data['fullFeed']
-                    if 'marketFF' in full_feed:
-                        market_ff = full_feed['marketFF']
-
-                        # Market level data (up to 30 levels for full_d30)
-                        if 'marketLevel' in market_ff and 'bidAskQuote' in market_ff['marketLevel']:
-                            quotes = market_ff['marketLevel']['bidAskQuote']
-                            if quotes and len(quotes) > 0:
-                                first_quote = quotes[0]
-                                tick_data.update({
-                                    'best_bid': float(first_quote.get('bidP', 0)),
-                                    'best_bid_quantity': int(first_quote.get('bidQ', 0)),
-                                    'best_ask': float(first_quote.get('askP', 0)),
-                                    'best_ask_quantity': int(first_quote.get('askQ', 0)),
-                                    'market_depth_levels': len(quotes),  # Number of market depth levels
-                                    'total_buy_quantity': float(market_ff.get('tbq', 0)),
-                                    'total_sell_quantity': float(market_ff.get('tsq', 0))
-                                })
-
-                        # Additional full_d30 data
-                        if 'atp' in market_ff:
-                            tick_data['avg_traded_price'] = float(market_ff['atp'])
-                        if 'vtt' in market_ff:
-                            tick_data['volume'] = int(market_ff['vtt'])
-                        if 'oi' in market_ff:
-                            tick_data['open_interest'] = float(market_ff['oi'])
-                        if 'iv' in market_ff:
-                            tick_data['implied_volatility'] = float(market_ff['iv'])
-
-                        # Option Greeks (if available)
-                        if 'optionGreeks' in market_ff:
-                            greeks = market_ff['optionGreeks']
-                            tick_data.update({
-                                'delta': float(greeks.get('delta', 0)),
-                                'theta': float(greeks.get('theta', 0)),
-                                'gamma': float(greeks.get('gamma', 0)),
-                                'vega': float(greeks.get('vega', 0)),
-                                'rho': float(greeks.get('rho', 0))
-                            })
-
             else:
-                # Handle object format (non-dict)
-                if hasattr(feed_data, 'ltpc'):
-                    ltpc = feed_data.ltpc
-                    if hasattr(ltpc, 'ltp'):
+                # Handle protobuf object format (non-dict)
+                if hasattr(feed_data, 'fullFeed'):
+                    full_feed = feed_data.fullFeed
+                    market_data = None
+                    
+                    if hasattr(full_feed, 'marketFF'):
+                        market_data = full_feed.marketFF
+                    elif hasattr(full_feed, 'indexFF'):
+                        market_data = full_feed.indexFF
+                    
+                    if market_data and hasattr(market_data, 'ltpc'):
+                        ltpc = market_data.ltpc
                         tick_data.update({
                             'ltp': float(getattr(ltpc, 'ltp', 0)),
                             'ltq': int(getattr(ltpc, 'ltq', 0)),
                             'close': float(getattr(ltpc, 'cp', 0))
                         })
+                        
+                elif hasattr(feed_data, 'ltpc'):
+                    ltpc = feed_data.ltpc
+                    tick_data.update({
+                        'ltp': float(getattr(ltpc, 'ltp', 0)),
+                        'ltq': int(getattr(ltpc, 'ltq', 0)),
+                        'close': float(getattr(ltpc, 'cp', 0))
+                    })
 
-            # Only return tick if we have valid price data
+            # Enhanced validation and logging
             if tick_data['ltp'] > 0:
                 self.last_tick_data[instrument_key] = tick_data
 
-                # Log with clean format
+                # Clean logging
                 display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
                 ltp = tick_data['ltp']
                 volume = tick_data['volume']
+                depth_levels = tick_data.get('market_depth_levels', 0)
 
-                # More frequent logging during market hours for debugging
-                if self._msg_counter % 10 == 0:
-                    depth_levels = tick_data.get('market_depth_levels', 0)
-                    avg_price = tick_data.get('avg_traded_price', 0)
-                    oi = tick_data.get('open_interest', 0)
-                    print(f"📊 FULL_D30 TICK: {display_name} @ ₹{ltp:.2f} | Vol: {volume:,} | Depth: {depth_levels} levels | ATP: ₹{avg_price:.2f} | OI: {oi:,.0f} | Time: {tick_data['timestamp'].strftime('%H:%M:%S')}")
+                # Log every tick for debugging (during development)
+                if self._msg_counter % 5 == 0:  # More frequent logging
+                    print(f"✅ FULL_D30 EXTRACTED: {display_name} @ ₹{ltp:.2f} | Vol: {volume:,} | Depth: {depth_levels} levels | Time: {tick_data['timestamp'].strftime('%H:%M:%S')}")
 
                 return tick_data
             else:
-                # Debug: Log when we receive data but no valid price
-                if self._msg_counter % 50 == 0:
-                    display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-                    print(f"⚠️ Received data for {display_name} but LTP is 0 or invalid")
+                # Enhanced debugging for when LTP is 0 or missing
+                display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+                
+                if self._msg_counter % 25 == 0:
+                    print(f"⚠️ NO LTP EXTRACTED for {display_name}")
+                    if isinstance(feed_data, dict):
+                        print(f"🔍 Feed structure keys: {list(feed_data.keys())}")
+                        if 'fullFeed' in feed_data:
+                            full_feed = feed_data['fullFeed']
+                            print(f"🔍 FullFeed keys: {list(full_feed.keys()) if isinstance(full_feed, dict) else 'Not dict'}")
+                            if isinstance(full_feed, dict):
+                                if 'marketFF' in full_feed and isinstance(full_feed['marketFF'], dict):
+                                    print(f"🔍 MarketFF keys: {list(full_feed['marketFF'].keys())}")
+                                if 'indexFF' in full_feed and isinstance(full_feed['indexFF'], dict):
+                                    print(f"🔍 IndexFF keys: {list(full_feed['indexFF'].keys())}")
 
             return None
 
         except Exception as e:
-            print(f"❌ Tick creation error: {e}")
+            display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+            print(f"❌ Tick creation error for {display_name}: {e}")
             return None
 
     async def _send_subscription(self, instrument_keys):
