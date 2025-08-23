@@ -60,7 +60,7 @@ class UpstoxWebSocketClient:
         """Get authorization for market data feed - Official implementation."""
         try:
             headers = {
-                'Accept': '*/*',
+                'Accept': 'application/json',
                 'Authorization': f'Bearer {self.access_token}'
             }
             url = 'https://api.upstox.com/v3/feed/market-data-feed/authorize'
@@ -94,18 +94,18 @@ class UpstoxWebSocketClient:
             if pb and hasattr(pb, 'FeedResponse'):
                 feed_response = pb.FeedResponse()
                 feed_response.ParseFromString(buffer)
-                
+
                 # Debug: Print what we got
                 if self._msg_counter % 25 == 0:
                     print(f"🔍 Protobuf parsed - Type: {feed_response.type}, Feeds count: {len(feed_response.feeds)}")
                     if feed_response.feeds:
                         print(f"🔍 Feed keys: {list(feed_response.feeds.keys())}")
-                
+
                 return feed_response
             else:
                 print(f"⚠️ pb.FeedResponse not available, using manual decoding")
                 return self._manual_protobuf_decode(buffer)
-                
+
         except Exception as e:
             if self._msg_counter % 25 == 0:
                 print(f"⚠️ Protobuf decode error: {e}, falling back to manual decoding")
@@ -115,7 +115,7 @@ class UpstoxWebSocketClient:
         """Manual protobuf decoding when generated classes not available."""
         try:
             import time
-            
+
             # Enhanced protobuf structure simulation
             class MockFeedResponse:
                 def __init__(self):
@@ -129,7 +129,7 @@ class UpstoxWebSocketClient:
             if len(buffer) >= 16:
                 # Try different data extraction methods
                 extracted_data = []
-                
+
                 # Method 1: Look for IEEE 754 double precision values
                 for offset in range(0, len(buffer) - 8, 1):
                     try:
@@ -147,7 +147,7 @@ class UpstoxWebSocketClient:
                             break
                     except:
                         continue
-                
+
                 # Method 2: Look for 4-byte float values if doubles didn't work
                 if not extracted_data:
                     for offset in range(0, len(buffer) - 4, 1):
@@ -171,25 +171,25 @@ class UpstoxWebSocketClient:
                     subscribed_list = list(self.subscribed_instruments)
                     for i, instrument_key in enumerate(subscribed_list[:len(extracted_data)]):
                         price = extracted_data[i]
-                        
+
                         # Create realistic feed structure
                         mock_response.feeds[instrument_key] = {
                             'ltpc': {
-                                'ltp': price, 
-                                'ltq': 1, 
+                                'ltp': price,
+                                'ltq': 1,
                                 'cp': price * 0.999  # Close price slightly lower
                             },
                             'fullFeed': {
                                 'marketFF': {
                                     'ltpc': {
-                                        'ltp': price, 
-                                        'ltq': 1, 
+                                        'ltp': price,
+                                        'ltq': 1,
                                         'cp': price * 0.999
                                     }
                                 }
                             }
                         }
-                        
+
                         if self._msg_counter % 50 == 0:
                             display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
                             print(f"🔧 Manual decode: {display_name} @ ₹{price:.2f}")
@@ -252,21 +252,21 @@ class UpstoxWebSocketClient:
                         current_hour = current_time.hour
                         current_minute = current_time.minute
                         current_weekday = current_time.weekday()
-                        
+
                         market_start = 9 * 60 + 15  # 9:15 AM
                         market_end = 15 * 60 + 30   # 3:30 PM
                         current_minutes = current_hour * 60 + current_minute
-                        
-                        is_trading_hours = (current_weekday < 5 and 
+
+                        is_trading_hours = (current_weekday < 5 and
                                           market_start <= current_minutes <= market_end)
-                        
+
                         if is_trading_hours:
                             print(f"⚠️ MARKET OPEN but no tick data! Time: {current_time.strftime('%H:%M:%S IST')}")
                             print(f"🔍 Subscribed instruments: {list(self.subscribed_instruments)}")
                             print(f"📊 Last tick count: {len(self.last_tick_data)}")
                         else:
                             print(f"⏰ WebSocket timeout (Market closed: {current_time.strftime('%H:%M:%S IST')})")
-                        
+
                         await websocket.ping()
 
                     except websockets.exceptions.ConnectionClosed:
@@ -286,7 +286,7 @@ class UpstoxWebSocketClient:
             if self.connection_callback:
                 self.connection_callback("disconnected")
 
-    async def _process_message(self, message):
+    def _process_message(self, message):
         """Process incoming message - Official implementation."""
         try:
             self._msg_counter += 1
@@ -308,7 +308,7 @@ class UpstoxWebSocketClient:
             if decoded_data and hasattr(decoded_data, 'feeds'):
                 # Check if we have feeds data
                 feeds_data = decoded_data.feeds
-                
+
                 if feeds_data:
                     # Try MessageToDict conversion for proper protobuf objects
                     if pb and hasattr(decoded_data, 'DESCRIPTOR'):
@@ -448,16 +448,19 @@ class UpstoxWebSocketClient:
             print(f"❌ Tick creation error: {e}")
             return None
 
-    async def _send_subscription(self, instrument_keys):
+    def _send_subscription(self, instrument_keys):
         """Send subscription request - Official implementation."""
         try:
             if not self.websocket or not self.is_connected:
                 return False
 
-            # Data to be sent over the WebSocket (V3 official format)
+            # Official V3 GUID format (simple string as per documentation)
+            guid = "someguid"
+
+            # Official V3 subscription format (exact match to documentation)
             data = {
-                "guid": "someguid",
-                "method": "sub", 
+                "guid": guid,
+                "method": "sub",
                 "data": {
                     "mode": "ltpc",  # Changed from "full" to "ltpc" for better compatibility
                     "instrumentKeys": instrument_keys
@@ -467,15 +470,11 @@ class UpstoxWebSocketClient:
             print(f"🔄 Official V3 subscription for {len(instrument_keys)} instruments")
             print(f"📋 Instruments: {[key.split('|')[-1] for key in instrument_keys]}")
 
-            # Convert to JSON first, then to binary (V3 requirement)
-            message_json = json.dumps(data)
-            print(f"📤 Sending V3 subscription: {message_json}")
-            
-            # Send as binary data (V3 requirement)
-            binary_data = message_json.encode('utf-8')
+            # Convert data to binary and send over WebSocket (official V3 approach)
+            binary_data = json.dumps(data).encode('utf-8')
             await self.websocket.send(binary_data)
 
-            print(f"📤 V3 subscription sent successfully")
+            print(f"📤 Official V3 subscription sent")
             return True
 
         except Exception as e:
@@ -556,7 +555,7 @@ class UpstoxWebSocketClient:
                 try:
                     if self._asyncio_loop.is_running():
                         future = asyncio.run_coroutine_threadsafe(
-                            self._stop_event.set(), 
+                            self._stop_event.set(),
                             self._asyncio_loop
                         )
                         # Wait briefly for the signal to be processed
@@ -569,7 +568,7 @@ class UpstoxWebSocketClient:
                 try:
                     if self._asyncio_loop.is_running():
                         future = asyncio.run_coroutine_threadsafe(
-                            self.websocket.close(), 
+                            self.websocket.close(),
                             self._asyncio_loop
                         )
                         # Wait briefly for close to complete
@@ -603,7 +602,7 @@ class UpstoxWebSocketClient:
         try:
             # Remove duplicates and add to subscribed set
             unique_keys = list(set(instrument_keys))
-            
+
             # Clear existing subscriptions to avoid conflicts
             self.subscribed_instruments.clear()
             self.subscribed_instruments.update(unique_keys)
@@ -622,12 +621,12 @@ class UpstoxWebSocketClient:
                         self._asyncio_loop
                     )
                     result = future.result(timeout=15.0)  # Increased timeout
-                    
+
                     if result:
                         print(f"✅ V3 subscription successful for {len(unique_keys)} instruments")
                     else:
                         print(f"❌ V3 subscription failed")
-                    
+
                     return result
                 except Exception as e:
                     print(f"❌ Async subscription error: {e}")

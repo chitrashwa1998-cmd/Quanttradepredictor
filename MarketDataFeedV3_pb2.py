@@ -12,8 +12,6 @@ from google.protobuf import symbol_database as _symbol_database
 _sym_db = _symbol_database.Default()
 
 
-
-
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16MarketDataFeedV3.proto\x12,com.upstox.marketdatafeederv3udapi.rpc.proto\"9\n\x04LTPC\x12\x0b\n\x03ltp\x18\x01 \x01(\x01\x12\x0b\n\x03ltt\x18\x02 \x01(\x03\x12\x0b\n\x03ltq\x18\x03 \x01(\x03\x12\n\n\x02\x63p\x18\x04 \x01(\x01\"W\n\x0bMarketLevel\x12H\n\x0b\x62idAskQuote\x18\x01 \x03(\x0b\x32\x33.com.upstox.marketdatafeederv3udapi.rpc.proto.Quote\"N\n\nMarketOHLC\x12@\n\x04ohlc\x18\x01 \x03(\x0b\x32\x32.com.upstox.marketdatafeederv3udapi.rpc.proto.OHLC\"?\n\x05Quote\x12\x0c\n\x04\x62idQ\x18\x01 \x01(\x03\x12\x0c\n\x04\x62idP\x18\x02 \x01(\x01\x12\x0c\n\x04\x61skQ\x18\x03 \x01(\x03\x12\x0c\n\x04\x61skP\x18\x04 \x01(\x01\"V\n\x0cOptionGreeks\x12\r\n\x05\x64\x65lta\x18\x01 \x01(\x01\x12\r\n\x05theta\x18\x02 \x01(\x01\x12\r\n\x05gamma\x18\x03 \x01(\x01\x12\x0c\n\x04vega\x18\x04 \x01(\x01\x12\x0b\n\x03rho\x18\x05 \x01(\x01\"i\n\x04OHLC\x12\x10\n\x08interval\x18\x01 \x01(\t\x12\x0c\n\x04open\x18\x02 \x01(\x01\x12\x0c\n\x04high\x18\x03 \x01(\x01\x12\x0b\n\x03low\x18\x04 \x01(\x01\x12\r\n\x05\x63lose\x18\x05 \x01(\x01\x12\x0b\n\x03vol\x18\x06 \x01(\x03\x12\n\n\x02ts\x18\x07 \x01(\x03\"\x8e\x03\n\x0eMarketFullFeed\x12@\n\x04ltpc\x18\x01 \x01(\x0b\x32\x32.com.upstox.marketdatafeederv3udapi.rpc.proto.LTPC\x12N\n\x0bmarketLevel\x18\x02 \x01(\x0b\x32\x39.com.upstox.marketdatafeederv3udapi.rpc.proto.MarketLevel\x12P\n\x0coptionGreeks\x18\x03 \x01(\x0b\x32:.com.upstox.marketdatafeederv3udapi.rpc.proto.OptionGreeks\x12L\n\nmarketOHLC\x18\x04 \x01(\x0b\x32\x38.com.upstox.marketdatafeederv3udapi.rpc.proto.MarketOHLC\x12\x0b\n\x03\x61tp\x18\x05 \x01(\x01\x12\x0b\n\x03vtt\x18\x06 \x01(\x03\x12\n\n\x02oi\x18\x07 \x01(\x01\x12\n\n\x02iv\x18\x08 \x01(\x01\x12\x0b\n\x03tbq\x18\t \x01(\x01\x12\x0b\n\x03tsq\x18\n \x01(\x01\"\x9f\x01\n\rIndexFullFeed\x12@\n\x04ltpc\x18\x01 \x01(\x0b\x32\x32.com.upstox.marketdatafeederv3udapi.rpc.proto.LTPC\x12L\n\nmarketOHLC\x18\x02 \x01(\x0b\x32\x38.com.upstox.marketdatafeederv3udapi.rpc.proto.MarketOHLC\"\xbd\x01\n\x08\x46ullFeed\x12P\n\x08marketFF\x18\x01 \x01(\x0b\x32<.com.upstox.marketdatafeederv3udapi.rpc.proto.MarketFullFeedH\x00\x12N\n\x07indexFF\x18\x02 \x01(\x0b\x32;.com.upstox.marketdatafeederv3udapi.rpc.proto.IndexFullFeedH\x00\x42\x0f\n\rFullFeedUnion\"\x98\x02\n\x14\x46irstLevelWithGreeks\x12@\n\x04ltpc\x18\x01 \x01(\x0b\x32\x32.com.upstox.marketdatafeederv3udapi.rpc.proto.LTPC\x12G\n\nfirstDepth\x18\x02 \x01(\x0b\x32\x33.com.upstox.marketdatafeederv3udapi.rpc.proto.Quote\x12P\n\x0coptionGreeks\x18\x03 \x01(\x0b\x32:.com.upstox.marketdatafeederv3udapi.rpc.proto.OptionGreeks\x12\x0b\n\x03vtt\x18\x04 \x01(\x03\x12\n\n\x02oi\x18\x05 \x01(\x01\x12\n\n\x02iv\x18\x06 \x01(\x01\"\xd7\x02\n\x04\x46\x65\x65\x64\x12\x42\n\x04ltpc\x18\x01 \x01(\x0b\x32\x32.com.upstox.marketdatafeederv3udapi.rpc.proto.LTPCH\x00\x12J\n\x08\x66ullFeed\x18\x02 \x01(\x0b\x32\x36.com.upstox.marketdatafeederv3udapi.rpc.proto.FullFeedH\x00\x12\x62\n\x14\x66irstLevelWithGreeks\x18\x03 \x01(\x0b\x32\x42.com.upstox.marketdatafeederv3udapi.rpc.proto.FirstLevelWithGreeksH\x00\x12N\n\x0brequestMode\x18\x04 \x01(\x0e\x32\x39.com.upstox.marketdatafeederv3udapi.rpc.proto.RequestModeB\x0b\n\tFeedUnion\"\xe2\x01\n\nMarketInfo\x12\x62\n\rsegmentStatus\x18\x01 \x03(\x0b\x32K.com.upstox.marketdatafeederv3udapi.rpc.proto.MarketInfo.SegmentStatusEntry\x1ap\n\x12SegmentStatusEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12I\n\x05value\x18\x02 \x01(\x0e\x32:.com.upstox.marketdatafeederv3udapi.rpc.proto.MarketStatus:\x02\x38\x01\"\xe9\x02\n\x0c\x46\x65\x65\x64Response\x12@\n\x04type\x18\x01 \x01(\x0e\x32\x32.com.upstox.marketdatafeederv3udapi.rpc.proto.Type\x12T\n\x05\x66\x65\x65\x64s\x18\x02 \x03(\x0b\x32\x45.com.upstox.marketdatafeederv3udapi.rpc.proto.FeedResponse.FeedsEntry\x12\x11\n\tcurrentTs\x18\x03 \x01(\x03\x12L\n\nmarketInfo\x18\x04 \x01(\x0b\x32\x38.com.upstox.marketdatafeederv3udapi.rpc.proto.MarketInfo\x1a`\n\nFeedsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x41\n\x05value\x18\x02 \x01(\x0b\x32\x32.com.upstox.marketdatafeederv3udapi.rpc.proto.Feed:\x02\x38\x01*8\n\x04Type\x12\x10\n\x0cinitial_feed\x10\x00\x12\r\n\tlive_feed\x10\x01\x12\x0f\n\x0bmarket_info\x10\x02*E\n\x0bRequestMode\x12\x08\n\x04ltpc\x10\x00\x12\x0b\n\x07\x66ull_d5\x10\x01\x12\x11\n\roption_greeks\x10\x02\x12\x0c\n\x08\x66ull_d30\x10\x03*{\n\x0cMarketStatus\x12\x12\n\x0ePRE_OPEN_START\x10\x00\x12\x10\n\x0cPRE_OPEN_END\x10\x01\x12\x0f\n\x0bNORMAL_OPEN\x10\x02\x12\x10\n\x0cNORMAL_CLOSE\x10\x03\x12\x11\n\rCLOSING_START\x10\x04\x12\x0f\n\x0b\x43LOSING_END\x10\x05\x62\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
@@ -58,104 +56,7 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _MARKETINFO_SEGMENTSTATUSENTRY._serialized_start=2059
   _MARKETINFO_SEGMENTSTATUSENTRY._serialized_end=2171
   _FEEDRESPONSE._serialized_start=2174
-  _FEEDRESPONSE_FEEDSENTRY._serialized_end=2535
-  _FEEDRESPONSE_FEEDSENTRY._serialized_start=2439
   _FEEDRESPONSE._serialized_end=2535
+  _FEEDRESPONSE_FEEDSENTRY._serialized_start=2439
+  _FEEDRESPONSE_FEEDSENTRY._serialized_end=2535
 # @@protoc_insertion_point(module_scope)
-
-
-# Python class definitions (generated from .proto file)
-class LTPC:
-    def __init__(self):
-        self.ltp = 0.0
-        self.ltt = 0
-        self.ltq = 0
-        self.cp = 0.0
-
-class Quote:
-    def __init__(self):
-        self.bidQ = 0
-        self.bidP = 0.0
-        self.askQ = 0
-        self.askP = 0.0
-
-class MarketLevel:
-    def __init__(self):
-        self.bidAskQuote = []
-
-class OptionGreeks:
-    def __init__(self):
-        self.delta = 0.0
-        self.theta = 0.0
-        self.gamma = 0.0
-        self.vega = 0.0
-        self.rho = 0.0
-
-class OHLC:
-    def __init__(self):
-        self.interval = ""
-        self.open = 0.0
-        self.high = 0.0
-        self.low = 0.0
-        self.close = 0.0
-        self.vol = 0
-        self.ts = 0
-
-class MarketOHLC:
-    def __init__(self):
-        self.ohlc = []
-
-class MarketFullFeed:
-    def __init__(self):
-        self.ltpc = None
-        self.marketLevel = None
-        self.optionGreeks = None
-        self.marketOHLC = None
-        self.atp = 0.0
-        self.vtt = 0
-        self.oi = 0.0
-        self.iv = 0.0
-        self.tbq = 0.0
-        self.tsq = 0.0
-
-class IndexFullFeed:
-    def __init__(self):
-        self.ltpc = None
-        self.marketOHLC = None
-
-class FullFeed:
-    def __init__(self):
-        self.marketFF = None
-        self.indexFF = None
-
-class FirstLevelWithGreeks:
-    def __init__(self):
-        self.ltpc = None
-        self.firstDepth = None
-        self.optionGreeks = None
-        self.vtt = 0
-        self.oi = 0.0
-        self.iv = 0.0
-
-class Feed:
-    def __init__(self):
-        self.ltpc = None
-        self.fullFeed = None
-        self.firstLevelWithGreeks = None
-        self.requestMode = 0
-
-class MarketInfo:
-    def __init__(self):
-        self.segmentStatus = {}
-
-class FeedResponse:
-    def __init__(self):
-        self.type = 0
-        self.feeds = {}
-        self.currentTs = 0
-        self.marketInfo = None
-    
-    def ParseFromString(self, data):
-        """Parse protobuf binary data."""
-        # This is a simplified parser - in production you'd use the full protobuf library
-        pass
