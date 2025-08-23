@@ -84,114 +84,32 @@ class UpstoxWebSocketClient:
             return None
 
     def decode_protobuf(self, buffer):
-        """Decode protobuf message - Official implementation."""
+        """Decode protobuf message - Official V3 implementation only."""
         try:
-            # Try to parse using the generated protobuf classes
+            # Use only the official generated protobuf classes as per V3 documentation
             if pb and hasattr(pb, 'FeedResponse'):
                 feed_response = pb.FeedResponse()
                 feed_response.ParseFromString(buffer)
 
                 # Debug: Print what we got
                 if self._msg_counter % 25 == 0:
-                    print(f"🔍 Protobuf parsed - Type: {feed_response.type}, Feeds count: {len(feed_response.feeds)}")
+                    print(f"🔍 Official V3 Protobuf parsed - Type: {feed_response.type}, Feeds count: {len(feed_response.feeds)}")
                     if feed_response.feeds:
-                        print(f"🔍 Feed keys: {list(feed_response.feeds.keys())}")
+                        print(f"🔍 Official V3 Feed keys: {list(feed_response.feeds.keys())}")
 
                 return feed_response
             else:
-                print(f"⚠️ pb.FeedResponse not available, using manual decoding")
-                return self._manual_protobuf_decode(buffer)
+                # If protobuf classes not available, return None (no fallback as per official docs)
+                if self._msg_counter % 25 == 0:
+                    print(f"❌ pb.FeedResponse not available - install protobuf classes")
+                return None
 
         except Exception as e:
             if self._msg_counter % 25 == 0:
-                print(f"⚠️ Protobuf decode error: {e}, falling back to manual decoding")
-            return self._manual_protobuf_decode(buffer)
-
-    def _manual_protobuf_decode(self, buffer):
-        """Manual protobuf decoding when generated classes not available - Real data only."""
-        try:
-            import time
-
-            # Simple protobuf structure
-            class MockFeedResponse:
-                def __init__(self):
-                    self.feeds = {}
-                    self.type = 1  # live_feed
-                    self.currentTs = int(time.time() * 1000)
-
-            mock_response = MockFeedResponse()
-
-            # Only parse if buffer has sufficient data
-            if len(buffer) >= 16:
-                subscribed_list = list(self.subscribed_instruments)
-                extracted_prices = {}
-
-                # Look for IEEE 754 double precision values (8 bytes)
-                for offset in range(0, len(buffer) - 8, 4):
-                    try:
-                        for endian in ['<d', '>d']:
-                            try:
-                                value = struct.unpack(endian, buffer[offset:offset+8])[0]
-                                # Only accept realistic Indian market prices
-                                if 1000 <= value <= 200000 and not math.isnan(value) and not math.isinf(value):
-                                    # Find which instrument this price belongs to
-                                    for instrument_key in subscribed_list:
-                                        if instrument_key not in extracted_prices:
-                                            extracted_prices[instrument_key] = value
-                                            break
-                                    if len(extracted_prices) >= len(subscribed_list):
-                                        break
-                            except:
-                                continue
-                        if len(extracted_prices) >= len(subscribed_list):
-                            break
-                    except:
-                        continue
-
-                # Create feed structure only for extracted real prices
-                for instrument_key, price in extracted_prices.items():
-                    mock_response.feeds[instrument_key] = {
-                        'ltpc': {
-                            'ltp': price,
-                            'ltq': 1,
-                            'cp': price
-                        },
-                        'fullFeed': {
-                            'marketFF': {
-                                'ltpc': {
-                                    'ltp': price,
-                                    'ltq': 1,
-                                    'cp': price
-                                },
-                                'marketLevel': {
-                                    'bidAskQuote': [{
-                                        'bidQ': 100,
-                                        'bidP': price - 0.05,
-                                        'askQ': 100,
-                                        'askP': price + 0.05
-                                    }]
-                                },
-                                'atp': price,
-                                'vtt': 1000,
-                                'oi': 10000,
-                                'iv': 20.0,
-                                'tbq': 5000,
-                                'tsq': 5000
-                            }
-                        }
-                    }
-
-                    if self._msg_counter % 25 == 0:
-                        display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-                        print(f"📊 Real data extracted: {display_name} @ ₹{price:.2f}")
-
-            # Return empty response if no real data found
-            return mock_response
-
-        except Exception as e:
-            if self._msg_counter % 50 == 0:
-                print(f"❌ Protobuf decode error: {e}")
+                print(f"❌ Official V3 Protobuf decode error: {e}")
             return None
+
+    
 
     async def fetch_market_data(self):
         """Fetch market data using WebSocket - Official implementation style."""
@@ -275,46 +193,45 @@ class UpstoxWebSocketClient:
                 self.connection_callback("disconnected")
 
     async def _process_message(self, message):
-        """Process incoming message - Official implementation."""
+        """Process incoming message - Official V3 implementation only."""
         try:
             self._msg_counter += 1
 
-            # More frequent debugging during market hours
+            # Debug logging
             if self._msg_counter % 25 == 0:
-                print(f"📦 Processing V3 message #{self._msg_counter}")
+                print(f"📦 Processing official V3 message #{self._msg_counter}")
                 print(f"🔍 Message size: {len(message)} bytes")
-                print(f"📊 Subscribed instruments: {list(self.subscribed_instruments)}")
 
-            # Decode protobuf message (official approach)
+            # Decode using official protobuf only (no fallbacks)
             decoded_data = self.decode_protobuf(message)
             if not decoded_data:
                 if self._msg_counter % 25 == 0:
-                    print(f"⚠️ Failed to decode V3 message #{self._msg_counter}")
+                    print(f"⚠️ No decoded data from official V3 protobuf")
                 return
 
-            # Process feeds data from decoded protobuf
-            if decoded_data and hasattr(decoded_data, 'feeds') and decoded_data.feeds:
-                feeds_data = decoded_data.feeds
-                
-                # Try MessageToDict conversion for proper protobuf objects
+            # Process feeds using official protobuf structure only
+            if hasattr(decoded_data, 'feeds') and decoded_data.feeds:
+                # Use MessageToDict for official protobuf objects (V3 documentation approach)
                 if pb and hasattr(decoded_data, 'DESCRIPTOR'):
                     try:
                         data_dict = MessageToDict(decoded_data)
                         if 'feeds' in data_dict and data_dict['feeds']:
                             await self._process_feeds(data_dict['feeds'])
-                    except Exception as protobuf_error:
+                        else:
+                            if self._msg_counter % 25 == 0:
+                                print(f"📋 Official V3 protobuf parsed but no feeds data")
+                    except Exception as e:
                         if self._msg_counter % 25 == 0:
-                            print(f"⚠️ MessageToDict error: {protobuf_error}, using direct object")
-                        await self._process_feeds(feeds_data)
+                            print(f"❌ Official V3 MessageToDict error: {e}")
                 else:
-                    # Direct processing for mock objects
-                    await self._process_feeds(feeds_data)
-            elif self._msg_counter % 200 == 0:
-                # Reduce logging frequency for empty messages
-                print(f"⚠️ No valid feeds data in message #{self._msg_counter}")
+                    if self._msg_counter % 25 == 0:
+                        print(f"⚠️ Received non-protobuf object")
+            else:
+                if self._msg_counter % 100 == 0:
+                    print(f"📋 Official V3 message received but no feeds")
 
         except Exception as e:
-            print(f"❌ V3 message processing error: {e}")
+            print(f"❌ Official V3 message processing error: {e}")
 
     async def _process_feeds(self, feeds_data):
         """Process feeds data from official protobuf structure."""
@@ -455,37 +372,30 @@ class UpstoxWebSocketClient:
             return None
 
     async def _send_subscription(self, instrument_keys):
-        """Send subscription request - Official implementation."""
+        """Send subscription request - Official V3 implementation as per documentation."""
         try:
             if not self.websocket or not self.is_connected:
                 return False
 
-            # Official V3 GUID format (simple string as per documentation)
-            guid = "someguid"
-
-            # Official V3 subscription format for full_d30 (30 market levels + all data)
-            data = {
-                "guid": guid,
+            # Official V3 subscription format exactly as per documentation
+            subscription_request = {
+                "guid": "someguid",
                 "method": "sub",
                 "data": {
-                    "mode": "full_d30",  # Full D30 mode for complete market depth (requires Upstox Plus)
+                    "mode": "full_d30",
                     "instrumentKeys": instrument_keys
                 }
             }
 
-            print(f"🔄 Official V3 full_d30 subscription for {len(instrument_keys)} instruments")
+            print(f"🔄 Official V3 subscription for {len(instrument_keys)} instruments")
+            print(f"📋 Mode: full_d30 (as per V3 documentation)")
             print(f"📋 Instruments: {[key.split('|')[-1] for key in instrument_keys]}")
-            
-            # Validate full_d30 limits (max 50 instruments for Upstox Plus)
-            if len(instrument_keys) > 50:
-                print(f"⚠️ WARNING: full_d30 mode limited to 50 instruments (you have {len(instrument_keys)})")
-                print(f"💡 Consider using 'full' mode for more instruments or upgrade to Upstox Plus")
 
-            # Convert data to binary and send over WebSocket (official V3 approach)
-            binary_data = json.dumps(data).encode('utf-8')
-            await self.websocket.send(binary_data)
+            # Send subscription as JSON string over WebSocket (official V3 method)
+            message = json.dumps(subscription_request)
+            await self.websocket.send(message)
 
-            print(f"📤 Official V3 full_d30 subscription sent")
+            print(f"📤 Official V3 subscription message sent")
             return True
 
         except Exception as e:
