@@ -286,7 +286,7 @@ class UpstoxWebSocketClient:
             if self.connection_callback:
                 self.connection_callback("disconnected")
 
-    def _process_message(self, message):
+    async def _process_message(self, message):
         """Process incoming message - Official implementation."""
         try:
             self._msg_counter += 1
@@ -448,7 +448,7 @@ class UpstoxWebSocketClient:
             print(f"❌ Tick creation error: {e}")
             return None
 
-    def _send_subscription(self, instrument_keys):
+    async def _send_subscription(self, instrument_keys):
         """Send subscription request - Official implementation."""
         try:
             if not self.websocket or not self.is_connected:
