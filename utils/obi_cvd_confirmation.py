@@ -224,9 +224,9 @@ class OBICVDConfirmation:
             # Return comprehensive analysis
             return self._analyze_granular_confirmation(
                 instrument_key, 
-                current_obi, 
+                current_obi if current_obi is not None else 0.0, 
                 rolling_avg_obi_1min,
-                current_cvd_increment,
+                current_cvd_increment if current_cvd_increment is not None else 0.0,
                 rolling_avg_cvd_2min,
                 instrument_data['cvd'],
                 legacy_avg_obi
@@ -249,6 +249,14 @@ class OBICVDConfirmation:
                                           rolling_cvd_2min: float, total_cvd: float, legacy_avg_obi: float) -> Dict:
         """Analyze granular OBI and CVD to provide detailed confirmation signals."""
         try:
+            # Handle None values for current_obi
+            if current_obi is None:
+                current_obi = 0.0
+                
+            # Handle None values for current_cvd_increment
+            if current_cvd_increment is None:
+                current_cvd_increment = 0.0
+                
             # Current OBI Analysis (instantaneous)
             if current_obi > 0.5:
                 current_obi_signal = 'Strong Bullish'
@@ -403,9 +411,9 @@ class OBICVDConfirmation:
         
         return self._analyze_granular_confirmation(
             instrument_key, 
-            current_obi, 
+            current_obi if current_obi is not None else 0.0, 
             rolling_avg_obi_1min,
-            current_cvd_increment,
+            current_cvd_increment if current_cvd_increment is not None else 0.0,
             rolling_avg_cvd_2min,
             total_cvd,
             legacy_avg_obi
