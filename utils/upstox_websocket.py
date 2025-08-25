@@ -354,9 +354,11 @@ class UpstoxWebSocketClient:
     def _create_tick_from_feed(self, instrument_key, feed_data):
         """Create tick data from feed structure."""
         try:
+            import pytz
+            ist = pytz.timezone('Asia/Kolkata')
             tick_data = {
                 'instrument_token': instrument_key,
-                'timestamp': datetime.now(),
+                'timestamp': datetime.now(ist),
                 'ltp': 0.0,
                 'ltq': 0,
                 'volume': 0,
