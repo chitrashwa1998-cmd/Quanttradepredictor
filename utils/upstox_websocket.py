@@ -86,27 +86,46 @@ class UpstoxWebSocketClient:
     def decode_protobuf(self, buffer):
         """Decode protobuf message - Official V3 implementation only."""
         try:
-            # Use only the official generated protobuf classes as per V3 documentation
-            if pb and hasattr(pb, 'FeedResponse'):
-                feed_response = pb.FeedResponse()
-                feed_response.ParseFromString(buffer)
-
-                # Debug: Print what we got
+            # First check if we have protobuf classes
+            if not pb or not hasattr(pb, 'FeedResponse'):
                 if self._msg_counter % 25 == 0:
-                    print(f"🔍 Official V3 Protobuf parsed - Type: {feed_response.type}, Feeds count: {len(feed_response.feeds)}")
-                    if feed_response.feeds:
-                        print(f"🔍 Official V3 Feed keys: {list(feed_response.feeds.keys())}")
-
-                return feed_response
-            else:
-                # If protobuf classes not available, return None (no fallback as per official docs)
-                if self._msg_counter % 25 == 0:
-                    print(f"❌ pb.FeedResponse not available - install protobuf classes")
+                    print(f"❌ pb.FeedResponse not available - protobuf classes missing")
                 return None
 
+            # Check if buffer is actually binary protobuf data
+            if isinstance(buffer, str):
+                # If it's a string, it might be JSON - try parsing
+                try:
+                    import json
+                    json_data = json.loads(buffer)
+                    if self._msg_counter % 10 == 0:
+                        print(f"🔍 Received JSON instead of protobuf: {list(json_data.keys()) if isinstance(json_data, dict) else 'Not dict'}")
+                    return None
+                except:
+                    # Not JSON, might be protobuf as string - convert to bytes
+                    buffer = buffer.encode('latin-1')
+
+            # Try to parse as protobuf
+            feed_response = pb.FeedResponse()
+            feed_response.ParseFromString(buffer)
+
+            # Debug: Print what we got
+            if self._msg_counter % 10 == 0:
+                print(f"🔍 Official V3 Protobuf parsed - Type: {feed_response.type}, Feeds count: {len(feed_response.feeds)}")
+                if feed_response.feeds:
+                    print(f"🔍 Official V3 Feed keys: {list(feed_response.feeds.keys())}")
+
+            return feed_response
+
         except Exception as e:
-            if self._msg_counter % 25 == 0:
+            if self._msg_counter % 10 == 0:
                 print(f"❌ Official V3 Protobuf decode error: {e}")
+                print(f"🔍 Buffer type: {type(buffer)}, length: {len(buffer) if hasattr(buffer, '__len__') else 'unknown'}")
+                if hasattr(buffer, '__len__') and len(buffer) > 0:
+                    if isinstance(buffer, bytes):
+                        print(f"🔍 First 20 bytes: {buffer[:20]}")
+                    else:
+                        print(f"🔍 First 100 chars: {str(buffer)[:100]}")
             return None
 
     
@@ -170,10 +189,21 @@ class UpstoxWebSocketClient:
                             print(f"⚠️ MARKET OPEN but no tick data! Time: {current_time.strftime('%H:%M:%S IST')}")
                             print(f"🔍 Subscribed instruments: {list(self.subscribed_instruments)}")
                             print(f"📊 Last tick count: {len(self.last_tick_data)}")
+                            print(f"🔍 WebSocket state: {websocket.state}")
+                            print(f"🔍 Connection URL: {self.websocket_url}")
+                            print(f"🔍 Message counter: {self._msg_counter}")
                         else:
                             print(f"⏰ WebSocket timeout (Market closed: {current_time.strftime('%H:%M:%S IST')})")
 
-                        await websocket.ping()
+                        # Send ping and check pong response
+                        try:
+                            pong_waiter = await websocket.ping()
+                            await asyncio.wait_for(pong_waiter, timeout=5.0)
+                            print(f"🏓 Ping/Pong successful")
+                        except asyncio.TimeoutError:
+                            print(f"❌ Ping/Pong timeout - connection might be stale")
+                        except Exception as ping_error:
+                            print(f"❌ Ping error: {ping_error}")
 
                     except websockets.exceptions.ConnectionClosed:
                         print("🔌 WebSocket connection closed")
@@ -197,10 +227,27 @@ class UpstoxWebSocketClient:
         try:
             self._msg_counter += 1
 
-            # Debug logging
-            if self._msg_counter % 25 == 0:
+            # Enhanced debug logging with message type detection
+            if self._msg_counter % 10 == 0:
                 print(f"📦 Processing official V3 message #{self._msg_counter}")
                 print(f"🔍 Message size: {len(message)} bytes")
+                print(f"🔍 Message type: {type(message)}")
+                
+                # Check if it's binary or text
+                if isinstance(message, bytes):
+                    print(f"🔍 Binary message - first 50 bytes: {message[:50]}")
+                    # Check for protobuf magic bytes
+                    if len(message) > 0:
+                        print(f"🔍 First byte (hex): {message[0]:02x}")
+                elif isinstance(message, str):
+                    print(f"🔍 Text message: {message[:200]}...")
+                    # Try to parse as JSON
+                    try:
+                        import json
+                        json_data = json.loads(message)
+                        print(f"🔍 JSON keys: {list(json_data.keys()) if isinstance(json_data, dict) else 'Not dict'}")
+                    except:
+                        print(f"🔍 Not valid JSON")
 
             # Decode using official protobuf only (no fallbacks)
             decoded_data = self.decode_protobuf(message)
