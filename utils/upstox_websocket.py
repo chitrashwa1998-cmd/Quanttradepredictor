@@ -390,6 +390,7 @@ class UpstoxWebSocketClient:
                     tick_data.update({
                         'ltp': float(ltpc.get('ltp', 0)),
                         'ltq': int(ltpc.get('ltq', 0)),
+                        'volume': int(ltpc.get('ltq', 0)),  # Use actual volume from ltq
                         'close': float(ltpc.get('cp', 0)),
                         'last_traded_price': float(ltpc.get('ltp', 0)),
                         'last_traded_quantity': int(ltpc.get('ltq', 0))
@@ -421,7 +422,10 @@ class UpstoxWebSocketClient:
                         tick_data.update({
                             'ltp': float(ltpc.get('ltp', 0)),
                             'ltq': int(ltpc.get('ltq', 0)),
-                            'close': float(ltpc.get('cp', 0))
+                            'volume': int(ltpc.get('ltq', 0)),  # Use actual volume from ltq
+                            'close': float(ltpc.get('cp', 0)),
+                            'last_traded_price': float(ltpc.get('ltp', 0)),
+                            'last_traded_quantity': int(ltpc.get('ltq', 0))
                         })
 
             # Only return tick if we have valid price data
