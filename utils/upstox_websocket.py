@@ -10,7 +10,7 @@ from datetime import datetime
 import struct
 import math
 import time
-from typing import Callable, Optional, Dict, Any
+from typing import Callable, Optional, Dict, Any, List
 from google.protobuf.json_format import MessageToDict
 
 # Import the generated protobuf classes (we'll create this file)
@@ -389,7 +389,7 @@ class UpstoxWebSocketClient:
                 # Handle full feed data structure
                 if 'fullFeed' in feed_data and 'marketFF' in feed_data['fullFeed']:
                     market_ff = feed_data['fullFeed']['marketFF']
-                    
+
                     # Extract LTPC data from marketFF
                     if 'ltpc' in market_ff:
                         ltpc = market_ff['ltpc']
@@ -400,11 +400,11 @@ class UpstoxWebSocketClient:
                             'last_traded_price': float(ltpc.get('ltp', 0)),
                             'last_traded_quantity': int(ltpc.get('ltq', 0))
                         })
-                    
+
                     # Extract volume from VTT (Volume Traded Today)
                     if 'vtt' in market_ff:
                         tick_data['volume'] = int(market_ff.get('vtt', 0))
-                    
+
                     # Extract additional market data
                     tick_data.update({
                         'total_buy_quantity': int(market_ff.get('tbq', 0)),
@@ -425,7 +425,7 @@ class UpstoxWebSocketClient:
                                 'best_ask': float(first_quote.get('askP', 0)),
                                 'best_ask_quantity': int(first_quote.get('askQ', 0))
                             })
-                    
+
                     # OHLC data extraction
                     if 'marketOHLC' in market_ff and 'ohlc' in market_ff['marketOHLC']:
                         ohlc_list = market_ff['marketOHLC']['ohlc']
@@ -437,7 +437,7 @@ class UpstoxWebSocketClient:
                                     'low': float(ohlc.get('low', 0))
                                 })
                                 break
-                    
+
                     # Option Greeks (if available)
                     if 'optionGreeks' in market_ff:
                         greeks = market_ff['optionGreeks']
@@ -545,7 +545,7 @@ class UpstoxWebSocketClient:
                 # Convert data to binary and send over WebSocket (official V3 approach)
                 binary_data = json.dumps(data).encode('utf-8')
                 await self.websocket.send(binary_data)
-                
+
                 print(f"📤 Official V3 {mode.upper()} mode subscription sent")
                 success_count += 1
 
@@ -669,7 +669,7 @@ class UpstoxWebSocketClient:
 
         print("🔌 Official WebSocket disconnected")
 
-    def subscribe(self, instrument_keys: list, mode: str = "ltpc", mode_mapping: dict = None):
+    def subscribe(self, instrument_keys: List[str], mode_mapping: Dict[str, str] = None) -> bool:
         """Subscribe to instruments using official implementation with mixed mode support."""
         if not instrument_keys:
             return False
@@ -682,15 +682,24 @@ class UpstoxWebSocketClient:
             self.subscribed_instruments.clear()
             self.subscribed_instruments.update(unique_keys)
 
-            # Create mode mapping if not provided
-            if not mode_mapping:
-                mode_mapping = {key: mode for key in unique_keys}
+            # Determine the default mode if no mapping is provided
+            default_mode = "full"
+            if mode_mapping:
+                # If mode_mapping is provided, use it to determine the default mode
+                # This assumes that if any instrument has a mode other than 'full',
+                # the default should be determined by the most common mode or 'full'
+                # For simplicity, we'll stick to 'full' as default and rely on mapping
+                pass
+            else:
+                # If no mode_mapping, all instruments will use the default mode
+                mode_mapping = {key: default_mode for key in unique_keys}
+
 
             print(f"🎯 V3 Mixed Mode Subscription Request:")
             print(f"   - Instruments: {len(unique_keys)}")
             for key in unique_keys:
                 display_name = key.split('|')[-1] if '|' in key else key
-                assigned_mode = mode_mapping.get(key, mode)
+                assigned_mode = mode_mapping.get(key, default_mode)
                 print(f"   - {display_name}: {assigned_mode.upper()} mode")
 
             # If connected, send subscription immediately
@@ -713,6 +722,8 @@ class UpstoxWebSocketClient:
                     return False
             else:
                 print(f"🔄 V3 instruments queued for mixed mode subscription: {len(unique_keys)}")
+                # Store pending subscription details
+                self._pending_mode_mapping = mode_mapping
                 return True
 
         except Exception as e:

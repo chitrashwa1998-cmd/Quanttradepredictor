@@ -245,6 +245,15 @@ class LiveDataManager:
         # Then subscribe for live updates
         return self.ws_client.subscribe(instrument_keys, mode)
 
+    def subscribe(self, instrument_keys: List[str], mode_mapping: Dict[str, str] = None) -> bool:
+        """Subscribe to instruments with mixed mode configuration."""
+        # First, try to seed each instrument from database
+        for instrument_key in instrument_keys:
+            self.seed_live_data_from_database(instrument_key)
+
+        # Then subscribe for live updates with mixed mode support
+        return self.ws_client.subscribe(instrument_keys, mode_mapping)
+
     def unsubscribe_instruments(self, instrument_keys: List[str]) -> bool:
         """Unsubscribe from instruments."""
         return self.ws_client.unsubscribe(instrument_keys)

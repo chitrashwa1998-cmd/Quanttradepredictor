@@ -174,8 +174,8 @@ class LivePredictionPipeline:
             "NSE_FO|64103": "full"         # Futures use full mode
         }
 
-        # Subscribe to instruments with mixed mode configuration
-        if self.live_data_manager.subscribe(all_instruments, mixed_mode_config):
+        # Subscribe to instruments with mixed mode configuration  
+        if self.live_data_manager.ws_client.subscribe(all_instruments, mixed_mode_config):
             print(f"✅ Subscribed to {len(all_instruments)} instruments with mixed mode configuration")
             return True
         else:
