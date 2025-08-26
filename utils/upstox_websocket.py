@@ -236,7 +236,9 @@ class UpstoxWebSocketClient:
 
                 # Subscribe to instruments if any are pending
                 if self.subscribed_instruments:
-                    await self._send_subscription(list(self.subscribed_instruments))
+                    # Check if we have stored mode mapping
+                    mode_mapping = getattr(self, '_pending_mode_mapping', None)
+                    await self._send_subscription(list(self.subscribed_instruments), mode_mapping)
 
                 # Continuously receive and decode data from WebSocket (official loop)
                 while self._stop_event and not self._stop_event.is_set():
@@ -501,33 +503,53 @@ class UpstoxWebSocketClient:
             print(f"❌ Tick creation error: {e}")
             return None
 
-    async def _send_subscription(self, instrument_keys):
-        """Send subscription request - Official implementation."""
+    async def _send_subscription(self, instrument_keys, mode_mapping=None):
+        """Send subscription request - Official implementation with mixed mode support."""
         try:
             if not self.websocket or not self.is_connected:
                 return False
 
-            # Official V3 GUID format (simple string as per documentation)
-            guid = "someguid"
+            # If no mode mapping provided, use full mode for all
+            if not mode_mapping:
+                mode_mapping = {key: "full" for key in instrument_keys}
 
-            # Official V3 subscription format (exact match to documentation)
-            data = {
-                "guid": guid,
-                "method": "sub",
-                "data": {
-                    "mode": "full",  # Full mode for complete market data including bid/ask, volume, Greeks
-                    "instrumentKeys": instrument_keys
+            # Group instruments by mode
+            mode_groups = {}
+            for instrument_key in instrument_keys:
+                mode = mode_mapping.get(instrument_key, "full")
+                if mode not in mode_groups:
+                    mode_groups[mode] = []
+                mode_groups[mode].append(instrument_key)
+
+            # Send separate subscription for each mode
+            success_count = 0
+            for mode, keys in mode_groups.items():
+                # Official V3 GUID format (simple string as per documentation)
+                guid = f"someguid_{mode}"
+
+                # Official V3 subscription format (exact match to documentation)
+                data = {
+                    "guid": guid,
+                    "method": "sub",
+                    "data": {
+                        "mode": mode,
+                        "instrumentKeys": keys
+                    }
                 }
-            }
 
-            print(f"🔄 Official V3 subscription for {len(instrument_keys)} instruments")
-            print(f"📋 Instruments: {[key.split('|')[-1] for key in instrument_keys]}")
+                print(f"🔄 Official V3 subscription for {len(keys)} instruments in {mode.upper()} mode")
+                for key in keys:
+                    display_name = key.split('|')[-1] if '|' in key else key
+                    print(f"📋 {mode.upper()}: {display_name}")
 
-            # Convert data to binary and send over WebSocket (official V3 approach)
-            binary_data = json.dumps(data).encode('utf-8')
-            await self.websocket.send(binary_data)
+                # Convert data to binary and send over WebSocket (official V3 approach)
+                binary_data = json.dumps(data).encode('utf-8')
+                await self.websocket.send(binary_data)
+                
+                print(f"📤 Official V3 {mode.upper()} mode subscription sent")
+                success_count += 1
 
-            print(f"📤 Official V3 subscription sent")
+            print(f"✅ All {success_count} mode subscriptions sent successfully")
             return True
 
         except Exception as e:
@@ -647,8 +669,8 @@ class UpstoxWebSocketClient:
 
         print("🔌 Official WebSocket disconnected")
 
-    def subscribe(self, instrument_keys: list, mode: str = "ltpc"):
-        """Subscribe to instruments using official implementation."""
+    def subscribe(self, instrument_keys: list, mode: str = "ltpc", mode_mapping: dict = None):
+        """Subscribe to instruments using official implementation with mixed mode support."""
         if not instrument_keys:
             return False
 
@@ -660,36 +682,41 @@ class UpstoxWebSocketClient:
             self.subscribed_instruments.clear()
             self.subscribed_instruments.update(unique_keys)
 
-            print(f"🎯 V3 Subscription Request:")
+            # Create mode mapping if not provided
+            if not mode_mapping:
+                mode_mapping = {key: mode for key in unique_keys}
+
+            print(f"🎯 V3 Mixed Mode Subscription Request:")
             print(f"   - Instruments: {len(unique_keys)}")
             for key in unique_keys:
                 display_name = key.split('|')[-1] if '|' in key else key
-                print(f"   - {key} ({display_name})")
+                assigned_mode = mode_mapping.get(key, mode)
+                print(f"   - {display_name}: {assigned_mode.upper()} mode")
 
             # If connected, send subscription immediately
             if self.is_connected and self._asyncio_loop:
                 try:
                     future = asyncio.run_coroutine_threadsafe(
-                        self._send_subscription(unique_keys),
+                        self._send_subscription(unique_keys, mode_mapping),
                         self._asyncio_loop
                     )
                     result = future.result(timeout=15.0)  # Increased timeout
 
                     if result:
-                        print(f"✅ V3 subscription successful for {len(unique_keys)} instruments")
+                        print(f"✅ V3 mixed mode subscription successful for {len(unique_keys)} instruments")
                     else:
-                        print(f"❌ V3 subscription failed")
+                        print(f"❌ V3 mixed mode subscription failed")
 
                     return result
                 except Exception as e:
                     print(f"❌ Async subscription error: {e}")
                     return False
             else:
-                print(f"🔄 V3 instruments queued for subscription: {len(unique_keys)}")
+                print(f"🔄 V3 instruments queued for mixed mode subscription: {len(unique_keys)}")
                 return True
 
         except Exception as e:
-            print(f"❌ V3 subscription failed: {e}")
+            print(f"❌ V3 mixed mode subscription failed: {e}")
             return False
 
     def unsubscribe(self, instrument_keys: list):

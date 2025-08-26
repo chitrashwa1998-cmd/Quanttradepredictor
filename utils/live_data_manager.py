@@ -30,7 +30,7 @@ class LiveDataManager:
         self.connection_status = "disconnected"
         self.last_update_time = None
         self.total_ticks_received = 0
-        
+
         # Continuation tracking
         self.seeded_instruments = {}  # Track which instruments were seeded from database
 
@@ -94,26 +94,26 @@ class LiveDataManager:
 
             # Get existing data first
             existing_ohlc = self.ohlc_data.get(instrument_key, pd.DataFrame())
-            
+
             # If we have seeded data, use a different approach
             if instrument_key in self.seeded_instruments and len(existing_ohlc) > 0:
                 # For seeded instruments, create live candles based on current time
                 current_time = df.index[-1]  # Latest tick time
-                
+
                 # Round down to nearest 5-minute interval
                 current_candle_time = current_time.floor('5T')
-                
+
                 # Ensure we're working with the full seeded dataset
                 if len(existing_ohlc) < self.seeded_instruments[instrument_key]['seed_count']:
                     # Re-seed if data was lost
                     self.seed_live_data_from_database(instrument_key)
                     existing_ohlc = self.ohlc_data.get(instrument_key, pd.DataFrame())
-                
+
                 # Check if we already have a candle for this time period
                 if current_candle_time in existing_ohlc.index:
                     # Update existing candle with new tick data
                     existing_row = existing_ohlc.loc[current_candle_time]
-                    
+
                     # Get all ticks for this time period
                     period_ticks = df[df.index >= current_candle_time]
                     if len(period_ticks) > 0:
@@ -122,7 +122,7 @@ class LiveDataManager:
                         updated_low = min(existing_row['Low'], period_ticks['ltp'].min())
                         updated_close = period_ticks['ltp'].iloc[-1]  # Latest price
                         updated_volume = existing_row['Volume'] + period_ticks['volume'].sum()
-                        
+
                         # Update the candle
                         existing_ohlc.loc[current_candle_time] = {
                             'Open': existing_row['Open'],
@@ -131,16 +131,16 @@ class LiveDataManager:
                             'Close': updated_close,
                             'Volume': updated_volume
                         }
-                        
+
                         self.ohlc_data[instrument_key] = existing_ohlc
-                        
+
                         # Only show update message occasionally to reduce noise
                         if not hasattr(self, '_update_counter'):
                             self._update_counter = {}
                         if instrument_key not in self._update_counter:
                             self._update_counter[instrument_key] = 0
                         self._update_counter[instrument_key] += 1
-                        
+
                         if self._update_counter[instrument_key] % 10 == 0:  # Show every 10th update
                             seed_count = self.seeded_instruments[instrument_key]['seed_count']
                             total_rows = len(existing_ohlc)
@@ -157,16 +157,16 @@ class LiveDataManager:
                             'Close': [period_ticks['ltp'].iloc[-1]],
                             'Volume': [period_ticks['volume'].sum()]
                         }, index=[current_candle_time])
-                        
+
                         # Append to existing data
                         combined_ohlc = pd.concat([existing_ohlc, new_candle])
                         combined_ohlc = combined_ohlc.sort_index()
-                        
+
                         # Keep reasonable limits but protect seeded data
                         if instrument_key in self.seeded_instruments:
                             original_seed_count = self.seeded_instruments[instrument_key]['seed_count']
                             max_rows = max(300, original_seed_count + 50)  # Allow 50 new live candles beyond seed
-                            
+
                             if len(combined_ohlc) > max_rows:
                                 # Only trim if we exceed reasonable limits, but keep all seeded data
                                 trim_to_rows = max(original_seed_count + 10, max_rows - 20)
@@ -175,16 +175,16 @@ class LiveDataManager:
                             max_rows = 100
                             if len(combined_ohlc) > max_rows:
                                 combined_ohlc = combined_ohlc.tail(max_rows)
-                        
+
                         self.ohlc_data[instrument_key] = combined_ohlc
-                        
+
                         seed_count = self.seeded_instruments[instrument_key]['seed_count']
                         total_rows = len(combined_ohlc)
                         live_count = max(0, total_rows - seed_count)
                         print(f"🕐 NEW 5-MINUTE CANDLE CREATED for {instrument_key}: {current_candle_time}")
                         print(f"📈 Total data: {total_rows} rows ({seed_count} seeded + {live_count} live)")
                         print(f"💡 This candle is now ready for prediction processing!")
-                
+
             else:
                 # Standard resampling for non-seeded instruments
                 new_ohlc = df['ltp'].resample(timeframe).ohlc()
@@ -208,7 +208,7 @@ class LiveDataManager:
                             # Only add truly new data
                             new_data_to_add = new_ohlc.loc[list(truly_new_timestamps)]
                             combined_ohlc = pd.concat([existing_ohlc, new_data_to_add])
-                            
+
                             # Sort by timestamp
                             combined_ohlc = combined_ohlc.sort_index()
 
@@ -241,7 +241,7 @@ class LiveDataManager:
         # First, try to seed each instrument from database
         for instrument_key in instrument_keys:
             self.seed_live_data_from_database(instrument_key)
-        
+
         # Then subscribe for live updates
         return self.ws_client.subscribe(instrument_keys, mode)
 
@@ -302,23 +302,23 @@ class LiveDataManager:
         """Seed live OHLC data from database for continuation."""
         try:
             from utils.database_adapter import DatabaseAdapter
-            
+
             # Convert instrument key to database dataset name
             # Use livenifty50 as primary, fallback to pre_seed_dataset
             db_test = DatabaseAdapter(use_row_based=True)
             datasets = db_test.get_dataset_list()
             dataset_names = [d['name'] for d in datasets]
-            
+
             if "livenifty50" in dataset_names:
                 dataset_name = "livenifty50"
             elif "pre_seed_dataset" in dataset_names:
                 dataset_name = "pre_seed_dataset"
             else:
                 dataset_name = "livenifty50"
-            
+
             # Use row-based storage for better performance
             db = DatabaseAdapter(use_row_based=True)
-            
+
             # Try row-based first, fallback to blob-based
             try:
                 historical_data = db.get_latest_rows(dataset_name, 250)
@@ -328,11 +328,11 @@ class LiveDataManager:
                 historical_data = db.load_ohlc_data(dataset_name)
                 if historical_data is not None and len(historical_data) > 250:
                     historical_data = historical_data.tail(250)
-            
+
             if historical_data is not None and len(historical_data) > 0:
                 # Use the most recent data (last 250 rows for performance)
                 seed_data = historical_data.tail(250).copy()
-                
+
                 # Ensure the data has the correct column names
                 if all(col in seed_data.columns for col in ['Open', 'High', 'Low', 'Close', 'Volume']):
                     # Store as foundation for live data
@@ -342,7 +342,7 @@ class LiveDataManager:
                         'seed_date_range': f"{seed_data.index.min()} to {seed_data.index.max()}",
                         'seeded_at': pd.Timestamp.now()
                     }
-                    
+
                     print(f"🌱 SEEDED {instrument_key} with {len(seed_data)} historical OHLC rows from database")
                     print(f"📈 Foundation set: {len(seed_data)} rows ready for live continuation")
                     return True
@@ -352,7 +352,7 @@ class LiveDataManager:
             else:
                 print(f"📊 No historical data found for {dataset_name}, starting fresh")
                 return False
-                
+
         except Exception as e:
             print(f"❌ Error seeding data for {instrument_key}: {str(e)}")
             return False
@@ -373,9 +373,9 @@ class LiveDataManager:
         """Get only the new live-generated data (excluding seeded data) for an instrument."""
         if instrument_key not in self.ohlc_data:
             return None
-            
+
         current_data = self.ohlc_data[instrument_key]
-        
+
         if instrument_key in self.seeded_instruments:
             # For seeded instruments, return only data beyond the seed count
             seed_count = self.seeded_instruments[instrument_key]['seed_count']
@@ -387,12 +387,12 @@ class LiveDataManager:
         else:
             # For non-seeded instruments, all data is new
             return current_data.copy() if current_data is not None else None
-    
+
     @staticmethod
     def get_continuation_dataset_name(instrument_key: str) -> str:
         """Get the dataset name needed for continuation for a given instrument."""
         return "livenifty50"
-    
+
     @staticmethod
     def get_continuation_info() -> Dict[str, str]:
         """Get continuation dataset names for common instruments."""

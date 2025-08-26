@@ -168,7 +168,19 @@ class LivePredictionPipeline:
         print(f"   OBI+CVD: {self.obi_cvd_instrument}")
         print(f"   Additional instruments: {[inst for inst in instrument_keys if inst not in dedicated_instruments]}")
 
-        return self.live_data_manager.subscribe_instruments(all_instruments)
+        # Configure mixed mode subscription
+        mixed_mode_config = {
+            "NSE_INDEX|Nifty 50": "ltpc",  # Index uses LTPC mode
+            "NSE_FO|64103": "full"         # Futures use full mode
+        }
+
+        # Subscribe to instruments with mixed mode configuration
+        if self.live_data_manager.subscribe(all_instruments, mixed_mode_config):
+            print(f"✅ Subscribed to {len(all_instruments)} instruments with mixed mode configuration")
+            return True
+        else:
+            print("❌ Failed to subscribe to instruments")
+            return False
 
     def _processing_loop(self):
         """Main processing loop for generating live predictions."""
