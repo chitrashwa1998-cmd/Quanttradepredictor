@@ -352,7 +352,7 @@ class UpstoxWebSocketClient:
             print(f"❌ Feeds processing error: {e}")
 
     def _create_tick_from_feed(self, instrument_key, feed_data):
-        """Create tick data from feed structure - Fixed per V3 documentation."""
+        """Create tick data from feed structure."""
         try:
             import pytz
             ist = pytz.timezone('Asia/Kolkata')
@@ -382,116 +382,51 @@ class UpstoxWebSocketClient:
                 'ask_qty': 0
             }
 
-            # Enhanced debugging to understand the exact structure
-            if self._msg_counter % 25 == 0:
-                display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-                print(f"🔍 DEBUG {display_name}: feed_data type = {type(feed_data)}")
-                if isinstance(feed_data, dict):
-                    print(f"🔍 DEBUG {display_name}: keys = {list(feed_data.keys())}")
-                    if 'ltpc' in feed_data:
-                        print(f"🔍 DEBUG {display_name}: ltpc = {feed_data['ltpc']}")
-
-            # Extract data based on official V3 documentation structure
+            # Extract LTPC data (official structure)
             if isinstance(feed_data, dict):
-                # Method 1: Direct LTPC extraction (most common for full mode)
+                # Handle dictionary format (from MessageToDict)
                 if 'ltpc' in feed_data:
                     ltpc = feed_data['ltpc']
-                    if isinstance(ltpc, dict):
+                    tick_data.update({
+                        'ltp': float(ltpc.get('ltp', 0)),
+                        'ltq': int(ltpc.get('ltq', 0)),
+                        'volume': int(ltpc.get('ltq', 0)),  # Use actual volume from ltq
+                        'close': float(ltpc.get('cp', 0)),
+                        'last_traded_price': float(ltpc.get('ltp', 0)),
+                        'last_traded_quantity': int(ltpc.get('ltq', 0))
+                    })
+
+                # Handle full feed data
+                if 'fullFeed' in feed_data:
+                    full_feed = feed_data['fullFeed']
+                    if 'marketFF' in full_feed:
+                        market_ff = full_feed['marketFF']
+
+                        # Market level data
+                        if 'marketLevel' in market_ff and 'bidAskQuote' in market_ff['marketLevel']:
+                            quotes = market_ff['marketLevel']['bidAskQuote']
+                            if quotes and len(quotes) > 0:
+                                first_quote = quotes[0]
+                                tick_data.update({
+                                    'best_bid': float(first_quote.get('bidP', 0)),
+                                    'best_bid_quantity': int(first_quote.get('bidQ', 0)),
+                                    'best_ask': float(first_quote.get('askP', 0)),
+                                    'best_ask_quantity': int(first_quote.get('askQ', 0))
+                                })
+
+            else:
+                # Handle mock object format
+                if hasattr(feed_data, 'get'):
+                    ltpc = feed_data.get('ltpc', {})
+                    if ltpc:
                         tick_data.update({
                             'ltp': float(ltpc.get('ltp', 0)),
                             'ltq': int(ltpc.get('ltq', 0)),
-                            'volume': int(ltpc.get('ltq', 0)),
+                            'volume': int(ltpc.get('ltq', 0)),  # Use actual volume from ltq
                             'close': float(ltpc.get('cp', 0)),
                             'last_traded_price': float(ltpc.get('ltp', 0)),
                             'last_traded_quantity': int(ltpc.get('ltq', 0))
                         })
-
-                # Method 2: Check if it's nested inside fullFeed structure
-                elif 'fullFeed' in feed_data:
-                    full_feed = feed_data['fullFeed']
-                    if isinstance(full_feed, dict):
-                        # Check for marketFF -> ltpc path
-                        if 'marketFF' in full_feed:
-                            market_ff = full_feed['marketFF']
-                            if isinstance(market_ff, dict) and 'ltpc' in market_ff:
-                                ltpc = market_ff['ltpc']
-                                tick_data.update({
-                                    'ltp': float(ltpc.get('ltp', 0)),
-                                    'ltq': int(ltpc.get('ltq', 0)),
-                                    'volume': int(ltpc.get('ltq', 0)),
-                                    'close': float(ltpc.get('cp', 0)),
-                                    'last_traded_price': float(ltpc.get('ltp', 0)),
-                                    'last_traded_quantity': int(ltpc.get('ltq', 0))
-                                })
-
-                            # Extract market depth if available
-                            if 'marketLevel' in market_ff and 'bidAskQuote' in market_ff['marketLevel']:
-                                quotes = market_ff['marketLevel']['bidAskQuote']
-                                if quotes and len(quotes) > 0:
-                                    first_quote = quotes[0]
-                                    tick_data.update({
-                                        'best_bid': float(first_quote.get('bidP', 0)),
-                                        'best_bid_quantity': int(first_quote.get('bidQ', 0)),
-                                        'best_ask': float(first_quote.get('askP', 0)),
-                                        'best_ask_quantity': int(first_quote.get('askQ', 0))
-                                    })
-
-                        # Check for indexFF -> ltpc path (for indices like Nifty 50)
-                        elif 'indexFF' in full_feed:
-                            index_ff = full_feed['indexFF']
-                            if isinstance(index_ff, dict) and 'ltpc' in index_ff:
-                                ltpc = index_ff['ltpc']
-                                tick_data.update({
-                                    'ltp': float(ltpc.get('ltp', 0)),
-                                    'ltq': int(ltpc.get('ltq', 0)),
-                                    'volume': int(ltpc.get('ltq', 0)),
-                                    'close': float(ltpc.get('cp', 0)),
-                                    'last_traded_price': float(ltpc.get('ltp', 0)),
-                                    'last_traded_quantity': int(ltpc.get('ltq', 0))
-                                })
-
-                # Method 3: Try direct field extraction if structure is flatter
-                elif 'ltp' in feed_data:
-                    tick_data.update({
-                        'ltp': float(feed_data.get('ltp', 0)),
-                        'ltq': int(feed_data.get('ltq', 0)),
-                        'volume': int(feed_data.get('ltq', 0)),
-                        'close': float(feed_data.get('cp', 0)),
-                        'last_traded_price': float(feed_data.get('ltp', 0)),
-                        'last_traded_quantity': int(feed_data.get('ltq', 0))
-                    })
-
-            # Handle protobuf objects with attributes instead of dict access
-            else:
-                # Try to extract from protobuf object attributes
-                try:
-                    if hasattr(feed_data, 'ltpc') and feed_data.ltpc:
-                        ltpc = feed_data.ltpc
-                        tick_data.update({
-                            'ltp': float(getattr(ltpc, 'ltp', 0)),
-                            'ltq': int(getattr(ltpc, 'ltq', 0)),
-                            'volume': int(getattr(ltpc, 'ltq', 0)),
-                            'close': float(getattr(ltpc, 'cp', 0)),
-                            'last_traded_price': float(getattr(ltpc, 'ltp', 0)),
-                            'last_traded_quantity': int(getattr(ltpc, 'ltq', 0))
-                        })
-                    elif hasattr(feed_data, 'fullFeed') and feed_data.fullFeed:
-                        full_feed = feed_data.fullFeed
-                        if hasattr(full_feed, 'marketFF') and full_feed.marketFF:
-                            market_ff = full_feed.marketFF
-                            if hasattr(market_ff, 'ltpc') and market_ff.ltpc:
-                                ltpc = market_ff.ltpc
-                                tick_data.update({
-                                    'ltp': float(getattr(ltpc, 'ltp', 0)),
-                                    'ltq': int(getattr(ltpc, 'ltq', 0)),
-                                    'volume': int(getattr(ltpc, 'ltq', 0)),
-                                    'close': float(getattr(ltpc, 'cp', 0)),
-                                    'last_traded_price': float(getattr(ltpc, 'ltp', 0)),
-                                    'last_traded_quantity': int(getattr(ltpc, 'ltq', 0))
-                                })
-                except Exception as attr_error:
-                    if self._msg_counter % 50 == 0:
-                        print(f"⚠️ Attribute extraction failed: {attr_error}")
 
             # Only return tick if we have valid price data
             if tick_data['ltp'] > 0:
@@ -508,21 +443,15 @@ class UpstoxWebSocketClient:
 
                 return tick_data
             else:
-                # Enhanced debugging for invalid LTP
-                if self._msg_counter % 25 == 0:
+                # Debug: Log when we receive data but no valid price
+                if self._msg_counter % 50 == 0:
                     display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
-                    print(f"⚠️ No valid LTP for {display_name} - extracted LTP: {tick_data['ltp']}")
-                    print(f"🔍 Feed data structure: {type(feed_data)}")
-                    if isinstance(feed_data, dict):
-                        print(f"🔍 Available keys: {list(feed_data.keys())}")
+                    print(f"⚠️ Received data for {display_name} but LTP is 0 or invalid")
 
             return None
 
         except Exception as e:
-            if self._msg_counter % 25 == 0:
-                print(f"❌ Tick creation error for {instrument_key}: {e}")
-                import traceback
-                print(f"🔍 Full error: {traceback.format_exc()}")
+            print(f"❌ Tick creation error: {e}")
             return None
 
     async def _send_subscription(self, instrument_keys):
@@ -539,7 +468,7 @@ class UpstoxWebSocketClient:
                 "guid": guid,
                 "method": "sub",
                 "data": {
-                    "mode": "full",  # Full mode for complete market data including bid/ask, volume, etc.
+                    "mode": "ltpc",  # Changed from "full" to "ltpc" for better compatibility
                     "instrumentKeys": instrument_keys
                 }
             }
