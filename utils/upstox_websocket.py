@@ -468,7 +468,7 @@ class UpstoxWebSocketClient:
                 "guid": guid,
                 "method": "sub",
                 "data": {
-                    "mode": "ltpc",  # Changed from "full" to "ltpc" for better compatibility
+                    "mode": "full",  # Full mode for complete market data including bid/ask, volume, etc.
                     "instrumentKeys": instrument_keys
                 }
             }
