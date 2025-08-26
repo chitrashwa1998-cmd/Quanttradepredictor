@@ -382,37 +382,82 @@ class UpstoxWebSocketClient:
                 'ask_qty': 0
             }
 
-            # Extract LTPC data (official structure)
+            # Extract data from full mode structure (correct format based on provided example)
             if isinstance(feed_data, dict):
-                # Handle dictionary format (from MessageToDict)
-                if 'ltpc' in feed_data:
+                # Handle full feed data structure
+                if 'fullFeed' in feed_data and 'marketFF' in feed_data['fullFeed']:
+                    market_ff = feed_data['fullFeed']['marketFF']
+                    
+                    # Extract LTPC data from marketFF
+                    if 'ltpc' in market_ff:
+                        ltpc = market_ff['ltpc']
+                        tick_data.update({
+                            'ltp': float(ltpc.get('ltp', 0)),
+                            'ltq': int(ltpc.get('ltq', 0)),
+                            'close': float(ltpc.get('cp', 0)),
+                            'last_traded_price': float(ltpc.get('ltp', 0)),
+                            'last_traded_quantity': int(ltpc.get('ltq', 0))
+                        })
+                    
+                    # Extract volume from VTT (Volume Traded Today)
+                    if 'vtt' in market_ff:
+                        tick_data['volume'] = int(market_ff.get('vtt', 0))
+                    
+                    # Extract additional market data
+                    tick_data.update({
+                        'total_buy_quantity': int(market_ff.get('tbq', 0)),
+                        'total_sell_quantity': int(market_ff.get('tsq', 0)),
+                        'open_interest': float(market_ff.get('oi', 0)),
+                        'implied_volatility': float(market_ff.get('iv', 0)),
+                        'average_traded_price': float(market_ff.get('atp', 0))
+                    })
+
+                    # Market level data (bid/ask quotes)
+                    if 'marketLevel' in market_ff and 'bidAskQuote' in market_ff['marketLevel']:
+                        quotes = market_ff['marketLevel']['bidAskQuote']
+                        if quotes and len(quotes) > 0:
+                            first_quote = quotes[0]
+                            tick_data.update({
+                                'best_bid': float(first_quote.get('bidP', 0)),
+                                'best_bid_quantity': int(first_quote.get('bidQ', 0)),
+                                'best_ask': float(first_quote.get('askP', 0)),
+                                'best_ask_quantity': int(first_quote.get('askQ', 0))
+                            })
+                    
+                    # OHLC data extraction
+                    if 'marketOHLC' in market_ff and 'ohlc' in market_ff['marketOHLC']:
+                        ohlc_list = market_ff['marketOHLC']['ohlc']
+                        for ohlc in ohlc_list:
+                            if ohlc.get('interval') == '1d':  # Daily OHLC
+                                tick_data.update({
+                                    'open': float(ohlc.get('open', 0)),
+                                    'high': float(ohlc.get('high', 0)),
+                                    'low': float(ohlc.get('low', 0))
+                                })
+                                break
+                    
+                    # Option Greeks (if available)
+                    if 'optionGreeks' in market_ff:
+                        greeks = market_ff['optionGreeks']
+                        tick_data.update({
+                            'delta': float(greeks.get('delta', 0)),
+                            'theta': float(greeks.get('theta', 0)),
+                            'gamma': float(greeks.get('gamma', 0)),
+                            'vega': float(greeks.get('vega', 0)),
+                            'rho': float(greeks.get('rho', 0))
+                        })
+
+                # Fallback: Handle simple LTPC format
+                elif 'ltpc' in feed_data:
                     ltpc = feed_data['ltpc']
                     tick_data.update({
                         'ltp': float(ltpc.get('ltp', 0)),
                         'ltq': int(ltpc.get('ltq', 0)),
-                        'volume': int(ltpc.get('ltq', 0)),  # Use actual volume from ltq
+                        'volume': int(ltpc.get('ltq', 0)),  # Fallback to ltq
                         'close': float(ltpc.get('cp', 0)),
                         'last_traded_price': float(ltpc.get('ltp', 0)),
                         'last_traded_quantity': int(ltpc.get('ltq', 0))
                     })
-
-                # Handle full feed data
-                if 'fullFeed' in feed_data:
-                    full_feed = feed_data['fullFeed']
-                    if 'marketFF' in full_feed:
-                        market_ff = full_feed['marketFF']
-
-                        # Market level data
-                        if 'marketLevel' in market_ff and 'bidAskQuote' in market_ff['marketLevel']:
-                            quotes = market_ff['marketLevel']['bidAskQuote']
-                            if quotes and len(quotes) > 0:
-                                first_quote = quotes[0]
-                                tick_data.update({
-                                    'best_bid': float(first_quote.get('bidP', 0)),
-                                    'best_bid_quantity': int(first_quote.get('bidQ', 0)),
-                                    'best_ask': float(first_quote.get('askP', 0)),
-                                    'best_ask_quantity': int(first_quote.get('askQ', 0))
-                                })
 
             else:
                 # Handle mock object format
@@ -439,7 +484,9 @@ class UpstoxWebSocketClient:
 
                 # More frequent logging during market hours for debugging
                 if self._msg_counter % 10 == 0:
-                    print(f"📊 LIVE TICK: {display_name} @ ₹{ltp:.2f} | Vol: {volume:,} | Time: {tick_data['timestamp'].strftime('%H:%M:%S')}")
+                    vtt = tick_data.get('volume', 0)
+                    oi = tick_data.get('open_interest', 0)
+                    print(f"📊 LIVE TICK: {display_name} @ ₹{ltp:.2f} | Vol: {vtt:,} | OI: {oi:,} | Time: {tick_data['timestamp'].strftime('%H:%M:%S')}")
 
                 return tick_data
             else:
@@ -468,7 +515,7 @@ class UpstoxWebSocketClient:
                 "guid": guid,
                 "method": "sub",
                 "data": {
-                    "mode": "ltpc",  # Changed from "full" to "ltpc" for better compatibility
+                    "mode": "full",  # Full mode for complete market data including bid/ask, volume, Greeks
                     "instrumentKeys": instrument_keys
                 }
             }
