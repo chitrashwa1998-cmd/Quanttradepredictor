@@ -28,11 +28,11 @@ class LivePredictionPipeline:
         # Processing state
         self.is_processing = False
         self.processing_thread = None
-        self.update_interval = 10  # Check for new candles every 10 seconds
+        self.update_interval = 1  # Check for new candles every 1 second
 
         # Black-Scholes continuous calculation
         self.bs_thread = None
-        self.bs_update_interval = 5  # Update Black-Scholes every 5 seconds with live tick data
+        self.bs_update_interval = 1  # Update Black-Scholes every 1 second with live tick data
         self.latest_volatility_predictions = {}  # Store latest volatility for each instrument
 
         # Minimum data requirements
@@ -172,7 +172,7 @@ class LivePredictionPipeline:
 
     def _processing_loop(self):
         """Main processing loop for generating live predictions."""
-        print(f"🚀 Prediction processing loop started - will check every {self.update_interval} seconds")
+        print(f"🚀 Prediction processing loop started - will check every {self.update_interval} second")
         consecutive_errors = 0
         max_consecutive_errors = 5
 
@@ -608,7 +608,7 @@ class LivePredictionPipeline:
 
     def _black_scholes_continuous_loop(self):
         """Continuous loop for Black-Scholes calculations using live tick data."""
-        print(f"🚀 Black-Scholes continuous loop started - updating every {self.bs_update_interval} seconds")
+        print(f"🚀 Black-Scholes continuous loop started - updating every {self.bs_update_interval} second")
         consecutive_errors = 0
         max_consecutive_errors = 5
 
