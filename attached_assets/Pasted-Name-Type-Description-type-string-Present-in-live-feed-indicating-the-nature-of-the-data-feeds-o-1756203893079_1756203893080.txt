@@ -1,0 +1,37 @@
+Name	Type	Description
+type	string	Present in live feed, indicating the nature of the data.
+feeds	object	Contains updates for the instrument keys requested.
+feeds[InstrumentKey]	object	Data specific to the requested instrument key.
+fullFeed	object	Includes full market feed details for the instrument.
+marketFF	object	Contains detailed market-level data.
+ltpc	object	Details of the latest trading price (LTP), last traded time (LTT), last traded quantity (LTQ) and close price.
+ltpc.ltp	number	Last traded price of the instrument.
+ltpc.ltt	string	Last traded time (timestamp).
+ltpc.ltq	string	Last traded quantity
+ltpc.cp	number	Close price of the instrument.
+marketLevel	object	Contains multiple levels of market bid/ask quotes.
+marketLevel.bidAskQuote	array	List of bid and ask quotes at various market levels.
+bidAskQuote[n].bidQ	string	Quantity available at the nth best bid price.
+bidAskQuote[n].bidP	number	nth best bid price.
+bidAskQuote[n].askQ	string	Quantity available at the nth best ask price.
+bidAskQuote[n].askP	number	nth best ask price.
+optionGreeks	object	Includes Greeks data (e.g., delta, gamma) for the instrument.
+optionGreeks.delta	number	Sensitivity of the option's price to changes in the underlying asset's price.
+optionGreeks.theta	number	Rate of decline in the option's value due to the passage of time.
+optionGreeks.gamma	number	Rate of change of delta with respect to changes in the underlying asset's price.
+optionGreeks.vega	number	Sensitivity of the option's price to changes in volatility.
+optionGreeks.rho	number	Sensitivity of the option's price to changes in interest rates.
+marketOHLC	object	Contains OHLC (Open, High, Low, Close) data for various time intervals.
+ohlc	array	List of OHLC data for different intervals.
+ohlc[n].interval	string	Interval duration (e.g., 1d for daily, I1 for 1minute).
+ohlc[n].open	number	Open price for the nth interval.
+ohlc[n].high	number	High price for the nth interval.
+ohlc[n].low	number	Low price for the nth interval.
+ohlc[n].close	number	Close price for the nth interval.
+ohlc[n].ts	string	Timestamp for the nth interval.
+atp	number	Average traded price for the instrument.
+vtt	string	Volume traded today (in contracts).
+oi	number	Open interest for the instrument.
+tbq	number	Total buy quantity across all levels.
+tsq	number	Total sell quantity across all levels.
+currentTs	string	Timestamp of the current tick received.
