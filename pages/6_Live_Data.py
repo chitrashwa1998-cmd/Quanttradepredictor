@@ -99,21 +99,88 @@ def show_live_data_page():
             "INFOSYS": "NSE_EQ|INE009A01021"
         }
 
-        selected_instruments = st.multiselect(
-            "Select Instruments",
-            options=list(popular_instruments.keys()),
-            default=["NIFTY 50", "BANK NIFTY"],
-            help="Choose instruments to subscribe for live data"
-        )
+        st.subheader("🎯 Instrument Selection & Subscription Modes")
+        
+        # Advanced mode selector
+        use_different_modes = st.checkbox("🔧 Use Different Subscription Modes", help="Enable to set different modes for each instrument")
+        
+        if use_different_modes:
+            st.info("**Subscription Modes:**\n- **ltpc**: Last Traded Price & Close (lightweight)\n- **full**: Complete market data (price, volume, bid/ask, Greeks)")
+            
+            # Create instrument-mode configuration
+            instruments_with_modes = {}
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Select Instruments:**")
+                selected_instruments = st.multiselect(
+                    "Instruments",
+                    options=list(popular_instruments.keys()),
+                    default=["NIFTY 50", "BANK NIFTY"],
+                    label_visibility="collapsed"
+                )
+                
+            with col2:
+                st.write("**Set Subscription Modes:**")
+                for instrument in selected_instruments:
+                    mode = st.selectbox(
+                        f"Mode for {instrument}",
+                        options=["ltpc", "full"],
+                        index=0 if instrument == "NIFTY 50" else 1,  # NIFTY 50 defaults to ltpc, others to full
+                        key=f"mode_{instrument}"
+                    )
+                    instruments_with_modes[popular_instruments[instrument]] = mode
+            
+            # Custom instrument with mode
+            col3, col4 = st.columns(2)
+            with col3:
+                custom_instrument = st.text_input(
+                    "Custom Instrument Key",
+                    help="Enter custom instrument key (e.g., NSE_EQ|INE002A01018)"
+                )
+            with col4:
+                if custom_instrument:
+                    custom_mode = st.selectbox(
+                        "Custom Mode",
+                        options=["ltpc", "full"],
+                        index=1
+                    )
+                    instruments_with_modes[custom_instrument] = custom_mode
+            
+            # Show configuration summary
+            if instruments_with_modes:
+                st.write("**Configuration Summary:**")
+                for instrument_key, mode in instruments_with_modes.items():
+                    display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+                    st.write(f"- {display_name}: `{mode}` mode")
+        else:
+            # Simple mode - all instruments use same mode
+            selected_instruments = st.multiselect(
+                "Select Instruments",
+                options=list(popular_instruments.keys()),
+                default=["NIFTY 50", "BANK NIFTY"],
+                help="Choose instruments to subscribe for live data"
+            )
+            
+            # Global mode selector
+            global_mode = st.selectbox(
+                "Subscription Mode",
+                options=["ltpc", "full"],
+                index=1,
+                help="ltpc: Lightweight (price only) | full: Complete market data"
+            )
+            
+            # Custom instrument input
+            custom_instrument = st.text_input(
+                "Custom Instrument Key",
+                help="Enter custom instrument key (e.g., NSE_EQ|INE002A01018)"
+            )
 
-        # Custom instrument input
-        custom_instrument = st.text_input(
-            "Custom Instrument Key",
-            help="Enter custom instrument key (e.g., NSE_EQ|INE002A01018)"
-        )
-
-        if custom_instrument:
-            selected_instruments.append(custom_instrument)
+            if custom_instrument:
+                selected_instruments.append(custom_instrument)
+            
+            # Create instruments dict with same mode for all
+            instruments_with_modes = {popular_instruments.get(inst, inst): global_mode for inst in selected_instruments}
 
     with historical_tab:
         st.subheader("📈 Fetch Historical Data from Upstox")
@@ -420,10 +487,14 @@ def show_live_data_page():
                         time.sleep(2)
 
                         # Subscribe to selected instruments
-                        if selected_instruments:
-                            instrument_keys = [popular_instruments.get(inst, inst) for inst in selected_instruments]
-                            if st.session_state.live_prediction_pipeline.subscribe_instruments(instrument_keys):
-                                st.success(f"✅ Subscribed to {len(instrument_keys)} instruments with live predictions")
+                        if instruments_with_modes:
+                            if st.session_state.live_prediction_pipeline.subscribe_instruments(instruments_with_modes):
+                                st.success(f"✅ Subscribed to {len(instruments_with_modes)} instruments with live predictions")
+                                
+                                # Show subscription details
+                                for instrument_key, mode in instruments_with_modes.items():
+                                    display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
+                                    st.write(f"- {display_name}: `{mode}` mode")
                             else:
                                 st.warning("⚠️ Failed to subscribe to instruments")
                     else:
