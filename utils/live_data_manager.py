@@ -236,27 +236,14 @@ class LiveDataManager:
         self.ws_client.disconnect()
         self.connection_status = "disconnected"
 
-    def subscribe_instruments(self, instrument_keys, mode="full") -> bool:
-        """Subscribe to instruments for live data with automatic database seeding.
-        
-        Args:
-            instrument_keys: Can be a list of strings or dict with {instrument: mode}
-            mode: Default mode if instrument_keys is a list
-        """
-        # Handle both list and dict formats
-        if isinstance(instrument_keys, list):
-            instruments_dict = {key: mode for key in instrument_keys}
-        elif isinstance(instrument_keys, dict):
-            instruments_dict = instrument_keys
-        else:
-            return False
-        
+    def subscribe_instruments(self, instrument_keys: List[str], mode: str = "full") -> bool:
+        """Subscribe to instruments for live data with automatic database seeding."""
         # First, try to seed each instrument from database
-        for instrument_key in instruments_dict.keys():
+        for instrument_key in instrument_keys:
             self.seed_live_data_from_database(instrument_key)
         
         # Then subscribe for live updates
-        return self.ws_client.subscribe(instruments_dict)
+        return self.ws_client.subscribe(instrument_keys, mode)
 
     def unsubscribe_instruments(self, instrument_keys: List[str]) -> bool:
         """Unsubscribe from instruments."""

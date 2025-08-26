@@ -534,50 +534,6 @@ class UpstoxWebSocketClient:
             print(f"❌ V3 subscription error: {e}")
             return False
 
-    async def _send_subscription_with_modes(self, instruments_with_modes):
-        """Send subscription requests with different modes per instrument."""
-        try:
-            if not self.websocket or not self.is_connected:
-                return False
-
-            # Group instruments by mode
-            mode_groups = {}
-            for instrument_key, mode in instruments_with_modes.items():
-                if mode not in mode_groups:
-                    mode_groups[mode] = []
-                mode_groups[mode].append(instrument_key)
-
-            # Send separate subscription requests for each mode
-            all_successful = True
-            for mode, instrument_keys in mode_groups.items():
-                guid = f"someguid_{mode}"
-                
-                data = {
-                    "guid": guid,
-                    "method": "sub",
-                    "data": {
-                        "mode": mode,
-                        "instrumentKeys": instrument_keys
-                    }
-                }
-
-                print(f"🔄 V3 subscription ({mode} mode) for {len(instrument_keys)} instruments")
-                print(f"📋 Instruments: {[key.split('|')[-1] for key in instrument_keys]}")
-
-                # Convert data to binary and send over WebSocket
-                binary_data = json.dumps(data).encode('utf-8')
-                await self.websocket.send(binary_data)
-                
-                # Small delay between requests
-                await asyncio.sleep(0.1)
-
-            print(f"📤 All V3 subscriptions sent successfully")
-            return True
-
-        except Exception as e:
-            print(f"❌ V3 subscription with modes error: {e}")
-            return False
-
     def _get_next_instrument_in_sequence(self):
         """Get next instrument for round-robin assignment."""
         subscribed_list = list(self.subscribed_instruments)
@@ -691,41 +647,33 @@ class UpstoxWebSocketClient:
 
         print("🔌 Official WebSocket disconnected")
 
-    def subscribe(self, instrument_keys, mode="ltpc"):
-        """Subscribe to instruments with support for per-instrument modes."""
+    def subscribe(self, instrument_keys: list, mode: str = "ltpc"):
+        """Subscribe to instruments using official implementation."""
         if not instrument_keys:
             return False
 
         try:
-            # Handle both list and dict formats
-            if isinstance(instrument_keys, list):
-                # Convert list to dict with default mode
-                instruments_with_modes = {key: mode for key in instrument_keys}
-            elif isinstance(instrument_keys, dict):
-                # Use provided dict directly
-                instruments_with_modes = instrument_keys
-            else:
-                return False
-
             # Remove duplicates and add to subscribed set
-            unique_keys = list(instruments_with_modes.keys())
+            unique_keys = list(set(instrument_keys))
+
+            # Clear existing subscriptions to avoid conflicts
             self.subscribed_instruments.clear()
             self.subscribed_instruments.update(unique_keys)
 
             print(f"🎯 V3 Subscription Request:")
             print(f"   - Instruments: {len(unique_keys)}")
-            for key, sub_mode in instruments_with_modes.items():
+            for key in unique_keys:
                 display_name = key.split('|')[-1] if '|' in key else key
-                print(f"   - {key} ({display_name}) - Mode: {sub_mode}")
+                print(f"   - {key} ({display_name})")
 
             # If connected, send subscription immediately
             if self.is_connected and self._asyncio_loop:
                 try:
                     future = asyncio.run_coroutine_threadsafe(
-                        self._send_subscription_with_modes(instruments_with_modes),
+                        self._send_subscription(unique_keys),
                         self._asyncio_loop
                     )
-                    result = future.result(timeout=15.0)
+                    result = future.result(timeout=15.0)  # Increased timeout
 
                     if result:
                         print(f"✅ V3 subscription successful for {len(unique_keys)} instruments")
