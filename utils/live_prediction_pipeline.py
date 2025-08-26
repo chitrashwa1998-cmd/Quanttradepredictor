@@ -197,8 +197,8 @@ class LivePredictionPipeline:
                             self._debug_counter = 0
                         self._debug_counter += 1
 
-                        # Only show debug every 20 iterations to avoid spam
-                        if self._debug_counter % 20 == 0:
+                        # Only show debug every 10 iterations to avoid spam
+                        if self._debug_counter % 10 == 0:
                             print(f"🔍 Processing loop #{self._debug_counter} - checking ML models on {self.ml_models_instrument}")
 
                         # Check if a new candle has closed before processing predictions
@@ -659,12 +659,12 @@ class LivePredictionPipeline:
                                     self.live_predictions[instrument_key]['bs_volatility_annualized'] = bs_results.get('annualized_volatility', volatility_value)
                                     self.live_predictions[instrument_key]['bs_last_update'] = current_time
 
-                                    # Show update every 20 iterations to avoid spam
+                                    # Show update every 1 iteration for 1-second refresh
                                     if not hasattr(self, '_bs_counter'):
                                         self._bs_counter = 0
                                     self._bs_counter += 1
 
-                                    if self._bs_counter % 20 == 0:
+                                    if self._bs_counter % 1 == 0:
                                         display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
                                         annualized_vol = bs_results.get('annualized_volatility', volatility_value)
 
