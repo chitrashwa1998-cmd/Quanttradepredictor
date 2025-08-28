@@ -345,77 +345,92 @@ class LiveDataManager:
         try:
             print(f"🔍 Attempting to seed {instrument_key} from database...")
 
-            # Use a single database connection for the entire seeding process
+            # Import here to avoid circular imports
             from utils.database_adapter import DatabaseAdapter
+            import time
             
-            # Use row-based storage - single connection instance
-            db = DatabaseAdapter(use_row_based=True)
-            
-            # Get available datasets with proper error handling
-            try:
-                datasets = db.get_dataset_list()
-                if not datasets:
-                    print(f"❌ No datasets available in database")
-                    return False
-            except Exception as dataset_error:
-                print(f"❌ Failed to get dataset list: {dataset_error}")
-                return False
-
-            dataset_names = [d['name'] for d in datasets]
-            print(f"📋 Available datasets: {dataset_names}")
-
-            # Always use livenifty50 as primary dataset for Nifty 50
-            dataset_name = "livenifty50"
-            
-            if dataset_name not in dataset_names:
-                print(f"❌ Required dataset '{dataset_name}' not found in database")
-                print(f"💡 Please upload historical data with name '{dataset_name}' for continuation")
-                return False
-
-            print(f"🎯 Using dataset: {dataset_name}")
-
-            # Load historical data with better error handling
+            # Use a fresh database connection with retry logic
+            max_retries = 3
             historical_data = None
-            try:
-                print(f"📥 Loading {dataset_name} (225 rows available)...")
-                
-                # Try row-based loading first
-                historical_data = db.get_latest_rows(dataset_name, 250)
-                
-                if historical_data is None or len(historical_data) == 0:
-                    print(f"⚠️ Row-based loading returned empty data, trying full load...")
-                    historical_data = db.load_ohlc_data(dataset_name)
-                    if historical_data is not None and len(historical_data) > 250:
-                        historical_data = historical_data.tail(250)
-                
-            except Exception as load_error:
-                print(f"❌ Failed to load data from {dataset_name}: {load_error}")
-                # Try blob-based as final fallback
-                try:
-                    print(f"🔄 Attempting blob-based fallback...")
-                    blob_db = DatabaseAdapter(use_row_based=False)
-                    historical_data = blob_db.load_ohlc_data(dataset_name)
-                    if historical_data is not None and len(historical_data) > 250:
-                        historical_data = historical_data.tail(250)
-                except Exception as blob_error:
-                    print(f"❌ Blob-based fallback also failed: {blob_error}")
-                    return False
-
-            if historical_data is None or len(historical_data) == 0:
-                print(f"❌ No data could be loaded from {dataset_name}")
-                return False
-
-            print(f"✅ Successfully loaded {len(historical_data)} rows from {dataset_name}")
             
-            # Use the most recent data (last 225 rows to match database)
+            for attempt in range(max_retries):
+                try:
+                    print(f"🔄 Database connection attempt {attempt + 1}/{max_retries}...")
+                    
+                    # Create fresh connection for seeding
+                    db = DatabaseAdapter(use_row_based=True)
+                    
+                    # Test connection first
+                    if not db._test_connection():
+                        print(f"❌ Database connection test failed on attempt {attempt + 1}")
+                        if attempt < max_retries - 1:
+                            time.sleep(1)  # Wait before retry
+                            continue
+                        return False
+                    
+                    print(f"✅ Database connection established on attempt {attempt + 1}")
+                    
+                    # Get dataset list
+                    datasets = db.get_dataset_list()
+                    if not datasets:
+                        print(f"❌ No datasets found in database")
+                        return False
+                    
+                    dataset_names = [d['name'] for d in datasets]
+                    print(f"📋 Available datasets: {dataset_names}")
+                    
+                    # Always use livenifty50 as primary dataset
+                    dataset_name = "livenifty50"
+                    
+                    if dataset_name not in dataset_names:
+                        print(f"❌ Required dataset '{dataset_name}' not found")
+                        return False
+                    
+                    print(f"🎯 Loading dataset: {dataset_name}")
+                    
+                    # Try to load the data
+                    historical_data = db.load_ohlc_data(dataset_name)
+                    
+                    if historical_data is not None and len(historical_data) > 0:
+                        print(f"✅ Successfully loaded {len(historical_data)} rows from {dataset_name}")
+                        break
+                    else:
+                        print(f"⚠️ Dataset {dataset_name} returned empty data")
+                        if attempt < max_retries - 1:
+                            time.sleep(1)
+                            continue
+                        return False
+                        
+                except Exception as db_error:
+                    print(f"❌ Database attempt {attempt + 1} failed: {str(db_error)}")
+                    if attempt < max_retries - 1:
+                        time.sleep(1)  # Wait before retry
+                        continue
+                    else:
+                        print(f"❌ All {max_retries} database attempts failed")
+                        return False
+            
+            # Validate the loaded data
+            if historical_data is None or len(historical_data) == 0:
+                print(f"❌ No valid data could be loaded")
+                return False
+            
+            # Use the most recent data (last 225 rows to match your database export)
             seed_data = historical_data.tail(225).copy()
+            
+            print(f"📊 Using {len(seed_data)} rows for seeding (from total {len(historical_data)} available)")
 
             # Ensure the data has the correct column names
             required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
             if not all(col in seed_data.columns for col in required_columns):
                 missing_cols = [col for col in required_columns if col not in seed_data.columns]
-                print(f"❌ Database data missing required columns: {missing_cols}")
+                print(f"❌ Data missing required columns: {missing_cols}")
                 print(f"📋 Available columns: {list(seed_data.columns)}")
+                return False
+
+            # Validate index is datetime
+            if not isinstance(seed_data.index, pd.DatetimeIndex):
+                print(f"❌ Data index is not datetime format: {type(seed_data.index)}")
                 return False
 
             # Store as foundation for live data
@@ -426,14 +441,15 @@ class LiveDataManager:
                 'seeded_at': pd.Timestamp.now()
             }
 
-            print(f"🌱 SEEDED {instrument_key} with {len(seed_data)} historical OHLC rows from database")
+            print(f"🌱 SEEDED {instrument_key} with {len(seed_data)} historical OHLC rows")
             print(f"📈 Foundation set: {len(seed_data)} rows ready for live continuation")
             print(f"📅 Date range: {seed_data.index.min()} to {seed_data.index.max()}")
+            print(f"🎯 Seeding completed successfully!")
             
             return True
 
         except Exception as e:
-            print(f"❌ Error seeding data for {instrument_key}: {str(e)}")
+            print(f"❌ Critical error during seeding: {str(e)}")
             import traceback
             traceback.print_exc()
             return False
