@@ -238,21 +238,54 @@ class LiveDataManager:
 
     def subscribe_instruments(self, instrument_keys: List[str], mode: str = "full") -> bool:
         """Subscribe to instruments for live data with automatic database seeding."""
+        print(f"🚀 Starting subscription process for {len(instrument_keys)} instruments...")
+        
         # First, try to seed each instrument from database
+        seeded_count = 0
         for instrument_key in instrument_keys:
-            self.seed_live_data_from_database(instrument_key)
+            print(f"🌱 Attempting to seed: {instrument_key}")
+            if self.seed_live_data_from_database(instrument_key):
+                seeded_count += 1
+            else:
+                print(f"⚠️ Seeding failed for {instrument_key}, will start fresh")
 
+        print(f"✅ Seeded {seeded_count}/{len(instrument_keys)} instruments successfully")
+        
         # Then subscribe for live updates
-        return self.ws_client.subscribe(instrument_keys, mode)
+        subscription_result = self.ws_client.subscribe(instrument_keys, mode)
+        
+        if subscription_result:
+            print(f"📡 Successfully subscribed to {len(instrument_keys)} instruments for live updates")
+        else:
+            print(f"❌ Failed to subscribe to instruments")
+            
+        return subscription_result
 
     def subscribe(self, instrument_keys: List[str], mode_mapping: Dict[str, str] = None) -> bool:
         """Subscribe to instruments with mixed mode configuration."""
+        print(f"🚀 Starting mixed-mode subscription process for {len(instrument_keys)} instruments...")
+        
         # First, try to seed each instrument from database
+        seeded_count = 0
         for instrument_key in instrument_keys:
-            self.seed_live_data_from_database(instrument_key)
+            mode = mode_mapping.get(instrument_key, "full") if mode_mapping else "full"
+            print(f"🌱 Attempting to seed: {instrument_key} (mode: {mode})")
+            if self.seed_live_data_from_database(instrument_key):
+                seeded_count += 1
+            else:
+                print(f"⚠️ Seeding failed for {instrument_key}, will start fresh")
 
+        print(f"✅ Seeded {seeded_count}/{len(instrument_keys)} instruments successfully")
+        
         # Then subscribe for live updates with mixed mode support
-        return self.ws_client.subscribe(instrument_keys, mode_mapping)
+        subscription_result = self.ws_client.subscribe(instrument_keys, mode_mapping)
+        
+        if subscription_result:
+            print(f"📡 Successfully subscribed to {len(instrument_keys)} instruments with mixed modes")
+        else:
+            print(f"❌ Failed to subscribe to instruments with mixed modes")
+            
+        return subscription_result
 
     def unsubscribe_instruments(self, instrument_keys: List[str]) -> bool:
         """Unsubscribe from instruments."""
@@ -310,13 +343,39 @@ class LiveDataManager:
     def seed_live_data_from_database(self, instrument_key: str) -> bool:
         """Seed live OHLC data from database for continuation."""
         try:
+            import time
             from utils.database_adapter import DatabaseAdapter
+
+            # Add small delay to ensure main database connection is stable
+            time.sleep(0.5)
+
+            print(f"🔍 Attempting to seed {instrument_key} from database...")
 
             # Convert instrument key to database dataset name
             # Use livenifty50 as primary, fallback to pre_seed_dataset
             db_test = DatabaseAdapter(use_row_based=True)
-            datasets = db_test.get_dataset_list()
+            
+            # Retry mechanism for database connection
+            max_retries = 3
+            datasets = None
+            
+            for attempt in range(max_retries):
+                try:
+                    datasets = db_test.get_dataset_list()
+                    if datasets:
+                        break
+                    print(f"🔄 Seeding attempt {attempt + 1}/{max_retries}: No datasets found, retrying...")
+                    time.sleep(1)
+                except Exception as retry_error:
+                    print(f"🔄 Seeding attempt {attempt + 1}/{max_retries}: Database error {retry_error}, retrying...")
+                    time.sleep(1)
+            
+            if not datasets:
+                print(f"❌ Failed to get dataset list after {max_retries} attempts")
+                return False
+
             dataset_names = [d['name'] for d in datasets]
+            print(f"📋 Available datasets: {dataset_names}")
 
             if "livenifty50" in dataset_names:
                 dataset_name = "livenifty50"
@@ -325,25 +384,38 @@ class LiveDataManager:
             else:
                 dataset_name = "livenifty50"
 
+            print(f"🎯 Using dataset: {dataset_name}")
+
             # Use row-based storage for better performance
             db = DatabaseAdapter(use_row_based=True)
 
             # Try row-based first, fallback to blob-based
+            historical_data = None
             try:
+                print(f"📥 Loading {dataset_name} using row-based method...")
                 historical_data = db.get_latest_rows(dataset_name, 250)
-            except:
+            except Exception as row_error:
+                print(f"⚠️ Row-based loading failed: {row_error}")
                 # Fallback to blob-based storage
-                db = DatabaseAdapter(use_row_based=False)
-                historical_data = db.load_ohlc_data(dataset_name)
-                if historical_data is not None and len(historical_data) > 250:
-                    historical_data = historical_data.tail(250)
+                try:
+                    print(f"📥 Fallback: Loading {dataset_name} using blob-based method...")
+                    db = DatabaseAdapter(use_row_based=False)
+                    historical_data = db.load_ohlc_data(dataset_name)
+                    if historical_data is not None and len(historical_data) > 250:
+                        historical_data = historical_data.tail(250)
+                except Exception as blob_error:
+                    print(f"❌ Blob-based loading also failed: {blob_error}")
+                    return False
 
             if historical_data is not None and len(historical_data) > 0:
+                print(f"✅ Successfully loaded {len(historical_data)} rows from {dataset_name}")
+                
                 # Use the most recent data (last 250 rows for performance)
                 seed_data = historical_data.tail(250).copy()
 
                 # Ensure the data has the correct column names
-                if all(col in seed_data.columns for col in ['Open', 'High', 'Low', 'Close', 'Volume']):
+                required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+                if all(col in seed_data.columns for col in required_columns):
                     # Store as foundation for live data
                     self.ohlc_data[instrument_key] = seed_data
                     self.seeded_instruments[instrument_key] = {
@@ -354,9 +426,12 @@ class LiveDataManager:
 
                     print(f"🌱 SEEDED {instrument_key} with {len(seed_data)} historical OHLC rows from database")
                     print(f"📈 Foundation set: {len(seed_data)} rows ready for live continuation")
+                    print(f"📅 Date range: {seed_data.index.min()} to {seed_data.index.max()}")
                     return True
                 else:
-                    print(f"⚠️ Database data for {dataset_name} missing required columns")
+                    missing_cols = [col for col in required_columns if col not in seed_data.columns]
+                    print(f"⚠️ Database data for {dataset_name} missing required columns: {missing_cols}")
+                    print(f"📋 Available columns: {list(seed_data.columns)}")
                     return False
             else:
                 print(f"📊 No historical data found for {dataset_name}, starting fresh")
@@ -364,6 +439,8 @@ class LiveDataManager:
 
         except Exception as e:
             print(f"❌ Error seeding data for {instrument_key}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def get_seeding_status(self) -> Dict:
