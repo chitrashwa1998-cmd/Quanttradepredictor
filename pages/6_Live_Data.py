@@ -1170,7 +1170,7 @@ def show_live_data_page():
 
     # Auto-refresh functionality
     if auto_refresh and st.session_state.is_live_connected:
-        time.sleep(10)  # Refresh every 10 seconds
+        time.sleep(1)  # Refresh every 1 second
         st.rerun()
 
 if __name__ == "__main__":
