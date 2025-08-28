@@ -968,7 +968,7 @@ def show_live_data_page():
                                 if 'Nifty 50' in display_name or 'INDEX' in instrument:
                                     latest_price = 24500.0  # Typical Nifty range
                                     latest_volume = 0
-                                elif '64103' in instrument or 'FO' in instrument:
+                                elif '53001' in instrument or 'FO' in instrument:
                                     latest_price = 24550.0  # Typical futures premium
                                     latest_volume = 0
                                 else:
