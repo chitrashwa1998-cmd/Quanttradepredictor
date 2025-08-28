@@ -349,70 +349,31 @@ class LiveDataManager:
             from utils.database_adapter import DatabaseAdapter
             import time
             
-            # Use a fresh database connection with retry logic
-            max_retries = 3
-            historical_data = None
+            # Use a single database connection approach to avoid pool conflicts
+            print(f"🔄 Establishing database connection for seeding...")
             
-            for attempt in range(max_retries):
-                try:
-                    print(f"🔄 Database connection attempt {attempt + 1}/{max_retries}...")
-                    
-                    # Create fresh connection for seeding
-                    db = DatabaseAdapter(use_row_based=True)
-                    
-                    # Test connection first
-                    if not db._test_connection():
-                        print(f"❌ Database connection test failed on attempt {attempt + 1}")
-                        if attempt < max_retries - 1:
-                            time.sleep(1)  # Wait before retry
-                            continue
-                        return False
-                    
-                    print(f"✅ Database connection established on attempt {attempt + 1}")
-                    
-                    # Get dataset list
-                    datasets = db.get_dataset_list()
-                    if not datasets:
-                        print(f"❌ No datasets found in database")
-                        return False
-                    
-                    dataset_names = [d['name'] for d in datasets]
-                    print(f"📋 Available datasets: {dataset_names}")
-                    
-                    # Always use livenifty50 as primary dataset
-                    dataset_name = "livenifty50"
-                    
-                    if dataset_name not in dataset_names:
-                        print(f"❌ Required dataset '{dataset_name}' not found")
-                        return False
-                    
-                    print(f"🎯 Loading dataset: {dataset_name}")
-                    
-                    # Try to load the data
-                    historical_data = db.load_ohlc_data(dataset_name)
-                    
-                    if historical_data is not None and len(historical_data) > 0:
-                        print(f"✅ Successfully loaded {len(historical_data)} rows from {dataset_name}")
-                        break
-                    else:
-                        print(f"⚠️ Dataset {dataset_name} returned empty data")
-                        if attempt < max_retries - 1:
-                            time.sleep(1)
-                            continue
-                        return False
+            try:
+                # Create single connection for seeding - avoid multiple connections
+                db = DatabaseAdapter(use_row_based=True)
+                
+                print(f"✅ Database connection established for seeding")
+                
+                # Always use livenifty50 as primary dataset
+                dataset_name = "livenifty50"
+                
+                print(f"🎯 Loading dataset: {dataset_name}")
+                
+                # Direct load without dataset list check to avoid additional queries
+                historical_data = db.load_ohlc_data(dataset_name)
+                
+                if historical_data is None or len(historical_data) == 0:
+                    print(f"❌ Dataset '{dataset_name}' is empty or not found")
+                    return False
+                
+                print(f"✅ Successfully loaded {len(historical_data)} rows from {dataset_name}")
                         
-                except Exception as db_error:
-                    print(f"❌ Database attempt {attempt + 1} failed: {str(db_error)}")
-                    if attempt < max_retries - 1:
-                        time.sleep(1)  # Wait before retry
-                        continue
-                    else:
-                        print(f"❌ All {max_retries} database attempts failed")
-                        return False
-            
-            # Validate the loaded data
-            if historical_data is None or len(historical_data) == 0:
-                print(f"❌ No valid data could be loaded")
+            except Exception as db_error:
+                print(f"❌ Database connection failed: {str(db_error)}")
                 return False
             
             # Use the most recent data (last 225 rows to match your database export)
