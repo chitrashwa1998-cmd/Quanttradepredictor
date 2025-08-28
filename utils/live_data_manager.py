@@ -343,99 +343,94 @@ class LiveDataManager:
     def seed_live_data_from_database(self, instrument_key: str) -> bool:
         """Seed live OHLC data from database for continuation."""
         try:
-            import time
-            from utils.database_adapter import DatabaseAdapter
-
-            # Add small delay to ensure main database connection is stable
-            time.sleep(0.5)
-
             print(f"🔍 Attempting to seed {instrument_key} from database...")
 
-            # Convert instrument key to database dataset name
-            # Use livenifty50 as primary, fallback to pre_seed_dataset
-            db_test = DatabaseAdapter(use_row_based=True)
+            # Use a single database connection for the entire seeding process
+            from utils.database_adapter import DatabaseAdapter
             
-            # Retry mechanism for database connection
-            max_retries = 3
-            datasets = None
+            # Use row-based storage - single connection instance
+            db = DatabaseAdapter(use_row_based=True)
             
-            for attempt in range(max_retries):
-                try:
-                    datasets = db_test.get_dataset_list()
-                    if datasets:
-                        break
-                    print(f"🔄 Seeding attempt {attempt + 1}/{max_retries}: No datasets found, retrying...")
-                    time.sleep(1)
-                except Exception as retry_error:
-                    print(f"🔄 Seeding attempt {attempt + 1}/{max_retries}: Database error {retry_error}, retrying...")
-                    time.sleep(1)
-            
-            if not datasets:
-                print(f"❌ Failed to get dataset list after {max_retries} attempts")
+            # Get available datasets with proper error handling
+            try:
+                datasets = db.get_dataset_list()
+                if not datasets:
+                    print(f"❌ No datasets available in database")
+                    return False
+            except Exception as dataset_error:
+                print(f"❌ Failed to get dataset list: {dataset_error}")
                 return False
 
             dataset_names = [d['name'] for d in datasets]
             print(f"📋 Available datasets: {dataset_names}")
 
-            if "livenifty50" in dataset_names:
-                dataset_name = "livenifty50"
-            elif "pre_seed_dataset" in dataset_names:
-                dataset_name = "pre_seed_dataset"
-            else:
-                dataset_name = "livenifty50"
+            # Always use livenifty50 as primary dataset for Nifty 50
+            dataset_name = "livenifty50"
+            
+            if dataset_name not in dataset_names:
+                print(f"❌ Required dataset '{dataset_name}' not found in database")
+                print(f"💡 Please upload historical data with name '{dataset_name}' for continuation")
+                return False
 
             print(f"🎯 Using dataset: {dataset_name}")
 
-            # Use row-based storage for better performance
-            db = DatabaseAdapter(use_row_based=True)
-
-            # Try row-based first, fallback to blob-based
+            # Load historical data with better error handling
             historical_data = None
             try:
-                print(f"📥 Loading {dataset_name} using row-based method...")
+                print(f"📥 Loading {dataset_name} (225 rows available)...")
+                
+                # Try row-based loading first
                 historical_data = db.get_latest_rows(dataset_name, 250)
-            except Exception as row_error:
-                print(f"⚠️ Row-based loading failed: {row_error}")
-                # Fallback to blob-based storage
-                try:
-                    print(f"📥 Fallback: Loading {dataset_name} using blob-based method...")
-                    db = DatabaseAdapter(use_row_based=False)
+                
+                if historical_data is None or len(historical_data) == 0:
+                    print(f"⚠️ Row-based loading returned empty data, trying full load...")
                     historical_data = db.load_ohlc_data(dataset_name)
                     if historical_data is not None and len(historical_data) > 250:
                         historical_data = historical_data.tail(250)
-                except Exception as blob_error:
-                    print(f"❌ Blob-based loading also failed: {blob_error}")
-                    return False
-
-            if historical_data is not None and len(historical_data) > 0:
-                print(f"✅ Successfully loaded {len(historical_data)} rows from {dataset_name}")
                 
-                # Use the most recent data (last 250 rows for performance)
-                seed_data = historical_data.tail(250).copy()
-
-                # Ensure the data has the correct column names
-                required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-                if all(col in seed_data.columns for col in required_columns):
-                    # Store as foundation for live data
-                    self.ohlc_data[instrument_key] = seed_data
-                    self.seeded_instruments[instrument_key] = {
-                        'seed_count': len(seed_data),
-                        'seed_date_range': f"{seed_data.index.min()} to {seed_data.index.max()}",
-                        'seeded_at': pd.Timestamp.now()
-                    }
-
-                    print(f"🌱 SEEDED {instrument_key} with {len(seed_data)} historical OHLC rows from database")
-                    print(f"📈 Foundation set: {len(seed_data)} rows ready for live continuation")
-                    print(f"📅 Date range: {seed_data.index.min()} to {seed_data.index.max()}")
-                    return True
-                else:
-                    missing_cols = [col for col in required_columns if col not in seed_data.columns]
-                    print(f"⚠️ Database data for {dataset_name} missing required columns: {missing_cols}")
-                    print(f"📋 Available columns: {list(seed_data.columns)}")
+            except Exception as load_error:
+                print(f"❌ Failed to load data from {dataset_name}: {load_error}")
+                # Try blob-based as final fallback
+                try:
+                    print(f"🔄 Attempting blob-based fallback...")
+                    blob_db = DatabaseAdapter(use_row_based=False)
+                    historical_data = blob_db.load_ohlc_data(dataset_name)
+                    if historical_data is not None and len(historical_data) > 250:
+                        historical_data = historical_data.tail(250)
+                except Exception as blob_error:
+                    print(f"❌ Blob-based fallback also failed: {blob_error}")
                     return False
-            else:
-                print(f"📊 No historical data found for {dataset_name}, starting fresh")
+
+            if historical_data is None or len(historical_data) == 0:
+                print(f"❌ No data could be loaded from {dataset_name}")
                 return False
+
+            print(f"✅ Successfully loaded {len(historical_data)} rows from {dataset_name}")
+            
+            # Use the most recent data (last 225 rows to match database)
+            seed_data = historical_data.tail(225).copy()
+
+            # Ensure the data has the correct column names
+            required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+            if not all(col in seed_data.columns for col in required_columns):
+                missing_cols = [col for col in required_columns if col not in seed_data.columns]
+                print(f"❌ Database data missing required columns: {missing_cols}")
+                print(f"📋 Available columns: {list(seed_data.columns)}")
+                return False
+
+            # Store as foundation for live data
+            self.ohlc_data[instrument_key] = seed_data
+            self.seeded_instruments[instrument_key] = {
+                'seed_count': len(seed_data),
+                'seed_date_range': f"{seed_data.index.min()} to {seed_data.index.max()}",
+                'seeded_at': pd.Timestamp.now()
+            }
+
+            print(f"🌱 SEEDED {instrument_key} with {len(seed_data)} historical OHLC rows from database")
+            print(f"📈 Foundation set: {len(seed_data)} rows ready for live continuation")
+            print(f"📅 Date range: {seed_data.index.min()} to {seed_data.index.max()}")
+            
+            return True
 
         except Exception as e:
             print(f"❌ Error seeding data for {instrument_key}: {str(e)}")
