@@ -414,16 +414,49 @@ class UpstoxWebSocketClient:
                         'average_traded_price': float(market_ff.get('atp', 0))
                     })
 
-                    # Market level data (bid/ask quotes)
+                    # Market level data (bid/ask quotes) - Extract all 5 levels
                     if 'marketLevel' in market_ff and 'bidAskQuote' in market_ff['marketLevel']:
                         quotes = market_ff['marketLevel']['bidAskQuote']
                         if quotes and len(quotes) > 0:
+                            # Extract Level 1 (best bid/ask)
                             first_quote = quotes[0]
                             tick_data.update({
                                 'best_bid': float(first_quote.get('bidP', 0)),
                                 'best_bid_quantity': int(first_quote.get('bidQ', 0)),
                                 'best_ask': float(first_quote.get('askP', 0)),
                                 'best_ask_quantity': int(first_quote.get('askQ', 0))
+                            })
+                            
+                            # Extract all 5 levels for OBI calculation
+                            total_bid_qty = 0
+                            total_ask_qty = 0
+                            depth_levels = []
+                            
+                            for i, quote in enumerate(quotes[:5]):  # Process up to 5 levels
+                                bid_price = float(quote.get('bidP', 0))
+                                bid_qty = int(quote.get('bidQ', 0))
+                                ask_price = float(quote.get('askP', 0))
+                                ask_qty = int(quote.get('askQ', 0))
+                                
+                                if bid_qty > 0:
+                                    total_bid_qty += bid_qty
+                                if ask_qty > 0:
+                                    total_ask_qty += ask_qty
+                                
+                                depth_levels.append({
+                                    'level': i + 1,
+                                    'bid_price': bid_price,
+                                    'bid_quantity': bid_qty,
+                                    'ask_price': ask_price,
+                                    'ask_quantity': ask_qty
+                                })
+                            
+                            # Add aggregated 5-level data for enhanced OBI
+                            tick_data.update({
+                                'total_bid_quantity_5_levels': total_bid_qty,
+                                'total_ask_quantity_5_levels': total_ask_qty,
+                                'market_depth_levels': depth_levels,
+                                'depth_levels_count': len(quotes)
                             })
 
                     # OHLC data extraction

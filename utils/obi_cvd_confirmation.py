@@ -49,22 +49,33 @@ class OBICVDConfirmation:
         """
         Calculate Order Book Imbalance from tick data.
         
+        Enhanced to use 5-level market depth when available.
         OBI = (Bid Quantity - Ask Quantity) / (Bid Quantity + Ask Quantity)
         Range: -1 (only sellers) to +1 (only buyers)
         """
         try:
-            # Extract bid/ask quantities from tick data
-            bid_qty = tick_data.get('best_bid_quantity', 0) or tick_data.get('bid_qty', 0)
-            ask_qty = tick_data.get('best_ask_quantity', 0) or tick_data.get('ask_qty', 0)
+            # Check if 5-level depth data is available (new enhanced data)
+            total_bid_5_levels = tick_data.get('total_bid_quantity_5_levels', 0)
+            total_ask_5_levels = tick_data.get('total_ask_quantity_5_levels', 0)
             
-            # Also check for total buy/sell quantities if available
-            total_buy = tick_data.get('total_buy_quantity', 0)
-            total_sell = tick_data.get('total_sell_quantity', 0)
-            
-            # Use total quantities if available, otherwise use best bid/ask
-            if total_buy > 0 and total_sell > 0:
-                bid_qty = total_buy
-                ask_qty = total_sell
+            if total_bid_5_levels > 0 and total_ask_5_levels > 0:
+                # Use 5-level aggregated data for more accurate OBI
+                bid_qty = total_bid_5_levels
+                ask_qty = total_ask_5_levels
+                print(f"🔍 Using 5-level OBI: Bid={bid_qty}, Ask={ask_qty}")
+            else:
+                # Fallback to Level 1 data
+                bid_qty = tick_data.get('best_bid_quantity', 0) or tick_data.get('bid_qty', 0)
+                ask_qty = tick_data.get('best_ask_quantity', 0) or tick_data.get('ask_qty', 0)
+                
+                # Also check for total buy/sell quantities if available
+                total_buy = tick_data.get('total_buy_quantity', 0)
+                total_sell = tick_data.get('total_sell_quantity', 0)
+                
+                # Use total quantities if available, otherwise use best bid/ask
+                if total_buy > 0 and total_sell > 0:
+                    bid_qty = total_buy
+                    ask_qty = total_sell
             
             if bid_qty <= 0 and ask_qty <= 0:
                 return None
