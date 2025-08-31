@@ -23,31 +23,31 @@ class BlackScholesCalculator:
         self.strike_offsets = [-500, -400, -300, -200, -100, -50, 0, 50, 100, 200, 300, 400, 500]
 
     def get_nifty_expiry_dates(self) -> List[datetime]:
-        """Get next 3 weekly Thursday expiry dates for Nifty options."""
+        """Get next 3 weekly Tuesday expiry dates for Nifty options."""
         today = datetime.now().date()
         today_weekday = today.weekday()
 
-        # Calculate days until next Thursday with market hours consideration
-        if today_weekday <= 3:  # Monday to Thursday
-            days_until_thursday = (3 - today_weekday) % 7
-        else:  # Friday (4), Saturday (5), Sunday (6) - use next week's Thursday
-            days_until_thursday = 7 + (3 - today_weekday)
+        # Calculate days until next Tuesday with market hours consideration
+        if today_weekday <= 1:  # Monday to Tuesday
+            days_until_tuesday = (1 - today_weekday) % 7
+        else:  # Wednesday (2), Thursday (3), Friday (4), Saturday (5), Sunday (6) - use next week's Tuesday
+            days_until_tuesday = 7 + (1 - today_weekday)
 
-        # If today is Thursday after market close (3:30 PM), use next Thursday
+        # If today is Tuesday after market close (3:30 PM), use next Tuesday
         current_time = datetime.now().time()
         market_close = datetime.strptime("15:30", "%H:%M").time()
 
-        if days_until_thursday == 0:
-            # If Thursday after market close, get next Thursday
+        if days_until_tuesday == 0:
+            # If Tuesday after market close, get next Tuesday
             if current_time >= market_close:
-                days_until_thursday = 7
-            # If Thursday during market hours, keep as 0 (same day expiry)
+                days_until_tuesday = 7
+            # If Tuesday during market hours, keep as 0 (same day expiry)
 
         expiry_dates = []
 
         for i in range(3):
-            # Calculate expiry date for the next Thursday
-            expiry_date = today + timedelta(days=days_until_thursday + i * 7)
+            # Calculate expiry date for the next Tuesday
+            expiry_date = today + timedelta(days=days_until_tuesday + i * 7)
             expiry_dates.append(datetime.combine(expiry_date, datetime.min.time()))  # Convert to datetime
 
         return expiry_dates
@@ -67,12 +67,12 @@ class BlackScholesCalculator:
 
         # If it's a trading day and within market hours, use the appropriate expiry
         if is_trading_day and is_market_hours:
-            # If today is Thursday during market hours, use today's 3:30 PM
-            if now.weekday() == 3:
+            # If today is Tuesday during market hours, use today's 3:30 PM
+            if now.weekday() == 1:
                 market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
                 expiry_date = market_close
-            # For Monday-Wednesday during market hours, use current week's Thursday
-            # For Friday during market hours, use next week's Thursday (handled by get_nifty_expiry_dates)
+            # For Monday during market hours, use current week's Tuesday
+            # For Wednesday-Friday during market hours, use next week's Tuesday (handled by get_nifty_expiry_dates)
 
         if expiry_date <= now:
             return 0.001  # Minimum time to avoid division by zero
