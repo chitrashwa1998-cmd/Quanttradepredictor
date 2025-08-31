@@ -612,6 +612,18 @@ def show_live_data_page():
 
                                     st.metric(f"{rolling_obi_color} 1-Min Avg OBI", f"{rolling_obi:.3f}", rolling_obi_signal)
 
+                                    # Rolling OBI (2-minute average, resets every 2 minutes)
+                                    rolling_obi_2min = obi_cvd_data.get('obi_rolling_2min', 0.0)
+                                    rolling_obi_2min_signal = obi_cvd_data.get('obi_rolling_2min_signal', 'Unknown')
+                                    if 'Bullish' in rolling_obi_2min_signal:
+                                        rolling_obi_2min_color = "🟢"
+                                    elif 'Bearish' in rolling_obi_2min_signal:
+                                        rolling_obi_2min_color = "🔴"
+                                    else:
+                                        rolling_obi_2min_color = "⚪"
+
+                                    st.metric(f"{rolling_obi_2min_color} 2-Min Avg OBI", f"{rolling_obi_2min:.3f}", rolling_obi_2min_signal)
+
                                 with cvd_col:
                                     st.markdown("**💹 CVD Analysis**")
 
