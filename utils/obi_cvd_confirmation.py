@@ -418,23 +418,23 @@ class OBICVDConfirmation:
             # Current CVD Increment Analysis (tick-by-tick)
             if current_cvd_increment > 500:
                 current_cvd_signal = 'Strong Buying'
-            elif current_cvd_increment > 50:
+            elif current_cvd_increment > 100:
                 current_cvd_signal = 'Buying'
             elif current_cvd_increment < -500:
                 current_cvd_signal = 'Strong Selling'
-            elif current_cvd_increment < -50:
+            elif current_cvd_increment < -100:
                 current_cvd_signal = 'Selling'
             else:
                 current_cvd_signal = 'Neutral'
             
             # Rolling CVD 2-minute Analysis
-            if rolling_cvd_2min > 200:
+            if rolling_cvd_2min > 150:
                 rolling_cvd_signal = 'Strong Buying'
-            elif rolling_cvd_2min > 20:
+            elif rolling_cvd_2min > 50:
                 rolling_cvd_signal = 'Buying'
-            elif rolling_cvd_2min < -200:
+            elif rolling_cvd_2min < -150:
                 rolling_cvd_signal = 'Strong Selling'
-            elif rolling_cvd_2min < -20:
+            elif rolling_cvd_2min < -50:
                 rolling_cvd_signal = 'Selling'
             else:
                 rolling_cvd_signal = 'Neutral'
@@ -442,48 +442,48 @@ class OBICVDConfirmation:
             # Total CVD Analysis (30-minute cumulative)
             if total_cvd > 1000:
                 total_cvd_signal = 'Strong Buying'
-            elif total_cvd > 100:
+            elif total_cvd > 500:
                 total_cvd_signal = 'Buying'
             elif total_cvd < -1000:
                 total_cvd_signal = 'Strong Selling'
-            elif total_cvd < -100:
+            elif total_cvd < -500:
                 total_cvd_signal = 'Selling'
             else:
                 total_cvd_signal = 'Neutral'
             
             # Hourly CVD Analysis (1-hour cumulative)
-            if cvd_hourly > 2000:
+            if cvd_hourly > 2500:
                 hourly_cvd_signal = 'Strong Buying'
-            elif cvd_hourly > 300:
+            elif cvd_hourly > 1000:
                 hourly_cvd_signal = 'Buying'
-            elif cvd_hourly < -2000:
+            elif cvd_hourly < -2500:
                 hourly_cvd_signal = 'Strong Selling'
-            elif cvd_hourly < -300:
+            elif cvd_hourly < -1000:
                 hourly_cvd_signal = 'Selling'
             else:
                 hourly_cvd_signal = 'Neutral'
             
             # Daily CVD Analysis (full day cumulative)
-            if cvd_daily > 5000:
+            if cvd_daily > 10000:
                 daily_cvd_signal = 'Strong Buying'
-            elif cvd_daily > 1000:
+            elif cvd_daily > 5000:
                 daily_cvd_signal = 'Buying'
-            elif cvd_daily < -5000:
+            elif cvd_daily < -10000:
                 daily_cvd_signal = 'Strong Selling'
-            elif cvd_daily < -1000:
+            elif cvd_daily < -5000:
                 daily_cvd_signal = 'Selling'
             else:
                 daily_cvd_signal = 'Neutral'
             
             # CVD Delta Analysis for short timeframes (momentum detection)
             # 1-minute CVD Delta
-            if cvd_delta_1min > 500:
+            if cvd_delta_1min > 300:
                 cvd_delta_1min_signal = 'Strong Buying Momentum'
-            elif cvd_delta_1min > 100:
+            elif cvd_delta_1min > 150:
                 cvd_delta_1min_signal = 'Buying Momentum'
-            elif cvd_delta_1min < -500:
+            elif cvd_delta_1min < -300:
                 cvd_delta_1min_signal = 'Strong Selling Momentum'
-            elif cvd_delta_1min < -100:
+            elif cvd_delta_1min < -150:
                 cvd_delta_1min_signal = 'Selling Momentum'
             else:
                 cvd_delta_1min_signal = 'Neutral Momentum'
@@ -491,11 +491,11 @@ class OBICVDConfirmation:
             # 2-minute CVD Delta
             if cvd_delta_2min > 800:
                 cvd_delta_2min_signal = 'Strong Buying Momentum'
-            elif cvd_delta_2min > 200:
+            elif cvd_delta_2min > 400:
                 cvd_delta_2min_signal = 'Buying Momentum'
             elif cvd_delta_2min < -800:
                 cvd_delta_2min_signal = 'Strong Selling Momentum'
-            elif cvd_delta_2min < -200:
+            elif cvd_delta_2min < -400:
                 cvd_delta_2min_signal = 'Selling Momentum'
             else:
                 cvd_delta_2min_signal = 'Neutral Momentum'
@@ -503,11 +503,11 @@ class OBICVDConfirmation:
             # 5-minute CVD Delta
             if cvd_delta_5min > 1500:
                 cvd_delta_5min_signal = 'Strong Buying Momentum'
-            elif cvd_delta_5min > 400:
+            elif cvd_delta_5min > 800:
                 cvd_delta_5min_signal = 'Buying Momentum'
             elif cvd_delta_5min < -1500:
                 cvd_delta_5min_signal = 'Strong Selling Momentum'
-            elif cvd_delta_5min < -400:
+            elif cvd_delta_5min < -800:
                 cvd_delta_5min_signal = 'Selling Momentum'
             else:
                 cvd_delta_5min_signal = 'Neutral Momentum'
