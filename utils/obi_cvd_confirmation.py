@@ -22,7 +22,8 @@ class OBICVDConfirmation:
         
         # Storage for each instrument
         self.instrument_data = {}  # Store CVD and OBI data per instrument
-        self.last_cvd_reset = {}   # Track when CVD was last reset
+        self.last_cvd_reset = {}   # Track when CVD was last reset (30-min)
+        self.last_cvd_hourly_reset = {}   # Track when CVD hourly was last reset (1-hour)
         self.last_obi_reset = {}   # Track when OBI 1-min rolling average was last reset
         self.last_obi_2min_reset = {}   # Track when OBI 2-min rolling average was last reset
         self.last_cvd_rolling_reset = {}  # Track when CVD rolling average was last reset
@@ -31,7 +32,9 @@ class OBICVDConfirmation:
         """Initialize data storage for a new instrument."""
         if instrument_key not in self.instrument_data:
             self.instrument_data[instrument_key] = {
-                'cvd': 0.0,  # Cumulative Volume Delta (total accumulation)
+                'cvd': 0.0,  # Cumulative Volume Delta (30-minute accumulation)
+                'cvd_hourly': 0.0,  # Cumulative Volume Delta (1-hour accumulation)
+                'cvd_daily': 0.0,  # Cumulative Volume Delta (daily accumulation)
                 'obi_history': deque(maxlen=self.obi_window_seconds * 3),  # Store OBI values with timestamps
                 'cvd_history': deque(maxlen=120 * 2),  # Store CVD increments for 2-minute rolling average
                 'current_obi': 0.0,  # Current tick OBI value
@@ -44,6 +47,7 @@ class OBICVDConfirmation:
                 'tick_count': 0
             }
             self.last_cvd_reset[instrument_key] = datetime.now()
+            self.last_cvd_hourly_reset[instrument_key] = datetime.now()
             self.last_obi_reset[instrument_key] = datetime.now()
             self.last_obi_2min_reset[instrument_key] = datetime.now()
             self.last_cvd_rolling_reset[instrument_key] = datetime.now()
@@ -181,7 +185,11 @@ class OBICVDConfirmation:
             current_cvd_increment = self.calculate_cvd_increment(tick_data, instrument_key)
             if current_cvd_increment is not None:
                 instrument_data['current_cvd_increment'] = current_cvd_increment
-                instrument_data['cvd'] += current_cvd_increment
+                
+                # Update all CVD accumulations
+                instrument_data['cvd'] += current_cvd_increment  # 30-minute CVD
+                instrument_data['cvd_hourly'] += current_cvd_increment  # 1-hour CVD
+                instrument_data['cvd_daily'] += current_cvd_increment  # Daily CVD
                 
                 # Add to CVD history for rolling average
                 instrument_data['cvd_history'].append({
@@ -198,9 +206,31 @@ class OBICVDConfirmation:
             # Check if CVD total should be reset (every 30 minutes)
             time_since_cvd_reset = current_time - self.last_cvd_reset[instrument_key]
             if time_since_cvd_reset.total_seconds() > (self.cvd_reset_minutes * 60):
-                print(f"🔄 Resetting total CVD for {instrument_key} after {self.cvd_reset_minutes} minutes")
+                print(f"🔄 Resetting 30-min CVD for {instrument_key} after {self.cvd_reset_minutes} minutes")
                 instrument_data['cvd'] = 0.0
                 self.last_cvd_reset[instrument_key] = current_time
+            
+            # Check if CVD hourly should be reset (every 1 hour)
+            time_since_cvd_hourly_reset = current_time - self.last_cvd_hourly_reset[instrument_key]
+            if time_since_cvd_hourly_reset.total_seconds() > 3600:  # 1 hour = 3600 seconds
+                print(f"🔄 Resetting 1-hour CVD for {instrument_key} after 1 hour")
+                instrument_data['cvd_hourly'] = 0.0
+                self.last_cvd_hourly_reset[instrument_key] = current_time
+            
+            # Check if CVD daily should be reset (at market close or start of new day)
+            # Reset daily CVD at 3:30 PM IST (market close) or if it's a new trading day
+            import pytz
+            ist = pytz.timezone('Asia/Kolkata')
+            current_time_ist = current_time.astimezone(ist)
+            
+            # Check if it's after 3:30 PM and we haven't reset today
+            if current_time_ist.hour >= 15 and current_time_ist.minute >= 30:
+                last_reset_ist = self.last_cvd_hourly_reset[instrument_key].astimezone(ist)
+                if last_reset_ist.date() < current_time_ist.date():
+                    print(f"🔄 Resetting daily CVD for {instrument_key} at market close")
+                    instrument_data['cvd_daily'] = 0.0
+                    # Update last reset to prevent multiple resets on same day
+                    self.last_cvd_hourly_reset[instrument_key] = current_time
             
             # Check if OBI 1-minute rolling average should be reset (every 1 minute)
             time_since_obi_reset = current_time - self.last_obi_reset[instrument_key]
@@ -264,6 +294,8 @@ class OBICVDConfirmation:
                 current_cvd_increment if current_cvd_increment is not None else 0.0,
                 rolling_avg_cvd_2min,
                 instrument_data['cvd'],
+                instrument_data['cvd_hourly'],
+                instrument_data['cvd_daily'],
                 legacy_avg_obi
             )
             
@@ -281,7 +313,7 @@ class OBICVDConfirmation:
     
     def _analyze_granular_confirmation(self, instrument_key: str, current_obi: float, 
                                           rolling_obi_1min: float, rolling_obi_2min: float, current_cvd_increment: float,
-                                          rolling_cvd_2min: float, total_cvd: float, legacy_avg_obi: float) -> Dict:
+                                          rolling_cvd_2min: float, total_cvd: float, cvd_hourly: float, cvd_daily: float, legacy_avg_obi: float) -> Dict:
         """Analyze granular OBI and CVD to provide detailed confirmation signals."""
         try:
             # Handle None values for current_obi
@@ -352,7 +384,7 @@ class OBICVDConfirmation:
             else:
                 rolling_cvd_signal = 'Neutral'
             
-            # Total CVD Analysis (cumulative)
+            # Total CVD Analysis (30-minute cumulative)
             if total_cvd > 1000:
                 total_cvd_signal = 'Strong Buying'
             elif total_cvd > 100:
@@ -363,6 +395,30 @@ class OBICVDConfirmation:
                 total_cvd_signal = 'Selling'
             else:
                 total_cvd_signal = 'Neutral'
+            
+            # Hourly CVD Analysis (1-hour cumulative)
+            if cvd_hourly > 2000:
+                hourly_cvd_signal = 'Strong Buying'
+            elif cvd_hourly > 300:
+                hourly_cvd_signal = 'Buying'
+            elif cvd_hourly < -2000:
+                hourly_cvd_signal = 'Strong Selling'
+            elif cvd_hourly < -300:
+                hourly_cvd_signal = 'Selling'
+            else:
+                hourly_cvd_signal = 'Neutral'
+            
+            # Daily CVD Analysis (full day cumulative)
+            if cvd_daily > 5000:
+                daily_cvd_signal = 'Strong Buying'
+            elif cvd_daily > 1000:
+                daily_cvd_signal = 'Buying'
+            elif cvd_daily < -5000:
+                daily_cvd_signal = 'Strong Selling'
+            elif cvd_daily < -1000:
+                daily_cvd_signal = 'Selling'
+            else:
+                daily_cvd_signal = 'Neutral'
             
             # Combined Confirmation based on rolling averages
             if (('Bullish' in rolling_obi_1min_signal or 'Bullish' in rolling_obi_2min_signal) and 'Buying' in rolling_cvd_signal):
@@ -394,6 +450,10 @@ class OBICVDConfirmation:
                 # Total accumulation
                 'cvd_total': float(total_cvd),
                 'cvd_total_signal': total_cvd_signal,
+                'cvd_hourly': float(cvd_hourly),
+                'cvd_hourly_signal': hourly_cvd_signal,
+                'cvd_daily': float(cvd_daily),
+                'cvd_daily_signal': daily_cvd_signal,
                 
                 # Legacy support
                 'obi_average': float(legacy_avg_obi),  # Keep for backward compatibility
@@ -439,6 +499,8 @@ class OBICVDConfirmation:
         current_obi = data.get('current_obi', 0.0)
         current_cvd_increment = data.get('current_cvd_increment', 0.0)
         total_cvd = data.get('cvd', 0.0)
+        cvd_hourly = data.get('cvd_hourly', 0.0)
+        cvd_daily = data.get('cvd_daily', 0.0)
         
         # Calculate rolling averages
         # OBI 1-minute rolling average
@@ -477,6 +539,8 @@ class OBICVDConfirmation:
             current_cvd_increment if current_cvd_increment is not None else 0.0,
             rolling_avg_cvd_2min,
             total_cvd,
+            cvd_hourly,
+            cvd_daily,
             legacy_avg_obi
         )
     

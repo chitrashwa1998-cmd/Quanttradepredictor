@@ -667,7 +667,7 @@ def show_live_data_page():
                                     st.metric(f"{combined_color} Order Flow", combined, f"Ticks: {obi_cvd_data.get('tick_count', 0)}")
 
                                 with col2:
-                                    # Total CVD (cumulative)
+                                    # Total CVD (30-minute cumulative)
                                     total_cvd = obi_cvd_data.get('cvd_total', 0.0)
                                     total_cvd_signal = obi_cvd_data.get('cvd_total_signal', 'Unknown')
                                     if 'Buying' in total_cvd_signal:
@@ -677,7 +677,36 @@ def show_live_data_page():
                                     else:
                                         total_cvd_color = "⚪"
 
-                                    st.metric(f"{total_cvd_color} Total CVD", f"{total_cvd:.0f}", total_cvd_signal)
+                                    st.metric(f"{total_cvd_color} Total CVD (30m)", f"{total_cvd:.0f}", total_cvd_signal)
+
+                                # Additional CVD periods
+                                col1_cvd, col2_cvd = st.columns(2)
+                                
+                                with col1_cvd:
+                                    # Hourly CVD (1-hour cumulative)
+                                    hourly_cvd = obi_cvd_data.get('cvd_hourly', 0.0)
+                                    hourly_cvd_signal = obi_cvd_data.get('cvd_hourly_signal', 'Unknown')
+                                    if 'Buying' in hourly_cvd_signal:
+                                        hourly_cvd_color = "🟢"
+                                    elif 'Selling' in hourly_cvd_signal:
+                                        hourly_cvd_color = "🔴"
+                                    else:
+                                        hourly_cvd_color = "⚪"
+
+                                    st.metric(f"{hourly_cvd_color} Hourly CVD (1h)", f"{hourly_cvd:.0f}", hourly_cvd_signal)
+                                
+                                with col2_cvd:
+                                    # Daily CVD (full day cumulative)
+                                    daily_cvd = obi_cvd_data.get('cvd_daily', 0.0)
+                                    daily_cvd_signal = obi_cvd_data.get('cvd_daily_signal', 'Unknown')
+                                    if 'Buying' in daily_cvd_signal:
+                                        daily_cvd_color = "🟢"
+                                    elif 'Selling' in daily_cvd_signal:
+                                        daily_cvd_color = "🔴"
+                                    else:
+                                        daily_cvd_color = "⚪"
+
+                                    st.metric(f"{daily_cvd_color} Daily CVD", f"{daily_cvd:.0f}", daily_cvd_signal)
 
                                 st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
                                 st.divider()
