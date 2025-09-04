@@ -760,6 +760,85 @@ def show_live_data_page():
                     for instrument_key, prediction in live_predictions.items():
                         display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
 
+                        # ML Model predictions display (OBI+CVD now shown independently above)
+                        st.markdown(f"**🤖 ML Model Predictions - {display_name}**")
+
+                        # Show prediction details in expandable sections
+                        with st.expander(f"📊 Prediction Details - {display_name}", expanded=False):
+
+                            # Get detailed summary
+                            summary = st.session_state.live_prediction_pipeline.get_instrument_summary(instrument_key)
+
+                            with st.container():
+                                col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
+
+                                with col1:
+                                    st.markdown(f"**📊 {display_name}**")
+
+                                    # Direction prediction
+                                    if 'direction' in prediction:
+                                        direction_data = prediction.get('direction', {})
+                                        if isinstance(direction_data, dict):
+                                            direction = direction_data.get('prediction', 'Unknown')
+                                            confidence = direction_data.get('confidence', 0.5)
+                                        else:
+                                            direction = prediction.get('direction', 'Unknown')
+                                            confidence = prediction.get('confidence', 0.5)
+
+                                        direction_color = "🟢" if direction == 'Bullish' else "🔴"
+                                        st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
+
+                                with col2:
+                                    # Volatility prediction
+                                    if 'volatility' in prediction:
+                                        vol_data = prediction['volatility']
+                                        vol_level = vol_data.get('prediction', 'Unknown')
+                                        vol_value = vol_data.get('value', 0.0)
+                                        vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
+                                        st.markdown(f"**{vol_color} Volatility:** {vol_level}")
+                                        st.markdown(f"**📊 Predicted Vol:** {vol_value:.4f} ({vol_value*100:.2f}%)")
+
+                                    # Profit probability
+                                    if 'profit_probability' in prediction:
+                                        profit_data = prediction['profit_probability']
+                                        profit_level = profit_data.get('prediction', 'Unknown')
+                                        profit_conf = profit_data.get('confidence', 0.5)
+                                        profit_color = "💰" if profit_level == 'High' else "⚠️"
+                                        st.markdown(f"**{profit_color} Profit:** {profit_level} ({profit_conf:.1%})")
+
+                                with col3:
+                                    # Reversal prediction
+                                    if 'reversal' in prediction:
+                                        reversal_data = prediction['reversal']
+                                        reversal_expected = reversal_data.get('prediction', 'Unknown')
+                                        reversal_conf = reversal_data.get('confidence', 0.5)
+                                        reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
+                                        st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
+
+                                    # Models used
+                                    models_used = prediction.get('models_used', [])
+                                    st.markdown(f"**📋 Active Models:** {len(models_used)}/4")
+
+                                with col4:
+                                    pred_time = prediction['generated_at'].strftime('%H:%M:%S')
+                                    candle_time = prediction['timestamp'].strftime('%H:%M:%S')
+                                    st.markdown(f"**🕐 Candle Close Time:** {candle_time}")
+                                    st.markdown(f"**⏰ Prediction Generated:** {pred_time}")
+                                    st.markdown(f"**💰 Candle Close Price:** ₹{prediction['current_price']:.2f}")
+                                    st.markdown(f"**📊 Volume:** {prediction['volume']:,}")
+                                    st.markdown(f"**🤖 Models Used:** {len(prediction['models_used'])}")
+
+                                    # Show prediction type
+                                    if prediction.get('candle_close_prediction'):
+                                        st.success("✅ Complete 5-minute candle prediction")
+
+                            # Show prediction timestamp
+                            time_ago = datetime.now() - prediction['generated_at']
+                            st.caption(f"Generated {time_ago.total_seconds():.0f}s ago")
+
+
+                        st.divider()
+
                         # Show Black-Scholes information if available
                         if 'black_scholes' in prediction:
                             bs_data = prediction['black_scholes']
@@ -853,87 +932,13 @@ def show_live_data_page():
                                     update_time = prediction['bs_last_update']
                                     if hasattr(update_time, 'strftime'):
                                         st.caption(f"🔄 Last updated: {update_time.strftime('%H:%M:%S')}")
+                                
+                                st.divider()
+                                
                             elif prediction.get('has_volatility_for_bs', False):
                                 st.info("⏳ Black-Scholes fair values will appear once volatility prediction is available...")
                             else:
                                 st.info("📊 Black-Scholes fair values require volatility predictions to be generated first.")
-
-                        # ML Model predictions display (OBI+CVD now shown independently above)
-                        st.markdown(f"**🤖 ML Model Predictions - {display_name}**")
-
-                        # Show prediction details in expandable sections
-                        with st.expander(f"📊 Prediction Details - {display_name}", expanded=False):
-
-                            # Get detailed summary
-                            summary = st.session_state.live_prediction_pipeline.get_instrument_summary(instrument_key)
-
-                            with st.container():
-                                col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
-
-                                with col1:
-                                    st.markdown(f"**📊 {display_name}**")
-
-                                    # Direction prediction
-                                    if 'direction' in prediction:
-                                        direction_data = prediction.get('direction', {})
-                                        if isinstance(direction_data, dict):
-                                            direction = direction_data.get('prediction', 'Unknown')
-                                            confidence = direction_data.get('confidence', 0.5)
-                                        else:
-                                            direction = prediction.get('direction', 'Unknown')
-                                            confidence = prediction.get('confidence', 0.5)
-
-                                        direction_color = "🟢" if direction == 'Bullish' else "🔴"
-                                        st.markdown(f"**{direction_color} Direction:** {direction} ({confidence:.1%})")
-
-                                with col2:
-                                    # Volatility prediction
-                                    if 'volatility' in prediction:
-                                        vol_data = prediction['volatility']
-                                        vol_level = vol_data.get('prediction', 'Unknown')
-                                        vol_value = vol_data.get('value', 0.0)
-                                        vol_color = "🔥" if vol_level in ['High', 'Very High'] else "🔵"
-                                        st.markdown(f"**{vol_color} Volatility:** {vol_level}")
-                                        st.markdown(f"**📊 Predicted Vol:** {vol_value:.4f} ({vol_value*100:.2f}%)")
-
-                                    # Profit probability
-                                    if 'profit_probability' in prediction:
-                                        profit_data = prediction['profit_probability']
-                                        profit_level = profit_data.get('prediction', 'Unknown')
-                                        profit_conf = profit_data.get('confidence', 0.5)
-                                        profit_color = "💰" if profit_level == 'High' else "⚠️"
-                                        st.markdown(f"**{profit_color} Profit:** {profit_level} ({profit_conf:.1%})")
-
-                                with col3:
-                                    # Reversal prediction
-                                    if 'reversal' in prediction:
-                                        reversal_data = prediction['reversal']
-                                        reversal_expected = reversal_data.get('prediction', 'Unknown')
-                                        reversal_conf = reversal_data.get('confidence', 0.5)
-                                        reversal_color = "🔄" if reversal_expected == 'Yes' else "➡️"
-                                        st.markdown(f"**{reversal_color} Reversal:** {reversal_expected} ({reversal_conf:.1%})")
-
-                                    # Models used
-                                    models_used = prediction.get('models_used', [])
-                                    st.markdown(f"**📋 Active Models:** {len(models_used)}/4")
-
-                                with col4:
-                                    pred_time = prediction['generated_at'].strftime('%H:%M:%S')
-                                    candle_time = prediction['timestamp'].strftime('%H:%M:%S')
-                                    st.markdown(f"**🕐 Candle Close Time:** {candle_time}")
-                                    st.markdown(f"**⏰ Prediction Generated:** {pred_time}")
-                                    st.markdown(f"**💰 Candle Close Price:** ₹{prediction['current_price']:.2f}")
-                                    st.markdown(f"**📊 Volume:** {prediction['volume']:,}")
-                                    st.markdown(f"**🤖 Models Used:** {len(prediction['models_used'])}")
-
-                                    # Show prediction type
-                                    if prediction.get('candle_close_prediction'):
-                                        st.success("✅ Complete 5-minute candle prediction")
-
-                            # Show prediction timestamp
-                            time_ago = datetime.now() - prediction['generated_at']
-                            st.caption(f"Generated {time_ago.total_seconds():.0f}s ago")
-
 
                         st.divider()
 
