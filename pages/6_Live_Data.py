@@ -708,6 +708,49 @@ def show_live_data_page():
 
                                     st.metric(f"{daily_cvd_color} Daily CVD", f"{daily_cvd:.0f}", daily_cvd_signal)
 
+                                # CVD Delta Momentum Analysis (Short Timeframes)
+                                st.markdown("**⚡ CVD Delta Momentum Analysis**")
+                                col1_delta, col2_delta, col3_delta = st.columns(3)
+                                
+                                with col1_delta:
+                                    # 1-minute CVD Delta
+                                    cvd_delta_1min = obi_cvd_data.get('cvd_delta_1min', 0.0)
+                                    cvd_delta_1min_signal = obi_cvd_data.get('cvd_delta_1min_signal', 'Unknown')
+                                    if 'Buying' in cvd_delta_1min_signal:
+                                        delta_1min_color = "🟢"
+                                    elif 'Selling' in cvd_delta_1min_signal:
+                                        delta_1min_color = "🔴"
+                                    else:
+                                        delta_1min_color = "⚪"
+
+                                    st.metric(f"{delta_1min_color} CVD Delta (1m)", f"{cvd_delta_1min:.0f}", cvd_delta_1min_signal)
+                                
+                                with col2_delta:
+                                    # 2-minute CVD Delta
+                                    cvd_delta_2min = obi_cvd_data.get('cvd_delta_2min', 0.0)
+                                    cvd_delta_2min_signal = obi_cvd_data.get('cvd_delta_2min_signal', 'Unknown')
+                                    if 'Buying' in cvd_delta_2min_signal:
+                                        delta_2min_color = "🟢"
+                                    elif 'Selling' in cvd_delta_2min_signal:
+                                        delta_2min_color = "🔴"
+                                    else:
+                                        delta_2min_color = "⚪"
+
+                                    st.metric(f"{delta_2min_color} CVD Delta (2m)", f"{cvd_delta_2min:.0f}", cvd_delta_2min_signal)
+                                
+                                with col3_delta:
+                                    # 5-minute CVD Delta
+                                    cvd_delta_5min = obi_cvd_data.get('cvd_delta_5min', 0.0)
+                                    cvd_delta_5min_signal = obi_cvd_data.get('cvd_delta_5min_signal', 'Unknown')
+                                    if 'Buying' in cvd_delta_5min_signal:
+                                        delta_5min_color = "🟢"
+                                    elif 'Selling' in cvd_delta_5min_signal:
+                                        delta_5min_color = "🔴"
+                                    else:
+                                        delta_5min_color = "⚪"
+
+                                    st.metric(f"{delta_5min_color} CVD Delta (5m)", f"{cvd_delta_5min:.0f}", cvd_delta_5min_signal)
+
                                 st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
                                 st.divider()
 

@@ -28,6 +28,11 @@ class OBICVDConfirmation:
         self.last_obi_2min_reset = {}   # Track when OBI 2-min rolling average was last reset
         self.last_cvd_rolling_reset = {}  # Track when CVD rolling average was last reset
         
+        # CVD Delta tracking for short timeframes
+        self.last_cvd_1min_reset = {}   # Track when CVD 1-min was last reset
+        self.last_cvd_2min_reset = {}   # Track when CVD 2-min was last reset  
+        self.last_cvd_5min_reset = {}   # Track when CVD 5-min was last reset
+        
     def _initialize_instrument(self, instrument_key: str):
         """Initialize data storage for a new instrument."""
         if instrument_key not in self.instrument_data:
@@ -42,6 +47,15 @@ class OBICVDConfirmation:
                 'rolling_obi_1min': deque(maxlen=60 * 2),  # 1-minute rolling OBI values
                 'rolling_obi_2min': deque(maxlen=120 * 2),  # 2-minute rolling OBI values
                 'rolling_cvd_2min': deque(maxlen=120 * 2),  # 2-minute rolling CVD values
+                
+                # CVD Delta tracking for short timeframes
+                'cvd_delta_1min': 0.0,  # CVD accumulation for 1-minute delta
+                'cvd_delta_2min': 0.0,  # CVD accumulation for 2-minute delta
+                'cvd_delta_5min': 0.0,  # CVD accumulation for 5-minute delta
+                'cvd_delta_1min_prev': 0.0,  # Previous 1-min CVD for delta calculation
+                'cvd_delta_2min_prev': 0.0,  # Previous 2-min CVD for delta calculation
+                'cvd_delta_5min_prev': 0.0,  # Previous 5-min CVD for delta calculation
+                
                 'last_price': 0.0,
                 'last_volume': 0,
                 'tick_count': 0
@@ -51,6 +65,11 @@ class OBICVDConfirmation:
             self.last_obi_reset[instrument_key] = datetime.now()
             self.last_obi_2min_reset[instrument_key] = datetime.now()
             self.last_cvd_rolling_reset[instrument_key] = datetime.now()
+            
+            # Initialize CVD Delta reset timers
+            self.last_cvd_1min_reset[instrument_key] = datetime.now()
+            self.last_cvd_2min_reset[instrument_key] = datetime.now()
+            self.last_cvd_5min_reset[instrument_key] = datetime.now()
     
     def calculate_obi(self, tick_data: Dict) -> Optional[float]:
         """
@@ -191,6 +210,11 @@ class OBICVDConfirmation:
                 instrument_data['cvd_hourly'] += current_cvd_increment  # 1-hour CVD
                 instrument_data['cvd_daily'] += current_cvd_increment  # Daily CVD
                 
+                # Update CVD Delta accumulations for short timeframes
+                instrument_data['cvd_delta_1min'] += current_cvd_increment  # 1-minute CVD delta
+                instrument_data['cvd_delta_2min'] += current_cvd_increment  # 2-minute CVD delta
+                instrument_data['cvd_delta_5min'] += current_cvd_increment  # 5-minute CVD delta
+                
                 # Add to CVD history for rolling average
                 instrument_data['cvd_history'].append({
                     'timestamp': current_time,
@@ -253,6 +277,33 @@ class OBICVDConfirmation:
                 instrument_data['rolling_cvd_2min'].clear()
                 self.last_cvd_rolling_reset[instrument_key] = current_time
             
+            # Check if CVD Delta 1-minute should be reset (every 1 minute)
+            time_since_cvd_1min_reset = current_time - self.last_cvd_1min_reset[instrument_key]
+            if time_since_cvd_1min_reset.total_seconds() > 60:  # Reset every 1 minute
+                print(f"🔄 Resetting CVD Delta 1-min for {instrument_key} after 1 minute")
+                # Store current value as previous for delta calculation
+                instrument_data['cvd_delta_1min_prev'] = instrument_data['cvd_delta_1min']
+                instrument_data['cvd_delta_1min'] = 0.0
+                self.last_cvd_1min_reset[instrument_key] = current_time
+            
+            # Check if CVD Delta 2-minute should be reset (every 2 minutes)
+            time_since_cvd_2min_reset = current_time - self.last_cvd_2min_reset[instrument_key]
+            if time_since_cvd_2min_reset.total_seconds() > 120:  # Reset every 2 minutes
+                print(f"🔄 Resetting CVD Delta 2-min for {instrument_key} after 2 minutes")
+                # Store current value as previous for delta calculation
+                instrument_data['cvd_delta_2min_prev'] = instrument_data['cvd_delta_2min']
+                instrument_data['cvd_delta_2min'] = 0.0
+                self.last_cvd_2min_reset[instrument_key] = current_time
+            
+            # Check if CVD Delta 5-minute should be reset (every 5 minutes)
+            time_since_cvd_5min_reset = current_time - self.last_cvd_5min_reset[instrument_key]
+            if time_since_cvd_5min_reset.total_seconds() > 300:  # Reset every 5 minutes
+                print(f"🔄 Resetting CVD Delta 5-min for {instrument_key} after 5 minutes")
+                # Store current value as previous for delta calculation
+                instrument_data['cvd_delta_5min_prev'] = instrument_data['cvd_delta_5min']
+                instrument_data['cvd_delta_5min'] = 0.0
+                self.last_cvd_5min_reset[instrument_key] = current_time
+            
             # Calculate rolling averages
             # OBI 1-minute rolling average
             recent_obi_1min = [
@@ -296,7 +347,10 @@ class OBICVDConfirmation:
                 instrument_data['cvd'],
                 instrument_data['cvd_hourly'],
                 instrument_data['cvd_daily'],
-                legacy_avg_obi
+                legacy_avg_obi,
+                instrument_data['cvd_delta_1min'],
+                instrument_data['cvd_delta_2min'],
+                instrument_data['cvd_delta_5min']
             )
             
         except Exception as e:
@@ -313,7 +367,8 @@ class OBICVDConfirmation:
     
     def _analyze_granular_confirmation(self, instrument_key: str, current_obi: float, 
                                           rolling_obi_1min: float, rolling_obi_2min: float, current_cvd_increment: float,
-                                          rolling_cvd_2min: float, total_cvd: float, cvd_hourly: float, cvd_daily: float, legacy_avg_obi: float) -> Dict:
+                                          rolling_cvd_2min: float, total_cvd: float, cvd_hourly: float, cvd_daily: float, legacy_avg_obi: float,
+                                          cvd_delta_1min: float, cvd_delta_2min: float, cvd_delta_5min: float) -> Dict:
         """Analyze granular OBI and CVD to provide detailed confirmation signals."""
         try:
             # Handle None values for current_obi
@@ -420,6 +475,43 @@ class OBICVDConfirmation:
             else:
                 daily_cvd_signal = 'Neutral'
             
+            # CVD Delta Analysis for short timeframes (momentum detection)
+            # 1-minute CVD Delta
+            if cvd_delta_1min > 500:
+                cvd_delta_1min_signal = 'Strong Buying Momentum'
+            elif cvd_delta_1min > 100:
+                cvd_delta_1min_signal = 'Buying Momentum'
+            elif cvd_delta_1min < -500:
+                cvd_delta_1min_signal = 'Strong Selling Momentum'
+            elif cvd_delta_1min < -100:
+                cvd_delta_1min_signal = 'Selling Momentum'
+            else:
+                cvd_delta_1min_signal = 'Neutral Momentum'
+            
+            # 2-minute CVD Delta
+            if cvd_delta_2min > 800:
+                cvd_delta_2min_signal = 'Strong Buying Momentum'
+            elif cvd_delta_2min > 200:
+                cvd_delta_2min_signal = 'Buying Momentum'
+            elif cvd_delta_2min < -800:
+                cvd_delta_2min_signal = 'Strong Selling Momentum'
+            elif cvd_delta_2min < -200:
+                cvd_delta_2min_signal = 'Selling Momentum'
+            else:
+                cvd_delta_2min_signal = 'Neutral Momentum'
+            
+            # 5-minute CVD Delta
+            if cvd_delta_5min > 1500:
+                cvd_delta_5min_signal = 'Strong Buying Momentum'
+            elif cvd_delta_5min > 400:
+                cvd_delta_5min_signal = 'Buying Momentum'
+            elif cvd_delta_5min < -1500:
+                cvd_delta_5min_signal = 'Strong Selling Momentum'
+            elif cvd_delta_5min < -400:
+                cvd_delta_5min_signal = 'Selling Momentum'
+            else:
+                cvd_delta_5min_signal = 'Neutral Momentum'
+            
             # Combined Confirmation based on rolling averages
             if (('Bullish' in rolling_obi_1min_signal or 'Bullish' in rolling_obi_2min_signal) and 'Buying' in rolling_cvd_signal):
                 combined_confirmation = 'Strong Bullish'
@@ -455,6 +547,14 @@ class OBICVDConfirmation:
                 'cvd_daily': float(cvd_daily),
                 'cvd_daily_signal': daily_cvd_signal,
                 
+                # CVD Delta momentum (short timeframes)
+                'cvd_delta_1min': float(cvd_delta_1min),
+                'cvd_delta_1min_signal': cvd_delta_1min_signal,
+                'cvd_delta_2min': float(cvd_delta_2min),
+                'cvd_delta_2min_signal': cvd_delta_2min_signal,
+                'cvd_delta_5min': float(cvd_delta_5min),
+                'cvd_delta_5min_signal': cvd_delta_5min_signal,
+                
                 # Legacy support
                 'obi_average': float(legacy_avg_obi),  # Keep for backward compatibility
                 'cvd_current': float(total_cvd),  # Legacy field
@@ -484,6 +584,12 @@ class OBICVDConfirmation:
                 'cvd_rolling_signal': 'Error',
                 'cvd_total': 0.0,
                 'cvd_total_signal': 'Error',
+                'cvd_delta_1min': 0.0,
+                'cvd_delta_1min_signal': 'Error',
+                'cvd_delta_2min': 0.0,
+                'cvd_delta_2min_signal': 'Error',
+                'cvd_delta_5min': 0.0,
+                'cvd_delta_5min_signal': 'Error',
                 'combined_confirmation': 'Error'
             }
     
@@ -541,7 +647,10 @@ class OBICVDConfirmation:
             total_cvd,
             cvd_hourly,
             cvd_daily,
-            legacy_avg_obi
+            legacy_avg_obi,
+            data.get('cvd_delta_1min', 0.0),
+            data.get('cvd_delta_2min', 0.0),
+            data.get('cvd_delta_5min', 0.0)
         )
     
     def reset_instrument(self, instrument_key: str):
