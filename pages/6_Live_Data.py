@@ -571,7 +571,7 @@ def show_live_data_page():
                     # Independent OBI+CVD Market Analysis Section
                     if independent_obi_cvd:
                         st.subheader("📈 Independent OBI+CVD Market Analysis")
-                        st.info("🔍 **Order Flow Analysis** - Independent of ML model predictions")
+                        st.info("🔍 *Order Book Imbalance & Cumulative Volume Delta (53001 ONLY)*")
 
                         # Create columns for OBI+CVD display
                         obi_cvd_cols = st.columns(min(2, len(independent_obi_cvd)))
@@ -681,7 +681,7 @@ def show_live_data_page():
 
                                 # Additional CVD periods
                                 col1_cvd, col2_cvd = st.columns(2)
-                                
+
                                 with col1_cvd:
                                     # Hourly CVD (1-hour cumulative)
                                     hourly_cvd = obi_cvd_data.get('cvd_hourly', 0.0)
@@ -694,7 +694,7 @@ def show_live_data_page():
                                         hourly_cvd_color = "⚪"
 
                                     st.metric(f"{hourly_cvd_color} Hourly CVD (1h)", f"{hourly_cvd:.0f}", hourly_cvd_signal)
-                                
+
                                 with col2_cvd:
                                     # Daily CVD (full day cumulative)
                                     daily_cvd = obi_cvd_data.get('cvd_daily', 0.0)
@@ -711,7 +711,7 @@ def show_live_data_page():
                                 # CVD Delta Momentum Analysis (Short Timeframes)
                                 st.markdown("**⚡ CVD Delta Momentum Analysis**")
                                 col1_delta, col2_delta, col3_delta = st.columns(3)
-                                
+
                                 with col1_delta:
                                     # 1-minute CVD Delta
                                     cvd_delta_1min = obi_cvd_data.get('cvd_delta_1min', 0.0)
@@ -724,7 +724,7 @@ def show_live_data_page():
                                         delta_1min_color = "⚪"
 
                                     st.metric(f"{delta_1min_color} CVD Delta (1m)", f"{cvd_delta_1min:.0f}", cvd_delta_1min_signal)
-                                
+
                                 with col2_delta:
                                     # 2-minute CVD Delta
                                     cvd_delta_2min = obi_cvd_data.get('cvd_delta_2min', 0.0)
@@ -737,7 +737,7 @@ def show_live_data_page():
                                         delta_2min_color = "⚪"
 
                                     st.metric(f"{delta_2min_color} CVD Delta (2m)", f"{cvd_delta_2min:.0f}", cvd_delta_2min_signal)
-                                
+
                                 with col3_delta:
                                     # 5-minute CVD Delta
                                     cvd_delta_5min = obi_cvd_data.get('cvd_delta_5min', 0.0)
@@ -932,9 +932,9 @@ def show_live_data_page():
                                     update_time = prediction['bs_last_update']
                                     if hasattr(update_time, 'strftime'):
                                         st.caption(f"🔄 Last updated: {update_time.strftime('%H:%M:%S')}")
-                                
+
                                 st.divider()
-                                
+
                             elif prediction.get('has_volatility_for_bs', False):
                                 st.info("⏳ Black-Scholes fair values will appear once volatility prediction is available...")
                             else:

@@ -649,11 +649,18 @@ class LivePredictionPipeline:
                         # Get latest tick data from ML models instrument
                         latest_tick = self.live_data_manager.ws_client.get_latest_tick(instrument_key)
 
-                        # Also update OBI+CVD with dedicated futures instrument data
+                        # Update OBI+CVD ONLY with dedicated 53001 futures instrument data - NO FALLBACK
                         if self.obi_cvd_instrument in self.live_data_manager.ws_client.last_tick_data:
                             obi_cvd_tick = self.live_data_manager.ws_client.get_latest_tick(self.obi_cvd_instrument)
-                            if obi_cvd_tick:
-                                obi_cvd_results = self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
+                            if obi_cvd_tick and '53001' in str(self.obi_cvd_instrument):
+                                # Strict validation - only process 53001 data
+                                if '53001' in str(obi_cvd_tick.get('instrument_token', '')):
+                                    obi_cvd_results = self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
+                                    print(f"✅ OBI+CVD updated with 53001 data")
+                                else:
+                                    print(f"⚠️ Skipping OBI+CVD update - tick not from 53001: {obi_cvd_tick.get('instrument_token', 'unknown')}")
+                            else:
+                                print(f"⚠️ Waiting for 53001 tick data for OBI+CVD...")
 
                         if latest_tick and 'ltp' in latest_tick:
                             current_price = float(latest_tick['ltp'])
@@ -688,8 +695,8 @@ class LivePredictionPipeline:
                                                 obi_cvd_signal = obi_cvd_status.get('combined_confirmation', 'Unknown')
 
                                         futures_name = self.obi_cvd_instrument.split('|')[-1] if '|' in self.obi_cvd_instrument else self.obi_cvd_instrument
-                                        print(f"🔧 Live Update: {display_name} @ ₹{current_price:.2f} | Vol: {volatility_value:.4f}→{annualized_vol:.2f}")
-                                        print(f"📊 OBI+CVD ({futures_name}): {obi_cvd_signal}")
+                                        print(f"🔧 Live Update ML+BSM ({display_name}): ₹{current_price:.2f} | Vol: {volatility_value:.4f}→{annualized_vol:.2f}")
+                                        print(f"📊 OBI+CVD (53001 ONLY): {obi_cvd_signal}")
 
                     except Exception as e:
                         print(f"❌ Error calculating Black-Scholes for {instrument_key}: {e}")

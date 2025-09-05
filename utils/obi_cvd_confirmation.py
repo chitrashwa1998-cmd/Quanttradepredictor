@@ -73,13 +73,19 @@ class OBICVDConfirmation:
     
     def calculate_obi(self, tick_data: Dict) -> Optional[float]:
         """
-        Calculate Order Book Imbalance from tick data.
+        Calculate Order Book Imbalance from tick data - ONLY for NSE_FO|53001.
         
         Enhanced to use 5-level market depth when available.
         OBI = (Bid Quantity - Ask Quantity) / (Bid Quantity + Ask Quantity)
         Range: -1 (only sellers) to +1 (only buyers)
         """
         try:
+            # Strict check - only process if we have valid futures tick data
+            instrument_token = tick_data.get('instrument_token', '')
+            if '53001' not in str(instrument_token):
+                print(f"⚠️ OBI calculation skipped - not from 53001 contract: {instrument_token}")
+                return None
+            
             # Check if 5-level depth data is available (new enhanced data)
             total_bid_5_levels = tick_data.get('total_bid_quantity_5_levels', 0)
             total_ask_5_levels = tick_data.get('total_ask_quantity_5_levels', 0)
@@ -88,9 +94,9 @@ class OBICVDConfirmation:
                 # Use 5-level aggregated data for more accurate OBI
                 bid_qty = total_bid_5_levels
                 ask_qty = total_ask_5_levels
-                print(f"🔍 Using 5-level OBI: Bid={bid_qty}, Ask={ask_qty}")
+                print(f"🔍 Using 5-level OBI from 53001: Bid={bid_qty}, Ask={ask_qty}")
             else:
-                # Fallback to Level 1 data
+                # Only use Level 1 data from 53001 - NO FALLBACK
                 bid_qty = tick_data.get('best_bid_quantity', 0) or tick_data.get('bid_qty', 0)
                 ask_qty = tick_data.get('best_ask_quantity', 0) or tick_data.get('ask_qty', 0)
                 
@@ -103,7 +109,9 @@ class OBICVDConfirmation:
                     bid_qty = total_buy
                     ask_qty = total_sell
             
+            # Strict validation - must have valid bid/ask data from 53001
             if bid_qty <= 0 and ask_qty <= 0:
+                print(f"⚠️ No valid bid/ask data from 53001 - waiting for data...")
                 return None
             
             # Calculate OBI
@@ -115,21 +123,28 @@ class OBICVDConfirmation:
             return max(-1.0, min(1.0, obi))  # Clamp to [-1, 1]
             
         except Exception as e:
-            print(f"❌ Error calculating OBI: {e}")
+            print(f"❌ Error calculating OBI from 53001: {e}")
             return None
     
     def calculate_cvd_increment(self, tick_data: Dict, instrument_key: str) -> Optional[float]:
         """
-        Calculate CVD increment from current tick.
+        Calculate CVD increment from current tick - ONLY for NSE_FO|53001.
         
         CVD = ∑(Buy Volume - Sell Volume)
         Uses price comparison to determine if volume is buy or sell initiated.
         """
         try:
+            # Strict check - only process if we have valid 53001 tick data
+            instrument_token = tick_data.get('instrument_token', '')
+            if '53001' not in str(instrument_token) and '53001' not in str(instrument_key):
+                print(f"⚠️ CVD calculation skipped - not from 53001 contract: {instrument_key}")
+                return None
+            
             current_price = tick_data.get('ltp', 0) or tick_data.get('last_traded_price', 0)
             current_volume = tick_data.get('ltq', 0) or tick_data.get('last_traded_quantity', 0)
             
             if current_price <= 0 or current_volume <= 0:
+                print(f"⚠️ No valid price/volume data from 53001 - waiting for data...")
                 return None
             
             # Get previous price for comparison
@@ -169,8 +184,36 @@ class OBICVDConfirmation:
     def update_confirmation(self, instrument_key: str, tick_data: Dict) -> Dict:
         """
         Update OBI and CVD for an instrument and return confirmation analysis.
+        STRICT: Only processes NSE_FO|53001 data - NO FALLBACK.
         """
         try:
+            # Strict validation - ONLY process 53001 data
+            if '53001' not in str(instrument_key):
+                print(f"❌ OBI+CVD update rejected - not 53001 instrument: {instrument_key}")
+                return {
+                    'error': f'Only 53001 instrument supported, got: {instrument_key}',
+                    'obi_current': 0.0,
+                    'obi_rolling_1min': 0.0,
+                    'cvd_current_increment': 0.0,
+                    'cvd_rolling_2min': 0.0,
+                    'cvd_total': 0.0,
+                    'confirmation': 'Waiting for 53001 data'
+                }
+            
+            # Additional validation on tick data
+            tick_instrument = tick_data.get('instrument_token', '')
+            if '53001' not in str(tick_instrument):
+                print(f"❌ OBI+CVD tick rejected - not from 53001: {tick_instrument}")
+                return {
+                    'error': f'Tick not from 53001, got: {tick_instrument}',
+                    'obi_current': 0.0,
+                    'obi_rolling_1min': 0.0,
+                    'cvd_current_increment': 0.0,
+                    'cvd_rolling_2min': 0.0,
+                    'cvd_total': 0.0,
+                    'confirmation': 'Waiting for 53001 data'
+                }
+            
             # Initialize instrument if needed
             self._initialize_instrument(instrument_key)
             
