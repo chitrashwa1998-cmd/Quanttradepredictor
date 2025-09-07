@@ -679,11 +679,7 @@ def show_live_data_page():
 
                                     st.metric(f"{total_cvd_color} Total CVD (30m)", f"{total_cvd:.0f}", total_cvd_signal)
 
-                                # Additional CVD periods
-                                col1_cvd, col2_cvd = st.columns(2)
-
-                                with col1_cvd:
-                                    # Hourly CVD (1-hour cumulative)
+                                    # Hourly CVD (1-hour cumulative) - displayed beside 30-minute CVD
                                     hourly_cvd = obi_cvd_data.get('cvd_hourly', 0.0)
                                     hourly_cvd_signal = obi_cvd_data.get('cvd_hourly_signal', 'Unknown')
                                     if 'Buying' in hourly_cvd_signal:
@@ -695,7 +691,10 @@ def show_live_data_page():
 
                                     st.metric(f"{hourly_cvd_color} Hourly CVD (1h)", f"{hourly_cvd:.0f}", hourly_cvd_signal)
 
-                                with col2_cvd:
+                                # Daily CVD gets its own section
+                                col1_daily = st.columns(1)[0]
+
+                                with col1_daily:
                                     # Daily CVD (full day cumulative)
                                     daily_cvd = obi_cvd_data.get('cvd_daily', 0.0)
                                     daily_cvd_signal = obi_cvd_data.get('cvd_daily_signal', 'Unknown')
