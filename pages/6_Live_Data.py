@@ -448,7 +448,7 @@ def show_live_data_page():
             st.rerun()
 
     with col4:
-        auto_refresh = st.toggle("🔄 Auto Refresh", value=False, key="auto_refresh_main")
+        st.metric("Live Status", "📡 Connected" if st.session_state.is_live_connected else "⏸️ Disconnected")
 
 
 
@@ -535,6 +535,11 @@ def show_live_data_page():
         with predictions_tab:
             if st.session_state.is_prediction_pipeline_active:
                 st.subheader("🎯 Real-time ML Model Predictions")
+
+                # Auto-refresh controls specific to predictions tab
+                col1, col2 = st.columns([3, 1])
+                with col2:
+                    auto_refresh_predictions = st.toggle("🔄 Auto Refresh (30s)", value=False, key="auto_refresh_predictions_only")
 
                 # Show model status
                 pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
@@ -941,16 +946,11 @@ def show_live_data_page():
 
                         st.divider()
 
-                    # Auto-refresh toggle
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button("🔄 Refresh Predictions"):
-                            st.rerun()
+                    # Manual refresh button
+                    if st.button("🔄 Refresh Predictions"):
+                        st.rerun()
 
-                    with col2:
-                        auto_refresh_predictions = st.toggle("🔄 Auto Refresh (30s)", value=False, key="auto_refresh_predictions")
-
-                    # Auto-refresh functionality for predictions
+                    # Auto-refresh functionality for predictions tab only
                     if auto_refresh_predictions:
                         time.sleep(30)
                         st.rerun()
@@ -1256,10 +1256,7 @@ def show_live_data_page():
     else:
         st.info("📊 Connect to live data feed to see real-time market information")
 
-    # Auto-refresh functionality
-    if auto_refresh and st.session_state.is_live_connected:
-        time.sleep(1)  # Refresh every 1 second
-        st.rerun()
+    # No global auto-refresh - only predictions tab has auto-refresh
 
 if __name__ == "__main__":
     show_live_data_page()
