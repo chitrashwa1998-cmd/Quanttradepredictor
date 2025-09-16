@@ -37,6 +37,13 @@
     --gradient-danger: linear-gradient(45deg, #ff0080, #ff6b35);
 }
 
+/* Force dark theme immediately on load */
+html {
+    background: #0a0a0f !important;
+    color: #ffffff !important;
+    min-height: 100vh !important;
+}
+
 /* Global Styles */
 * {
     margin: 0;
@@ -45,10 +52,11 @@
 }
 
 html, body {
-    background: var(--bg-primary) !important;
-    color: var(--text-primary) !important;
-    font-family: var(--font-primary) !important;
+    background: var(--bg-primary, #0a0a0f) !important;
+    color: var(--text-primary, #ffffff) !important;
+    font-family: var(--font-primary, 'Space Grotesk', sans-serif) !important;
     overflow-x: hidden;
+    min-height: 100vh !important;
 }
 
 /* Animated Background */
@@ -80,8 +88,38 @@ body::before {
     max-width: 1400px !important;
 }
 
+/* Force Streamlit dark theme immediately */
 .stApp {
-    background: var(--bg-primary) !important;
+    background: var(--bg-primary, #0a0a0f) !important;
+    color: var(--text-primary, #ffffff) !important;
+}
+
+/* Override Streamlit's default theme detection */
+.stApp > header {
+    background: transparent !important;
+}
+
+.stApp .main {
+    background: transparent !important;
+}
+
+/* Ensure iframe content uses dark theme */
+iframe {
+    background: var(--bg-primary, #0a0a0f) !important;
+}
+
+/* Override any Streamlit light theme defaults */
+[data-testid="stApp"] {
+    background: var(--bg-primary, #0a0a0f) !important;
+    color: var(--text-primary, #ffffff) !important;
+}
+
+[data-testid="stHeader"] {
+    background: transparent !important;
+}
+
+[data-testid="stSidebar"] {
+    background: var(--bg-secondary, #151520) !important;
 }
 
 /* Typography */

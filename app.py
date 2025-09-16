@@ -14,9 +14,24 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load custom CSS
+# Load custom CSS with immediate dark theme injection
 with open('style.css') as f:
-    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    css_content = f.read()
+    
+# Add critical CSS to ensure dark theme loads immediately
+critical_css = """
+html { background: #0a0a0f !important; color: #ffffff !important; }
+body { background: #0a0a0f !important; color: #ffffff !important; }
+.stApp { background: #0a0a0f !important; color: #ffffff !important; }
+"""
+
+st.markdown(f'<style>{critical_css}{css_content}</style>', unsafe_allow_html=True)
+
+# Add meta tag for theme-color
+st.markdown("""
+<meta name="theme-color" content="#0a0a0f">
+<meta name="color-scheme" content="dark">
+""", unsafe_allow_html=True)
 
 # Auto-restore system
 from auto_restore import auto_restore_system
