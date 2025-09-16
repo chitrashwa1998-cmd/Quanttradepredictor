@@ -539,7 +539,7 @@ def show_live_data_page():
                 # Auto-refresh controls specific to predictions tab
                 col1, col2 = st.columns([3, 1])
                 with col2:
-                    auto_refresh_predictions = st.toggle("🔄 Auto Refresh (30s)", value=False, key="auto_refresh_predictions_only")
+                    auto_refresh_predictions = st.toggle("🔄 Auto Refresh (1s)", value=False, key="auto_refresh_predictions_only")
 
                 # Show model status
                 pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
@@ -952,7 +952,7 @@ def show_live_data_page():
 
                     # Auto-refresh functionality for predictions tab only
                     if auto_refresh_predictions:
-                        time.sleep(30)
+                        time.sleep(1)
                         st.rerun()
 
                 else:
