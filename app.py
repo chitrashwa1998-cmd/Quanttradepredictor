@@ -18,17 +18,11 @@ st.set_page_config(
 with open('style.css') as f:
     css_content = f.read()
     
-# Add critical CSS to ensure dark theme loads immediately with proper fonts
+# Add critical CSS to ensure dark theme loads immediately
 critical_css = """
-html, html *, body, body *, #root, #root *, .stApp, .stApp *, div, p, span, label, h1, h2, h3, h4, h5, h6 { 
-    background: #0a0a0f !important; 
-    color: #ffffff !important; 
-    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif !important;
-    font-weight: 400 !important;
-    text-rendering: optimizeLegibility !important;
-    -webkit-font-smoothing: antialiased !important;
-}
-* { color: #ffffff !important; background: inherit !important; }
+html { background: #0a0a0f !important; color: #ffffff !important; }
+body { background: #0a0a0f !important; color: #ffffff !important; }
+.stApp { background: #0a0a0f !important; color: #ffffff !important; }
 """
 
 st.markdown(f'<style>{critical_css}{css_content}</style>', unsafe_allow_html=True)
