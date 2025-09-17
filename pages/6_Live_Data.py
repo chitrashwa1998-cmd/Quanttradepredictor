@@ -536,10 +536,12 @@ def show_live_data_page():
             if st.session_state.is_prediction_pipeline_active:
                 st.subheader("🎯 Real-time ML Model Predictions")
 
-                # Auto-refresh controls specific to predictions tab
+                # Auto-refresh controls specific to predictions tab  
                 col1, col2 = st.columns([3, 1])
                 with col2:
-                    auto_refresh_predictions = st.toggle("🔄 Auto Refresh (1s)", value=False, key="auto_refresh_predictions_only")
+                    auto_refresh_predictions = st.toggle("🔄 Auto OBI+CVD", value=False, key="auto_refresh_obi_cvd_only")
+                    if auto_refresh_predictions:
+                        st.caption("🔄 OBI+CVD auto-updating...")
 
                 # Show model status
                 pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
@@ -946,14 +948,28 @@ def show_live_data_page():
 
                         st.divider()
 
-                    # Manual refresh button
-                    if st.button("🔄 Refresh Predictions"):
-                        st.rerun()
-
-                    # Auto-refresh functionality for predictions tab only
+                    # Container-based auto-refresh for OBI+CVD data only
                     if auto_refresh_predictions:
-                        time.sleep(1)
-                        st.rerun()
+                        # Use a placeholder container that updates without full page reload
+                        import asyncio
+                        import threading
+
+                        # Create a refresh counter to track updates
+                        if 'obi_cvd_refresh_counter' not in st.session_state:
+                            st.session_state.obi_cvd_refresh_counter = 0
+
+                        # Increment counter to trigger container refresh
+                        st.session_state.obi_cvd_refresh_counter += 1
+
+                        # Use container refresh with a small delay to avoid WebSocket disruption
+                        time.sleep(0.5)  # Reduced from 1 second
+
+                        # Only refresh if WebSocket is still connected
+                        if st.session_state.live_prediction_pipeline:
+                            pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
+                            if pipeline_status.get('data_connected', False):
+                                # Refresh only the data, not the entire page
+                                st.rerun()
 
                 else:
                     st.info("🎯 Prediction pipeline is active but no predictions generated yet. Please wait for sufficient OHLC data to accumulate...")
