@@ -239,7 +239,7 @@ class LiveDataManager:
     def subscribe_instruments(self, instrument_keys: List[str], mode: str = "full") -> bool:
         """Subscribe to instruments for live data with automatic database seeding."""
         print(f"🚀 Starting subscription process for {len(instrument_keys)} instruments...")
-        
+
         # First, try to seed each instrument from database
         seeded_count = 0
         for instrument_key in instrument_keys:
@@ -250,21 +250,21 @@ class LiveDataManager:
                 print(f"⚠️ Seeding failed for {instrument_key}, will start fresh")
 
         print(f"✅ Seeded {seeded_count}/{len(instrument_keys)} instruments successfully")
-        
+
         # Then subscribe for live updates
         subscription_result = self.ws_client.subscribe(instrument_keys, mode)
-        
+
         if subscription_result:
             print(f"📡 Successfully subscribed to {len(instrument_keys)} instruments for live updates")
         else:
             print(f"❌ Failed to subscribe to instruments")
-            
+
         return subscription_result
 
     def subscribe(self, instrument_keys: List[str], mode_mapping: Dict[str, str] = None) -> bool:
         """Subscribe to instruments with mixed mode configuration."""
         print(f"🚀 Starting mixed-mode subscription process for {len(instrument_keys)} instruments...")
-        
+
         # First, try to seed each instrument from database
         seeded_count = 0
         for instrument_key in instrument_keys:
@@ -276,15 +276,23 @@ class LiveDataManager:
                 print(f"⚠️ Seeding failed for {instrument_key}, will start fresh")
 
         print(f"✅ Seeded {seeded_count}/{len(instrument_keys)} instruments successfully")
-        
+
+        # Use full_d30 mode by default for 30-level market depth
+        if not mode_mapping:
+            mode_mapping = {key: "full_d30" for key in instrument_keys}
+        else:
+            for key in instrument_keys:
+                if key not in mode_mapping:
+                    mode_mapping[key] = "full_d30"
+
         # Then subscribe for live updates with mixed mode support
         subscription_result = self.ws_client.subscribe(instrument_keys, mode_mapping)
-        
+
         if subscription_result:
-            print(f"📡 Successfully subscribed to {len(instrument_keys)} instruments with mixed modes")
+            print(f"📡 Successfully subscribed to {len(instrument_keys)} instruments for live updates with 30-level depth")
         else:
-            print(f"❌ Failed to subscribe to instruments with mixed modes")
-            
+            print(f"❌ Failed to subscribe to instruments")
+
         return subscription_result
 
     def unsubscribe_instruments(self, instrument_keys: List[str]) -> bool:
@@ -348,37 +356,37 @@ class LiveDataManager:
             # Import here to avoid circular imports
             from utils.database_adapter import DatabaseAdapter
             import time
-            
+
             # Use a single database connection approach to avoid pool conflicts
             print(f"🔄 Establishing database connection for seeding...")
-            
+
             try:
                 # Create single connection for seeding - avoid multiple connections
                 db = DatabaseAdapter(use_row_based=True)
-                
+
                 print(f"✅ Database connection established for seeding")
-                
+
                 # Always use livenifty50 as primary dataset
                 dataset_name = "livenifty50"
-                
+
                 print(f"🎯 Loading dataset: {dataset_name}")
-                
+
                 # Direct load without dataset list check to avoid additional queries
                 historical_data = db.load_ohlc_data(dataset_name)
-                
+
                 if historical_data is None or len(historical_data) == 0:
                     print(f"❌ Dataset '{dataset_name}' is empty or not found")
                     return False
-                
+
                 print(f"✅ Successfully loaded {len(historical_data)} rows from {dataset_name}")
-                        
+
             except Exception as db_error:
                 print(f"❌ Database connection failed: {str(db_error)}")
                 return False
-            
+
             # Use the most recent data (last 225 rows to match your database export)
             seed_data = historical_data.tail(225).copy()
-            
+
             print(f"📊 Using {len(seed_data)} rows for seeding (from total {len(historical_data)} available)")
 
             # Ensure the data has the correct column names
@@ -406,7 +414,7 @@ class LiveDataManager:
             print(f"📈 Foundation set: {len(seed_data)} rows ready for live continuation")
             print(f"📅 Date range: {seed_data.index.min()} to {seed_data.index.max()}")
             print(f"🎯 Seeding completed successfully!")
-            
+
             return True
 
         except Exception as e:
@@ -456,7 +464,7 @@ class LiveDataManager:
         """Get continuation dataset names for common instruments."""
         common_instruments = {
             "NSE_INDEX|Nifty 50": "livenifty50",
-            "NSE_INDEX|Nifty Bank": "liveniftybank", 
+            "NSE_INDEX|Nifty Bank": "liveniftybank",
             "NSE_EQ|INE002A01018": "livereliance",  # Reliance
             "NSE_EQ|INE467B01029": "livetcs",  # TCS
             "NSE_EQ|INE040A01034": "livehdfcbank",  # HDFC Bank

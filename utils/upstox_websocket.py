@@ -414,7 +414,7 @@ class UpstoxWebSocketClient:
                         'average_traded_price': float(market_ff.get('atp', 0))
                     })
 
-                    # Market level data (bid/ask quotes) - Extract all 5 levels
+                    # Market level data (bid/ask quotes) - Extract all 30 levels
                     if 'marketLevel' in market_ff and 'bidAskQuote' in market_ff['marketLevel']:
                         quotes = market_ff['marketLevel']['bidAskQuote']
                         if quotes and len(quotes) > 0:
@@ -427,21 +427,28 @@ class UpstoxWebSocketClient:
                                 'best_ask_quantity': int(first_quote.get('askQ', 0))
                             })
                             
-                            # Extract all 5 levels for OBI calculation
-                            total_bid_qty = 0
-                            total_ask_qty = 0
+                            # Extract all 30 levels for enhanced OBI calculation
+                            total_bid_qty_5 = 0
+                            total_ask_qty_5 = 0
+                            total_bid_qty_30 = 0
+                            total_ask_qty_30 = 0
                             depth_levels = []
                             
-                            for i, quote in enumerate(quotes[:5]):  # Process up to 5 levels
+                            for i, quote in enumerate(quotes[:30]):  # Process up to 30 levels
                                 bid_price = float(quote.get('bidP', 0))
                                 bid_qty = int(quote.get('bidQ', 0))
                                 ask_price = float(quote.get('askP', 0))
                                 ask_qty = int(quote.get('askQ', 0))
                                 
                                 if bid_qty > 0:
-                                    total_bid_qty += bid_qty
+                                    total_bid_qty_30 += bid_qty
+                                    if i < 5:  # First 5 levels
+                                        total_bid_qty_5 += bid_qty
+                                        
                                 if ask_qty > 0:
-                                    total_ask_qty += ask_qty
+                                    total_ask_qty_30 += ask_qty
+                                    if i < 5:  # First 5 levels
+                                        total_ask_qty_5 += ask_qty
                                 
                                 depth_levels.append({
                                     'level': i + 1,
@@ -451,10 +458,12 @@ class UpstoxWebSocketClient:
                                     'ask_quantity': ask_qty
                                 })
                             
-                            # Add aggregated 5-level data for enhanced OBI
+                            # Add aggregated data for both 5-level and 30-level analysis
                             tick_data.update({
-                                'total_bid_quantity_5_levels': total_bid_qty,
-                                'total_ask_quantity_5_levels': total_ask_qty,
+                                'total_bid_quantity_5_levels': total_bid_qty_5,
+                                'total_ask_quantity_5_levels': total_ask_qty_5,
+                                'total_bid_quantity_30_levels': total_bid_qty_30,
+                                'total_ask_quantity_30_levels': total_ask_qty_30,
                                 'market_depth_levels': depth_levels,
                                 'depth_levels_count': len(quotes)
                             })
@@ -542,9 +551,9 @@ class UpstoxWebSocketClient:
             if not self.websocket or not self.is_connected:
                 return False
 
-            # If no mode mapping provided, use full mode for all
+            # If no mode mapping provided, use full_d30 mode for all (30-level quotes)
             if not mode_mapping:
-                mode_mapping = {key: "full" for key in instrument_keys}
+                mode_mapping = {key: "full_d30" for key in instrument_keys}
 
             # Group instruments by mode
             mode_groups = {}
@@ -716,12 +725,12 @@ class UpstoxWebSocketClient:
             self.subscribed_instruments.update(unique_keys)
 
             # Determine the default mode if no mapping is provided
-            default_mode = "full"
+            default_mode = "full_d30"  # Changed to full_d30 for 30-level quotes
             if mode_mapping:
                 # If mode_mapping is provided, use it to determine the default mode
-                # This assumes that if any instrument has a mode other than 'full',
-                # the default should be determined by the most common mode or 'full'
-                # For simplicity, we'll stick to 'full' as default and rely on mapping
+                # This assumes that if any instrument has a mode other than 'full_d30',
+                # the default should be determined by the most common mode or 'full_d30'
+                # For simplicity, we'll stick to 'full_d30' as default and rely on mapping
                 pass
             else:
                 # If no mode_mapping, all instruments will use the default mode
