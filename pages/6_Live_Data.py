@@ -714,6 +714,61 @@ def show_live_data_page():
 
                                     st.metric(f"{daily_cvd_color} Daily CVD", f"{daily_cvd:.0f}", daily_cvd_signal)
 
+                                # Advanced Liquidity Analysis Section
+                                st.markdown("**🏗️ Advanced Liquidity Analysis**")
+                                col1_liq, col2_liq, col3_liq = st.columns(3)
+                                
+                                with col1_liq:
+                                    # Liquidity Walls
+                                    total_walls = obi_cvd_data.get('liquidity_walls', 0)
+                                    bid_walls = obi_cvd_data.get('bid_walls', 0)
+                                    ask_walls = obi_cvd_data.get('ask_walls', 0)
+                                    
+                                    wall_color = "🟢" if bid_walls > ask_walls else "🔴" if ask_walls > bid_walls else "⚪"
+                                    st.metric(f"{wall_color} Liquidity Walls", f"{total_walls}", f"B:{bid_walls} A:{ask_walls}")
+                                    
+                                    # Reload Walls
+                                    reload_walls = obi_cvd_data.get('reload_walls', 0)
+                                    reload_color = "🔄" if reload_walls > 0 else "⚪"
+                                    st.metric(f"{reload_color} Reload Walls", f"{reload_walls}", "Iceberg Orders")
+                                
+                                with col2_liq:
+                                    # Order Book Slope
+                                    slope_asymmetry = obi_cvd_data.get('slope_asymmetry', 0.0)
+                                    slope_interpretation = obi_cvd_data.get('slope_interpretation', 'neutral_neutral')
+                                    
+                                    slope_color = "🟢" if slope_asymmetry > 0.1 else "🔴" if slope_asymmetry < -0.1 else "⚪"
+                                    st.metric(f"{slope_color} Slope Asymmetry", f"{slope_asymmetry:.3f}", slope_interpretation.replace('_', ' ').title())
+                                    
+                                    # Bid/Ask Slopes
+                                    bid_slope = obi_cvd_data.get('order_book_slope_bid', 0.0)
+                                    ask_slope = obi_cvd_data.get('order_book_slope_ask', 0.0)
+                                    st.write(f"**Bid Slope:** {bid_slope:.3f}")
+                                    st.write(f"**Ask Slope:** {ask_slope:.3f}")
+                                
+                                with col3_liq:
+                                    # Liquidity Delta & Absorption
+                                    liquidity_delta_net = obi_cvd_data.get('liquidity_delta_net', 0.0)
+                                    liquidity_sentiment = obi_cvd_data.get('liquidity_sentiment', 'neutral')
+                                    
+                                    delta_color = "🟢" if liquidity_delta_net > 0 else "🔴" if liquidity_delta_net < 0 else "⚪"
+                                    st.metric(f"{delta_color} Net Liquidity Δ", f"{liquidity_delta_net:.0f}", liquidity_sentiment.replace('_', ' ').title())
+                                    
+                                    # Absorption Ratio
+                                    absorption_avg = obi_cvd_data.get('absorption_ratio_avg', 0.0)
+                                    absorption_color = "🟢" if absorption_avg > 0.7 else "🔴" if absorption_avg < 0.3 else "⚪"
+                                    st.metric(f"{absorption_color} Avg Absorption", f"{absorption_avg:.2f}", "Real vs Fake")
+
+                                # Comprehensive Liquidity Signal
+                                liquidity_signal = obi_cvd_data.get('liquidity_signal', 'neutral_neutral_neutral')
+                                wall_signal, slope_signal, delta_signal = liquidity_signal.split('_')[:3]
+                                
+                                col1_signal = st.columns(1)[0]
+                                with col1_signal:
+                                    overall_color = "🟢" if 'bullish' in liquidity_signal else "🔴" if 'bearish' in liquidity_signal else "⚪"
+                                    signal_text = f"Walls: {wall_signal.title()}, Slope: {slope_signal.title()}, Delta: {delta_signal.title()}"
+                                    st.metric(f"{overall_color} Overall Liquidity Signal", signal_text)
+
                                 # CVD Delta Momentum Analysis (Short Timeframes)
                                 st.markdown("**⚡ CVD Delta Momentum Analysis**")
                                 col1_delta, col2_delta, col3_delta = st.columns(3)
