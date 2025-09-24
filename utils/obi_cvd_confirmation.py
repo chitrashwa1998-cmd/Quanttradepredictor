@@ -86,15 +86,15 @@ class OBICVDConfirmation:
                 print(f"⚠️ OBI calculation skipped - not from 53001 contract: {instrument_token}")
                 return None
             
-            # Check if 5-level depth data is available (new enhanced data)
-            total_bid_5_levels = tick_data.get('total_bid_quantity_5_levels', 0)
-            total_ask_5_levels = tick_data.get('total_ask_quantity_5_levels', 0)
+            # Check if 30-level depth data is available (enhanced data)
+            total_bid_30_levels = tick_data.get('total_bid_quantity_30_levels', 0)
+            total_ask_30_levels = tick_data.get('total_ask_quantity_30_levels', 0)
             
-            if total_bid_5_levels > 0 and total_ask_5_levels > 0:
-                # Use 5-level aggregated data for more accurate OBI
-                bid_qty = total_bid_5_levels
-                ask_qty = total_ask_5_levels
-                print(f"🔍 Using 5-level OBI from 53001: Bid={bid_qty}, Ask={ask_qty}")
+            if total_bid_30_levels > 0 and total_ask_30_levels > 0:
+                # Use 30-level aggregated data for enhanced OBI accuracy
+                bid_qty = total_bid_30_levels
+                ask_qty = total_ask_30_levels
+                print(f"🔍 Using 30-level OBI from 53001: Bid={bid_qty}, Ask={ask_qty}")
             else:
                 # Only use Level 1 data from 53001 - NO FALLBACK
                 bid_qty = tick_data.get('best_bid_quantity', 0) or tick_data.get('bid_qty', 0)

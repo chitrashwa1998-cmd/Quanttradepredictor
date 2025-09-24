@@ -428,8 +428,6 @@ class UpstoxWebSocketClient:
                             })
                             
                             # Extract all 30 levels for enhanced OBI calculation
-                            total_bid_qty_5 = 0
-                            total_ask_qty_5 = 0
                             total_bid_qty_30 = 0
                             total_ask_qty_30 = 0
                             depth_levels = []
@@ -442,13 +440,9 @@ class UpstoxWebSocketClient:
                                 
                                 if bid_qty > 0:
                                     total_bid_qty_30 += bid_qty
-                                    if i < 5:  # First 5 levels
-                                        total_bid_qty_5 += bid_qty
                                         
                                 if ask_qty > 0:
                                     total_ask_qty_30 += ask_qty
-                                    if i < 5:  # First 5 levels
-                                        total_ask_qty_5 += ask_qty
                                 
                                 depth_levels.append({
                                     'level': i + 1,
@@ -458,10 +452,8 @@ class UpstoxWebSocketClient:
                                     'ask_quantity': ask_qty
                                 })
                             
-                            # Add aggregated data for both 5-level and 30-level analysis
+                            # Add aggregated data for 30-level analysis only
                             tick_data.update({
-                                'total_bid_quantity_5_levels': total_bid_qty_5,
-                                'total_ask_quantity_5_levels': total_ask_qty_5,
                                 'total_bid_quantity_30_levels': total_bid_qty_30,
                                 'total_ask_quantity_30_levels': total_ask_qty_30,
                                 'market_depth_levels': depth_levels,
