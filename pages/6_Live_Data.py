@@ -814,7 +814,7 @@ def show_live_data_page():
                                 st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
                                 st.divider()
 
-                        st.divider()
+                    st.divider()
 
                 # ML Model Predictions Section - Show only when available
                 if live_predictions:
