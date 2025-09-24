@@ -582,7 +582,7 @@ def show_live_data_page():
                     # Create columns for OBI+CVD display
                     obi_cvd_cols = st.columns(min(2, len(independent_obi_cvd)))
 
-                        for i, (instrument_key, obi_cvd_data) in enumerate(independent_obi_cvd.items()):
+                    for i, (instrument_key, obi_cvd_data) in enumerate(independent_obi_cvd.items()):
                             display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
 
                             with obi_cvd_cols[i % len(obi_cvd_cols)]:
