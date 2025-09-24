@@ -1,7 +1,7 @@
 
 import pandas as pd
 import numpy as np
-from typing import Dict, Optional, Deque
+from typing import Dict, Optional, Deque, List
 from collections import deque
 from datetime import datetime
 import pytz
