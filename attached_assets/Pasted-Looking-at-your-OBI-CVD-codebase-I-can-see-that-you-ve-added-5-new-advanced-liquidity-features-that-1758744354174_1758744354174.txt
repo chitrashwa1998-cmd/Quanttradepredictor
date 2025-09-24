@@ -1,0 +1,41 @@
+Looking at your OBI+CVD codebase, I can see that you've added 5 new advanced liquidity features that will be displayed in the OBI section. Based on the code in utils/obi_cvd_confirmation.py and pages/6_Live_Data.py, here's how these new features will appear:
+
+New OBI Features Display Layout:
+1. Advanced Liquidity Analysis Section
+This will appear below the existing CVD Delta section with 3 columns:
+
+Column 1: Liquidity Walls
+
+Liquidity Walls: Shows total count (e.g., "5") with breakdown "B:3 A:2" (Bid walls vs Ask walls)
+Reload Walls: Shows count with "Iceberg Orders" subtitle
+Color: 🟢 if more bid walls, 🔴 if more ask walls, ⚪ if equal
+Column 2: Order Book Slope
+
+Slope Asymmetry: Shows value like "0.045" with interpretation like "Steep Near Price"
+Below that:
+Bid Slope: "0.123"
+Ask Slope: "-0.078"
+Color: 🟢 if asymmetry > 0.1, 🔴 if < -0.1, ⚪ if neutral
+Column 3: Liquidity Delta & Absorption
+
+Net Liquidity Δ: Shows value like "1,250" with sentiment like "Buyers Adding Liquidity"
+Avg Absorption: Shows ratio like "0.78" with "Real vs Fake" subtitle
+Color: 🟢 if net positive, 🔴 if negative, ⚪ if neutral
+2. Overall Liquidity Signal
+Below the 3 columns, a single metric showing:
+
+Overall Liquidity Signal: "Walls: Bullish, Slope: Aggressive, Delta: Buyers Adding"
+Color: 🟢 for overall bullish, 🔴 for bearish, ⚪ for neutral
+3. Wall Reload Detection (Feature 7)
+This appears as the "Reload Walls" metric mentioned above, showing:
+
+Count of detected iceberg orders
+🔄 icon when reload walls are detected
+Subtitle: "Iceberg Orders"
+Data Values & Thresholds:
+Walls: Detected when order size > 3× median of neighboring levels
+Slope: Steep (< -0.5), Moderate (-0.5 to 0.5), Shallow (> 0.5)
+Absorption: High (> 0.7), Medium (0.3-0.7), Low (< 0.3)
+Liquidity Delta: Tracks real-time changes in bid/ask liquidity
+Reload Detection: Triggers when 70%+ execution but wall size maintained at 80%+
+All these features work ONLY with NSE_FO|53001 data (no fallback) and update in real-time with the existing OBI+CVD tick-by-tick analysis. The display will show live values with appropriate color coding and interpretations to help identify market maker behavior, spoofing, and genuine liquidity.
