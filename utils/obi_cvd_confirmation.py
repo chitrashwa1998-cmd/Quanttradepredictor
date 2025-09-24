@@ -149,50 +149,80 @@ class OBICVDConfirmation:
         """
         try:
             if not depth_levels or len(depth_levels) < 5:
-                return {'bid_walls': [], 'ask_walls': []}
+                return {'bid_walls': [], 'ask_walls': [], 'total_walls': 0}
             
             bid_walls = []
             ask_walls = []
             
-            # Process bid levels
-            bid_sizes = [level['bid_quantity'] for level in depth_levels if level['bid_quantity'] > 0]
-            if len(bid_sizes) >= 5:
-                for i in range(2, len(bid_sizes) - 2):
-                    neighbor_start = max(0, i - 2)
-                    neighbor_end = min(len(bid_sizes), i + 3)
-                    neighbors = bid_sizes[neighbor_start:neighbor_end]
-                    median_neighbor = np.median(neighbors)
-                    
-                    if bid_sizes[i] > self.wall_detection_multiplier * median_neighbor and median_neighbor > 0:
-                        wall_info = {
-                            'level': i + 1,
-                            'price': depth_levels[i]['bid_price'],
-                            'size': bid_sizes[i],
-                            'median_neighbor': median_neighbor,
-                            'strength': bid_sizes[i] / median_neighbor,
-                            'type': 'support_wall'
-                        }
-                        bid_walls.append(wall_info)
+            # Process bid levels with validation
+            bid_sizes = []
+            bid_prices = []
+            for i, level in enumerate(depth_levels):
+                if isinstance(level, dict) and 'bid_quantity' in level and 'bid_price' in level:
+                    bid_qty = level.get('bid_quantity', 0)
+                    bid_price = level.get('bid_price', 0)
+                    if isinstance(bid_qty, (int, float)) and bid_qty > 0 and isinstance(bid_price, (int, float)) and bid_price > 0:
+                        bid_sizes.append(bid_qty)
+                        bid_prices.append((i, bid_price))
             
-            # Process ask levels
-            ask_sizes = [level['ask_quantity'] for level in depth_levels if level['ask_quantity'] > 0]
+            if len(bid_sizes) >= 5:
+                for idx in range(2, len(bid_sizes) - 2):
+                    try:
+                        neighbor_start = max(0, idx - 2)
+                        neighbor_end = min(len(bid_sizes), idx + 3)
+                        neighbors = bid_sizes[neighbor_start:neighbor_end]
+                        
+                        if len(neighbors) >= 3:
+                            median_neighbor = float(np.median(neighbors))
+                            
+                            if median_neighbor > 0 and bid_sizes[idx] > self.wall_detection_multiplier * median_neighbor:
+                                original_idx, price = bid_prices[idx]
+                                wall_info = {
+                                    'level': idx + 1,
+                                    'price': float(price),
+                                    'size': float(bid_sizes[idx]),
+                                    'median_neighbor': median_neighbor,
+                                    'strength': float(bid_sizes[idx] / median_neighbor),
+                                    'type': 'support_wall'
+                                }
+                                bid_walls.append(wall_info)
+                    except (IndexError, ZeroDivisionError, ValueError, TypeError) as inner_e:
+                        continue
+            
+            # Process ask levels with validation
+            ask_sizes = []
+            ask_prices = []
+            for i, level in enumerate(depth_levels):
+                if isinstance(level, dict) and 'ask_quantity' in level and 'ask_price' in level:
+                    ask_qty = level.get('ask_quantity', 0)
+                    ask_price = level.get('ask_price', 0)
+                    if isinstance(ask_qty, (int, float)) and ask_qty > 0 and isinstance(ask_price, (int, float)) and ask_price > 0:
+                        ask_sizes.append(ask_qty)
+                        ask_prices.append((i, ask_price))
+            
             if len(ask_sizes) >= 5:
-                for i in range(2, len(ask_sizes) - 2):
-                    neighbor_start = max(0, i - 2)
-                    neighbor_end = min(len(ask_sizes), i + 3)
-                    neighbors = ask_sizes[neighbor_start:neighbor_end]
-                    median_neighbor = np.median(neighbors)
-                    
-                    if ask_sizes[i] > self.wall_detection_multiplier * median_neighbor and median_neighbor > 0:
-                        wall_info = {
-                            'level': i + 1,
-                            'price': depth_levels[i]['ask_price'],
-                            'size': ask_sizes[i],
-                            'median_neighbor': median_neighbor,
-                            'strength': ask_sizes[i] / median_neighbor,
-                            'type': 'resistance_wall'
-                        }
-                        ask_walls.append(wall_info)
+                for idx in range(2, len(ask_sizes) - 2):
+                    try:
+                        neighbor_start = max(0, idx - 2)
+                        neighbor_end = min(len(ask_sizes), idx + 3)
+                        neighbors = ask_sizes[neighbor_start:neighbor_end]
+                        
+                        if len(neighbors) >= 3:
+                            median_neighbor = float(np.median(neighbors))
+                            
+                            if median_neighbor > 0 and ask_sizes[idx] > self.wall_detection_multiplier * median_neighbor:
+                                original_idx, price = ask_prices[idx]
+                                wall_info = {
+                                    'level': idx + 1,
+                                    'price': float(price),
+                                    'size': float(ask_sizes[idx]),
+                                    'median_neighbor': median_neighbor,
+                                    'strength': float(ask_sizes[idx] / median_neighbor),
+                                    'type': 'resistance_wall'
+                                }
+                                ask_walls.append(wall_info)
+                    except (IndexError, ZeroDivisionError, ValueError, TypeError) as inner_e:
+                        continue
             
             return {
                 'bid_walls': bid_walls,
@@ -211,62 +241,74 @@ class OBICVDConfirmation:
         """
         try:
             if not depth_levels or len(depth_levels) < 3:
-                return {'bid_slope': 0.0, 'ask_slope': 0.0, 'slope_asymmetry': 0.0}
+                return {'bid_slope': 0.0, 'ask_slope': 0.0, 'slope_asymmetry': 0.0, 
+                       'bid_slope_interpretation': 'neutral', 'ask_slope_interpretation': 'neutral'}
             
-            # Calculate bid slope
+            # Calculate bid slope with validation
             bid_distances = []
             bid_quantities = []
             
             for i, level in enumerate(depth_levels):
-                if level['bid_quantity'] > 0:
-                    bid_distances.append(i + 1)  # Distance from best bid
-                    bid_quantities.append(level['bid_quantity'])
+                if isinstance(level, dict) and 'bid_quantity' in level:
+                    bid_qty = level.get('bid_quantity', 0)
+                    if isinstance(bid_qty, (int, float)) and bid_qty > 0:
+                        bid_distances.append(float(i + 1))  # Distance from best bid
+                        bid_quantities.append(float(bid_qty))
             
             bid_slope = 0.0
             if len(bid_distances) >= 3:
-                d_mean = np.mean(bid_distances)
-                q_mean = np.mean(bid_quantities)
-                
-                numerator = sum((d - d_mean) * (q - q_mean) for d, q in zip(bid_distances, bid_quantities))
-                denominator = sum((d - d_mean) ** 2 for d in bid_distances)
-                
-                if denominator > 0:
-                    bid_slope = numerator / denominator
+                try:
+                    d_mean = float(np.mean(bid_distances))
+                    q_mean = float(np.mean(bid_quantities))
+                    
+                    numerator = sum((d - d_mean) * (q - q_mean) for d, q in zip(bid_distances, bid_quantities))
+                    denominator = sum((d - d_mean) ** 2 for d in bid_distances)
+                    
+                    if abs(denominator) > 1e-10:  # Avoid division by very small numbers
+                        bid_slope = float(numerator / denominator)
+                except (ValueError, TypeError, ZeroDivisionError):
+                    bid_slope = 0.0
             
-            # Calculate ask slope
+            # Calculate ask slope with validation
             ask_distances = []
             ask_quantities = []
             
             for i, level in enumerate(depth_levels):
-                if level['ask_quantity'] > 0:
-                    ask_distances.append(i + 1)  # Distance from best ask
-                    ask_quantities.append(level['ask_quantity'])
+                if isinstance(level, dict) and 'ask_quantity' in level:
+                    ask_qty = level.get('ask_quantity', 0)
+                    if isinstance(ask_qty, (int, float)) and ask_qty > 0:
+                        ask_distances.append(float(i + 1))  # Distance from best ask
+                        ask_quantities.append(float(ask_qty))
             
             ask_slope = 0.0
             if len(ask_distances) >= 3:
-                d_mean = np.mean(ask_distances)
-                q_mean = np.mean(ask_quantities)
-                
-                numerator = sum((d - d_mean) * (q - q_mean) for d, q in zip(ask_distances, ask_quantities))
-                denominator = sum((d - d_mean) ** 2 for d in ask_distances)
-                
-                if denominator > 0:
-                    ask_slope = numerator / denominator
+                try:
+                    d_mean = float(np.mean(ask_distances))
+                    q_mean = float(np.mean(ask_quantities))
+                    
+                    numerator = sum((d - d_mean) * (q - q_mean) for d, q in zip(ask_distances, ask_quantities))
+                    denominator = sum((d - d_mean) ** 2 for d in ask_distances)
+                    
+                    if abs(denominator) > 1e-10:  # Avoid division by very small numbers
+                        ask_slope = float(numerator / denominator)
+                except (ValueError, TypeError, ZeroDivisionError):
+                    ask_slope = 0.0
             
             # Calculate slope asymmetry
-            slope_asymmetry = bid_slope - ask_slope
+            slope_asymmetry = float(bid_slope - ask_slope)
             
             return {
-                'bid_slope': float(bid_slope),
-                'ask_slope': float(ask_slope),
-                'slope_asymmetry': float(slope_asymmetry),
+                'bid_slope': bid_slope,
+                'ask_slope': ask_slope,
+                'slope_asymmetry': slope_asymmetry,
                 'bid_slope_interpretation': self._interpret_slope(bid_slope, 'bid'),
                 'ask_slope_interpretation': self._interpret_slope(ask_slope, 'ask')
             }
             
         except Exception as e:
             print(f"❌ Error calculating order book slope: {e}")
-            return {'bid_slope': 0.0, 'ask_slope': 0.0, 'slope_asymmetry': 0.0}
+            return {'bid_slope': 0.0, 'ask_slope': 0.0, 'slope_asymmetry': 0.0,
+                   'bid_slope_interpretation': 'neutral', 'ask_slope_interpretation': 'neutral'}
     
     def _interpret_slope(self, slope: float, side: str) -> str:
         """Interpret the meaning of order book slope."""
@@ -288,34 +330,61 @@ class OBICVDConfirmation:
         """
         try:
             if not current_depth or not previous_depth:
-                return {'delta_bid': 0.0, 'delta_ask': 0.0, 'net_liquidity_change': 0.0}
+                return {'delta_bid': 0.0, 'delta_ask': 0.0, 'net_liquidity_change': 0.0, 'liquidity_sentiment': 'neutral'}
             
             delta_bid_total = 0.0
             delta_ask_total = 0.0
             
-            # Create price-level mapping for comparison
-            prev_bid_map = {level['bid_price']: level['bid_quantity'] for level in previous_depth if level['bid_price'] > 0}
-            prev_ask_map = {level['ask_price']: level['ask_quantity'] for level in previous_depth if level['ask_price'] > 0}
+            # Create price-level mapping for comparison with validation
+            prev_bid_map = {}
+            prev_ask_map = {}
+            
+            for level in previous_depth:
+                if isinstance(level, dict):
+                    bid_price = level.get('bid_price', 0)
+                    bid_qty = level.get('bid_quantity', 0)
+                    ask_price = level.get('ask_price', 0)
+                    ask_qty = level.get('ask_quantity', 0)
+                    
+                    if isinstance(bid_price, (int, float)) and isinstance(bid_qty, (int, float)) and bid_price > 0:
+                        prev_bid_map[float(bid_price)] = float(bid_qty)
+                    
+                    if isinstance(ask_price, (int, float)) and isinstance(ask_qty, (int, float)) and ask_price > 0:
+                        prev_ask_map[float(ask_price)] = float(ask_qty)
             
             # Calculate bid side changes
             for level in current_depth:
-                if level['bid_price'] > 0:
-                    current_qty = level['bid_quantity']
-                    previous_qty = prev_bid_map.get(level['bid_price'], 0)
-                    delta = current_qty - previous_qty
+                if isinstance(level, dict):
+                    bid_price = level.get('bid_price', 0)
+                    bid_qty = level.get('bid_quantity', 0)
                     
-                    if delta > 0:  # Liquidity added
-                        delta_bid_total += delta
+                    if isinstance(bid_price, (int, float)) and isinstance(bid_qty, (int, float)) and bid_price > 0:
+                        try:
+                            current_qty = float(bid_qty)
+                            previous_qty = prev_bid_map.get(float(bid_price), 0.0)
+                            delta = current_qty - previous_qty
+                            
+                            if delta > 0:  # Only count liquidity additions
+                                delta_bid_total += delta
+                        except (ValueError, TypeError):
+                            continue
             
             # Calculate ask side changes
             for level in current_depth:
-                if level['ask_price'] > 0:
-                    current_qty = level['ask_quantity']
-                    previous_qty = prev_ask_map.get(level['ask_price'], 0)
-                    delta = current_qty - previous_qty
+                if isinstance(level, dict):
+                    ask_price = level.get('ask_price', 0)
+                    ask_qty = level.get('ask_quantity', 0)
                     
-                    if delta > 0:  # Liquidity added
-                        delta_ask_total += delta
+                    if isinstance(ask_price, (int, float)) and isinstance(ask_qty, (int, float)) and ask_price > 0:
+                        try:
+                            current_qty = float(ask_qty)
+                            previous_qty = prev_ask_map.get(float(ask_price), 0.0)
+                            delta = current_qty - previous_qty
+                            
+                            if delta > 0:  # Only count liquidity additions
+                                delta_ask_total += delta
+                        except (ValueError, TypeError):
+                            continue
             
             net_liquidity_change = delta_bid_total - delta_ask_total
             
@@ -328,7 +397,7 @@ class OBICVDConfirmation:
             
         except Exception as e:
             print(f"❌ Error calculating liquidity delta: {e}")
-            return {'delta_bid': 0.0, 'delta_ask': 0.0, 'net_liquidity_change': 0.0}
+            return {'delta_bid': 0.0, 'delta_ask': 0.0, 'net_liquidity_change': 0.0, 'liquidity_sentiment': 'neutral'}
     
     def _interpret_liquidity_delta(self, delta_bid: float, delta_ask: float) -> str:
         """Interpret liquidity delta changes."""
@@ -349,13 +418,17 @@ class OBICVDConfirmation:
         Formula: Absorption(p) = ExecutedVolume(p) / InitialSize(p)
         """
         try:
-            if initial_size <= 0:
+            # Validate inputs
+            if not isinstance(executed_volume, (int, float)) or not isinstance(initial_size, (int, float)):
                 return 0.0
             
-            absorption = executed_volume / initial_size
+            if initial_size <= 0 or executed_volume < 0:
+                return 0.0
+            
+            absorption = float(executed_volume) / float(initial_size)
             return min(1.0, max(0.0, absorption))  # Clamp between 0 and 1
             
-        except Exception as e:
+        except (ZeroDivisionError, ValueError, TypeError) as e:
             print(f"❌ Error calculating absorption ratio: {e}")
             return 0.0
     
@@ -365,28 +438,42 @@ class OBICVDConfirmation:
         Combines wall detection + liquidity delta analysis.
         """
         try:
+            # Validate inputs
+            if not isinstance(wall_price, (int, float)) or not isinstance(current_size, (int, float)) or not isinstance(executed_volume, (int, float)):
+                return {'is_reload_wall': False, 'reload_strength': 0.0, 'size_maintained_ratio': 0.0, 'execution_ratio': 0.0, 'total_reloads': 0}
+            
             if instrument_key not in self.instrument_data:
-                return {'is_reload_wall': False, 'reload_strength': 0.0}
+                return {'is_reload_wall': False, 'reload_strength': 0.0, 'size_maintained_ratio': 0.0, 'execution_ratio': 0.0, 'total_reloads': 0}
             
             data = self.instrument_data[instrument_key]
+            wall_price_key = float(wall_price)
             
             # Check if this price level has reload wall history
-            if wall_price not in data['reload_walls']:
-                data['reload_walls'][wall_price] = {
-                    'initial_size': current_size,
+            if wall_price_key not in data['reload_walls']:
+                data['reload_walls'][wall_price_key] = {
+                    'initial_size': float(current_size) if current_size > 0 else 1.0,
                     'total_executed': 0.0,
                     'reload_count': 0,
-                    'last_size': current_size
+                    'last_size': float(current_size)
                 }
             
-            wall_data = data['reload_walls'][wall_price]
+            wall_data = data['reload_walls'][wall_price_key]
             
-            # Update execution tracking
-            wall_data['total_executed'] += executed_volume
+            # Update execution tracking safely
+            if isinstance(executed_volume, (int, float)) and executed_volume >= 0:
+                wall_data['total_executed'] += float(executed_volume)
             
-            # Check for reload behavior
-            size_maintained_ratio = current_size / wall_data['initial_size'] if wall_data['initial_size'] > 0 else 0
-            execution_ratio = wall_data['total_executed'] / wall_data['initial_size'] if wall_data['initial_size'] > 0 else 0
+            # Check for reload behavior with safe division
+            size_maintained_ratio = 0.0
+            execution_ratio = 0.0
+            
+            if wall_data['initial_size'] > 0:
+                try:
+                    size_maintained_ratio = float(current_size) / float(wall_data['initial_size'])
+                    execution_ratio = float(wall_data['total_executed']) / float(wall_data['initial_size'])
+                except (ZeroDivisionError, ValueError, TypeError):
+                    size_maintained_ratio = 0.0
+                    execution_ratio = 0.0
             
             # Reload detected if:
             # 1. Significant volume executed against wall
@@ -396,19 +483,19 @@ class OBICVDConfirmation:
             if is_reload_wall:
                 wall_data['reload_count'] += 1
             
-            wall_data['last_size'] = current_size
+            wall_data['last_size'] = float(current_size) if isinstance(current_size, (int, float)) else 0.0
             
             return {
-                'is_reload_wall': is_reload_wall,
+                'is_reload_wall': bool(is_reload_wall),
                 'reload_strength': float(wall_data['reload_count']),
                 'size_maintained_ratio': float(size_maintained_ratio),
                 'execution_ratio': float(execution_ratio),
-                'total_reloads': wall_data['reload_count']
+                'total_reloads': int(wall_data['reload_count'])
             }
             
         except Exception as e:
             print(f"❌ Error detecting wall reload: {e}")
-            return {'is_reload_wall': False, 'reload_strength': 0.0}
+            return {'is_reload_wall': False, 'reload_strength': 0.0, 'size_maintained_ratio': 0.0, 'execution_ratio': 0.0, 'total_reloads': 0}
 
     def calculate_cvd_increment(self, tick_data: Dict, instrument_key: str) -> Optional[float]:
         """
@@ -909,49 +996,103 @@ class OBICVDConfirmation:
             else:
                 combined_confirmation = 'Neutral'
             
-            # Prepare advanced liquidity summary
+            # Prepare advanced liquidity summary with safe access
             liquidity_summary = {}
-            if advanced_liquidity:
+            if advanced_liquidity and isinstance(advanced_liquidity, dict):
                 walls = advanced_liquidity.get('walls', {})
                 slopes = advanced_liquidity.get('slopes', {})
                 liquidity_delta = advanced_liquidity.get('liquidity_delta', {})
                 absorption_ratios = advanced_liquidity.get('absorption_ratios', {})
                 
+                # Safe wall processing
+                bid_walls = walls.get('bid_walls', []) if isinstance(walls, dict) else []
+                ask_walls = walls.get('ask_walls', []) if isinstance(walls, dict) else []
+                
+                # Find strongest walls safely
+                strongest_bid_wall = {}
+                strongest_ask_wall = {}
+                
+                if bid_walls and isinstance(bid_walls, list):
+                    try:
+                        strongest_bid_wall = max(bid_walls, key=lambda x: x.get('strength', 0) if isinstance(x, dict) else 0)
+                    except (ValueError, TypeError):
+                        strongest_bid_wall = {}
+                
+                if ask_walls and isinstance(ask_walls, list):
+                    try:
+                        strongest_ask_wall = max(ask_walls, key=lambda x: x.get('strength', 0) if isinstance(x, dict) else 0)
+                    except (ValueError, TypeError):
+                        strongest_ask_wall = {}
+                
+                # Safe absorption ratio calculation
+                avg_absorption = 0.0
+                high_absorption_levels = []
+                low_absorption_levels = []
+                
+                if absorption_ratios and isinstance(absorption_ratios, dict):
+                    try:
+                        valid_ratios = [float(ratio) for ratio in absorption_ratios.values() 
+                                       if isinstance(ratio, (int, float)) and 0 <= ratio <= 1]
+                        avg_absorption = float(np.mean(valid_ratios)) if valid_ratios else 0.0
+                        
+                        high_absorption_levels = [float(price) for price, ratio in absorption_ratios.items() 
+                                                if isinstance(ratio, (int, float)) and ratio > 0.7]
+                        low_absorption_levels = [float(price) for price, ratio in absorption_ratios.items() 
+                                               if isinstance(ratio, (int, float)) and ratio < 0.3]
+                    except (ValueError, TypeError):
+                        avg_absorption = 0.0
+                        high_absorption_levels = []
+                        low_absorption_levels = []
+                
+                # Safe reload wall detection
+                reload_walls_detected = 0
+                try:
+                    for wall in bid_walls + ask_walls:
+                        if isinstance(wall, dict) and 'reload_analysis' in wall:
+                            reload_analysis = wall['reload_analysis']
+                            if isinstance(reload_analysis, dict) and reload_analysis.get('is_reload_wall', False):
+                                reload_walls_detected += 1
+                except (TypeError, AttributeError):
+                    reload_walls_detected = 0
+                
                 liquidity_summary = {
                     # Liquidity Walls
-                    'bid_walls_count': len(walls.get('bid_walls', [])),
-                    'ask_walls_count': len(walls.get('ask_walls', [])),
-                    'total_walls': walls.get('total_walls', 0),
-                    'strongest_bid_wall': max(walls.get('bid_walls', []), key=lambda x: x.get('strength', 0), default={}),
-                    'strongest_ask_wall': max(walls.get('ask_walls', []), key=lambda x: x.get('strength', 0), default={}),
+                    'bid_walls_count': len(bid_walls) if isinstance(bid_walls, list) else 0,
+                    'ask_walls_count': len(ask_walls) if isinstance(ask_walls, list) else 0,
+                    'total_walls': walls.get('total_walls', 0) if isinstance(walls, dict) else 0,
+                    'strongest_bid_wall': strongest_bid_wall,
+                    'strongest_ask_wall': strongest_ask_wall,
                     
                     # Order Book Slope
-                    'bid_slope': slopes.get('bid_slope', 0.0),
-                    'ask_slope': slopes.get('ask_slope', 0.0),
-                    'slope_asymmetry': slopes.get('slope_asymmetry', 0.0),
-                    'bid_slope_interpretation': slopes.get('bid_slope_interpretation', 'neutral'),
-                    'ask_slope_interpretation': slopes.get('ask_slope_interpretation', 'neutral'),
+                    'bid_slope': float(slopes.get('bid_slope', 0.0)) if isinstance(slopes, dict) else 0.0,
+                    'ask_slope': float(slopes.get('ask_slope', 0.0)) if isinstance(slopes, dict) else 0.0,
+                    'slope_asymmetry': float(slopes.get('slope_asymmetry', 0.0)) if isinstance(slopes, dict) else 0.0,
+                    'bid_slope_interpretation': str(slopes.get('bid_slope_interpretation', 'neutral')) if isinstance(slopes, dict) else 'neutral',
+                    'ask_slope_interpretation': str(slopes.get('ask_slope_interpretation', 'neutral')) if isinstance(slopes, dict) else 'neutral',
                     
                     # Liquidity Delta
-                    'liquidity_delta_bid': liquidity_delta.get('delta_bid', 0.0),
-                    'liquidity_delta_ask': liquidity_delta.get('delta_ask', 0.0),
-                    'net_liquidity_change': liquidity_delta.get('net_liquidity_change', 0.0),
-                    'liquidity_sentiment': liquidity_delta.get('liquidity_sentiment', 'neutral'),
+                    'liquidity_delta_bid': float(liquidity_delta.get('delta_bid', 0.0)) if isinstance(liquidity_delta, dict) else 0.0,
+                    'liquidity_delta_ask': float(liquidity_delta.get('delta_ask', 0.0)) if isinstance(liquidity_delta, dict) else 0.0,
+                    'net_liquidity_change': float(liquidity_delta.get('net_liquidity_change', 0.0)) if isinstance(liquidity_delta, dict) else 0.0,
+                    'liquidity_sentiment': str(liquidity_delta.get('liquidity_sentiment', 'neutral')) if isinstance(liquidity_delta, dict) else 'neutral',
                     
                     # Absorption Analysis
-                    'avg_absorption_ratio': np.mean(list(absorption_ratios.values())) if absorption_ratios else 0.0,
-                    'high_absorption_levels': [price for price, ratio in absorption_ratios.items() if ratio > 0.7],
-                    'low_absorption_levels': [price for price, ratio in absorption_ratios.items() if ratio < 0.3],
+                    'avg_absorption_ratio': avg_absorption,
+                    'high_absorption_levels': high_absorption_levels,
+                    'low_absorption_levels': low_absorption_levels,
                     
                     # Wall Reload Detection
-                    'reload_walls_detected': sum(1 for wall in walls.get('bid_walls', []) + walls.get('ask_walls', []) 
-                                               if wall.get('reload_analysis', {}).get('is_reload_wall', False)),
+                    'reload_walls_detected': reload_walls_detected,
                 }
                 
-                # Generate overall liquidity signal
-                wall_signal = 'bullish' if liquidity_summary['bid_walls_count'] > liquidity_summary['ask_walls_count'] else 'bearish' if liquidity_summary['ask_walls_count'] > liquidity_summary['bid_walls_count'] else 'neutral'
-                slope_signal = 'bullish' if slopes.get('slope_asymmetry', 0) > 0.1 else 'bearish' if slopes.get('slope_asymmetry', 0) < -0.1 else 'neutral'
-                delta_signal = liquidity_delta.get('liquidity_sentiment', 'neutral')
+                # Generate overall liquidity signal safely
+                bid_count = liquidity_summary['bid_walls_count']
+                ask_count = liquidity_summary['ask_walls_count']
+                slope_asym = liquidity_summary['slope_asymmetry']
+                
+                wall_signal = 'bullish' if bid_count > ask_count else 'bearish' if ask_count > bid_count else 'neutral'
+                slope_signal = 'bullish' if slope_asym > 0.1 else 'bearish' if slope_asym < -0.1 else 'neutral'
+                delta_signal = liquidity_summary['liquidity_sentiment'].replace('_', '_') if liquidity_summary['liquidity_sentiment'] else 'neutral'
                 
                 liquidity_summary['overall_liquidity_signal'] = f"{wall_signal}_{slope_signal}_{delta_signal}"
             
