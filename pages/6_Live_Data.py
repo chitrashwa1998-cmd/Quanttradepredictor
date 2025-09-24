@@ -574,14 +574,13 @@ def show_live_data_page():
                 live_predictions = st.session_state.live_prediction_pipeline.get_latest_predictions()
                 independent_obi_cvd = st.session_state.live_prediction_pipeline.get_all_independent_obi_cvd_status()
 
-                if live_predictions:
-                    # Independent OBI+CVD Market Analysis Section
-                    if independent_obi_cvd:
-                        st.subheader("📈 Independent OBI+CVD Market Analysis")
-                        st.info("🔍 *Order Book Imbalance & Cumulative Volume Delta (53001 ONLY)*")
+                # Independent OBI+CVD Market Analysis Section - ALWAYS SHOW when data is available
+                if independent_obi_cvd:
+                    st.subheader("📈 Independent OBI+CVD Market Analysis")
+                    st.info("🔍 *Order Book Imbalance & Cumulative Volume Delta (53001 ONLY) - Real-time Tick Processing*")
 
-                        # Create columns for OBI+CVD display
-                        obi_cvd_cols = st.columns(min(2, len(independent_obi_cvd)))
+                    # Create columns for OBI+CVD display
+                    obi_cvd_cols = st.columns(min(2, len(independent_obi_cvd)))
 
                         for i, (instrument_key, obi_cvd_data) in enumerate(independent_obi_cvd.items()):
                             display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
@@ -817,6 +816,11 @@ def show_live_data_page():
 
                         st.divider()
 
+                # ML Model Predictions Section - Show only when available
+                if live_predictions:
+                    st.subheader("🤖 ML Model Predictions (5-Minute Candle Based)")
+                    st.info("🕐 *Predictions generated when complete 5-minute candles close*")
+                    
                     # Display ML model predictions in a grid
                     for instrument_key, prediction in live_predictions.items():
                         display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
@@ -1004,40 +1008,54 @@ def show_live_data_page():
                         st.divider()
 
                     # Container-based auto-refresh for OBI+CVD data only
-                    if auto_refresh_predictions:
-                        # Use a placeholder container that updates without full page reload
-                        import asyncio
-                        import threading
+                if auto_refresh_predictions:
+                    # Use a placeholder container that updates without full page reload
+                    import asyncio
+                    import threading
 
-                        # Create a refresh counter to track updates
-                        if 'obi_cvd_refresh_counter' not in st.session_state:
-                            st.session_state.obi_cvd_refresh_counter = 0
+                    # Create a refresh counter to track updates
+                    if 'obi_cvd_refresh_counter' not in st.session_state:
+                        st.session_state.obi_cvd_refresh_counter = 0
 
-                        # Increment counter to trigger container refresh
-                        st.session_state.obi_cvd_refresh_counter += 1
+                    # Increment counter to trigger container refresh
+                    st.session_state.obi_cvd_refresh_counter += 1
 
-                        # Use container refresh with a small delay to avoid WebSocket disruption
-                        time.sleep(0.5)  # Reduced from 1 second
+                    # Use container refresh with a small delay to avoid WebSocket disruption
+                    time.sleep(0.5)  # Reduced from 1 second
 
-                        # Only refresh if WebSocket is still connected
-                        if st.session_state.live_prediction_pipeline:
-                            pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
-                            if pipeline_status.get('data_connected', False):
-                                # Refresh only the data, not the entire page
-                                st.rerun()
+                    # Only refresh if WebSocket is still connected AND we have OBI+CVD data
+                    if st.session_state.live_prediction_pipeline:
+                        pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
+                        has_obi_cvd = pipeline_status.get('obi_cvd_active', False)
+                        if pipeline_status.get('data_connected', False) and (independent_obi_cvd or has_obi_cvd):
+                            # Refresh only the data, not the entire page
+                            st.rerun()
 
+                elif independent_obi_cvd:
+                    # OBI+CVD is working but ML predictions aren't ready yet
+                    st.info("🤖 **ML Model Predictions:** Waiting for first 5-minute candle to close...")
+                    st.write("📊 OBI+CVD analysis is running in real-time above")
+                    st.write("⏳ ML predictions will appear after the first complete 5-minute candle")
+                    
+                    # Show model readiness status
+                    pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
+                    trained_models = pipeline_status.get('trained_models', [])
+                    if trained_models:
+                        st.write(f"✅ **Ready models:** {', '.join(trained_models)} ({len(trained_models)}/4)")
+                    else:
+                        st.warning("⚠️ No trained models available. Please train models first.")
                 else:
-                    st.info("🎯 Prediction pipeline is active but no predictions generated yet. Please wait for sufficient OHLC data to accumulate...")
+                    st.info("🎯 Prediction pipeline is active but no data available yet...")
 
                     # Show requirements for all models
                     st.write("**Requirements for comprehensive predictions:**")
-                    st.write("• Minimum 100 OHLC data points")
+                    st.write("• **OBI+CVD:** Real-time tick data from NSE_FO|53001")
+                    st.write("• **ML Models:** Complete 5-minute candles + trained models")
                     st.write("• At least one of the 4 models must be trained:")
                     st.write("  - Direction Model (price movement prediction)")
                     st.write("  - Volatility Model (market volatility forecasting)")
                     st.write("  - Profit Probability Model (profit opportunity detection)")
                     st.write("  - Reversal Model (trend reversal identification)")
-                    st.write("• Sufficient tick data for feature calculation")
 
             else:
                 st.warning("⚠️ Prediction pipeline not active. Please connect to start receiving live predictions from all trained models.")
