@@ -736,8 +736,18 @@ def show_live_data_page():
                                     slope_asymmetry = obi_cvd_data.get('slope_asymmetry', 0.0)
                                     slope_interpretation = obi_cvd_data.get('slope_interpretation', 'neutral_neutral')
                                     
-                                    slope_color = "🟢" if slope_asymmetry > 0.1 else "🔴" if slope_asymmetry < -0.1 else "⚪"
-                                    st.metric(f"{slope_color} Slope Asymmetry", f"{slope_asymmetry:.3f}", slope_interpretation.replace('_', ' ').title())
+                                    # Interpret slope asymmetry for bullish/bearish message
+                                    if slope_asymmetry > 0.1:
+                                        slope_message = "Bullish - Bid support deeper, Ask resistance lighter"
+                                        slope_color = "🟢"
+                                    elif slope_asymmetry < -0.1:
+                                        slope_message = "Bearish - Ask resistance heavy, Bid support shallow"
+                                        slope_color = "🔴"
+                                    else:
+                                        slope_message = "Neutral - Balanced liquidity distribution"
+                                        slope_color = "⚪"
+                                    
+                                    st.metric(f"{slope_color} Slope Asymmetry", f"{slope_asymmetry:.3f}", slope_message)
                                     
                                     # Bid/Ask Slopes
                                     bid_slope = obi_cvd_data.get('order_book_slope_bid', 0.0)
