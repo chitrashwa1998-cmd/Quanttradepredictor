@@ -352,7 +352,7 @@ class OBICVDConfirmation:
                     if isinstance(ask_price, (int, float)) and isinstance(ask_qty, (int, float)) and ask_price > 0:
                         prev_ask_map[float(ask_price)] = float(ask_qty)
             
-            # Calculate bid side changes
+            # Calculate bid side changes (include both additions and removals)
             for level in current_depth:
                 if isinstance(level, dict):
                     bid_price = level.get('bid_price', 0)
@@ -364,12 +364,12 @@ class OBICVDConfirmation:
                             previous_qty = prev_bid_map.get(float(bid_price), 0.0)
                             delta = current_qty - previous_qty
                             
-                            if delta > 0:  # Only count liquidity additions
-                                delta_bid_total += delta
+                            # Count ALL liquidity changes (both positive and negative)
+                            delta_bid_total += delta
                         except (ValueError, TypeError):
                             continue
             
-            # Calculate ask side changes
+            # Calculate ask side changes (include both additions and removals)
             for level in current_depth:
                 if isinstance(level, dict):
                     ask_price = level.get('ask_price', 0)
@@ -381,8 +381,8 @@ class OBICVDConfirmation:
                             previous_qty = prev_ask_map.get(float(ask_price), 0.0)
                             delta = current_qty - previous_qty
                             
-                            if delta > 0:  # Only count liquidity additions
-                                delta_ask_total += delta
+                            # Count ALL liquidity changes (both positive and negative)
+                            delta_ask_total += delta
                         except (ValueError, TypeError):
                             continue
             
@@ -401,14 +401,30 @@ class OBICVDConfirmation:
     
     def _interpret_liquidity_delta(self, delta_bid: float, delta_ask: float) -> str:
         """Interpret liquidity delta changes."""
-        if delta_bid > delta_ask * 1.5:
-            return "buyers_adding_liquidity"
-        elif delta_ask > delta_bid * 1.5:
-            return "sellers_adding_liquidity"
+        # Handle significant bid-side changes
+        if delta_bid > 0 and abs(delta_bid) > abs(delta_ask) * 1.5:
+            return "strong_bid_liquidity_addition"
+        elif delta_bid < 0 and abs(delta_bid) > abs(delta_ask) * 1.5:
+            return "strong_bid_liquidity_removal"
+        
+        # Handle significant ask-side changes  
+        elif delta_ask > 0 and abs(delta_ask) > abs(delta_bid) * 1.5:
+            return "strong_ask_liquidity_addition"
+        elif delta_ask < 0 and abs(delta_ask) > abs(delta_bid) * 1.5:
+            return "strong_ask_liquidity_removal"
+        
+        # Handle both sides moving in same direction
         elif delta_bid < 0 and delta_ask < 0:
             return "liquidity_pulling_both_sides"
         elif delta_bid > 0 and delta_ask > 0:
             return "liquidity_adding_both_sides"
+        
+        # Handle mixed scenarios
+        elif delta_bid > 0 and delta_ask < 0:
+            return "bid_adding_ask_removing"
+        elif delta_bid < 0 and delta_ask > 0:
+            return "bid_removing_ask_adding"
+        
         else:
             return "neutral_liquidity_change"
     
