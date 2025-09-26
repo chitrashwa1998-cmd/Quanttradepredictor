@@ -135,9 +135,9 @@ initialize_session_state()
 
 # Create TribexAlpha logo in sidebar without navigation tabs
 st.sidebar.markdown("""
-<div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #00ffff 0%, #8b5cf6 100%); 
-     border-radius: 16px; margin-bottom: 2rem;">
-    <h2 style="color: white; margin: 0; font-family: 'Orbitron', monospace;">⚡ TribexAlpha</h2>
+<div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1a1d29 0%, #252837 100%); 
+     border: 2px solid #00ffff; border-radius: 16px; margin-bottom: 2rem; box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);">
+    <h2 style="color: #00ffff; margin: 0; font-family: 'Orbitron', monospace; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); font-weight: 800;">⚡ TribexAlpha</h2>
 </div>
 """, unsafe_allow_html=True)
 
