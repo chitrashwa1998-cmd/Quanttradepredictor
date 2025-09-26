@@ -9,11 +9,11 @@ port = 5000
 address = "0.0.0.0"
 
 [theme]
-base = "light"
-primaryColor = "#2563eb"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f8f9fa"
-textColor = "#1f2937"
+base = "dark"
+primaryColor = "#3b82f6"
+backgroundColor = "#1a1d23"
+secondaryBackgroundColor = "#252930"
+textColor = "#e2e8f0"
 
 [browser]
 gatherUsageStats = false

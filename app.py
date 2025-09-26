@@ -20,16 +20,16 @@ with open('style.css') as f:
 
 # Enhanced critical CSS - loads before everything else
 critical_css = """
-/* Force immediate light theme - highest priority */
-* { background: #ffffff !important; color: #1f2937 !important; }
+/* Force immediate dark theme - highest priority */
+* { background: #1a1d23 !important; color: #e2e8f0 !important; }
 html, body, #root, [data-testid="stApp"] { 
-    background: #ffffff !important; 
-    color: #1f2937 !important; 
+    background: #1a1d23 !important; 
+    color: #e2e8f0 !important; 
     transition: none !important;
 }
 .stApp, .main, .block-container { 
-    background: #ffffff !important; 
-    color: #1f2937 !important; 
+    background: #1a1d23 !important; 
+    color: #e2e8f0 !important; 
     transition: none !important;
 }
 /* Disable all transitions during load */
@@ -42,21 +42,21 @@ st.markdown(f'<style>{css_content}</style>', unsafe_allow_html=True)
 
 # Add comprehensive meta tags for perfect cross-tab theme consistency
 st.markdown("""
-<meta name="theme-color" content="#ffffff">
-<meta name="color-scheme" content="light">
-<meta name="msapplication-navbutton-color" content="#ffffff">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="msapplication-TileColor" content="#ffffff">
-<meta name="msapplication-navbutton-color" content="#ffffff">
+<meta name="theme-color" content="#1a1d23">
+<meta name="color-scheme" content="dark">
+<meta name="msapplication-navbutton-color" content="#1a1d23">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="msapplication-TileColor" content="#1a1d23">
+<meta name="msapplication-navbutton-color" content="#1a1d23">
 <script>
-    // Light theme consistency
+    // Dark theme consistency
     function lockTheme() {
-        document.documentElement.style.setProperty('background-color', '#ffffff', 'important');
-        document.documentElement.style.setProperty('color', '#1f2937', 'important');
-        document.documentElement.style.setProperty('color-scheme', 'light', 'important');
-        document.body.style.setProperty('background-color', '#ffffff', 'important');
-        document.body.style.setProperty('color', '#1f2937', 'important');
-        document.body.style.setProperty('color-scheme', 'light', 'important');
+        document.documentElement.style.setProperty('background-color', '#1a1d23', 'important');
+        document.documentElement.style.setProperty('color', '#e2e8f0', 'important');
+        document.documentElement.style.setProperty('color-scheme', 'dark', 'important');
+        document.body.style.setProperty('background-color', '#1a1d23', 'important');
+        document.body.style.setProperty('color', '#e2e8f0', 'important');
+        document.body.style.setProperty('color-scheme', 'dark', 'important');
     }
     
     // Apply immediately

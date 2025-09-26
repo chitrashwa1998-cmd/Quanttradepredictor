@@ -1,60 +1,61 @@
-/* CRITICAL: Instant light theme injection - loads immediately */
+
+/* CRITICAL: Instant dark theme injection - loads immediately */
 html, body, #root, [data-testid="stApp"], .stApp { 
-    background: #ffffff !important; 
-    color: #2c3e50 !important; 
+    background: #1a1d23 !important; 
+    color: #e2e8f0 !important; 
     min-height: 100vh !important;
 }
 
 /* Import clean fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Source+Code+Pro:wght@400;500;600&display=swap');
 
-/* CSS Variables - Clean Light Theme */
+/* CSS Variables - Professional Dark Theme */
 :root, 
 html,
 body,
 [data-testid="stApp"],
 .stApp {
-    --bg-primary: #ffffff !important;
-    --bg-secondary: #f8f9fa !important;
-    --bg-tertiary: #f1f3f4 !important;
-    --card-bg: #ffffff !important;
-    --card-bg-hover: #f8f9fa !important;
+    --bg-primary: #1a1d23 !important;
+    --bg-secondary: #252930 !important;
+    --bg-tertiary: #2d3748 !important;
+    --card-bg: #1e2328 !important;
+    --card-bg-hover: #252930 !important;
 
-    --accent-blue: #2563eb !important;
-    --accent-green: #059669 !important;
-    --accent-purple: #7c3aed !important;
-    --accent-red: #dc2626 !important;
-    --accent-orange: #ea580c !important;
+    --accent-blue: #3b82f6 !important;
+    --accent-green: #10b981 !important;
+    --accent-purple: #8b5cf6 !important;
+    --accent-red: #ef4444 !important;
+    --accent-orange: #f59e0b !important;
     --accent-gray: #6b7280 !important;
 
-    --text-primary: #1f2937 !important;
-    --text-secondary: #4b5563 !important;
-    --text-accent: #2563eb !important;
-    --text-muted: #9ca3af !important;
+    --text-primary: #e2e8f0 !important;
+    --text-secondary: #cbd5e1 !important;
+    --text-accent: #60a5fa !important;
+    --text-muted: #94a3b8 !important;
 
-    --border: #e5e7eb !important;
-    --border-hover: #d1d5db !important;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
-    --shadow-hover: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+    --border: #374151 !important;
+    --border-hover: #4b5563 !important;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.3) !important;
+    --shadow-hover: 0 8px 12px rgba(0, 0, 0, 0.4) !important;
 
     --font-primary: 'Inter', sans-serif !important;
     --font-mono: 'Source Code Pro', monospace !important;
 
     /* Force color scheme */
-    color-scheme: light !important;
-    background-color: #ffffff !important;
-    color: #1f2937 !important;
+    color-scheme: dark !important;
+    background-color: #1a1d23 !important;
+    color: #e2e8f0 !important;
 }
 
-/* Force light theme immediately on load */
+/* Force dark theme immediately on load */
 html,
 html:focus,
 html:active,
 html:hover {
-    background: #ffffff !important;
-    color: #1f2937 !important;
+    background: #1a1d23 !important;
+    color: #e2e8f0 !important;
     min-height: 100vh !important;
-    color-scheme: light !important;
+    color-scheme: dark !important;
 }
 
 /* Lock tab state consistency */
@@ -67,9 +68,9 @@ html:hover,
 body:focus,
 body:active,
 body:hover {
-    background: #ffffff !important;
-    color: #1f2937 !important;
-    color-scheme: light !important;
+    background: #1a1d23 !important;
+    color: #e2e8f0 !important;
+    color-scheme: dark !important;
 }
 
 /* Browser tab visibility states */
@@ -77,9 +78,9 @@ html:not([hidden]),
 html[hidden],
 body:not([hidden]),
 body[hidden] {
-    background: #ffffff !important;
-    color: #1f2937 !important;
-    color-scheme: light !important;
+    background: #1a1d23 !important;
+    color: #e2e8f0 !important;
+    color-scheme: dark !important;
 }
 
 /* Global Styles */
@@ -90,28 +91,28 @@ body[hidden] {
 }
 
 html, body {
-    background: #ffffff !important;
-    color: #1f2937 !important;
+    background: #1a1d23 !important;
+    color: #e2e8f0 !important;
     font-family: 'Inter', sans-serif !important;
     overflow-x: hidden;
     min-height: 100vh !important;
-    color-scheme: light !important;
+    color-scheme: dark !important;
 }
 
 /* Window focus/blur state locks */
 @media (prefers-color-scheme: light) {
     html, body, :root {
-        background: #ffffff !important;
-        color: #1f2937 !important;
-        color-scheme: light !important;
+        background: #1a1d23 !important;
+        color: #e2e8f0 !important;
+        color-scheme: dark !important;
     }
 }
 
 @media (prefers-color-scheme: dark) {
     html, body, :root {
-        background: #ffffff !important;
-        color: #1f2937 !important;
-        color-scheme: light !important;
+        background: #1a1d23 !important;
+        color: #e2e8f0 !important;
+        color-scheme: dark !important;
     }
 }
 
@@ -119,14 +120,10 @@ html, body {
 html[data-whatinput="mouse"],
 html[data-whatinput="keyboard"],
 html[data-whatinput="touch"] {
-    background: #ffffff !important;
-    color: #1f2937 !important;
-    color-scheme: light !important;
+    background: #1a1d23 !important;
+    color: #e2e8f0 !important;
+    color-scheme: dark !important;
 }
-
-/* Animated Background - Removed for clean light theme */
-/* body::before { ... } */
-/* @keyframes backgroundShift { ... } */
 
 /* Streamlit Container Overrides */
 .main .block-container {
@@ -135,7 +132,7 @@ html[data-whatinput="touch"] {
     max-width: 1400px !important;
 }
 
-/* Force Streamlit light theme immediately */
+/* Force Streamlit dark theme immediately */
 .stApp {
     background: var(--bg-primary) !important;
     color: var(--text-primary) !important;
@@ -150,12 +147,12 @@ html[data-whatinput="touch"] {
     background: transparent !important;
 }
 
-/* Ensure iframe content uses light theme */
+/* Ensure iframe content uses dark theme */
 iframe {
     background: var(--bg-primary) !important;
 }
 
-/* Override any Streamlit light theme defaults */
+/* Override any Streamlit theme defaults */
 [data-testid="stApp"] {
     background: var(--bg-primary) !important;
     color: var(--text-primary) !important;
@@ -178,12 +175,12 @@ h1 {
     color: var(--text-primary) !important;
     text-align: center;
     margin-bottom: 1rem !important;
-    background: none !important; /* Removed gradient */
+    background: none !important;
     -webkit-background-clip: unset !important;
     -webkit-text-fill-color: unset !important;
     background-clip: unset !important;
-    text-shadow: none !important; /* Removed shadow */
-    animation: none !important; /* Removed animation */
+    text-shadow: none !important;
+    animation: none !important;
 }
 
 h2 {
@@ -220,17 +217,6 @@ h4 {
     box-shadow: var(--shadow);
 }
 
-.trading-header::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: transparent; /* Removed gradient */
-    animation: none; /* Removed animation */
-}
-
 /* Card Components */
 .metric-container {
     background: var(--card-bg);
@@ -246,11 +232,7 @@ h4 {
     border-color: var(--border-hover);
     background: var(--card-bg-hover);
     box-shadow: var(--shadow-hover);
-    transform: none; /* Removed transform */
-}
-
-.metric-container::before {
-    content: none; /* Removed pseudo-element */
+    transform: translateY(-2px);
 }
 
 /* Chart Container */
@@ -264,19 +246,9 @@ h4 {
     position: relative;
 }
 
-.chart-container::after {
-    content: none; /* Removed pseudo-element */
-}
-
-/* Glow Animation - Removed */
-.glow-animation {
-    animation: none;
-}
-
 /* Status Indicators */
 .status-online {
     color: var(--accent-green) !important;
-    animation: none !important; /* Removed animation */
 }
 
 .status-warning {
@@ -302,9 +274,9 @@ h4 {
 }
 
 .stButton > button:hover {
-    background: #1d4ed8 !important;
+    background: #2563eb !important;
     box-shadow: var(--shadow-hover) !important;
-    transform: none !important; /* Removed transform */
+    transform: translateY(-1px) !important;
 }
 
 /* Sidebar */
@@ -336,7 +308,7 @@ h4 {
 .stTextInput > div > div > input,
 .stSelectbox > div > div > div,
 .stNumberInput > div > div > input {
-    background: var(--bg-primary) !important;
+    background: var(--bg-secondary) !important;
     border: 1px solid var(--border) !important;
     border-radius: 6px !important;
     color: var(--text-primary) !important;
@@ -347,7 +319,7 @@ h4 {
 .stSelectbox > div > div > div:focus,
 .stNumberInput > div > div > input:focus {
     border-color: var(--accent-blue) !important;
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1) !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
 }
 
 /* Progress Bars */
@@ -387,11 +359,6 @@ pre {
     padding: 1rem !important;
 }
 
-/* Page Transitions - Removed */
-.main {
-    animation: none !important;
-}
-
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
@@ -407,7 +374,7 @@ pre {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--accent-gray);
+    background: var(--accent-blue);
 }
 
 /* Responsive Design */
@@ -447,15 +414,56 @@ pre {
 /* Success/Error States */
 .success-state {
     border-left: 4px solid var(--accent-green) !important;
-    background: rgba(5, 150, 105, 0.05) !important;
+    background: rgba(16, 185, 129, 0.1) !important;
 }
 
 .error-state {
     border-left: 4px solid var(--accent-red) !important;
-    background: rgba(220, 38, 38, 0.05) !important;
+    background: rgba(239, 68, 68, 0.1) !important;
 }
 
 .warning-state {
     border-left: 4px solid var(--accent-orange) !important;
-    background: rgba(234, 88, 12, 0.05) !important;
+    background: rgba(245, 158, 11, 0.1) !important;
+}
+
+/* Feature Cards */
+.feature-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin: 1rem 0;
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+    border-color: var(--accent-blue);
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
+}
+
+/* Enhanced metric containers with subtle blue glow */
+.glow-animation {
+    position: relative;
+    overflow: hidden;
+}
+
+.glow-animation::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, transparent, rgba(59, 130, 246, 0.3), transparent);
+    border-radius: 10px;
+    z-index: -1;
+    animation: borderGlow 3s ease-in-out infinite;
+}
+
+@keyframes borderGlow {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.7; }
 }
