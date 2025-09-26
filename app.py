@@ -17,20 +17,42 @@ st.set_page_config(
 # Load custom CSS with immediate dark theme injection
 with open('style.css') as f:
     css_content = f.read()
-    
-# Add critical CSS to ensure dark theme loads immediately
+
+# Enhanced critical CSS - loads before everything else
 critical_css = """
-html { background: #0a0a0f !important; color: #ffffff !important; }
-body { background: #0a0a0f !important; color: #ffffff !important; }
-.stApp { background: #0a0a0f !important; color: #ffffff !important; }
+/* Force immediate dark theme - highest priority */
+* { background: #0a0a0f !important; color: #ffffff !important; }
+html, body, #root, [data-testid="stApp"] { 
+    background: #0a0a0f !important; 
+    color: #ffffff !important; 
+    transition: none !important;
+}
+.stApp, .main, .block-container { 
+    background: #0a0a0f !important; 
+    color: #ffffff !important; 
+    transition: none !important;
+}
+/* Disable all transitions during load */
+*, *::before, *::after { transition: none !important; animation-duration: 0s !important; }
 """
 
-st.markdown(f'<style>{critical_css}{css_content}</style>', unsafe_allow_html=True)
+# Inject critical CSS first, then full CSS
+st.markdown(f'<style>{critical_css}</style>', unsafe_allow_html=True)
+st.markdown(f'<style>{css_content}</style>', unsafe_allow_html=True)
 
-# Add meta tag for theme-color
+# Add comprehensive meta tags for perfect theme consistency
 st.markdown("""
 <meta name="theme-color" content="#0a0a0f">
 <meta name="color-scheme" content="dark">
+<meta name="msapplication-navbutton-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script>
+    // Force dark theme before any rendering
+    document.documentElement.style.backgroundColor = '#0a0a0f';
+    document.documentElement.style.color = '#ffffff';
+    document.body.style.backgroundColor = '#0a0a0f';
+    document.body.style.color = '#ffffff';
+</script>
 """, unsafe_allow_html=True)
 
 # Auto-restore system

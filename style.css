@@ -1,4 +1,11 @@
 
+/* CRITICAL: Instant dark theme injection - loads immediately */
+html, body, #root, [data-testid="stApp"], .stApp { 
+    background: #0a0a0f !important; 
+    color: #ffffff !important; 
+    min-height: 100vh !important;
+}
+
 /* Import futuristic fonts */
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
 

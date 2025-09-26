@@ -8,6 +8,13 @@ maxUploadSize = 200
 port = 5000
 address = "0.0.0.0"
 
+[theme]
+base = "dark"
+primaryColor = "#00ffff"
+backgroundColor = "#0a0a0f"
+secondaryBackgroundColor = "#151520"
+textColor = "#ffffff"
+
 [browser]
 gatherUsageStats = false
 
