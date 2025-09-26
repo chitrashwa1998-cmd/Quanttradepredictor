@@ -8,7 +8,7 @@ warnings.filterwarnings('ignore')
 
 # Page configuration
 st.set_page_config(
-    page_title="TribexAlpha",
+    page_title="Home",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -22,7 +22,7 @@ with open('style.css') as f:
 from auto_restore import auto_restore_system
 auto_restore_system()
 
-# Initialize session state with automatic data recovery
+# Initialize session state with automatic data and model recovery
 def initialize_session_state():
     """Initialize session state with automatic data and model recovery."""
     # Core session state variables
