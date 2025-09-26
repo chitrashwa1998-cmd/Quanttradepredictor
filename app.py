@@ -40,18 +40,40 @@ html, body, #root, [data-testid="stApp"] {
 st.markdown(f'<style>{critical_css}</style>', unsafe_allow_html=True)
 st.markdown(f'<style>{css_content}</style>', unsafe_allow_html=True)
 
-# Add comprehensive meta tags for perfect theme consistency
+# Add comprehensive meta tags for perfect cross-tab theme consistency
 st.markdown("""
 <meta name="theme-color" content="#0a0a0f">
 <meta name="color-scheme" content="dark">
 <meta name="msapplication-navbutton-color" content="#0a0a0f">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="msapplication-TileColor" content="#0a0a0f">
+<meta name="msapplication-navbutton-color" content="#0a0a0f">
 <script>
-    // Force dark theme before any rendering
-    document.documentElement.style.backgroundColor = '#0a0a0f';
-    document.documentElement.style.color = '#ffffff';
-    document.body.style.backgroundColor = '#0a0a0f';
-    document.body.style.color = '#ffffff';
+    // Enhanced cross-tab theme consistency
+    function lockTheme() {
+        document.documentElement.style.setProperty('background-color', '#0a0a0f', 'important');
+        document.documentElement.style.setProperty('color', '#ffffff', 'important');
+        document.documentElement.style.setProperty('color-scheme', 'dark', 'important');
+        document.body.style.setProperty('background-color', '#0a0a0f', 'important');
+        document.body.style.setProperty('color', '#ffffff', 'important');
+        document.body.style.setProperty('color-scheme', 'dark', 'important');
+    }
+    
+    // Apply immediately
+    lockTheme();
+    
+    // Lock on window focus/blur
+    window.addEventListener('focus', lockTheme);
+    window.addEventListener('blur', lockTheme);
+    
+    // Lock on visibility change (tab switching)
+    document.addEventListener('visibilitychange', lockTheme);
+    
+    // Lock on DOM ready
+    document.addEventListener('DOMContentLoaded', lockTheme);
+    
+    // Continuous enforcement
+    setInterval(lockTheme, 1000);
 </script>
 """, unsafe_allow_html=True)
 

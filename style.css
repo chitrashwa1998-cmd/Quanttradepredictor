@@ -9,49 +9,87 @@ html, body, #root, [data-testid="stApp"], .stApp {
 /* Import futuristic fonts */
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
-/* CSS Variables - Cyberpunk Theme */
-:root {
-    --bg-primary: #0a0a0f;
-    --bg-secondary: #151520;
-    --bg-tertiary: #1a1a2e;
-    --card-bg: rgba(25, 25, 45, 0.9);
-    --card-bg-hover: rgba(35, 35, 55, 0.95);
+/* CSS Variables - Cyberpunk Theme - LOCKED FOR ALL TAB STATES */
+:root, 
+html,
+body,
+[data-testid="stApp"],
+.stApp {
+    --bg-primary: #0a0a0f !important;
+    --bg-secondary: #151520 !important;
+    --bg-tertiary: #1a1a2e !important;
+    --card-bg: rgba(25, 25, 45, 0.9) !important;
+    --card-bg-hover: rgba(35, 35, 55, 0.95) !important;
     
-    --accent-cyan: #00ffff;
-    --accent-electric: #00ff41;
-    --accent-purple: #8b5cf6;
-    --accent-pink: #ff0080;
-    --accent-gold: #ffd700;
-    --accent-orange: #ff6b35;
+    --accent-cyan: #00ffff !important;
+    --accent-electric: #00ff41 !important;
+    --accent-purple: #8b5cf6 !important;
+    --accent-pink: #ff0080 !important;
+    --accent-gold: #ffd700 !important;
+    --accent-orange: #ff6b35 !important;
     
-    --text-primary: #ffffff;
-    --text-secondary: #b8bcc8;
-    --text-accent: #00ffff;
-    --text-muted: #6b7280;
+    --text-primary: #ffffff !important;
+    --text-secondary: #b8bcc8 !important;
+    --text-accent: #00ffff !important;
+    --text-muted: #6b7280 !important;
     
-    --border: rgba(0, 255, 255, 0.2);
-    --border-hover: rgba(0, 255, 255, 0.5);
-    --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    --shadow-glow: 0 0 20px rgba(0, 255, 255, 0.1);
+    --border: rgba(0, 255, 255, 0.2) !important;
+    --border-hover: rgba(0, 255, 255, 0.5) !important;
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+    --shadow-glow: 0 0 20px rgba(0, 255, 255, 0.1) !important;
     
-    --font-primary: 'Space Grotesk', sans-serif;
-    --font-display: 'Orbitron', monospace;
-    --font-mono: 'JetBrains Mono', monospace;
+    --font-primary: 'Space Grotesk', sans-serif !important;
+    --font-display: 'Orbitron', monospace !important;
+    --font-mono: 'JetBrains Mono', monospace !important;
     
-    --gradient-primary: linear-gradient(135deg, #00ffff, #8b5cf6, #ff0080);
-    --gradient-card: linear-gradient(145deg, rgba(25, 25, 45, 0.9), rgba(35, 35, 55, 0.6));
-    --gradient-button: linear-gradient(45deg, #00ffff, #00ff41);
-    --gradient-danger: linear-gradient(45deg, #ff0080, #ff6b35);
+    --gradient-primary: linear-gradient(135deg, #00ffff, #8b5cf6, #ff0080) !important;
+    --gradient-card: linear-gradient(145deg, rgba(25, 25, 45, 0.9), rgba(35, 35, 55, 0.6)) !important;
+    --gradient-button: linear-gradient(45deg, #00ffff, #00ff41) !important;
+    --gradient-danger: linear-gradient(45deg, #ff0080, #ff6b35) !important;
+
+    /* Force color scheme lock */
+    color-scheme: dark !important;
+    background-color: #0a0a0f !important;
+    color: #ffffff !important;
 }
 
-/* Force dark theme immediately on load */
-html {
+/* Force dark theme immediately on load - ALL TAB STATES */
+html,
+html:focus,
+html:active,
+html:hover {
     background: #0a0a0f !important;
     color: #ffffff !important;
     min-height: 100vh !important;
+    color-scheme: dark !important;
 }
 
-/* Global Styles */
+/* Lock tab state consistency */
+:root:focus,
+:root:active,
+:root:hover,
+html:focus,
+html:active,
+html:hover,
+body:focus,
+body:active,
+body:hover {
+    background: #0a0a0f !important;
+    color: #ffffff !important;
+    color-scheme: dark !important;
+}
+
+/* Browser tab visibility states */
+html:not([hidden]),
+html[hidden],
+body:not([hidden]),
+body[hidden] {
+    background: #0a0a0f !important;
+    color: #ffffff !important;
+    color-scheme: dark !important;
+}
+
+/* Global Styles - TAB CONSISTENCY LOCK */
 * {
     margin: 0;
     padding: 0;
@@ -59,11 +97,38 @@ html {
 }
 
 html, body {
-    background: var(--bg-primary, #0a0a0f) !important;
-    color: var(--text-primary, #ffffff) !important;
-    font-family: var(--font-primary, 'Space Grotesk', sans-serif) !important;
+    background: #0a0a0f !important;
+    color: #ffffff !important;
+    font-family: 'Space Grotesk', sans-serif !important;
     overflow-x: hidden;
     min-height: 100vh !important;
+    color-scheme: dark !important;
+}
+
+/* Window focus/blur state locks */
+@media (prefers-color-scheme: light) {
+    html, body, :root {
+        background: #0a0a0f !important;
+        color: #ffffff !important;
+        color-scheme: dark !important;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    html, body, :root {
+        background: #0a0a0f !important;
+        color: #ffffff !important;
+        color-scheme: dark !important;
+    }
+}
+
+/* Tab visibility API overrides */
+html[data-whatinput="mouse"],
+html[data-whatinput="keyboard"],
+html[data-whatinput="touch"] {
+    background: #0a0a0f !important;
+    color: #ffffff !important;
+    color-scheme: dark !important;
 }
 
 /* Animated Background */
