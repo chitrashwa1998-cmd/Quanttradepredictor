@@ -20,16 +20,16 @@ with open('style.css') as f:
 
 # Enhanced critical CSS - loads before everything else
 critical_css = """
-/* Force immediate dark theme - highest priority */
-* { background: #0a0a0f !important; color: #ffffff !important; }
+/* Force immediate light theme - highest priority */
+* { background: #ffffff !important; color: #1f2937 !important; }
 html, body, #root, [data-testid="stApp"] { 
-    background: #0a0a0f !important; 
-    color: #ffffff !important; 
+    background: #ffffff !important; 
+    color: #1f2937 !important; 
     transition: none !important;
 }
 .stApp, .main, .block-container { 
-    background: #0a0a0f !important; 
-    color: #ffffff !important; 
+    background: #ffffff !important; 
+    color: #1f2937 !important; 
     transition: none !important;
 }
 /* Disable all transitions during load */
@@ -42,21 +42,21 @@ st.markdown(f'<style>{css_content}</style>', unsafe_allow_html=True)
 
 # Add comprehensive meta tags for perfect cross-tab theme consistency
 st.markdown("""
-<meta name="theme-color" content="#0a0a0f">
-<meta name="color-scheme" content="dark">
-<meta name="msapplication-navbutton-color" content="#0a0a0f">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="msapplication-TileColor" content="#0a0a0f">
-<meta name="msapplication-navbutton-color" content="#0a0a0f">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light">
+<meta name="msapplication-navbutton-color" content="#ffffff">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="msapplication-TileColor" content="#ffffff">
+<meta name="msapplication-navbutton-color" content="#ffffff">
 <script>
-    // Enhanced cross-tab theme consistency
+    // Light theme consistency
     function lockTheme() {
-        document.documentElement.style.setProperty('background-color', '#0a0a0f', 'important');
-        document.documentElement.style.setProperty('color', '#ffffff', 'important');
-        document.documentElement.style.setProperty('color-scheme', 'dark', 'important');
-        document.body.style.setProperty('background-color', '#0a0a0f', 'important');
-        document.body.style.setProperty('color', '#ffffff', 'important');
-        document.body.style.setProperty('color-scheme', 'dark', 'important');
+        document.documentElement.style.setProperty('background-color', '#ffffff', 'important');
+        document.documentElement.style.setProperty('color', '#1f2937', 'important');
+        document.documentElement.style.setProperty('color-scheme', 'light', 'important');
+        document.body.style.setProperty('background-color', '#ffffff', 'important');
+        document.body.style.setProperty('color', '#1f2937', 'important');
+        document.body.style.setProperty('color-scheme', 'light', 'important');
     }
     
     // Apply immediately
@@ -71,9 +71,6 @@ st.markdown("""
     
     // Lock on DOM ready
     document.addEventListener('DOMContentLoaded', lockTheme);
-    
-    // Continuous enforcement
-    setInterval(lockTheme, 1000);
 </script>
 """, unsafe_allow_html=True)
 
