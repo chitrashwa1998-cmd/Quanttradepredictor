@@ -14,65 +14,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load custom CSS with immediate dark theme injection
+# Load custom CSS - same approach as other tabs
 with open('style.css') as f:
-    css_content = f.read()
-
-# Enhanced critical CSS - loads before everything else
-critical_css = """
-/* Force immediate dark theme - highest priority */
-* { background: #1a1d23 !important; color: #e2e8f0 !important; }
-html, body, #root, [data-testid="stApp"] { 
-    background: #1a1d23 !important; 
-    color: #e2e8f0 !important; 
-    transition: none !important;
-}
-.stApp, .main, .block-container { 
-    background: #1a1d23 !important; 
-    color: #e2e8f0 !important; 
-    transition: none !important;
-}
-/* Disable all transitions during load */
-*, *::before, *::after { transition: none !important; animation-duration: 0s !important; }
-"""
-
-# Inject critical CSS first, then full CSS
-st.markdown(f'<style>{critical_css}</style>', unsafe_allow_html=True)
-st.markdown(f'<style>{css_content}</style>', unsafe_allow_html=True)
-
-# Add comprehensive meta tags for perfect cross-tab theme consistency
-st.markdown("""
-<meta name="theme-color" content="#1a1d23">
-<meta name="color-scheme" content="dark">
-<meta name="msapplication-navbutton-color" content="#1a1d23">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="msapplication-TileColor" content="#1a1d23">
-<meta name="msapplication-navbutton-color" content="#1a1d23">
-<script>
-    // Dark theme consistency
-    function lockTheme() {
-        document.documentElement.style.setProperty('background-color', '#1a1d23', 'important');
-        document.documentElement.style.setProperty('color', '#e2e8f0', 'important');
-        document.documentElement.style.setProperty('color-scheme', 'dark', 'important');
-        document.body.style.setProperty('background-color', '#1a1d23', 'important');
-        document.body.style.setProperty('color', '#e2e8f0', 'important');
-        document.body.style.setProperty('color-scheme', 'dark', 'important');
-    }
-    
-    // Apply immediately
-    lockTheme();
-    
-    // Lock on window focus/blur
-    window.addEventListener('focus', lockTheme);
-    window.addEventListener('blur', lockTheme);
-    
-    // Lock on visibility change (tab switching)
-    document.addEventListener('visibilitychange', lockTheme);
-    
-    // Lock on DOM ready
-    document.addEventListener('DOMContentLoaded', lockTheme);
-</script>
-""", unsafe_allow_html=True)
+    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 # Auto-restore system
 from auto_restore import auto_restore_system
