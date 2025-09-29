@@ -96,6 +96,11 @@ class OBICVDConfirmation:
         Range: -1 (only sellers) to +1 (only buyers)
         """
         try:
+            # Input validation
+            if not isinstance(tick_data, dict):
+                print(f"❌ Invalid tick_data type: {type(tick_data)}")
+                return None
+            
             # Strict check - only process if we have valid futures tick data
             instrument_token = tick_data.get('instrument_token', '')
             if '53001' not in str(instrument_token):
@@ -105,6 +110,14 @@ class OBICVDConfirmation:
             # Check if 30-level depth data is available (enhanced data)
             total_bid_30_levels = tick_data.get('total_bid_quantity_30_levels', 0)
             total_ask_30_levels = tick_data.get('total_ask_quantity_30_levels', 0)
+            
+            # Type validation and conversion
+            try:
+                total_bid_30_levels = float(total_bid_30_levels) if total_bid_30_levels is not None else 0.0
+                total_ask_30_levels = float(total_ask_30_levels) if total_ask_30_levels is not None else 0.0
+            except (ValueError, TypeError):
+                total_bid_30_levels = 0.0
+                total_ask_30_levels = 0.0
             
             if total_bid_30_levels > 0 and total_ask_30_levels > 0:
                 # Use 30-level aggregated data for enhanced OBI accuracy
@@ -116,9 +129,25 @@ class OBICVDConfirmation:
                 bid_qty = tick_data.get('best_bid_quantity', 0) or tick_data.get('bid_qty', 0)
                 ask_qty = tick_data.get('best_ask_quantity', 0) or tick_data.get('ask_qty', 0)
                 
+                # Type validation and conversion
+                try:
+                    bid_qty = float(bid_qty) if bid_qty is not None else 0.0
+                    ask_qty = float(ask_qty) if ask_qty is not None else 0.0
+                except (ValueError, TypeError):
+                    bid_qty = 0.0
+                    ask_qty = 0.0
+                
                 # Also check for total buy/sell quantities if available
                 total_buy = tick_data.get('total_buy_quantity', 0)
                 total_sell = tick_data.get('total_sell_quantity', 0)
+                
+                # Type validation and conversion
+                try:
+                    total_buy = float(total_buy) if total_buy is not None else 0.0
+                    total_sell = float(total_sell) if total_sell is not None else 0.0
+                except (ValueError, TypeError):
+                    total_buy = 0.0
+                    total_sell = 0.0
                 
                 # Use total quantities if available, otherwise use best bid/ask
                 if total_buy > 0 and total_sell > 0:
@@ -130,13 +159,19 @@ class OBICVDConfirmation:
                 print(f"⚠️ No valid bid/ask data from 53001 - waiting for data...")
                 return None
             
-            # Calculate OBI
+            # Calculate OBI with division by zero protection
             total_qty = bid_qty + ask_qty
-            if total_qty == 0:
+            if abs(total_qty) < 1e-10:  # Avoid division by very small numbers
                 return 0.0
             
             obi = (bid_qty - ask_qty) / total_qty
-            return max(-1.0, min(1.0, obi))  # Clamp to [-1, 1]
+            
+            # Additional validation of result
+            if not isinstance(obi, (int, float)) or not (-1 <= obi <= 1):
+                print(f"❌ Invalid OBI result: {obi}, resetting to 0")
+                return 0.0
+            
+            return float(max(-1.0, min(1.0, obi)))  # Clamp to [-1, 1]
             
         except Exception as e:
             print(f"❌ Error calculating OBI from 53001: {e}")
@@ -266,6 +301,8 @@ class OBICVDConfirmation:
                     
                     if abs(denominator) > 1e-10:  # Avoid division by very small numbers
                         bid_slope = float(numerator / denominator)
+                    else:
+                        bid_slope = 0.0
                 except (ValueError, TypeError, ZeroDivisionError):
                     bid_slope = 0.0
             
@@ -291,6 +328,8 @@ class OBICVDConfirmation:
                     
                     if abs(denominator) > 1e-10:  # Avoid division by very small numbers
                         ask_slope = float(numerator / denominator)
+                    else:
+                        ask_slope = 0.0
                 except (ValueError, TypeError, ZeroDivisionError):
                     ask_slope = 0.0
             
@@ -521,6 +560,15 @@ class OBICVDConfirmation:
         Uses price comparison to determine if volume is buy or sell initiated.
         """
         try:
+            # Input validation
+            if not isinstance(tick_data, dict):
+                print(f"❌ Invalid tick_data type: {type(tick_data)}")
+                return None
+            
+            if not isinstance(instrument_key, str):
+                print(f"❌ Invalid instrument_key type: {type(instrument_key)}")
+                return None
+            
             # Strict check - only process if we have valid 53001 tick data
             instrument_token = tick_data.get('instrument_token', '')
             if '53001' not in str(instrument_token) and '53001' not in str(instrument_key):
@@ -530,25 +578,49 @@ class OBICVDConfirmation:
             current_price = tick_data.get('ltp', 0) or tick_data.get('last_traded_price', 0)
             current_volume = tick_data.get('ltq', 0) or tick_data.get('last_traded_quantity', 0)
             
+            # Type validation and conversion
+            try:
+                current_price = float(current_price) if current_price is not None else 0.0
+                current_volume = float(current_volume) if current_volume is not None else 0.0
+            except (ValueError, TypeError):
+                print(f"❌ Invalid price/volume data types from 53001")
+                return None
+            
             if current_price <= 0 or current_volume <= 0:
                 print(f"⚠️ No valid price/volume data from 53001 - waiting for data...")
                 return None
             
-            # Get previous price for comparison
+            # Get previous price for comparison with safe access
             prev_data = self.instrument_data.get(instrument_key, {})
             prev_price = prev_data.get('last_price', current_price)
             
+            try:
+                prev_price = float(prev_price) if prev_price is not None else current_price
+            except (ValueError, TypeError):
+                prev_price = current_price
+            
             # Classify volume as buy or sell based on price movement
-            if current_price > prev_price:
-                # Price up = buyer initiated
-                volume_delta = current_volume
-            elif current_price < prev_price:
-                # Price down = seller initiated
-                volume_delta = -current_volume
+            volume_delta = 0.0
+            
+            if abs(current_price - prev_price) > 1e-10:  # Avoid floating point comparison issues
+                if current_price > prev_price:
+                    # Price up = buyer initiated
+                    volume_delta = current_volume
+                elif current_price < prev_price:
+                    # Price down = seller initiated
+                    volume_delta = -current_volume
             else:
                 # Price unchanged = use bid/ask comparison
                 bid_price = tick_data.get('best_bid', 0) or tick_data.get('bid_price', 0)
                 ask_price = tick_data.get('best_ask', 0) or tick_data.get('ask_price', 0)
+                
+                # Type validation for bid/ask
+                try:
+                    bid_price = float(bid_price) if bid_price is not None else 0.0
+                    ask_price = float(ask_price) if ask_price is not None else 0.0
+                except (ValueError, TypeError):
+                    bid_price = 0.0
+                    ask_price = 0.0
                 
                 if ask_price > 0 and current_price >= ask_price:
                     volume_delta = current_volume  # Trade at ask = buy
@@ -557,15 +629,22 @@ class OBICVDConfirmation:
                 else:
                     volume_delta = 0  # Neutral
             
-            # Update last price
+            # Update last price safely
             if instrument_key in self.instrument_data:
-                self.instrument_data[instrument_key]['last_price'] = current_price
-                self.instrument_data[instrument_key]['last_volume'] = current_volume
+                self.instrument_data[instrument_key]['last_price'] = float(current_price)
+                self.instrument_data[instrument_key]['last_volume'] = float(current_volume)
             
-            return volume_delta
+            # Final validation of result
+            if not isinstance(volume_delta, (int, float)):
+                print(f"❌ Invalid volume_delta result: {volume_delta}")
+                return None
+            
+            return float(volume_delta)
             
         except Exception as e:
             print(f"❌ Error calculating CVD increment: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def update_confirmation(self, instrument_key: str, tick_data: Dict) -> Dict:
@@ -1293,6 +1372,29 @@ class OBICVDConfirmation:
         Tunable via `weights` and `thresholds`.
         """
         try:
+            # Input validation
+            if not isinstance(instrument_key, str):
+                return {
+                    'signal': 'NEUTRAL',
+                    'score': 0.0,
+                    'confidence': 0.0,
+                    'breakdown': {},
+                    'raw_confirmation': None,
+                    'error': f'Invalid instrument_key type: {type(instrument_key)}',
+                    'timestamp': datetime.now().strftime('%H:%M:%S'),
+                    'instrument': str(instrument_key)
+                }
+            
+            # Validate weights if provided
+            if weights is not None and not isinstance(weights, dict):
+                weights = None
+                print("⚠️ Invalid weights type, using defaults")
+            
+            # Validate thresholds if provided
+            if thresholds is not None and not isinstance(thresholds, dict):
+                thresholds = None
+                print("⚠️ Invalid thresholds type, using defaults")
+            
             # Default weights (tweak to your strategy / timeframe)
             default_weights = {
                 'rolling_obi': 0.30,        # 1-min rolling OBI

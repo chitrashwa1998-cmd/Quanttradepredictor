@@ -655,26 +655,26 @@ class LivePredictionPipeline:
                             if obi_cvd_tick and '53001' in str(self.obi_cvd_instrument):
                                 # Strict validation - only process 53001 data
                                 if '53001' in str(obi_cvd_tick.get('instrument_token', '')):
-                                    obi_cvd_results = self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
-                                    
+                                    self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
+
                                     # Generate trade signal every 10 ticks to avoid excessive computation
                                     if not hasattr(self, '_trade_signal_counter'):
                                         self._trade_signal_counter = 0
                                     self._trade_signal_counter += 1
-                                    
+
                                     if self._trade_signal_counter % 10 == 0:
                                         trade_signal = self.obi_cvd_confirmation.generate_trade_signal(self.obi_cvd_instrument)
                                         signal = trade_signal.get('signal', 'NEUTRAL')
                                         confidence = trade_signal.get('confidence', 0.0)
                                         score = trade_signal.get('score', 0.0)
-                                        
+
                                         # Store latest trade signal for UI access
                                         if not hasattr(self, 'latest_trade_signals'):
                                             self.latest_trade_signals = {}
                                         self.latest_trade_signals[self.obi_cvd_instrument] = trade_signal
-                                        
+
                                         print(f"🎯 Trade Signal (53001): {signal} | Score: {score:.3f} | Confidence: {confidence:.1f}%")
-                                    
+
                                     print(f"✅ OBI+CVD updated with 53001 data")
                                 else:
                                     print(f"⚠️ Skipping OBI+CVD update - tick not from 53001: {obi_cvd_tick.get('instrument_token', 'unknown')}")
@@ -780,7 +780,7 @@ class LivePredictionPipeline:
                 'calculation_successful': False
             }
 
-    def _format_comprehensive_prediction(self, instrument_key: str, timestamp: pd.Timestamp, 
+    def _format_comprehensive_prediction(self, instrument_key: str, timestamp: pd.Timestamp,
                                         all_predictions: Dict, ohlc_row: pd.Series, obi_cvd_status: Optional[Dict] = None) -> Dict:
         """Format comprehensive prediction data from all models."""
         # Ensure timestamp is timezone-naive
@@ -880,10 +880,10 @@ class LivePredictionPipeline:
         """Get the latest trade signal for an instrument (defaults to OBI+CVD instrument)."""
         if instrument_key is None:
             instrument_key = self.obi_cvd_instrument
-        
+
         if hasattr(self, 'latest_trade_signals') and instrument_key in self.latest_trade_signals:
             return self.latest_trade_signals[instrument_key]
-        
+
         # Generate fresh signal if none cached
         try:
             trade_signal = self.obi_cvd_confirmation.generate_trade_signal(instrument_key)
@@ -974,7 +974,7 @@ class LivePredictionPipeline:
 
         # Reversal statistics
         if 'reversal' in latest:
-            recent_reversal = [p.get('reversal', {}).get('prediction', 'Unknown') 
+            recent_reversal = [p.get('reversal', {}).get('prediction', 'Unknown')
                              for p in history if 'reversal' in p]
             if recent_reversal:
                 reversal_count = recent_reversal.count('Yes')
