@@ -1,0 +1,138 @@
+Got it 👍 — let me break down how that signal function is actually combining your OBI + CVD + Liquidity features to produce a BUY / SELL / NEUTRAL.
+
+Think of it as a weighted vote among multiple micro-signals, each mapped into a score from -1 (strong sell) to +1 (strong buy).
+
+1. Rolling OBI (Order Book Imbalance, 1-min)
+
+You already compute obi_rolling_1min and give it a categorical signal (Bullish, Bearish, Neutral).
+
+I convert that into a numeric score:
+
+Strong Bullish → +1
+
+Bullish → +0.6
+
+Neutral → 0
+
+Bearish → –0.6
+
+Strong Bearish → –1
+
+Then I blend that with the actual raw OBI value (since it’s already normalized –1..+1).
+
+Formula: obi_numeric = 0.7 * categorical + 0.3 * raw value
+
+2. Rolling CVD (Cumulative Volume Delta, 2-min)
+
+Same idea as OBI:
+
+Strong Buying / Strong Bullish → +1
+
+Buying / Bullish → +0.6
+
+Neutral → 0
+
+Selling / Bearish → –0.6
+
+Strong Selling / Strong Bearish → –1
+
+Combined with raw normalized rolling CVD:
+
+cvd_numeric = 0.7 * categorical + 0.3 * (rolling_cvd / 500)
+(500 is a scale factor; you’d tune based on your instrument’s volume magnitude).
+
+3. CVD Deltas (1, 2, 5-min changes)
+
+These measure short-term directional pushes.
+
+Each delta is normalized by a scale (so it fits into –1..+1):
+
+cvd_delta_1min / 500
+
+cvd_delta_2min / 1000
+
+cvd_delta_5min / 2000
+
+Then I average them:
+
+combined_cvd_delta = (norm1 + norm2 + norm5) / 3
+
+If buyers are hitting consistently across 1/2/5min → positive bias.
+
+If sellers dominate → negative bias.
+
+4. Total CVD (30-min cumulative)
+
+Captures overall pressure trend.
+
+Normalized: total_cvd_norm = total_cvd / 2000 (clamped –1..+1).
+
+Idea: if short-term and long-term CVD agree → stronger signal.
+
+If they diverge → weakens conviction.
+
+5. Liquidity Features
+
+From your liquidity_signal (which summarizes walls, slope, absorption):
+
+If string contains bullish → +0.6
+
+If contains bearish → –0.6
+
+Else → 0
+
+I then adjust slightly with absorption:
+
+absorption_modifier = (0.5 – absorption_avg)
+
+Added as ±0.2, so strong absorption lowers conviction, low absorption boosts it.
+
+Net result: liquidity_numeric ∈ [–1, +1].
+
+6. Final Weighted Score
+
+All these get weighted and summed:
+
+final_score =
+    0.30 * obi_numeric
+  + 0.30 * cvd_numeric
+  + 0.20 * combined_cvd_delta
+  + 0.10 * total_cvd_norm
+  + 0.10 * liquidity_numeric
+
+
+Weights are tunable. They basically reflect:
+
+OBI + Rolling CVD dominate (short-term flow)
+
+Deltas add momentum confirmation
+
+Total CVD adds trend context
+
+Liquidity adds structural filter
+
+7. Signal Classification
+
+If final_score ≥ +0.40 → BUY
+
+If final_score ≤ –0.40 → SELL
+
+Else → NEUTRAL
+
+Confidence = |score| scaled 0–100, with boost if |score| ≥ 0.7 (very strong alignment).
+
+Liquidity contradictions (e.g. buy pressure but bearish liquidity) reduce confidence by ~30%.
+
+✅ So the combinations used are:
+
+OBI direction + magnitude
+
+CVD direction + magnitude
+
+Short-term CVD deltas (1/2/5 min momentum)
+
+Longer-term total CVD (trend confirmation)
+
+Liquidity (walls, slope, absorption)
+
+Then blended into a single score that decides BUY/SELL/NEUTRAL.
