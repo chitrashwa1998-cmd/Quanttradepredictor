@@ -1275,6 +1275,245 @@ class OBICVDConfirmation:
             advanced_liquidity
         )
     
+    def generate_trade_signal(self, instrument_key: str,
+                              weights: Optional[Dict[str, float]] = None,
+                              thresholds: Optional[Dict[str, float]] = None) -> Dict:
+        """
+        Generate a combined trade signal (BUY / SELL / NEUTRAL) for instrument_key.
+
+        Returns:
+            {
+              'signal': 'BUY'|'SELL'|'NEUTRAL',
+              'score': float (range -1..1),
+              'confidence': float (0..100),
+              'breakdown': { ... individual component scores ... },
+              'raw_confirmation': {...}  # full underlying confirmation dict for debugging
+            }
+
+        Tunable via `weights` and `thresholds`.
+        """
+        try:
+            # Default weights (tweak to your strategy / timeframe)
+            default_weights = {
+                'rolling_obi': 0.30,        # 1-min rolling OBI
+                'rolling_cvd': 0.30,        # 2-min rolling CVD
+                'cvd_deltas': 0.20,         # combines 1/2/5 min deltas
+                'total_cvd': 0.10,          # 30-min total CVD
+                'liquidity': 0.10           # walls/slopes/absorption combined
+            }
+            # Default thresholds for final score to classify
+            default_thresholds = {
+                'buy': 0.40,
+                'sell': -0.40,
+                # confidence scaling (score magnitude required for high confidence)
+                'high_confidence': 0.7
+            }
+
+            # Use provided or defaults
+            if weights is None:
+                weights = default_weights
+            else:
+                # ensure keys exist
+                for k in default_weights:
+                    weights.setdefault(k, default_weights[k])
+
+            if thresholds is None:
+                thresholds = default_thresholds
+            else:
+                for k in default_thresholds:
+                    thresholds.setdefault(k, default_thresholds[k])
+
+            # Get current confirmation (uses existing analysis pipeline)
+            raw = self.get_confirmation_status(instrument_key)
+            if raw is None:
+                return {
+                    'signal': 'NEUTRAL',
+                    'score': 0.0,
+                    'confidence': 0.0,
+                    'breakdown': {},
+                    'raw_confirmation': None,
+                    'note': f'No data for {instrument_key}'
+                }
+
+            # Helper: map categorical signals to numeric [-1..1]
+            def map_order_signal(cat: str) -> float:
+                # Strong Bullish/Buying => +1, Bullish/Buying => +0.6, Neutral => 0,
+                # Bearish/Selling => -0.6, Strong Bearish/Strong Selling => -1
+                if not cat:
+                    return 0.0
+                s = str(cat).lower()
+                if 'strong' in s and ('buy' in s or 'bull' in s):
+                    return 1.0
+                if ('buy' in s and 'strong' not in s) or ('bull' in s and 'strong' not in s):
+                    return 0.6
+                if 'neutral' in s:
+                    return 0.0
+                if ('sell' in s and 'strong' not in s) or ('bear' in s and 'strong' not in s):
+                    return -0.6
+                if 'strong' in s and ('sell' in s or 'bear' in s):
+                    return -1.0
+                return 0.0
+
+            # Pull component values (safe access)
+            rolling_obi = float(raw.get('obi_rolling_1min', 0.0))
+            rolling_obi_signal = raw.get('obi_rolling_1min_signal', 'Neutral')
+
+            rolling_cvd = float(raw.get('cvd_rolling_2min', 0.0))
+            rolling_cvd_signal = raw.get('cvd_rolling_signal', 'Neutral')
+
+            cvd_delta_1 = float(raw.get('cvd_delta_1min', 0.0))
+            cvd_delta_2 = float(raw.get('cvd_delta_2min', 0.0))
+            cvd_delta_5 = float(raw.get('cvd_delta_5min', 0.0))
+            # combine deltas into a single normalized value (clip to reasonable bounds)
+            # normalization constants chosen as conservative defaults; tweak as needed
+            norm_1 = max(-1.0, min(1.0, cvd_delta_1 / 500.0))
+            norm_2 = max(-1.0, min(1.0, cvd_delta_2 / 1000.0))
+            norm_5 = max(-1.0, min(1.0, cvd_delta_5 / 2000.0))
+            combined_cvd_delta = (norm_1 + norm_2 + norm_5) / 3.0  # in [-1,1]
+
+            total_cvd = float(raw.get('cvd_total', 0.0))
+            # normalize total_cvd to [-1,1] using a default scale (tweakable)
+            total_cvd_norm = max(-1.0, min(1.0, total_cvd / 2000.0))
+
+            # Liquidity: use liquidity_signal and a few numerical measures
+            liquidity_signal_str = str(raw.get('liquidity_signal', 'neutral_neutral_neutral')).lower()
+            # simple mapping: if liquidity_signal contains 'bullish' -> +0.6, 'bearish' -> -0.6 else 0
+            if 'bullish' in liquidity_signal_str:
+                liquidity_base = 0.6
+            elif 'bearish' in liquidity_signal_str:
+                liquidity_base = -0.6
+            else:
+                liquidity_base = 0.0
+
+            # absorption_ratio_avg: higher absorption on opposite side reduces confidence
+            absorption_avg = float(raw.get('absorption_ratio_avg', 0.0))  # 0..1
+            # convert to small modifier: more avg absorption -> reduces conviction slightly
+            absorption_modifier = (0.5 - absorption_avg)  # positive if low absorption, negative if high
+
+            # Now map categorical signals to numeric scores
+            obi_score = map_order_signal(rolling_obi_signal)  # -1..1 approx
+            cvd_score = map_order_signal(rolling_cvd_signal)  # -1..1 approx
+
+            # combine numeric components (all in roughly [-1,1])
+            # But rolling_obi numeric should also account for actual rolling_obi magnitude (since OBI is itself -1..1)
+            obi_numeric = (obi_score * 0.7) + (rolling_obi * 0.3)  # give weight to both category + raw value
+            cvd_numeric = (cvd_score * 0.7) + (max(-1, min(1, rolling_cvd / 500.0)) * 0.3)
+
+            # liquidity numeric
+            liquidity_numeric = liquidity_base + 0.2 * absorption_modifier
+            liquidity_numeric = max(-1.0, min(1.0, liquidity_numeric))
+
+            # Weighted sum
+            final_score = (
+                weights['rolling_obi'] * obi_numeric +
+                weights['rolling_cvd'] * cvd_numeric +
+                weights['cvd_deltas'] * combined_cvd_delta +
+                weights['total_cvd'] * total_cvd_norm +
+                weights['liquidity'] * liquidity_numeric
+            )
+
+            # clamp final score to [-1,1]
+            final_score = float(max(-1.0, min(1.0, final_score)))
+
+            # Decide signal using thresholds
+            buy_thr = float(thresholds.get('buy', 0.4))
+            sell_thr = float(thresholds.get('sell', -0.4))
+            high_conf = float(thresholds.get('high_confidence', 0.7))
+
+            if final_score >= buy_thr:
+                signal = 'BUY'
+            elif final_score <= sell_thr:
+                signal = 'SELL'
+            else:
+                signal = 'NEUTRAL'
+
+            # Confidence: map |score| to percentage, but scale by whether it exceeds high_conf threshold
+            base_conf = abs(final_score)  # 0..1
+            # penalize if liquidity contradictory: e.g., liquidity opposite sign of score reduces confidence
+            if liquidity_numeric * final_score < 0:
+                base_conf *= 0.7
+
+            # scale into 0..100
+            confidence = float(min(100.0, max(0.0, base_conf * 100.0)))
+
+            # If extremely high magnitude, mark very confident
+            if abs(final_score) >= high_conf:
+                confidence = max(confidence, 85.0)
+
+            breakdown = {
+                'obi_numeric': float(obi_numeric),
+                'cvd_numeric': float(cvd_numeric),
+                'combined_cvd_delta': float(combined_cvd_delta),
+                'total_cvd_norm': float(total_cvd_norm),
+                'liquidity_numeric': float(liquidity_numeric),
+                'rolling_obi_raw': float(rolling_obi),
+                'rolling_cvd_raw': float(rolling_cvd),
+                'cvd_delta_1min': float(cvd_delta_1),
+                'cvd_delta_2min': float(cvd_delta_2),
+                'cvd_delta_5min': float(cvd_delta_5),
+                'total_cvd_raw': float(total_cvd),
+                'absorption_avg': float(absorption_avg),
+                'weights_used': weights,
+                'thresholds_used': thresholds
+            }
+
+            return {
+                'signal': signal,
+                'score': float(final_score),
+                'confidence': float(confidence),
+                'breakdown': breakdown,
+                'raw_confirmation': raw,
+                'timestamp': datetime.now().strftime('%H:%M:%S'),
+                'instrument': instrument_key
+            }
+
+        except Exception as e:
+            print(f"❌ Error generating trade signal for {instrument_key}: {e}")
+            return {
+                'signal': 'NEUTRAL',
+                'score': 0.0,
+                'confidence': 0.0,
+                'breakdown': {},
+                'raw_confirmation': None,
+                'error': str(e),
+                'timestamp': datetime.now().strftime('%H:%M:%S'),
+                'instrument': instrument_key
+            }
+
+    def get_signal_breakdown_explanation(self, signal_result: Dict) -> str:
+        """
+        Generate a human-readable explanation of how the signal was generated.
+        """
+        if 'error' in signal_result:
+            return f"Error generating signal: {signal_result['error']}"
+        
+        breakdown = signal_result.get('breakdown', {})
+        signal = signal_result.get('signal', 'UNKNOWN')
+        score = signal_result.get('score', 0.0)
+        confidence = signal_result.get('confidence', 0.0)
+        
+        explanation = f"🎯 Signal: **{signal}** (Score: {score:.3f}, Confidence: {confidence:.1f}%)\n\n"
+        
+        explanation += "**Component Analysis:**\n"
+        explanation += f"• OBI (30%): {breakdown.get('obi_numeric', 0):.3f} (from raw OBI: {breakdown.get('rolling_obi_raw', 0):.3f})\n"
+        explanation += f"• CVD (30%): {breakdown.get('cvd_numeric', 0):.3f} (from raw CVD: {breakdown.get('rolling_cvd_raw', 0):.0f})\n"
+        explanation += f"• CVD Deltas (20%): {breakdown.get('combined_cvd_delta', 0):.3f}\n"
+        explanation += f"  - 1min: {breakdown.get('cvd_delta_1min', 0):.0f}\n"
+        explanation += f"  - 2min: {breakdown.get('cvd_delta_2min', 0):.0f}\n"
+        explanation += f"  - 5min: {breakdown.get('cvd_delta_5min', 0):.0f}\n"
+        explanation += f"• Total CVD (10%): {breakdown.get('total_cvd_norm', 0):.3f} (from raw: {breakdown.get('total_cvd_raw', 0):.0f})\n"
+        explanation += f"• Liquidity (10%): {breakdown.get('liquidity_numeric', 0):.3f} (absorption: {breakdown.get('absorption_avg', 0):.2f})\n"
+        
+        # Signal interpretation
+        if signal == 'BUY':
+            explanation += f"\n✅ **BUY Signal**: Score {score:.3f} ≥ threshold {breakdown.get('thresholds_used', {}).get('buy', 0.4)}"
+        elif signal == 'SELL':
+            explanation += f"\n❌ **SELL Signal**: Score {score:.3f} ≤ threshold {breakdown.get('thresholds_used', {}).get('sell', -0.4)}"
+        else:
+            explanation += f"\n⚪ **NEUTRAL Signal**: Score {score:.3f} between thresholds"
+        
+        return explanation
+
     def reset_instrument(self, instrument_key: str):
         """Reset all data for an instrument."""
         if instrument_key in self.instrument_data:

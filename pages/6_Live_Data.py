@@ -536,7 +536,7 @@ def show_live_data_page():
             if st.session_state.is_prediction_pipeline_active:
                 st.subheader("🎯 Real-time ML Model Predictions")
 
-                # Auto-refresh controls specific to predictions tab  
+                # Auto-refresh controls specific to predictions tab
                 col1, col2 = st.columns([3, 1])
                 with col2:
                     auto_refresh_predictions = st.toggle("🔄 Auto OBI+CVD", value=False, key="auto_refresh_obi_cvd_only")
@@ -716,26 +716,26 @@ def show_live_data_page():
                                 # Advanced Liquidity Analysis Section
                                 st.markdown("**🏗️ Advanced Liquidity Analysis**")
                                 col1_liq, col2_liq, col3_liq = st.columns(3)
-                                
+
                                 with col1_liq:
                                     # Liquidity Walls
                                     total_walls = obi_cvd_data.get('liquidity_walls', 0)
                                     bid_walls = obi_cvd_data.get('bid_walls', 0)
                                     ask_walls = obi_cvd_data.get('ask_walls', 0)
-                                    
+
                                     wall_color = "🟢" if bid_walls > ask_walls else "🔴" if ask_walls > bid_walls else "⚪"
                                     st.metric(f"{wall_color} Liquidity Walls", f"{total_walls}", f"B:{bid_walls} A:{ask_walls}")
-                                    
+
                                     # Reload Walls
                                     reload_walls = obi_cvd_data.get('reload_walls', 0)
                                     reload_color = "🔄" if reload_walls > 0 else "⚪"
                                     st.metric(f"{reload_color} Reload Walls", f"{reload_walls}", "Iceberg Orders")
-                                
+
                                 with col2_liq:
                                     # Order Book Slope
                                     slope_asymmetry = obi_cvd_data.get('slope_asymmetry', 0.0)
                                     slope_interpretation = obi_cvd_data.get('slope_interpretation', 'neutral_neutral')
-                                    
+
                                     # Interpret slope asymmetry for bullish/bearish message
                                     if slope_asymmetry > 0.1:
                                         slope_message = "Bullish - Bid support deeper, Ask resistance lighter"
@@ -746,23 +746,23 @@ def show_live_data_page():
                                     else:
                                         slope_message = "Neutral - Balanced liquidity distribution"
                                         slope_color = "⚪"
-                                    
+
                                     st.metric(f"{slope_color} Slope Asymmetry", f"{slope_asymmetry:.3f}", slope_message)
-                                    
+
                                     # Bid/Ask Slopes
                                     bid_slope = obi_cvd_data.get('order_book_slope_bid', 0.0)
                                     ask_slope = obi_cvd_data.get('order_book_slope_ask', 0.0)
                                     st.write(f"**Bid Slope:** {bid_slope:.3f}")
                                     st.write(f"**Ask Slope:** {ask_slope:.3f}")
-                                
+
                                 with col3_liq:
                                     # Liquidity Delta & Absorption
                                     liquidity_delta_net = obi_cvd_data.get('liquidity_delta_net', 0.0)
                                     liquidity_sentiment = obi_cvd_data.get('liquidity_sentiment', 'neutral')
-                                    
+
                                     delta_color = "🟢" if liquidity_delta_net > 0 else "🔴" if liquidity_delta_net < 0 else "⚪"
                                     st.metric(f"{delta_color} Net Liquidity Δ", f"{liquidity_delta_net:.0f}", liquidity_sentiment.replace('_', ' ').title())
-                                    
+
                                     # Absorption Ratio
                                     absorption_avg = obi_cvd_data.get('absorption_ratio_avg', 0.0)
                                     absorption_color = "🟢" if absorption_avg > 0.7 else "🔴" if absorption_avg < 0.3 else "⚪"
@@ -771,7 +771,7 @@ def show_live_data_page():
                                 # Comprehensive Liquidity Signal
                                 liquidity_signal = obi_cvd_data.get('liquidity_signal', 'neutral_neutral_neutral')
                                 wall_signal, slope_signal, delta_signal = liquidity_signal.split('_')[:3]
-                                
+
                                 col1_signal = st.columns(1)[0]
                                 with col1_signal:
                                     overall_color = "🟢" if 'bullish' in liquidity_signal else "🔴" if 'bearish' in liquidity_signal else "⚪"
@@ -824,13 +824,93 @@ def show_live_data_page():
                                 st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
                                 st.divider()
 
+                    # Display comprehensive OBI+CVD analysis for 53001
+                    st.markdown("### 🎯 Advanced Order Flow Analysis (NSE_FO|53001)")
+                    st.markdown("**Real-time OBI+CVD confirmation from dedicated futures contract**")
+
+                    # Generate and display trade signal
+                    try:
+                        if 'live_prediction_pipeline' in st.session_state and st.session_state.live_prediction_pipeline:
+                            obi_cvd_instance = st.session_state.live_prediction_pipeline.obi_cvd_confirmation
+                            trade_signal = obi_cvd_instance.generate_trade_signal("NSE_FO|53001")
+
+                            # Display trade signal prominently
+                            signal = trade_signal.get('signal', 'NEUTRAL')
+                            score = trade_signal.get('score', 0.0)
+                            confidence = trade_signal.get('confidence', 0.0)
+
+                            # Color coding for signal
+                            if signal == 'BUY':
+                                signal_color = "🟢"
+                                signal_bg = "success"
+                            elif signal == 'SELL':
+                                signal_color = "🔴"
+                                signal_bg = "error"
+                            else:
+                                signal_color = "⚪"
+                                signal_bg = "info"
+
+                            col1_signal, col2_signal, col3_signal = st.columns(3)
+
+                            with col1_signal:
+                                st.metric(f"{signal_color} Trade Signal", signal, f"Score: {score:.3f}")
+
+                            with col2_signal:
+                                confidence_color = "🟢" if confidence >= 70 else "🟡" if confidence >= 50 else "🔴"
+                                st.metric(f"{confidence_color} Confidence", f"{confidence:.1f}%", "Algorithmic")
+
+                            with col3_signal:
+                                timestamp = trade_signal.get('timestamp', 'N/A')
+                                st.metric("⏰ Signal Time", timestamp, "Live Update")
+
+                            # Show signal breakdown in expander
+                            with st.expander("🔍 Signal Breakdown & Explanation"):
+                                explanation = obi_cvd_instance.get_signal_breakdown_explanation(trade_signal)
+                                st.markdown(explanation)
+
+                                # Show raw breakdown data
+                                st.subheader("📊 Raw Component Data")
+                                breakdown = trade_signal.get('breakdown', {})
+                                if breakdown:
+                                    col1_bd, col2_bd = st.columns(2)
+
+                                    with col1_bd:
+                                        st.write("**Weighted Components:**")
+                                        st.write(f"• OBI Numeric: {breakdown.get('obi_numeric', 0):.4f}")
+                                        st.write(f"• CVD Numeric: {breakdown.get('cvd_numeric', 0):.4f}")
+                                        st.write(f"• CVD Deltas: {breakdown.get('combined_cvd_delta', 0):.4f}")
+                                        st.write(f"• Total CVD: {breakdown.get('total_cvd_norm', 0):.4f}")
+                                        st.write(f"• Liquidity: {breakdown.get('liquidity_numeric', 0):.4f}")
+
+                                    with col2_bd:
+                                        weights = breakdown.get('weights_used', {})
+                                        st.write("**Weights Applied:**")
+                                        for component, weight in weights.items():
+                                            st.write(f"• {component}: {weight:.1%}")
+
+                                # Show thresholds
+                                thresholds = breakdown.get('thresholds_used', {})
+                                if thresholds:
+                                    st.write("**Signal Thresholds:**")
+                                    st.write(f"• BUY threshold: ≥ {thresholds.get('buy', 0.4):.2f}")
+                                    st.write(f"• SELL threshold: ≤ {thresholds.get('sell', -0.4):.2f}")
+                                    st.write(f"• High confidence: ≥ {thresholds.get('high_confidence', 0.7):.2f}")
+
+                        else:
+                            st.warning("⚠️ Live prediction pipeline not active - trade signal unavailable")
+
+                    except Exception as e:
+                        st.error(f"❌ Error generating trade signal: {e}")
+
+                    st.markdown("---")
+
                     st.divider()
 
                 # ML Model Predictions Section - Show only when available
                 if live_predictions:
                     st.subheader("🤖 ML Model Predictions (5-Minute Candle Based)")
                     st.info("🕐 *Predictions generated when complete 5-minute candles close*")
-                    
+
                     # Display ML model predictions in a grid
                     for instrument_key, prediction in live_predictions.items():
                         display_name = instrument_key.split('|')[-1] if '|' in instrument_key else instrument_key
@@ -1046,7 +1126,7 @@ def show_live_data_page():
                     st.info("🤖 **ML Model Predictions:** Waiting for first 5-minute candle to close...")
                     st.write("📊 OBI+CVD analysis is running in real-time above")
                     st.write("⏳ ML predictions will appear after the first complete 5-minute candle")
-                    
+
                     # Show model readiness status
                     pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
                     trained_models = pipeline_status.get('trained_models', [])

@@ -656,6 +656,25 @@ class LivePredictionPipeline:
                                 # Strict validation - only process 53001 data
                                 if '53001' in str(obi_cvd_tick.get('instrument_token', '')):
                                     obi_cvd_results = self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
+                                    
+                                    # Generate trade signal every 10 ticks to avoid excessive computation
+                                    if not hasattr(self, '_trade_signal_counter'):
+                                        self._trade_signal_counter = 0
+                                    self._trade_signal_counter += 1
+                                    
+                                    if self._trade_signal_counter % 10 == 0:
+                                        trade_signal = self.obi_cvd_confirmation.generate_trade_signal(self.obi_cvd_instrument)
+                                        signal = trade_signal.get('signal', 'NEUTRAL')
+                                        confidence = trade_signal.get('confidence', 0.0)
+                                        score = trade_signal.get('score', 0.0)
+                                        
+                                        # Store latest trade signal for UI access
+                                        if not hasattr(self, 'latest_trade_signals'):
+                                            self.latest_trade_signals = {}
+                                        self.latest_trade_signals[self.obi_cvd_instrument] = trade_signal
+                                        
+                                        print(f"🎯 Trade Signal (53001): {signal} | Score: {score:.3f} | Confidence: {confidence:.1f}%")
+                                    
                                     print(f"✅ OBI+CVD updated with 53001 data")
                                 else:
                                     print(f"⚠️ Skipping OBI+CVD update - tick not from 53001: {obi_cvd_tick.get('instrument_token', 'unknown')}")
@@ -856,6 +875,28 @@ class LivePredictionPipeline:
         if status:
             obi_cvd_status[self.obi_cvd_instrument] = status
         return obi_cvd_status
+
+    def get_latest_trade_signal(self, instrument_key: str = None) -> Optional[Dict]:
+        """Get the latest trade signal for an instrument (defaults to OBI+CVD instrument)."""
+        if instrument_key is None:
+            instrument_key = self.obi_cvd_instrument
+        
+        if hasattr(self, 'latest_trade_signals') and instrument_key in self.latest_trade_signals:
+            return self.latest_trade_signals[instrument_key]
+        
+        # Generate fresh signal if none cached
+        try:
+            trade_signal = self.obi_cvd_confirmation.generate_trade_signal(instrument_key)
+            return trade_signal
+        except Exception as e:
+            print(f"❌ Error getting trade signal for {instrument_key}: {e}")
+            return None
+
+    def get_all_trade_signals(self) -> Dict:
+        """Get all available trade signals."""
+        if hasattr(self, 'latest_trade_signals'):
+            return self.latest_trade_signals.copy()
+        return {}
 
     def get_instrument_summary(self, instrument_key: str) -> Optional[Dict]:
         """Get comprehensive summary for a specific instrument."""
