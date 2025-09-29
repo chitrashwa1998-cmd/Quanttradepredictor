@@ -866,6 +866,7 @@ def show_live_data_page():
                             # Show signal breakdown in expander
                             with st.expander("🔍 Signal Breakdown & Explanation"):
                                 explanation = obi_cvd_instance.get_signal_breakdown_explanation(trade_signal)
+                                st.markdown(explanation)signal_breakdown_explanation(trade_signal)
                                 st.markdown(explanation)
 
                                 # Show raw breakdown data
