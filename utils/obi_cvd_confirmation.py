@@ -1415,15 +1415,24 @@ class OBICVDConfirmation:
             # clamp final score to [-1,1]
             final_score = float(max(-1.0, min(1.0, final_score)))
 
-            # Decide signal using thresholds
+            # Decide signal using granular thresholds
             buy_thr = float(thresholds.get('buy', 0.4))
             sell_thr = float(thresholds.get('sell', -0.4))
             high_conf = float(thresholds.get('high_confidence', 0.7))
 
-            if final_score >= buy_thr:
+            # Granular signal classification
+            if final_score >= 0.70:
+                signal = 'STRONG BUY'
+            elif final_score >= 0.40:
                 signal = 'BUY'
-            elif final_score <= sell_thr:
+            elif final_score >= 0.25:
+                signal = 'SCALP BUY'
+            elif final_score <= -0.70:
+                signal = 'STRONG SELL'
+            elif final_score <= -0.40:
                 signal = 'SELL'
+            elif final_score <= -0.25:
+                signal = 'SCALP SELL'
             else:
                 signal = 'NEUTRAL'
 
@@ -1505,12 +1514,20 @@ class OBICVDConfirmation:
         explanation += f"• Liquidity (10%): {breakdown.get('liquidity_numeric', 0):.3f} (absorption: {breakdown.get('absorption_avg', 0):.2f})\n"
         
         # Signal interpretation
-        if signal == 'BUY':
-            explanation += f"\n✅ **BUY Signal**: Score {score:.3f} ≥ threshold {breakdown.get('thresholds_used', {}).get('buy', 0.4)}"
+        if signal == 'STRONG BUY':
+            explanation += f"\n🚀 **STRONG BUY Signal**: Score {score:.3f} ≥ 0.70 (Very High Conviction)"
+        elif signal == 'BUY':
+            explanation += f"\n✅ **BUY Signal**: Score {score:.3f} ≥ 0.40 (Standard Buy Threshold)"
+        elif signal == 'SCALP BUY':
+            explanation += f"\n📈 **SCALP BUY Signal**: Score {score:.3f} ≥ 0.25 (Short-term Bullish)"
+        elif signal == 'STRONG SELL':
+            explanation += f"\n💥 **STRONG SELL Signal**: Score {score:.3f} ≤ -0.70 (Very High Conviction)"
         elif signal == 'SELL':
-            explanation += f"\n❌ **SELL Signal**: Score {score:.3f} ≤ threshold {breakdown.get('thresholds_used', {}).get('sell', -0.4)}"
+            explanation += f"\n❌ **SELL Signal**: Score {score:.3f} ≤ -0.40 (Standard Sell Threshold)"
+        elif signal == 'SCALP SELL':
+            explanation += f"\n📉 **SCALP SELL Signal**: Score {score:.3f} ≤ -0.25 (Short-term Bearish)"
         else:
-            explanation += f"\n⚪ **NEUTRAL Signal**: Score {score:.3f} between thresholds"
+            explanation += f"\n⚪ **NEUTRAL Signal**: Score {score:.3f} between -0.25 and 0.25"
         
         return explanation
 

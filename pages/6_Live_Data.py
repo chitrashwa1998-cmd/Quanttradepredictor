@@ -839,12 +839,24 @@ def show_live_data_page():
                             score = trade_signal.get('score', 0.0)
                             confidence = trade_signal.get('confidence', 0.0)
 
-                            # Color coding for signal
-                            if signal == 'BUY':
+                            # Color coding for granular signal types
+                            if signal == 'STRONG BUY':
+                                signal_color = "🚀"
+                                signal_bg = "success"
+                            elif signal == 'BUY':
                                 signal_color = "🟢"
                                 signal_bg = "success"
+                            elif signal == 'SCALP BUY':
+                                signal_color = "📈"
+                                signal_bg = "success"
+                            elif signal == 'STRONG SELL':
+                                signal_color = "💥"
+                                signal_bg = "error"
                             elif signal == 'SELL':
                                 signal_color = "🔴"
+                                signal_bg = "error"
+                            elif signal == 'SCALP SELL':
+                                signal_color = "📉"
                                 signal_bg = "error"
                             else:
                                 signal_color = "⚪"
