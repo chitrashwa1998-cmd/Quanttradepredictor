@@ -626,7 +626,7 @@ def show_live_data_page():
                                     elif 'Bearish' in rolling_obi_2min_signal:
                                         rolling_obi_2min_color = "🔴"
                                     else:
-                                        rolling_obi_2min_color = "⚪"
+                                        rolling_obi_2min_color = "⚪" = "⚪" = "⚪"
 
                                     st.metric(f"{rolling_obi_2min_color} 2-Min Avg OBI", f"{rolling_obi_2min:.3f}", rolling_obi_2min_signal)
 
@@ -729,7 +729,7 @@ def show_live_data_page():
                                     # Reload Walls
                                     reload_walls = obi_cvd_data.get('reload_walls', 0)
                                     reload_color = "🔄" if reload_walls > 0 else "⚪"
-                                    st.metric(f"{reload_color} Reload Walls", f"{reload_walls}", "Iceberg Orders")
+                                    st.metric(f"{reload_color} Reload Walls", f"{reload_walls}"), "Iceberg Orders")
 
                                 with col2_liq:
                                     # Order Book Slope
