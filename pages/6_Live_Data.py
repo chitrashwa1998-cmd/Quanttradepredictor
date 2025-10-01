@@ -577,7 +577,7 @@ def show_live_data_page():
                 # Independent OBI+CVD Market Analysis Section - ALWAYS SHOW when data is available
                 if independent_obi_cvd:
                     st.subheader("📈 Independent OBI+CVD Market Analysis")
-                    st.info("🔍 *Order Book Imbalance & Cumulative Volume Delta (53001 ONLY) - Real-time Tick Processing*")
+                    st.info("🔍 *Order Book Imbalance & Cumulative Volume Delta (52168 ONLY) - Real-time Tick Processing*")
 
                     # Create columns for OBI+CVD display
                     obi_cvd_cols = st.columns(min(2, len(independent_obi_cvd)))
@@ -824,15 +824,15 @@ def show_live_data_page():
                                 st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
                                 st.divider()
 
-                    # Display comprehensive OBI+CVD analysis for 53001
-                    st.markdown("### 🎯 Advanced Order Flow Analysis (NSE_FO|53001)")
+                    # Display comprehensive OBI+CVD analysis for 52168
+                    st.markdown("### 🎯 Advanced Order Flow Analysis (NSE_FO|52168)")
                     st.markdown("**Real-time OBI+CVD confirmation from dedicated futures contract**")
 
                     # Generate and display trade signal
                     try:
                         if 'live_prediction_pipeline' in st.session_state and st.session_state.live_prediction_pipeline:
                             obi_cvd_instance = st.session_state.live_prediction_pipeline.obi_cvd_confirmation
-                            trade_signal = obi_cvd_instance.generate_trade_signal("NSE_FO|53001")
+                            trade_signal = obi_cvd_instance.generate_trade_signal("NSE_FO|52168")
 
                             # Display trade signal prominently
                             signal = trade_signal.get('signal', 'NEUTRAL')
@@ -1109,7 +1109,7 @@ def show_live_data_page():
 
                         st.divider()
 
-                    # Container-based auto-refresh for OBI+CVD data only
+                # Container-based auto-refresh for OBI+CVD data only
                 if auto_refresh_predictions:
                     # Use a placeholder container that updates without full page reload
                     import asyncio
@@ -1151,7 +1151,7 @@ def show_live_data_page():
 
                     # Show requirements for all models
                     st.write("**Requirements for comprehensive predictions:**")
-                    st.write("• **OBI+CVD:** Real-time tick data from NSE_FO|53001")
+                    st.write("• **OBI+CVD:** Real-time tick data from NSE_FO|52168")
                     st.write("• **ML Models:** Complete 5-minute candles + trained models")
                     st.write("• At least one of the 4 models must be trained:")
                     st.write("  - Direction Model (price movement prediction)")
