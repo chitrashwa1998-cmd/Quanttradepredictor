@@ -46,6 +46,9 @@ class LivePredictionPipeline:
         self.ml_models_instrument = "NSE_INDEX|Nifty 50"  # Spot price for ML models + Black-Scholes
         self.obi_cvd_instrument = "NSE_FO|52168"  # Active futures contract for OBI+CVD
 
+        # Trade signal tick counter for 10-tick based generation
+        self._trade_signal_counter = 0
+
         # OBI+CVD Confirmation
         self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
 
@@ -148,6 +151,9 @@ class LivePredictionPipeline:
         self.live_predictions = {}
         self.prediction_history = {}
         self.latest_volatility_predictions = {}
+
+        # Reset trade signal tick counter
+        self._trade_signal_counter = 0
 
         # Reset OBI+CVD confirmation data
         self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
@@ -657,12 +663,11 @@ class LivePredictionPipeline:
                                 if '52168' in str(obi_cvd_tick.get('instrument_token', '')):
                                     self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
 
-                                    # Generate trade signal every second for real-time updates
-                                    if not hasattr(self, '_last_trade_signal_time'):
-                                        self._last_trade_signal_time = 0
-                                    
-                                    current_time = time.time()
-                                    if current_time - self._last_trade_signal_time >= 1.0:  # Every 1 second
+                                    # Increment tick counter for 10-tick based trade signal generation
+                                    self._trade_signal_counter += 1
+
+                                    # Generate trade signal every 10 ticks (like previously)
+                                    if self._trade_signal_counter % 10 == 0:
                                         trade_signal = self.obi_cvd_confirmation.generate_trade_signal(self.obi_cvd_instrument)
                                         signal = trade_signal.get('signal', 'NEUTRAL')
                                         confidence = trade_signal.get('confidence', 0.0)
@@ -673,10 +678,9 @@ class LivePredictionPipeline:
                                             self.latest_trade_signals = {}
                                         self.latest_trade_signals[self.obi_cvd_instrument] = trade_signal
 
-                                        print(f"🎯 Trade Signal (52168): {signal} | Score: {score:.3f} | Confidence: {confidence:.1f}%")
-                                        self._last_trade_signal_time = current_time
+                                        print(f"🎯 Trade Signal (52168) - Tick #{self._trade_signal_counter}: {signal} | Score: {score:.3f} | Confidence: {confidence:.1f}%")
 
-                                    print(f"✅ OBI+CVD updated with 52168 data")
+                                    print(f"✅ OBI+CVD updated with 52168 data (Tick #{self._trade_signal_counter})")
                                 else:
                                     print(f"⚠️ Skipping OBI+CVD update - tick not from 52168: {obi_cvd_tick.get('instrument_token', 'unknown')}")
                             else:
