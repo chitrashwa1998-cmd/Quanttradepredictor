@@ -44,7 +44,7 @@ class LivePredictionPipeline:
         # Dedicated instrument routing for specialized analysis
         # ML Models + Black-Scholes: Use spot index for accurate pricing models
         self.ml_models_instrument = "NSE_INDEX|Nifty 50"  # Spot price for ML models + Black-Scholes
-        self.obi_cvd_instrument = "NSE_FO|52168"  # Active futures contract for OBI+CVD
+        self.obi_cvd_instrument = "NSE_FO|53001"  # Active futures contract for OBI+CVD
 
         # OBI+CVD Confirmation
         self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
@@ -171,7 +171,7 @@ class LivePredictionPipeline:
         # Configure mixed mode subscription
         mixed_mode_config = {
             "NSE_INDEX|Nifty 50": "ltpc",  # Index uses LTPC mode
-            "NSE_FO|52168": "full"         # Futures use full mode
+            "NSE_FO|64103": "full"         # Futures use full mode
         }
 
         # Subscribe to instruments with mixed mode configuration (this includes seeding)
