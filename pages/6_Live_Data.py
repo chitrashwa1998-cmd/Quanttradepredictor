@@ -539,9 +539,9 @@ def show_live_data_page():
                 # Auto-refresh controls specific to predictions tab
                 col1, col2 = st.columns([3, 1])
                 with col2:
-                    auto_refresh_predictions = st.toggle("🔄 Auto OBI+CVD", value=False, key="auto_refresh_obi_cvd_only")
+                    auto_refresh_predictions = st.toggle("🔄 Auto OBI+CVD (1s)", value=False, key="auto_refresh_obi_cvd_only")
                     if auto_refresh_predictions:
-                        st.caption("🔄 OBI+CVD auto-updating...")
+                        st.caption("🔄 OBI+CVD auto-updating every 1 second...")
 
                 # Show model status
                 pipeline_status = st.session_state.live_prediction_pipeline.get_pipeline_status()
@@ -1095,8 +1095,8 @@ def show_live_data_page():
                     # Increment counter to trigger container refresh
                     st.session_state.obi_cvd_refresh_counter += 1
 
-                    # Use container refresh with a small delay to avoid WebSocket disruption
-                    time.sleep(0.5)  # Reduced from 1 second
+                    # Use container refresh every 1 second to sync with trade signal generation
+                    time.sleep(1.0)  # Every 1 second to match trade signal timing
 
                     # Only refresh if WebSocket is still connected AND we have OBI+CVD data
                     if st.session_state.live_prediction_pipeline:

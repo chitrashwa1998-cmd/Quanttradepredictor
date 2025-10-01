@@ -657,12 +657,12 @@ class LivePredictionPipeline:
                                 if '52168' in str(obi_cvd_tick.get('instrument_token', '')):
                                     self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
 
-                                    # Generate trade signal every 10 ticks to avoid excessive computation
-                                    if not hasattr(self, '_trade_signal_counter'):
-                                        self._trade_signal_counter = 0
-                                    self._trade_signal_counter += 1
-
-                                    if self._trade_signal_counter % 10 == 0:
+                                    # Generate trade signal every second for real-time updates
+                                    if not hasattr(self, '_last_trade_signal_time'):
+                                        self._last_trade_signal_time = 0
+                                    
+                                    current_time = time.time()
+                                    if current_time - self._last_trade_signal_time >= 1.0:  # Every 1 second
                                         trade_signal = self.obi_cvd_confirmation.generate_trade_signal(self.obi_cvd_instrument)
                                         signal = trade_signal.get('signal', 'NEUTRAL')
                                         confidence = trade_signal.get('confidence', 0.0)
@@ -674,6 +674,7 @@ class LivePredictionPipeline:
                                         self.latest_trade_signals[self.obi_cvd_instrument] = trade_signal
 
                                         print(f"🎯 Trade Signal (52168): {signal} | Score: {score:.3f} | Confidence: {confidence:.1f}%")
+                                        self._last_trade_signal_time = current_time
 
                                     print(f"✅ OBI+CVD updated with 52168 data")
                                 else:
