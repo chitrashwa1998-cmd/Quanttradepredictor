@@ -824,97 +824,70 @@ def show_live_data_page():
                                 st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
                                 st.divider()
 
-                    # Display comprehensive OBI+CVD analysis for 53001
-                    st.markdown("### 🎯 Advanced Order Flow Analysis (NSE_FO|53001)")
+                    # Futures Chart Section
+                    st.markdown("### 📊 Advanced Order Flow Analysis (NSE_FO|52168)")
                     st.markdown("**Real-time OBI+CVD confirmation from dedicated futures contract**")
 
-                    # Generate and display trade signal
+                    # Display current trade signal prominently
                     try:
                         if 'live_prediction_pipeline' in st.session_state and st.session_state.live_prediction_pipeline:
-                            obi_cvd_instance = st.session_state.live_prediction_pipeline.obi_cvd_confirmation
-                            trade_signal = obi_cvd_instance.generate_trade_signal("NSE_FO|53001")
+                            # Get latest trade signal
+                            trade_signal = st.session_state.live_prediction_pipeline.get_latest_trade_signal("NSE_FO|52168")
 
-                            # Display trade signal prominently
-                            signal = trade_signal.get('signal', 'NEUTRAL')
-                            score = trade_signal.get('score', 0.0)
-                            confidence = trade_signal.get('confidence', 0.0)
-
-                            # Color coding for granular signal types
-                            if signal == 'STRONG BUY':
-                                signal_color = "🚀"
-                                signal_bg = "success"
-                            elif signal == 'BUY':
-                                signal_color = "🟢"
-                                signal_bg = "success"
-                            elif signal == 'SCALP BUY':
-                                signal_color = "📈"
-                                signal_bg = "success"
-                            elif signal == 'STRONG SELL':
-                                signal_color = "💥"
-                                signal_bg = "error"
-                            elif signal == 'SELL':
-                                signal_color = "🔴"
-                                signal_bg = "error"
-                            elif signal == 'SCALP SELL':
-                                signal_color = "📉"
-                                signal_bg = "error"
-                            else:
-                                signal_color = "⚪"
-                                signal_bg = "info"
-
-                            col1_signal, col2_signal, col3_signal = st.columns(3)
-
-                            with col1_signal:
-                                st.metric(f"{signal_color} Trade Signal", signal, f"Score: {score:.3f}")
-
-                            with col2_signal:
-                                confidence_color = "🟢" if confidence >= 70 else "🟡" if confidence >= 50 else "🔴"
-                                st.metric(f"{confidence_color} Confidence", f"{confidence:.1f}%", "Algorithmic")
-
-                            with col3_signal:
+                            if trade_signal:
+                                signal = trade_signal.get('signal', 'NEUTRAL')
+                                score = trade_signal.get('score', 0.0)
+                                confidence = trade_signal.get('confidence', 0.0)
                                 timestamp = trade_signal.get('timestamp', 'N/A')
-                                st.metric("⏰ Signal Time", timestamp, "Live Update")
 
-                            # Show signal breakdown in expander
-                            with st.expander("🔍 Signal Breakdown & Explanation"):
-                                explanation = obi_cvd_instance.get_signal_breakdown_explanation(trade_signal)
-                                st.markdown(explanation)
+                                # Color coding for signals
+                                if signal == 'STRONG BUY':
+                                    signal_color = "🚀"
+                                    signal_bg = "success"
+                                elif signal == 'BUY':
+                                    signal_color = "🟢"
+                                    signal_bg = "success"
+                                elif signal == 'SCALP BUY':
+                                    signal_color = "📈"
+                                    signal_bg = "success"
+                                elif signal == 'STRONG SELL':
+                                    signal_color = "💥"
+                                    signal_bg = "error"
+                                elif signal == 'SELL':
+                                    signal_color = "🔴"
+                                    signal_bg = "error"
+                                elif signal == 'SCALP SELL':
+                                    signal_color = "📉"
+                                    signal_bg = "error"
+                                else:
+                                    signal_color = "⚪"
+                                    signal_bg = "info"
 
-                                # Show raw breakdown data
-                                st.subheader("📊 Raw Component Data")
-                                breakdown = trade_signal.get('breakdown', {})
-                                if breakdown:
-                                    col1_bd, col2_bd = st.columns(2)
+                                # Display trade signal in prominent box
+                                col1_ts, col2_ts, col3_ts = st.columns(3)
 
-                                    with col1_bd:
-                                        st.write("**Weighted Components:**")
-                                        st.write(f"• OBI Numeric: {breakdown.get('obi_numeric', 0):.4f}")
-                                        st.write(f"• CVD Numeric: {breakdown.get('cvd_numeric', 0):.4f}")
-                                        st.write(f"• CVD Deltas: {breakdown.get('combined_cvd_delta', 0):.4f}")
-                                        st.write(f"• Total CVD: {breakdown.get('total_cvd_norm', 0):.4f}")
-                                        st.write(f"• Liquidity: {breakdown.get('liquidity_numeric', 0):.4f}")
+                                with col1_ts:
+                                    st.metric(f"{signal_color} Live Trade Signal", signal, f"Score: {score:.3f}")
 
-                                    with col2_bd:
-                                        weights = breakdown.get('weights_used', {})
-                                        st.write("**Weights Applied:**")
-                                        for component, weight in weights.items():
-                                            st.write(f"• {component}: {weight:.1%}")
+                                with col2_ts:
+                                    confidence_color = "🟢" if confidence >= 70 else "🟡" if confidence >= 50 else "🔴"
+                                    st.metric(f"{confidence_color} Confidence", f"{confidence:.1f}%", "Real-time")
 
-                                # Show thresholds
-                                thresholds = breakdown.get('thresholds_used', {})
-                                if thresholds:
-                                    st.write("**Signal Thresholds:**")
-                                    st.write(f"• BUY threshold: ≥ {thresholds.get('buy', 0.4):.2f}")
-                                    st.write(f"• SELL threshold: ≤ {thresholds.get('sell', -0.4):.2f}")
-                                    st.write(f"• High confidence: ≥ {thresholds.get('high_confidence', 0.7):.2f}")
+                                with col3_ts:
+                                    st.metric("⏰ Signal Time", timestamp, "Live Update")
 
+                                # Show signal explanation
+                                with st.expander("🔍 Trade Signal Breakdown"):
+                                    explanation = st.session_state.live_prediction_pipeline.obi_cvd_confirmation.get_signal_breakdown_explanation(trade_signal)
+                                    st.markdown(explanation)
+
+                            else:
+                                st.info("⏳ Waiting for trade signal from NSE_FO|52168...")
                         else:
-                            st.warning("⚠️ Live prediction pipeline not active - trade signal unavailable")
+                            st.warning("⚠️ Live prediction pipeline not active")
 
                     except Exception as e:
-                        st.error(f"❌ Error generating trade signal: {e}")
-
-                    st.markdown("---")
+                        st.error(f"❌ Error displaying trade signal: {e}")
 
                     st.divider()
 
