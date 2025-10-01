@@ -715,7 +715,7 @@ class LivePredictionPipeline:
 
                                         futures_name = self.obi_cvd_instrument.split('|')[-1] if '|' in self.obi_cvd_instrument else self.obi_cvd_instrument
                                         print(f"🔧 Live Update ML+BSM ({display_name}): ₹{current_price:.2f} | Vol: {volatility_value:.4f}→{annualized_vol:.2f}")
-                                        print(f"📊 OBI+CVD (53001 ONLY): {obi_cvd_signal}")
+                                        print(f"📊 OBI+CVD (NSE_FO|52168 ONLY): {obi_cvd_signal}")
 
                     except Exception as e:
                         print(f"❌ Error calculating Black-Scholes for {instrument_key}: {e}")

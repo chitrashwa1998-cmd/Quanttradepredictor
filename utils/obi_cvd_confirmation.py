@@ -89,7 +89,7 @@ class OBICVDConfirmation:
     
     def calculate_obi(self, tick_data: Dict) -> Optional[float]:
         """
-        Calculate Order Book Imbalance from tick data - ONLY for NSE_FO|53001.
+        Calculate Order Book Imbalance from tick data - ONLY for NSE_FO|52168.
         
         Enhanced to use 5-level market depth when available.
         OBI = (Bid Quantity - Ask Quantity) / (Bid Quantity + Ask Quantity)
@@ -554,7 +554,7 @@ class OBICVDConfirmation:
 
     def calculate_cvd_increment(self, tick_data: Dict, instrument_key: str) -> Optional[float]:
         """
-        Calculate CVD increment from current tick - ONLY for NSE_FO|53001.
+        Calculate CVD increment from current tick - ONLY for NSE_FO|52168.
         
         CVD = ∑(Buy Volume - Sell Volume)
         Uses price comparison to determine if volume is buy or sell initiated.
@@ -650,7 +650,7 @@ class OBICVDConfirmation:
     def update_confirmation(self, instrument_key: str, tick_data: Dict) -> Dict:
         """
         Update OBI and CVD for an instrument and return confirmation analysis.
-        STRICT: Only processes NSE_FO|53001 data - NO FALLBACK.
+        STRICT: Only processes NSE_FO|52168 data - NO FALLBACK.
         """
         try:
             # Strict validation - ONLY process 52168 data
