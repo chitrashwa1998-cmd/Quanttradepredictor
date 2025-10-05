@@ -134,38 +134,12 @@ def initialize_session_state():
 initialize_session_state()
 
 # Create TribexAlpha logo in sidebar without navigation tabs
-try:
-    import base64
-    from pathlib import Path
-    
-    # Try to load logo from assets folder
-    logo_path = Path("assets/tribex_logo_full.png")
-    if logo_path.exists():
-        with open(logo_path, "rb") as f:
-            logo_data = base64.b64encode(f.read()).decode()
-        
-        st.sidebar.markdown(f"""
-        <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1a1d29 0%, #252837 100%); 
-             border: 2px solid #00ffff; border-radius: 16px; margin-bottom: 2rem; box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);">
-            <img src="data:image/png;base64,{logo_data}" style="max-width: 100%; height: auto; margin-bottom: 0.5rem;" alt="TribexAlpha Logo">
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        # Fallback to text logo if image not found
-        st.sidebar.markdown("""
-        <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1a1d29 0%, #252837 100%); 
-             border: 2px solid #00ffff; border-radius: 16px; margin-bottom: 2rem; box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);">
-            <h2 style="color: #00ffff; margin: 0; font-family: 'Orbitron', monospace; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); font-weight: 800;">⚡ TribexAlpha</h2>
-        </div>
-        """, unsafe_allow_html=True)
-except Exception:
-    # Fallback to text logo on any error
-    st.sidebar.markdown("""
-    <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1a1d29 0%, #252837 100%); 
-         border: 2px solid #00ffff; border-radius: 16px; margin-bottom: 2rem; box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);">
-        <h2 style="color: #00ffff; margin: 0; font-family: 'Orbitron', monospace; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); font-weight: 800;">⚡ TribexAlpha</h2>
-    </div>
-    """, unsafe_allow_html=True)
+st.sidebar.markdown("""
+<div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #1a1d29 0%, #252837 100%); 
+     border: 2px solid #00ffff; border-radius: 16px; margin-bottom: 2rem; box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);">
+    <h2 style="color: #00ffff; margin: 0; font-family: 'Orbitron', monospace; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); font-weight: 800;">⚡ TribexAlpha</h2>
+</div>
+""", unsafe_allow_html=True)
 
 # Database status indicator
 st.sidebar.markdown("---")
