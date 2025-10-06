@@ -862,7 +862,7 @@ def show_live_data_page():
                                 signal_color = "⚪"
                                 signal_bg = "info"
 
-                            col1_signal, col2_signal, col3_signal = st.columns(3)
+                            col1_signal, col2_signal, col3_signal, col4_signal = st.columns(4)
 
                             with col1_signal:
                                 st.metric(f"{signal_color} Trade Signal", signal, f"Score: {score:.3f}")
@@ -874,6 +874,72 @@ def show_live_data_page():
                             with col3_signal:
                                 timestamp = trade_signal.get('timestamp', 'N/A')
                                 st.metric("⏰ Signal Time", timestamp, "Live Update")
+
+                            with col4_signal:
+                                # Fetch ML Direction Model Prediction
+                                ml_direction = "N/A"
+                                ml_confidence = 0.0
+                                ml_instrument = st.session_state.live_prediction_pipeline.ml_models_instrument
+                                
+                                if ml_instrument in live_predictions:
+                                    prediction = live_predictions[ml_instrument]
+                                    if 'direction' in prediction:
+                                        direction_data = prediction.get('direction', {})
+                                        if isinstance(direction_data, dict):
+                                            ml_direction = direction_data.get('prediction', 'N/A')
+                                            ml_confidence = direction_data.get('confidence', 0.0)
+                                        else:
+                                            ml_direction = str(direction_data)
+                                
+                                ml_dir_color = "🟢" if ml_direction == "Bullish" else "🔴" if ml_direction == "Bearish" else "⚪"
+                                st.metric(f"{ml_dir_color} ML Direction", ml_direction, f"{ml_confidence:.1%}" if ml_confidence > 0 else "Waiting...")
+
+                            # Signal Comparison Section
+                            st.markdown("---")
+                            st.markdown("### 📊 Signal Comparison: OBI+CVD vs ML Direction")
+                            
+                            comparison_col1, comparison_col2, comparison_col3 = st.columns(3)
+                            
+                            with comparison_col1:
+                                st.markdown("**🎯 OBI+CVD Signal Generator**")
+                                st.markdown(f"Signal: **{signal_color} {signal}**")
+                                st.markdown(f"Confidence: **{confidence:.1f}%**")
+                            
+                            with comparison_col2:
+                                st.markdown("**🤖 ML Direction Model**")
+                                ml_direction_display = "N/A"
+                                ml_conf_display = "0.0%"
+                                
+                                ml_instrument = st.session_state.live_prediction_pipeline.ml_models_instrument
+                                if ml_instrument in live_predictions:
+                                    prediction = live_predictions[ml_instrument]
+                                    if 'direction' in prediction:
+                                        direction_data = prediction.get('direction', {})
+                                        if isinstance(direction_data, dict):
+                                            ml_direction_display = direction_data.get('prediction', 'N/A')
+                                            ml_conf_display = f"{direction_data.get('confidence', 0.0):.1%}"
+                                
+                                ml_color = "🟢" if ml_direction_display == "Bullish" else "🔴" if ml_direction_display == "Bearish" else "⚪"
+                                st.markdown(f"Direction: **{ml_color} {ml_direction_display}**")
+                                st.markdown(f"Confidence: **{ml_conf_display}**")
+                            
+                            with comparison_col3:
+                                st.markdown("**🔄 Signal Agreement**")
+                                # Check if signals agree
+                                obi_bullish = 'BUY' in signal
+                                obi_bearish = 'SELL' in signal
+                                ml_bullish = ml_direction_display == 'Bullish'
+                                ml_bearish = ml_direction_display == 'Bearish'
+                                
+                                if (obi_bullish and ml_bullish) or (obi_bearish and ml_bearish):
+                                    st.markdown("**✅ Signals Agree**")
+                                    st.success("Both signals aligned")
+                                elif ml_direction_display == 'N/A':
+                                    st.markdown("**⏳ ML Pending**")
+                                    st.info("Waiting for ML prediction")
+                                else:
+                                    st.markdown("**⚠️ Signals Diverge**")
+                                    st.warning("Mixed signals - use caution")
 
                             # Show signal breakdown in expander
                             with st.expander("🔍 Signal Breakdown & Explanation"):
