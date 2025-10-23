@@ -52,12 +52,7 @@ TribexAlpha is a comprehensive trading analytics platform built with Streamlit t
 - Session state management
 - Database persistence integration
 
-### Gemini AI Integration (`utils/gemini_analysis.py`)
-- Natural language market analysis using Google's Gemini 2.5 models
-- Market sentiment analysis and confidence scoring
-- AI-powered trading insights and recommendations
-- Risk assessment with natural language explanations
-- Integration with both static and live prediction displays
+
 
 ## Data Flow
 
@@ -111,7 +106,6 @@ TribexAlpha is a comprehensive trading analytics platform built with Streamlit t
 - Database backup for long-term persistence
 
 ## Changelog
-- July 22, 2025: Integrated Google Gemini AI for advanced market analysis - added natural language insights, sentiment analysis, and AI-powered trading recommendations to both static and live predictions
 - July 18, 2025: Fixed model persistence issue - models now automatically saved to database after training and persist across app restarts
 - July 18, 2025: Fixed profit probability model RangeIndex error by preserving datetime indices throughout feature calculation
 - July 17, 2025: Simplified candle detection to trigger predictions immediately when new 5-minute candles close (removed forced updates and buffers)

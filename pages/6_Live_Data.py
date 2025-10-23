@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from utils.live_data_manager import LiveDataManager
 from utils.live_prediction_pipeline import LivePredictionPipeline
 from utils.database_adapter import DatabaseAdapter
-from utils.gemini_analysis import GeminiAnalyzer, test_gemini_connection
 import json
 import pytz
 import requests
@@ -1228,26 +1227,7 @@ def show_live_data_page():
             else:
                 st.warning("⚠️ Prediction pipeline not active. Please connect to start receiving live predictions from all trained models.")
 
-            # GEMINI AI ANALYSIS FOR LIVE DATA - ALWAYS VISIBLE
-            st.divider()
-            st.subheader("🤖 AI Market Analysis")
-            st.success("✅ Gemini AI is now integrated!")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown("**🧠 AI Sentiment Analysis**")
-                st.metric("AI Market Sentiment", "Bullish", delta="+12.5%")
-                st.write("• Strong upward momentum detected")
-                st.write("• Technical indicators align positively")
-
-            with col2:
-                st.markdown("**💡 AI Trading Insights**")
-                st.metric("Signal Strength", "78%", delta="High Confidence")
-                if st.button("🚀 Generate Full AI Report", key="live_ai_analysis"):
-                    st.balloons()
-                    st.success("AI Analysis Complete!")
-                    st.info("Advanced AI insights would be generated here with your live predictions")
+            
 
         with overview_tab:
             st.subheader("💹 Real-time Price Dashboard")
