@@ -44,7 +44,7 @@ class LivePredictionPipeline:
         # Dedicated instrument routing for specialized analysis
         # ML Models + Black-Scholes: Use spot index for accurate pricing models
         self.ml_models_instrument = "NSE_INDEX|Nifty 50"  # Spot price for ML models + Black-Scholes
-        self.obi_cvd_instrument = "NSE_FO|52168"  # Active futures contract for OBI+CVD
+        self.obi_cvd_instrument = "NSE_FO|37054"  # Active futures contract for OBI+CVD
 
         # OBI+CVD Confirmation
         self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
@@ -171,7 +171,7 @@ class LivePredictionPipeline:
         # Configure mixed mode subscription
         mixed_mode_config = {
             "NSE_INDEX|Nifty 50": "ltpc",  # Index uses LTPC mode
-            "NSE_FO|64103": "full"         # Futures use full mode
+            "NSE_FO|37054": "full"         # Futures use full mode
         }
 
         # Subscribe to instruments with mixed mode configuration (this includes seeding)
@@ -649,12 +649,12 @@ class LivePredictionPipeline:
                         # Get latest tick data from ML models instrument
                         latest_tick = self.live_data_manager.ws_client.get_latest_tick(instrument_key)
 
-                        # Update OBI+CVD ONLY with dedicated 52168 futures instrument data - NO FALLBACK
+                        # Update OBI+CVD ONLY with dedicated 37054 futures instrument data - NO FALLBACK
                         if self.obi_cvd_instrument in self.live_data_manager.ws_client.last_tick_data:
                             obi_cvd_tick = self.live_data_manager.ws_client.get_latest_tick(self.obi_cvd_instrument)
-                            if obi_cvd_tick and '52168' in str(self.obi_cvd_instrument):
-                                # Strict validation - only process 52168 data
-                                if '52168' in str(obi_cvd_tick.get('instrument_token', '')):
+                            if obi_cvd_tick and '37054' in str(self.obi_cvd_instrument):
+                                # Strict validation - only process 37054 data
+                                if '37054' in str(obi_cvd_tick.get('instrument_token', '')):
                                     self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
 
                                     # Generate trade signal every 10 ticks to avoid excessive computation
@@ -673,13 +673,13 @@ class LivePredictionPipeline:
                                             self.latest_trade_signals = {}
                                         self.latest_trade_signals[self.obi_cvd_instrument] = trade_signal
 
-                                        print(f"🎯 Trade Signal (52168): {signal} | Score: {score:.3f} | Confidence: {confidence:.1f}%")
+                                        print(f"🎯 Trade Signal (37054): {signal} | Score: {score:.3f} | Confidence: {confidence:.1f}%")
 
-                                    print(f"✅ OBI+CVD updated with 52168 data")
+                                    print(f"✅ OBI+CVD updated with 37054 data")
                                 else:
-                                    print(f"⚠️ Skipping OBI+CVD update - tick not from 52168: {obi_cvd_tick.get('instrument_token', 'unknown')}")
+                                    print(f"⚠️ Skipping OBI+CVD update - tick not from 37054: {obi_cvd_tick.get('instrument_token', 'unknown')}")
                             else:
-                                print(f"⚠️ Waiting for 52168 tick data for OBI+CVD...")
+                                print(f"⚠️ Waiting for 37054 tick data for OBI+CVD...")
 
                         if latest_tick and 'ltp' in latest_tick:
                             current_price = float(latest_tick['ltp'])
@@ -715,7 +715,7 @@ class LivePredictionPipeline:
 
                                         futures_name = self.obi_cvd_instrument.split('|')[-1] if '|' in self.obi_cvd_instrument else self.obi_cvd_instrument
                                         print(f"🔧 Live Update ML+BSM ({display_name}): ₹{current_price:.2f} | Vol: {volatility_value:.4f}→{annualized_vol:.2f}")
-                                        print(f"📊 OBI+CVD (NSE_FO|52168 ONLY): {obi_cvd_signal}")
+                                        print(f"📊 OBI+CVD (NSE_FO|37054 ONLY): {obi_cvd_signal}")
 
                     except Exception as e:
                         print(f"❌ Error calculating Black-Scholes for {instrument_key}: {e}")
