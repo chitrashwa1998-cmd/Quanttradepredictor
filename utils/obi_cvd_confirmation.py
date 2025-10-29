@@ -153,9 +153,9 @@ class OBICVDConfirmation:
                     bid_qty = total_buy
                     ask_qty = total_sell
 
-            # Strict validation - must have valid bid/ask data from 52168
+            # Strict validation - must have valid bid/ask data from 37054
             if bid_qty <= 0 and ask_qty <= 0:
-                print(f"⚠️ No valid bid/ask data from 52168 - waiting for data...")
+                print(f"⚠️ No valid bid/ask data from 37054 - waiting for data...")
                 return None
 
             # Calculate OBI with division by zero protection
