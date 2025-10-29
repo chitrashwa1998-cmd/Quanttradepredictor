@@ -553,7 +553,7 @@ class OBICVDConfirmation:
 
     def calculate_cvd_increment(self, tick_data: Dict, instrument_key: str) -> Optional[float]:
         """
-        Calculate CVD increment from current tick - ONLY for NSE_FO|52168.
+        Calculate CVD increment from current tick - ONLY for NSE_FO|37054.
 
         CVD = ∑(Buy Volume - Sell Volume)
         Uses price comparison to determine if volume is buy or sell initiated.
