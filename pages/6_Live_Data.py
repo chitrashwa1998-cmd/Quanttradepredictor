@@ -879,7 +879,7 @@ def show_live_data_page():
                                 ml_direction = "N/A"
                                 ml_confidence = 0.0
                                 ml_instrument = st.session_state.live_prediction_pipeline.ml_models_instrument
-                                
+
                                 if ml_instrument in live_predictions:
                                     prediction = live_predictions[ml_instrument]
                                     if 'direction' in prediction:
@@ -889,26 +889,26 @@ def show_live_data_page():
                                             ml_confidence = direction_data.get('confidence', 0.0)
                                         else:
                                             ml_direction = str(direction_data)
-                                
+
                                 ml_dir_color = "🟢" if ml_direction == "Bullish" else "🔴" if ml_direction == "Bearish" else "⚪"
                                 st.metric(f"{ml_dir_color} ML Direction", ml_direction, f"{ml_confidence:.1%}" if ml_confidence > 0 else "Waiting...")
 
                             # Signal Comparison Section
                             st.markdown("---")
                             st.markdown("### 📊 Signal Comparison: OBI+CVD vs ML Direction")
-                            
+
                             comparison_col1, comparison_col2, comparison_col3 = st.columns(3)
-                            
+
                             with comparison_col1:
                                 st.markdown("**🎯 OBI+CVD Signal Generator**")
                                 st.markdown(f"Signal: **{signal_color} {signal}**")
                                 st.markdown(f"Confidence: **{confidence:.1f}%**")
-                            
+
                             with comparison_col2:
                                 st.markdown("**🤖 ML Direction Model**")
                                 ml_direction_display = "N/A"
                                 ml_conf_display = "0.0%"
-                                
+
                                 ml_instrument = st.session_state.live_prediction_pipeline.ml_models_instrument
                                 if ml_instrument in live_predictions:
                                     prediction = live_predictions[ml_instrument]
@@ -917,11 +917,11 @@ def show_live_data_page():
                                         if isinstance(direction_data, dict):
                                             ml_direction_display = direction_data.get('prediction', 'N/A')
                                             ml_conf_display = f"{direction_data.get('confidence', 0.0):.1%}"
-                                
+
                                 ml_color = "🟢" if ml_direction_display == "Bullish" else "🔴" if ml_direction_display == "Bearish" else "⚪"
                                 st.markdown(f"Direction: **{ml_color} {ml_direction_display}**")
                                 st.markdown(f"Confidence: **{ml_conf_display}**")
-                            
+
                             with comparison_col3:
                                 st.markdown("**🔄 Signal Agreement**")
                                 # Check if signals agree
@@ -929,7 +929,7 @@ def show_live_data_page():
                                 obi_bearish = 'SELL' in signal
                                 ml_bullish = ml_direction_display == 'Bullish'
                                 ml_bearish = ml_direction_display == 'Bearish'
-                                
+
                                 if (obi_bullish and ml_bullish) or (obi_bearish and ml_bearish):
                                     st.markdown("**✅ Signals Agree**")
                                     st.success("Both signals aligned")
@@ -1216,7 +1216,7 @@ def show_live_data_page():
 
                     # Show requirements for all models
                     st.write("**Requirements for comprehensive predictions:**")
-                    st.write("• **OBI+CVD:** Real-time tick data from NSE_FO|53001")
+                    st.write("• **OBI+CVD:** Real-time tick data from NSE_FO|49543")
                     st.write("• **ML Models:** Complete 5-minute candles + trained models")
                     st.write("• At least one of the 4 models must be trained:")
                     st.write("  - Direction Model (price movement prediction)")
@@ -1227,7 +1227,7 @@ def show_live_data_page():
             else:
                 st.warning("⚠️ Prediction pipeline not active. Please connect to start receiving live predictions from all trained models.")
 
-            
+
 
         with overview_tab:
             st.subheader("💹 Real-time Price Dashboard")
