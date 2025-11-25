@@ -576,7 +576,7 @@ def show_live_data_page():
                 # Independent OBI+CVD Market Analysis Section - ALWAYS SHOW when data is available
                 if independent_obi_cvd:
                     st.subheader("📈 Independent OBI+CVD Market Analysis")
-                    st.info("🔍 *Order Book Imbalance & Cumulative Volume Delta (NSE_FO|52168 ONLY) - Real-time Tick Processing*")
+                    st.info("🔍 *Order Book Imbalance & Cumulative Volume Delta (NSE_FO|49543 ONLY) - Real-time Tick Processing*")
 
                     # Create columns for OBI+CVD display
                     obi_cvd_cols = st.columns(min(2, len(independent_obi_cvd)))
@@ -831,7 +831,7 @@ def show_live_data_page():
                     try:
                         if 'live_prediction_pipeline' in st.session_state and st.session_state.live_prediction_pipeline:
                             obi_cvd_instance = st.session_state.live_prediction_pipeline.obi_cvd_confirmation
-                            trade_signal = obi_cvd_instance.generate_trade_signal("NSE_FO|52168")
+                            trade_signal = obi_cvd_instance.generate_trade_signal("NSE_FO|49543")
 
                             # Display trade signal prominently
                             signal = trade_signal.get('signal', 'NEUTRAL')
@@ -1293,7 +1293,7 @@ def show_live_data_page():
                                 if 'Nifty 50' in display_name or 'INDEX' in instrument:
                                     latest_price = 24500.0  # Typical Nifty range
                                     latest_volume = 0
-                                elif '52168' in instrument or 'FO' in instrument:
+                                elif '49543' in instrument or 'FO' in instrument:
                                     latest_price = 24550.0  # Typical futures premium
                                     latest_volume = 0
                                 else:
