@@ -153,9 +153,9 @@ class OBICVDConfirmation:
                     bid_qty = total_buy
                     ask_qty = total_sell
 
-            # Strict validation - must have valid bid/ask data from 37054
+            # Strict validation - must have valid bid/ask data from 52168
             if bid_qty <= 0 and ask_qty <= 0:
-                print(f"⚠️ No valid bid/ask data from 37054 - waiting for data...")
+                print(f"⚠️ No valid bid/ask data from 52168 - waiting for data...")
                 return None
 
             # Calculate OBI with division by zero protection
@@ -553,7 +553,7 @@ class OBICVDConfirmation:
 
     def calculate_cvd_increment(self, tick_data: Dict, instrument_key: str) -> Optional[float]:
         """
-        Calculate CVD increment from current tick - ONLY for NSE_FO|37054.
+        Calculate CVD increment from current tick - ONLY for NSE_FO|52168.
 
         CVD = ∑(Buy Volume - Sell Volume)
         Uses price comparison to determine if volume is buy or sell initiated.
