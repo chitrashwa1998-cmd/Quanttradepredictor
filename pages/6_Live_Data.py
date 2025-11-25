@@ -823,9 +823,9 @@ def show_live_data_page():
                                 st.caption(f"Last update: {obi_cvd_data.get('last_update', 'Unknown')}")
                                 st.divider()
 
-                    # Display comprehensive OBI+CVD analysis for NSE_FO|52168
-                    st.markdown("### 🎯 Advanced Order Flow Analysis (NSE_FO|52168)")
-                    st.markdown("**Real-time OBI+CVD confirmation from dedicated futures contract (NSE_FO|52168)**")
+                    # Display comprehensive OBI+CVD analysis for NSE_FO|49543
+                    st.markdown("### 🎯 Advanced Order Flow Analysis (NSE_FO|49543)")
+                    st.markdown("**Real-time OBI+CVD confirmation from dedicated futures contract (NSE_FO|49543)**")
 
                     # Generate and display trade signal
                     try:
