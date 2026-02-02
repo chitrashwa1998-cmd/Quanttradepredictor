@@ -12,6 +12,8 @@ from utils.obi_cvd_confirmation import OBICVDConfirmation
 import pytz
 import streamlit as st
 
+
+
 class LivePredictionPipeline:
     """Pipeline to process live OHLC data through direction model for real-time predictions."""
 
@@ -44,10 +46,12 @@ class LivePredictionPipeline:
         # Dedicated instrument routing for specialized analysis
         # ML Models + Black-Scholes: Use spot index for accurate pricing models
         self.ml_models_instrument = "NSE_INDEX|Nifty 50"  # Spot price for ML models + Black-Scholes
-        self.obi_cvd_instrument = "NSE_FO|49543"  # Active futures contract for OBI+CVD
+        self.obi_cvd_instrument = "NSE_FO|59182"  # Active futures contract for OBI+CVD
 
         # OBI+CVD Confirmation
         self.obi_cvd_confirmation = OBICVDConfirmation(cvd_reset_minutes=30, obi_window_seconds=60)
+
+        
 
     def start_pipeline(self) -> bool:
         """Start the live prediction pipeline."""
@@ -169,16 +173,16 @@ class LivePredictionPipeline:
         print(f"   Additional instruments: {[inst for inst in instrument_keys if inst not in dedicated_instruments]}")
 
         # Configure mixed mode subscription
-        # Configure mixed mode subscription with full_d30 for NSE_FO|49543
+        # Configure mixed mode subscription with full_d30 for NSE_FO|59182
         mixed_mode_config = {
             "NSE_INDEX|Nifty 50": "ltpc",     # Index uses LTPC mode
-            "NSE_FO|49543": "full_d30"        # Futures use full_d30 mode (30-level depth + all full mode data)
+            "NSE_FO|59182": "full_d30"        # Futures use full_d30 mode (30-level depth + all full mode data)
         }
 
         # Subscribe to instruments with mixed mode configuration (this includes seeding)
         if self.live_data_manager.subscribe(all_instruments, mixed_mode_config):
             print(f"✅ Subscribed to {len(all_instruments)} instruments with mixed mode configuration")
-            print(f"✅ NSE_FO|49543 subscribed with full_d30 mode (30-level market depth)")
+            print(f"✅ NSE_FO|59182 subscribed with full_d30 mode (30-level market depth)")
             return True
         else:
             print("❌ Failed to subscribe to instruments")
@@ -651,14 +655,14 @@ class LivePredictionPipeline:
                         # Get latest tick data from ML models instrument
                         latest_tick = self.live_data_manager.ws_client.get_latest_tick(instrument_key)
 
-                        # Update OBI+CVD ONLY with dedicated 49543 futures instrument data - NO FALLBACK
+                        # Update OBI+CVD ONLY with dedicated 59182 futures instrument data - NO FALLBACK
                         if self.obi_cvd_instrument in self.live_data_manager.ws_client.last_tick_data:
                             obi_cvd_tick = self.live_data_manager.ws_client.get_latest_tick(self.obi_cvd_instrument)
-                            if obi_cvd_tick and '49543' in str(self.obi_cvd_instrument):
-                                # Strict validation - only process 49543 data
-                                if '49543' in str(obi_cvd_tick.get('instrument_token', '')):
+                            if obi_cvd_tick and '59182' in str(self.obi_cvd_instrument):
+                                # Strict validation - only process 59182 data
+                                if '59182' in str(obi_cvd_tick.get('instrument_token', '')):
                                     self.obi_cvd_confirmation.update_confirmation(self.obi_cvd_instrument, obi_cvd_tick)
-
+                                   
                                     # Generate trade signal every 10 ticks to avoid excessive computation
                                     if not hasattr(self, '_trade_signal_counter'):
                                         self._trade_signal_counter = 0
@@ -675,13 +679,13 @@ class LivePredictionPipeline:
                                             self.latest_trade_signals = {}
                                         self.latest_trade_signals[self.obi_cvd_instrument] = trade_signal
 
-                                        print(f"🎯 Trade Signal (49543): {signal} | Score: {score:.3f} | Confidence: {confidence:.1f}%")
+                                        print(f"🎯 Trade Signal (59182): {signal} | Score: {score:.3f} | Confidence: {confidence:.1f}%")
 
-                                    print(f"✅ OBI+CVD updated with 49543 data")
+                                    print(f"✅ OBI+CVD updated with 59182 data")
                                 else:
-                                    print(f"⚠️ Skipping OBI+CVD update - tick not from 49543: {obi_cvd_tick.get('instrument_token', 'unknown')}")
+                                    print(f"⚠️ Skipping OBI+CVD update - tick not from 59182: {obi_cvd_tick.get('instrument_token', 'unknown')}")
                             else:
-                                print(f"⚠️ Waiting for 49543 tick data for OBI+CVD...")
+                                print(f"⚠️ Waiting for 59182 tick data for OBI+CVD...")
 
                         if latest_tick and 'ltp' in latest_tick:
                             current_price = float(latest_tick['ltp'])
@@ -717,7 +721,7 @@ class LivePredictionPipeline:
 
                                         futures_name = self.obi_cvd_instrument.split('|')[-1] if '|' in self.obi_cvd_instrument else self.obi_cvd_instrument
                                         print(f"🔧 Live Update ML+BSM ({display_name}): ₹{current_price:.2f} | Vol: {volatility_value:.4f}→{annualized_vol:.2f}")
-                                        print(f"📊 OBI+CVD (NSE_FO|49543 ONLY): {obi_cvd_signal}")
+                                        print(f"📊 OBI+CVD (NSE_FO|59182 ONLY): {obi_cvd_signal}")
 
                     except Exception as e:
                         print(f"❌ Error calculating Black-Scholes for {instrument_key}: {e}")
